@@ -826,7 +826,7 @@ git commit -m "chore: enforce conventional commits with commitlint"
 **Files:**
 - Create: `CONTRIBUTING.md`
 
-- [ ] **Step 1: 创建 `CONTRIBUTING.md`**
+- [x] **Step 1: 创建 `CONTRIBUTING.md`**
 
 完整内容（直接写）：
 
@@ -916,13 +916,13 @@ src/app/(dashboard)/[feature]/page.tsx
 
 ## 9. Code Review 检查清单
 
-- [ ] 新增功能是否在 `src/modules/[feature]/`？
-- [ ] 是否所有 Server Action 都 `Schema.parse()`？
-- [ ] 是否有跨模块 import 内部文件？（ESLint 已挡）
-- [ ] 是否有 `any` / `as any` 偷懒？
-- [ ] 数据查询是否经过 `applyScopeFilter`？
-- [ ] 错误是否用 `AppError`？
-- [ ] commit message 是否规范？
+- [x] 新增功能是否在 `src/modules/[feature]/`？
+- [x] 是否所有 Server Action 都 `Schema.parse()`？
+- [x] 是否有跨模块 import 内部文件？（ESLint 已挡）
+- [x] 是否有 `any` / `as any` 偷懒？
+- [x] 数据查询是否经过 `applyScopeFilter`？
+- [x] 错误是否用 `AppError`？
+- [x] commit message 是否规范？
 
 ## 10. 严禁事项（MUST NOT）
 
@@ -943,7 +943,7 @@ src/app/(dashboard)/[feature]/page.tsx
 - 严禁把真实 token 写进任何代码、文档、commit
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add CONTRIBUTING.md
