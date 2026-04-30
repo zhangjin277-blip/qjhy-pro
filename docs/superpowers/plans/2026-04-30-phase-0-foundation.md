@@ -221,7 +221,7 @@ git commit -m "chore: bootstrap Next.js 16 with strict TypeScript"
 - Create: `src/lib/utils/cn.ts`, `components.json`, `src/components/ui/button.tsx` (sample)
 - Modify: `src/app/globals.css`
 
-- [ ] **Step 1: 安装 shadcn/ui 必备依赖**
+- [x] **Step 1: 安装 shadcn/ui 必备依赖**
 
 ```bash
 cd /Users/zhangjin/qjhy-pro
@@ -229,7 +229,7 @@ pnpm add class-variance-authority clsx tailwind-merge lucide-react
 pnpm add -D @types/node
 ```
 
-- [ ] **Step 2: 创建 `src/lib/utils/cn.ts`**
+- [x] **Step 2: 创建 `src/lib/utils/cn.ts`**
 
 ```typescript
 import { clsx, type ClassValue } from "clsx";
@@ -240,7 +240,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 ```
 
-- [ ] **Step 3: 初始化 shadcn/ui**
+- [x] **Step 3: 初始化 shadcn/ui**
 
 ```bash
 pnpm dlx shadcn@latest init
@@ -253,7 +253,7 @@ pnpm dlx shadcn@latest init
 
 Expected: 生成 `components.json`，更新 `src/app/globals.css`。
 
-- [ ] **Step 4: 装 Button 组件验证 shadcn 工作**
+- [x] **Step 4: 装 Button 组件验证 shadcn 工作**
 
 ```bash
 pnpm dlx shadcn@latest add button
@@ -261,7 +261,7 @@ pnpm dlx shadcn@latest add button
 
 Expected: 生成 `src/components/ui/button.tsx`。
 
-- [ ] **Step 4.5: 应用 QJHY-Pro design tokens（覆盖 shadcn 默认色）**
+- [x] **Step 4.5: 应用 QJHY-Pro design tokens（覆盖 shadcn 默认色）**
 
 设计 token 完整定义见 [`docs/design/tokens.md`](../../design/tokens.md)。基于真实百应（抖音公会管理后台）UI 截图分析得出的字节 Semi Design 风格。
 
@@ -384,7 +384,7 @@ body {
 
 > ⚠️ **重要**：shadcn init 默认生成的 `globals.css` 用的是它自己的色板（`--primary` 是黑色），必须**整个替换**为以上内容才能让 shadcn 组件用我们的字节蓝。
 
-- [ ] **Step 5: 在首页验证 Button 渲染**
+- [x] **Step 5: 在首页验证 Button 渲染**
 
 修改 `src/app/page.tsx`：
 
@@ -422,7 +422,7 @@ export default function Home() {
 }
 ```
 
-- [ ] **Step 6: 启动 dev 验证 design tokens 已生效**
+- [x] **Step 6: 启动 dev 验证 design tokens 已生效**
 
 ```bash
 pnpm dev
@@ -441,7 +441,7 @@ pnpm dev
 
 Ctrl+C 关闭 dev。
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/lib/utils/cn.ts components.json src/components src/app/page.tsx src/app/globals.css package.json pnpm-lock.yaml
