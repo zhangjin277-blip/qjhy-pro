@@ -1175,13 +1175,13 @@ git commit -m "feat: add _meta placeholder schema and first migration"
 **Files:**
 - Create: `src/lib/env.ts`, `.env.example`, `.env.local`
 
-- [ ] **Step 1: 安装 Zod**
+- [x] **Step 1: 安装 Zod**
 
 ```bash
 pnpm add zod
 ```
 
-- [ ] **Step 2: 创建 `.env.example`**
+- [x] **Step 2: 创建 `.env.example`**
 
 ```bash
 # Database
@@ -1204,7 +1204,7 @@ NODE_ENV=development
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-- [ ] **Step 3: 创建 `.env.local`（本地实际配置，不进 git）**
+- [x] **Step 3: 创建 `.env.local`（本地实际配置，不进 git）**
 
 ```bash
 DATABASE_URL=postgresql://qjhy:qjhy_dev_password@localhost:5432/qjhy
@@ -1220,7 +1220,7 @@ DINGTALK_CORP_ID=
 
 ⚠️ 实际 `DINGTALK_BOT_WEBHOOK` 用用户提供的真实 token，但**绝不能**进 `.env.example` 或任何 commit。
 
-- [ ] **Step 4: 验证 `.env.local` 已被 .gitignore**
+- [x] **Step 4: 验证 `.env.local` 已被 .gitignore**
 
 ```bash
 git check-ignore .env.local
@@ -1228,7 +1228,7 @@ git check-ignore .env.local
 
 Expected: 输出 `.env.local`（被忽略）。
 
-- [ ] **Step 5: 创建 `src/lib/env.ts`**
+- [x] **Step 5: 创建 `src/lib/env.ts`**
 
 ```typescript
 import { z } from "zod";
@@ -1256,7 +1256,7 @@ if (!parsed.success) {
 export const env = parsed.data;
 ```
 
-- [ ] **Step 6: 验证 env 加载**
+- [x] **Step 6: 验证 env 加载**
 
 ```bash
 pnpm exec tsx --env-file=.env.local -e "import('./src/lib/env').then(({ env }) => console.log('OK:', { db: env.DATABASE_URL.slice(0, 30) }))"
@@ -1271,7 +1271,7 @@ pnpm exec tsx --env-file=.env.local -e "import('./src/lib/env').then(({ env }) =
 
 Expected: 输出 `OK: { db: 'postgresql://qjhy:qjhy_dev_pas' }`。
 
-- [ ] **Step 7: 测试缺少必需变量时报错**
+- [x] **Step 7: 测试缺少必需变量时报错**
 
 ```bash
 AUTH_SECRET= pnpm exec tsx --env-file=.env.local -e "import('./src/lib/env')"
@@ -1279,7 +1279,7 @@ AUTH_SECRET= pnpm exec tsx --env-file=.env.local -e "import('./src/lib/env')"
 
 Expected: 报错 "AUTH_SECRET must be at least 16 chars"。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/lib/env.ts .env.example package.json pnpm-lock.yaml
@@ -1294,7 +1294,7 @@ git commit -m "feat: add Zod-validated env loader (lib/env.ts)"
 - Create: `src/lib/errors/app-error.ts`, `src/lib/errors/index.ts`
 - Create: `src/lib/errors/app-error.test.ts`（用 vitest 验证 — 装 vitest 留 Phase 1，本任务用简单脚本）
 
-- [ ] **Step 1: 创建 `src/lib/errors/app-error.ts`**
+- [x] **Step 1: 创建 `src/lib/errors/app-error.ts`**
 
 ```typescript
 /**
@@ -1340,13 +1340,13 @@ export function isAppError(err: unknown): err is AppError {
 }
 ```
 
-- [ ] **Step 2: 创建 `src/lib/errors/index.ts`**
+- [x] **Step 2: 创建 `src/lib/errors/index.ts`**
 
 ```typescript
 export { AppError, isAppError } from "./app-error";
 ```
 
-- [ ] **Step 3: 写一个简单验证脚本**
+- [x] **Step 3: 写一个简单验证脚本**
 
 创建 `src/lib/errors/__verify.ts`：
 
@@ -1371,7 +1371,7 @@ pnpm exec tsx src/lib/errors/__verify.ts
 
 Expected: `✅ AppError verification passed`。
 
-- [ ] **Step 4: 删除验证脚本（一次性的）**
+- [x] **Step 4: 删除验证脚本（一次性的）**
 
 ```bash
 rm src/lib/errors/__verify.ts
@@ -1379,7 +1379,7 @@ rm src/lib/errors/__verify.ts
 
 > Phase 1 装 vitest 后，会有正式单元测试。Phase 0 这里只做手动验证。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/errors
@@ -1393,7 +1393,7 @@ git commit -m "feat: add AppError unified error class with code"
 **Files:**
 - Create: `src/lib/notify/dingtalk-bot.ts`, `src/lib/notify/index.ts`
 
-- [ ] **Step 1: 创建 `src/lib/notify/dingtalk-bot.ts`**
+- [x] **Step 1: 创建 `src/lib/notify/dingtalk-bot.ts`**
 
 ```typescript
 import { env } from "@/lib/env";
@@ -1465,13 +1465,13 @@ export async function notifyError(err: unknown, context?: Record<string, unknown
 }
 ```
 
-- [ ] **Step 2: 创建 `src/lib/notify/index.ts`**
+- [x] **Step 2: 创建 `src/lib/notify/index.ts`**
 
 ```typescript
 export { notifyDingtalk, notifyError } from "./dingtalk-bot";
 ```
 
-- [ ] **Step 3: 写一个手动测试脚本**
+- [x] **Step 3: 写一个手动测试脚本**
 
 创建 `src/lib/notify/__verify.ts`：
 
@@ -1503,13 +1503,13 @@ pnpm exec tsx --env-file=.env.local src/lib/notify/__verify.ts
 
 Expected: 控制台输出 `✅`，钉钉群里收到 2 条消息（开头是"【报错】"）。
 
-- [ ] **Step 4: 删除验证脚本**
+- [x] **Step 4: 删除验证脚本**
 
 ```bash
 rm src/lib/notify/__verify.ts
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/notify
