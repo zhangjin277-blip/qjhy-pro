@@ -7,6 +7,20 @@ import nextPlugin from "@next/eslint-plugin-next";
 
 export default tseslint.config(
   { ignores: [".next", "node_modules", "dist", "src/db/migrations"] },
+  {
+    files: ["**/*.cjs"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: {
+        module: "readonly",
+        require: "readonly",
+        __dirname: "readonly",
+        __filename: "readonly",
+        process: "readonly",
+        exports: "writable",
+      },
+    },
+  },
   js.configs.recommended,
   ...tseslint.configs.strict,
   ...tseslint.configs.stylistic,
