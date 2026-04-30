@@ -48,7 +48,10 @@ export const auth = betterAuth({
               // tokenUrl 必填（即使被 getToken override），better-auth 用它做配置完整性校验
               tokenUrl: "https://api.dingtalk.com/v1.0/oauth2/userAccessToken",
               userInfoUrl: "https://api.dingtalk.com/v1.0/contact/users/me",
-              scopes: ["openid", "corpid"],
+              // 钉钉新版 scope（点分大小写）：openid 必需，Contact.User.Read 用于调
+              // /v1.0/contact/users/me 拿用户信息（403 错误信息明确要求这个 scope）。
+              // corpid 是老格式，新接口不再需要。
+              scopes: ["openid", "Contact.User.Read"],
               // 钉钉 token endpoint 返回 camelCase，自己处理
               getToken: dingtalkGetToken,
               // 钉钉 userinfo 用 x-acs-dingtalk-access-token header，自己处理
