@@ -26,8 +26,7 @@ export default tseslint.config(
               target: "./src/modules/**",
               from: "./src/modules/**",
               except: ["**/index.ts"],
-              message:
-                "跨模块只允许 import 对方的 index.ts。详见 CONTRIBUTING.md 第 10.2 节。",
+              message: "跨模块只允许 import 对方的 index.ts。详见 CONTRIBUTING.md 第 10.2 节。",
             },
           ],
         },
