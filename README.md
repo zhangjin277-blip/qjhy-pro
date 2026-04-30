@@ -1,36 +1,127 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# QJHY-Pro
 
-## Getting Started
+> 新中台 · 替代 miracle-pro3 作为数据底座
 
-First, run the development server:
+## 项目目标
+
+替代老中台（miracle-pro3）做"数据底座"，解决以下问题：
+
+- 数据接口规范乱、加新功能要重新引导
+- 爬虫数据被"翻译"后丢失原始字段含义
+- SQLite 性能瓶颈（pro3 数据库已 600+MB）
+
+详见 [设计文档](./docs/superpowers/specs/2026-04-30-qjhy-pro-design.md)。
+
+## 技术栈
+
+- Next.js 16 (App Router + RSC + Server Actions)
+- TypeScript strict + Zod
+- PostgreSQL 16 + Drizzle ORM
+- Tailwind v4 + shadcn/ui（[design tokens](./docs/design/tokens.md)：字节蓝 + Semi Design 风格）
+- better-auth（钉钉 OAuth + 应急后门）
+- Docker Compose（web + worker + postgres）
+- ESLint + Prettier + Husky + commitlint
+
+## 快速开始
+
+### 前置
+
+- Node.js 20+（参考 `.nvmrc`）
+- pnpm 9+（`corepack enable`）
+- Docker Desktop / OrbStack
+
+### 安装
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <repo>
+cd qjhy-pro
+pnpm install
+cp .env.example .env.local
+# 编辑 .env.local 填入实际值（见下）
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### `.env.local` 必填项
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `AUTH_SECRET`：≥16 字符随机字符串（`openssl rand -base64 32`）
+- `EMERGENCY_LOGIN_PASSWORD`：≥16 字符随机字符串（应急登录用）
+- `DATABASE_URL`：默认本地 docker 即可
+- `DINGTALK_BOT_WEBHOOK`：报错通知（可选，留空则不通知）
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 启动开发环境（本机）
 
-## Learn More
+```bash
+docker-compose up -d postgres   # 起 Postgres
+pnpm db:migrate                 # 跑 migration
+pnpm db:seed:emergency          # 创建应急用户（首次）
+pnpm dev                        # 起 Next.js（3000）
 
-To learn more about Next.js, take a look at the following resources:
+# 另一个 terminal：
+pnpm worker                     # 起 Worker
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+访问 http://localhost:3000，应跳到 `/login`。用 `EMERGENCY_LOGIN_PASSWORD` 登录。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 全栈 Docker 启动
 
-## Deploy on Vercel
+```bash
+docker-compose --env-file=.env.local up -d
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 开发规范
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+⚠ **必读：[`CONTRIBUTING.md`](./CONTRIBUTING.md)**
+
+简言之：
+
+- 加新功能 = 加 `src/modules/[feature]/` 文件夹
+- 模块之间只能 import `index.ts`（ESLint 强制）
+- 所有 Server Action 入参 `Schema.parse()`
+- 错误用 `AppError`，不用 `new Error`
+- 落库不翻译字段，存原始 JSON
+
+## Phase 0 验收清单
+
+- [x] 项目骨架就绪（Next.js 16 + TS strict + Tailwind + shadcn/ui）
+- [x] Design tokens 应用（字节蓝 + 涨红跌绿 + KPI typography）
+- [x] ESLint 跨模块限制工作
+- [x] Pre-commit hook（typecheck + lint + format）+ commitlint
+- [x] Docker Compose 三容器（postgres + web + worker）启动成功
+- [x] Drizzle 迁移工作（`pnpm db:migrate`）
+- [x] env 通过 Zod 校验加载
+- [x] AppError 统一错误类型可用
+- [x] 钉钉机器人通知封装可用
+- [x] better-auth 集成 + 应急后门登录工作
+- [x] 钉钉 OAuth provider 占位（Phase 1 完整接入）
+- [x] 登录/Dashboard 闭环可走通
+- [x] Worker 进程 + cron 调度器可启动
+- [x] CONTRIBUTING.md 写完
+- [x] 平台数据样本（抖音/快手）已收集
+
+## 下一步
+
+进入 Phase 1（钉钉同步 + 权限系统）。
+
+## 项目结构
+
+```
+qjhy-pro/
+├── src/
+│   ├── app/          # Next.js 路由（页面/api）
+│   ├── modules/      # 业务模块（feature-first，目前空）
+│   ├── components/   # UI 组件（shadcn）
+│   ├── db/           # Drizzle schema + migration
+│   ├── lib/          # 共享工具（auth/env/errors/notify）
+│   └── worker/       # Worker 进程
+├── docs/
+│   ├── superpowers/  # spec / plan
+│   ├── design/       # design tokens
+│   └── raw-samples/  # 平台原始数据样本
+└── docker-compose.yml
+```
+
+## 相关文档
+
+- [设计文档](./docs/superpowers/specs/2026-04-30-qjhy-pro-design.md)
+- [Phase 0 实施计划](./docs/superpowers/plans/2026-04-30-phase-0-foundation.md)
+- [Design Tokens](./docs/design/tokens.md)
+- [开发规范](./CONTRIBUTING.md)
