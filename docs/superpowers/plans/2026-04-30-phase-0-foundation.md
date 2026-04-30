@@ -460,7 +460,7 @@ git commit -m "feat: add Tailwind + shadcn/ui with QJHY-Pro design tokens
 **Files:**
 - Create: `eslint.config.mjs`
 
-- [ ] **Step 1: 安装 ESLint + 必备插件**
+- [x] **Step 1: 安装 ESLint + 必备插件**
 
 ```bash
 pnpm add -D eslint @eslint/js typescript-eslint eslint-plugin-import \
@@ -468,7 +468,7 @@ pnpm add -D eslint @eslint/js typescript-eslint eslint-plugin-import \
             @next/eslint-plugin-next eslint-import-resolver-typescript
 ```
 
-- [ ] **Step 2: 创建 `eslint.config.mjs`**
+- [x] **Step 2: 创建 `eslint.config.mjs`**
 
 ```javascript
 // @ts-check
@@ -498,7 +498,7 @@ export default tseslint.config(
             {
               target: "./src/modules/**",
               from: "./src/modules/**",
-              except: ["./index.ts"],
+              except: ["**/index.ts"],
               message: "跨模块只允许 import 对方的 index.ts。详见 CONTRIBUTING.md 第 10.2 节。",
             },
           ],
@@ -527,7 +527,7 @@ export default tseslint.config(
 );
 ```
 
-- [ ] **Step 3: 在 `package.json` 加 lint script**
+- [x] **Step 3: 在 `package.json` 加 lint script**
 
 ```json
 {
@@ -538,7 +538,7 @@ export default tseslint.config(
 }
 ```
 
-- [ ] **Step 4: 运行 lint 验证**
+- [x] **Step 4: 运行 lint 验证**
 
 ```bash
 pnpm lint
@@ -546,7 +546,7 @@ pnpm lint
 
 Expected: 0 errors, 0 warnings（如果有，修到 0）。
 
-- [ ] **Step 5: 写一个故意违规的 import 验证 `no-restricted-paths` 工作**
+- [x] **Step 5: 写一个故意违规的 import 验证 `no-restricted-paths` 工作**
 
 临时创建 `src/modules/_test_a/index.ts`:
 ```typescript
@@ -575,13 +575,13 @@ pnpm lint
 
 Expected: 报错 "跨模块只允许 import 对方的 index.ts"。
 
-- [ ] **Step 6: 删除测试文件**
+- [x] **Step 6: 删除测试文件**
 
 ```bash
 rm -rf src/modules/_test_a src/modules/_test_b
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add eslint.config.mjs package.json pnpm-lock.yaml
