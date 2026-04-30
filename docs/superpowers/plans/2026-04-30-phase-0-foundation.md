@@ -595,13 +595,13 @@ git commit -m "chore: configure ESLint with cross-module import restrictions"
 **Files:**
 - Create: `.prettierrc`, `.prettierignore`
 
-- [ ] **Step 1: 安装 Prettier**
+- [x] **Step 1: 安装 Prettier**
 
 ```bash
 pnpm add -D prettier
 ```
 
-- [ ] **Step 2: 创建 `.prettierrc`**
+- [x] **Step 2: 创建 `.prettierrc`**
 
 ```json
 {
@@ -616,7 +616,7 @@ pnpm add -D prettier
 }
 ```
 
-- [ ] **Step 3: 创建 `.prettierignore`**
+- [x] **Step 3: 创建 `.prettierignore`**
 
 ```
 .next
@@ -628,7 +628,7 @@ src/db/migrations
 *.md
 ```
 
-- [ ] **Step 4: 在 `package.json` 加 format script**
+- [x] **Step 4: 在 `package.json` 加 format script**
 
 ```json
 {
@@ -639,7 +639,7 @@ src/db/migrations
 }
 ```
 
-- [ ] **Step 5: 跑一次 format:fix**
+- [x] **Step 5: 跑一次 format:fix**
 
 ```bash
 pnpm format:fix
@@ -647,7 +647,7 @@ pnpm format:fix
 
 Expected: 所有文件被格式化。
 
-- [ ] **Step 6: 验证 format 通过**
+- [x] **Step 6: 验证 format 通过**
 
 ```bash
 pnpm format
@@ -655,7 +655,7 @@ pnpm format
 
 Expected: "All matched files use Prettier code style!"
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add .prettierrc .prettierignore package.json pnpm-lock.yaml src/
@@ -670,7 +670,7 @@ git commit -m "chore: configure Prettier"
 - Create: `.husky/pre-commit`
 - Modify: `package.json`
 
-- [ ] **Step 1: 安装 Husky + lint-staged**
+- [x] **Step 1: 安装 Husky + lint-staged**
 
 ```bash
 pnpm add -D husky lint-staged
@@ -679,7 +679,7 @@ pnpm exec husky init
 
 Expected: 创建 `.husky/` 目录和 `.husky/pre-commit`。`package.json` 自动加上 `"prepare": "husky"`。
 
-- [ ] **Step 2: 替换 `.husky/pre-commit` 内容**
+- [x] **Step 2: 替换 `.husky/pre-commit` 内容**
 
 ```bash
 #!/usr/bin/env sh
@@ -691,7 +691,7 @@ pnpm exec tsc --noEmit
 echo "✅ Pre-commit passed"
 ```
 
-- [ ] **Step 3: 在 `package.json` 加 lint-staged 配置**
+- [x] **Step 3: 在 `package.json` 加 lint-staged 配置**
 
 ```json
 {
@@ -705,7 +705,7 @@ echo "✅ Pre-commit passed"
 }
 ```
 
-- [ ] **Step 4: 验证 hook 工作**
+- [x] **Step 4: 验证 hook 工作**
 
 故意改一个文件加点格式问题：
 
@@ -717,7 +717,7 @@ git commit -m "test: trigger pre-commit"
 
 Expected: pre-commit 自动 format + lint，commit 成功（因为是自动修复的）。
 
-- [ ] **Step 5: 撤销测试改动**
+- [x] **Step 5: 撤销测试改动**
 
 ```bash
 git revert --no-commit HEAD
@@ -733,7 +733,7 @@ git reset --hard HEAD~1
 
 ⚠️ 仅在确认上一个 commit 是测试 commit 时使用。
 
-- [ ] **Step 6: Commit hook 配置**
+- [x] **Step 6: Commit hook 配置**
 
 ```bash
 git add .husky package.json pnpm-lock.yaml
@@ -747,13 +747,13 @@ git commit -m "chore: add Husky pre-commit hook with lint-staged"
 **Files:**
 - Create: `commitlint.config.cjs`, `.husky/commit-msg`
 
-- [ ] **Step 1: 安装 commitlint**
+- [x] **Step 1: 安装 commitlint**
 
 ```bash
 pnpm add -D @commitlint/cli @commitlint/config-conventional
 ```
 
-- [ ] **Step 2: 创建 `commitlint.config.cjs`**
+- [x] **Step 2: 创建 `commitlint.config.cjs`**
 
 ```javascript
 module.exports = {
@@ -770,7 +770,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 3: 创建 `.husky/commit-msg`**
+- [x] **Step 3: 创建 `.husky/commit-msg`**
 
 ```bash
 #!/usr/bin/env sh
@@ -781,7 +781,7 @@ pnpm exec commitlint --edit $1
 chmod +x .husky/commit-msg
 ```
 
-- [ ] **Step 4: 验证 commitlint 工作**
+- [x] **Step 4: 验证 commitlint 工作**
 
 ```bash
 echo "" > /tmp/bad-msg
@@ -802,7 +802,7 @@ git commit --allow-empty -m "test: commitlint works"
 
 Expected: 成功。
 
-- [ ] **Step 5: Commit 测试 commit**
+- [x] **Step 5: Commit 测试 commit**
 
 刚才的 `test: commitlint works` 已经 commit 了。如果要保留 git history 干净，可以 reset。但既然是合法的，留着也行：
 
@@ -812,7 +812,7 @@ git log --oneline -1
 
 Expected: 看到 `test: commitlint works`。
 
-- [ ] **Step 6: Commit 配置文件**
+- [x] **Step 6: Commit 配置文件**
 
 ```bash
 git add commitlint.config.cjs .husky/commit-msg package.json pnpm-lock.yaml
