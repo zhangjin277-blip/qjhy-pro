@@ -2103,14 +2103,14 @@ git commit -m "feat: add dashboard with auth-protected layout"
 - Create: `src/worker/index.ts`, `src/worker/scheduler.ts`
 - Modify: `package.json`
 
-- [ ] **Step 1: 安装 node-cron**
+- [x] **Step 1: 安装 node-cron**
 
 ```bash
 pnpm add node-cron
 pnpm add -D @types/node-cron
 ```
 
-- [ ] **Step 2: 创建 `src/worker/scheduler.ts`**
+- [x] **Step 2: 创建 `src/worker/scheduler.ts`**
 
 ```typescript
 import cron from "node-cron";
@@ -2150,7 +2150,7 @@ export function listJobs(): Job[] {
 }
 ```
 
-- [ ] **Step 3: 创建 `src/worker/index.ts`**
+- [x] **Step 3: 创建 `src/worker/index.ts`**
 
 ```typescript
 import "@/lib/env"; // 验证 env
@@ -2178,7 +2178,7 @@ process.on("SIGTERM", () => {
 });
 ```
 
-- [ ] **Step 4: 在 `package.json` 加 worker script**
+- [x] **Step 4: 在 `package.json` 加 worker script**
 
 ```json
 {
@@ -2189,7 +2189,7 @@ process.on("SIGTERM", () => {
 }
 ```
 
-- [ ] **Step 5: 短跑 worker 验证**
+- [x] **Step 5: 短跑 worker 验证**
 
 ```bash
 pnpm worker &
@@ -2199,7 +2199,7 @@ kill %1
 
 Expected: 看到 `[scheduler] registered: heartbeat`，1 分钟后看到 `[heartbeat] 2026-...`。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/worker package.json pnpm-lock.yaml
@@ -2214,7 +2214,7 @@ git commit -m "feat: add worker process scaffold with cron scheduler"
 - Modify: `docker-compose.yml`
 - Create: `Dockerfile.web`, `Dockerfile.worker`, `.dockerignore`
 
-- [ ] **Step 1: 创建 `.dockerignore`**
+- [x] **Step 1: 创建 `.dockerignore`**
 
 ```
 node_modules
@@ -2228,7 +2228,7 @@ docs
 .vscode
 ```
 
-- [ ] **Step 2: 创建 `Dockerfile.web`**
+- [x] **Step 2: 创建 `Dockerfile.web`**
 
 ```dockerfile
 # syntax=docker/dockerfile:1.7
@@ -2264,7 +2264,7 @@ ENV HOSTNAME="0.0.0.0"
 CMD ["node", "server.js"]
 ```
 
-- [ ] **Step 3: 让 `next.config.ts` 输出 standalone**
+- [x] **Step 3: 让 `next.config.ts` 输出 standalone**
 
 修改 `next.config.ts`：
 
@@ -2278,7 +2278,7 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 ```
 
-- [ ] **Step 4: 创建 `Dockerfile.worker`**
+- [x] **Step 4: 创建 `Dockerfile.worker`**
 
 ```dockerfile
 # syntax=docker/dockerfile:1.7
@@ -2302,7 +2302,7 @@ COPY . .
 CMD ["pnpm", "exec", "tsx", "src/worker/index.ts"]
 ```
 
-- [ ] **Step 5: 修改 `docker-compose.yml` 加 web + worker**
+- [x] **Step 5: 修改 `docker-compose.yml` 加 web + worker**
 
 ```yaml
 version: "3.9"
@@ -2369,7 +2369,7 @@ volumes:
   qjhy_postgres_data:
 ```
 
-- [ ] **Step 6: 跑一次完整 docker-compose build**
+- [x] **Step 6: 跑一次完整 docker-compose build**
 
 ```bash
 docker-compose build
@@ -2377,7 +2377,7 @@ docker-compose build
 
 Expected: 三个镜像 build 完成（postgres 直接 pull，web/worker 编译）。镜像构建可能较慢（5-10 分钟，首次）。
 
-- [ ] **Step 7: 启动并验证**
+- [x] **Step 7: 启动并验证**
 
 ```bash
 docker-compose --env-file=.env.local up -d
@@ -2399,7 +2399,7 @@ docker-compose logs worker --tail=10
 
 Expected: 看到 `[scheduler] registered: heartbeat` 和 `[heartbeat] ...`。
 
-- [ ] **Step 8: 关闭 docker-compose**
+- [x] **Step 8: 关闭 docker-compose**
 
 ```bash
 docker-compose down
@@ -2407,7 +2407,7 @@ docker-compose down
 
 ⚠️ 不要带 `-v`，那会清掉 postgres 数据卷！
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add docker-compose.yml Dockerfile.web Dockerfile.worker .dockerignore next.config.ts
