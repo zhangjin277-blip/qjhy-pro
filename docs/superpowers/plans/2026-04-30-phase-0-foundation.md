@@ -4,9 +4,9 @@
 
 **Goal:** Stand up the QJHY-Pro project skeleton with all conventions, tooling, and infrastructure in place — so any business module built on top inherits the rules automatically (no opportunity to recreate the legacy mid-platform's "spaghetti").
 
-**Architecture:** Single-repo Next.js 15 monorepo. Two Docker containers (web + worker) sharing one PostgreSQL. All enforcement (TypeScript strict, ESLint cross-module restrictions, Zod parse, Drizzle migrations, pre-commit hooks, commitlint) is wired BEFORE the first business module is written. By the end of Phase 0, `docker-compose up` brings up an empty-but-runnable system, with DingTalk OAuth login + emergency backdoor working.
+**Architecture:** Single-repo Next.js 16 monorepo. Two Docker containers (web + worker) sharing one PostgreSQL. All enforcement (TypeScript strict, ESLint cross-module restrictions, Zod parse, Drizzle migrations, pre-commit hooks, commitlint) is wired BEFORE the first business module is written. By the end of Phase 0, `docker-compose up` brings up an empty-but-runnable system, with DingTalk OAuth login + emergency backdoor working.
 
-**Tech Stack:** Next.js 15 (App Router + RSC + Server Actions) · TypeScript strict · Tailwind v4 · shadcn/ui · Drizzle ORM · PostgreSQL 16 · Zod · better-auth · Husky · commitlint · Docker Compose · pnpm.
+**Tech Stack:** Next.js 16 (App Router + RSC + Server Actions) · TypeScript strict · Tailwind v4 · shadcn/ui · Drizzle ORM · PostgreSQL 16 · Zod · better-auth · Husky · commitlint · Docker Compose · pnpm.
 
 **Reference Spec:** `/Users/zhangjin/qjhy-pro/docs/superpowers/specs/2026-04-30-qjhy-pro-design.md`
 
@@ -99,13 +99,13 @@ qjhy-pro/
 
 ---
 
-## Task 1: 初始化 Next.js 15 项目骨架
+## Task 1: 初始化 Next.js 16 项目骨架
 
 **Files:**
 - Create: `package.json`, `tsconfig.json`, `next.config.ts`, `.editorconfig`, `.nvmrc`
 - Create: `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/globals.css`
 
-- [ ] **Step 1: 在 qjhy-pro 目录里初始化 Next.js 15 项目**
+- [ ] **Step 1: 在 qjhy-pro 目录里初始化 Next.js 16 项目**
 
 ```bash
 cd /Users/zhangjin/qjhy-pro
@@ -203,14 +203,14 @@ Expected: 0 errors。如有错误（比如未使用变量），修到通过。
 pnpm dev
 ```
 
-Expected: `▲ Next.js 15.x` 启动信息，`http://localhost:3000` 可访问。手动 Ctrl+C 关闭。
+Expected: `▲ Next.js 16.x` 启动信息，`http://localhost:3000` 可访问。手动 Ctrl+C 关闭。
 
 - [ ] **Step 8: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml tsconfig.json next.config.ts \
         .editorconfig .nvmrc src/ public/ next-env.d.ts postcss.config.mjs
-git commit -m "chore: bootstrap Next.js 15 with strict TypeScript"
+git commit -m "chore: bootstrap Next.js 16 with strict TypeScript"
 ```
 
 ---
@@ -2603,7 +2603,7 @@ git commit -m "docs: add Kuaishou raw data sample for Phase 2 schema design"
 
 ## 技术栈
 
-- Next.js 15 (App Router + RSC + Server Actions)
+- Next.js 16 (App Router + RSC + Server Actions)
 - TypeScript strict + Zod
 - PostgreSQL 16 + Drizzle ORM
 - Tailwind v4 + shadcn/ui
@@ -2667,7 +2667,7 @@ docker-compose --env-file=.env.local up -d
 
 ## Phase 0 验收清单
 
-✅ 项目骨架就绪（Next.js 15 + TS strict + Tailwind + shadcn/ui）
+✅ 项目骨架就绪（Next.js 16 + TS strict + Tailwind + shadcn/ui）
 ✅ ESLint 跨模块限制工作（故意违规会报错）
 ✅ Pre-commit hook（typecheck + lint + format）+ commitlint
 ✅ Docker Compose 三容器（postgres + web + worker）启动成功
@@ -2844,7 +2844,7 @@ git commit -m "feat: add idempotent emergency-user seed script"
 ```bash
 git tag -a v0.1.0-phase0 -m "Phase 0 foundation complete
 
-- Next.js 15 + TS strict + Tailwind + shadcn/ui
+- Next.js 16 + TS strict + Tailwind + shadcn/ui
 - ESLint cross-module restrictions enforced
 - Pre-commit hooks (typecheck/lint/format) + commitlint
 - Docker Compose (postgres + web + worker)

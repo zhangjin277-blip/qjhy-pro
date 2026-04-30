@@ -755,7 +755,7 @@ DINGTALK_BOT_WEBHOOK=https://oapi.dingtalk.com/robot/send?access_token=***
 
 | 层 | 选型 | 理由 |
 |---|---|---|
-| 前端框架 | Next.js 15 (App Router + RSC + Server Actions) | 单体最佳载体 |
+| 前端框架 | Next.js 16 (App Router + RSC + Server Actions) | 单体最佳载体 |
 | 语言 | TypeScript strict mode | 类型即接口契约 |
 | 样式 | Tailwind v4 | 主流 |
 | UI 组件 | shadcn/ui | 源码可改不被锁 |
@@ -794,7 +794,7 @@ Clerk（国外 SaaS，钉钉集成不友好）、Vercel（国内访问差、爬�
 
 | 任务 | 完成标志 |
 |---|---|
-| 初始化 Next.js 15 + pnpm + TS strict | `pnpm dev` 能跑 |
+| 初始化 Next.js 16 + pnpm + TS strict | `pnpm dev` 能跑 |
 | 安装 Tailwind v4 + shadcn/ui | 几个示例组件能渲染 |
 | 配置 ESLint/Biome + 跨模块 import 限制 | 故意写违规代码会报红 |
 | pre-commit hook（typecheck + lint + format） | 不通过不能提交 |
