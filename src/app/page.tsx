@@ -1,3 +1,8 @@
+/**
+ * Phase 0 临时演示页：用于验证 design tokens 是否生效。
+ * Task 17（dashboard 骨架）会整体替换本文件。
+ * 不要在此基础上添加业务功能。
+ */
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
