@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -18,6 +16,45 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: qjhy-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://qjhy:${POSTGRES_PASSWORD:-qjhy_dev_password}@postgres:5432/qjhy
+      AUTH_SECRET: ${AUTH_SECRET}
+      EMERGENCY_LOGIN_PASSWORD: ${EMERGENCY_LOGIN_PASSWORD}
+      DINGTALK_BOT_WEBHOOK: ${DINGTALK_BOT_WEBHOOK:-}
+      DINGTALK_APP_KEY: ${DINGTALK_APP_KEY:-}
+      DINGTALK_APP_SECRET: ${DINGTALK_APP_SECRET:-}
+      DINGTALK_CORP_ID: ${DINGTALK_CORP_ID:-}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: qjhy-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://qjhy:${POSTGRES_PASSWORD:-qjhy_dev_password}@postgres:5432/qjhy
+      AUTH_SECRET: ${AUTH_SECRET}
+      EMERGENCY_LOGIN_PASSWORD: ${EMERGENCY_LOGIN_PASSWORD}
+      DINGTALK_BOT_WEBHOOK: ${DINGTALK_BOT_WEBHOOK:-}
+      NODE_ENV: production
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
 
 volumes:
   qjhy_postgres_data:
