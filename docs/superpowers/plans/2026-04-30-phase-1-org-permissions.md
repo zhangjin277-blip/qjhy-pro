@@ -193,6 +193,19 @@ git status   # .env.local 不应出现
 **Files:**
 - Create: `src/lib/dingtalk/types.ts`, `src/lib/dingtalk/client.ts`, `src/lib/dingtalk/index.ts`
 
+### 🔥 复用提示：参考 PRO3 现有实现
+
+PRO3 项目已经实现过相同功能，可以**参考 4 个核心函数**：
+- 文件：`/Users/zhangjin/miracle-pro3/server/services/dingtalk/dingtalkOpenService.js`
+- 复用：`getAccessToken()` + `getAllDepartments()` + `getDepartmentUsers()` + `getAllUsers()`
+- **不复用**：考勤/审批同步、Express 路由（PRO3 业务专用）
+
+**操作建议**：
+1. 先读 PRO3 文件理解 API 调用方式（特别是接口路径、token 缓存策略、分页处理）
+2. 翻译成 TypeScript + Zod 校验响应
+3. 适配我们的 `AppError` 错误类型和 `env` 加载方式
+4. **不要**盲目照抄——PRO3 用 JS 没类型，我们要补类型；PRO3 用 sqlite，我们用 Postgres
+
 #### Step 1: 创建 `src/lib/dingtalk/types.ts`（钉钉 API 响应 Zod schema）
 
 ```typescript
