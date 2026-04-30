@@ -1526,13 +1526,13 @@ git commit -m "feat: add DingTalk bot notification (with error keyword)"
 - Create: `src/db/schema/auth.ts`
 - Modify: `src/db/schema/index.ts`
 
-- [ ] **Step 1: 安装 better-auth**
+- [x] **Step 1: 安装 better-auth**
 
 ```bash
 pnpm add better-auth
 ```
 
-- [ ] **Step 2: 创建 better-auth 所需的 schema (`src/db/schema/auth.ts`)**
+- [x] **Step 2: 创建 better-auth 所需的 schema (`src/db/schema/auth.ts`)**
 
 ```typescript
 import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
@@ -1590,14 +1590,14 @@ export const auth_verification = pgTable("auth_verification", {
 });
 ```
 
-- [ ] **Step 3: 在 `src/db/schema/index.ts` 加 `export * from "./auth"`**
+- [x] **Step 3: 在 `src/db/schema/index.ts` 加 `export * from "./auth"`**
 
 ```typescript
 export * from "./_meta";
 export * from "./auth";
 ```
 
-- [ ] **Step 4: 生成并跑 migration**
+- [x] **Step 4: 生成并跑 migration**
 
 ```bash
 pnpm db:generate
@@ -1612,7 +1612,7 @@ docker exec qjhy-postgres psql -U qjhy -d qjhy -c "\dt"
 
 应看到 `auth_user`, `auth_session`, `auth_account`, `auth_verification`, `_meta`。
 
-- [ ] **Step 5: 创建 `src/lib/auth/config.ts`**
+- [x] **Step 5: 创建 `src/lib/auth/config.ts`**
 
 ```typescript
 import { betterAuth } from "better-auth";
@@ -1636,7 +1636,7 @@ export const auth = betterAuth({
 export type Auth = typeof auth;
 ```
 
-- [ ] **Step 6: 创建 `src/lib/auth/emergency-login.ts`**
+- [x] **Step 6: 创建 `src/lib/auth/emergency-login.ts`**
 
 ```typescript
 import { env } from "@/lib/env";
@@ -1676,14 +1676,14 @@ export function isEmergencyUser(userId: string | undefined): boolean {
 }
 ```
 
-- [ ] **Step 7: 创建 `src/lib/auth/index.ts`**
+- [x] **Step 7: 创建 `src/lib/auth/index.ts`**
 
 ```typescript
 export { auth, type Auth } from "./config";
 export { verifyEmergencyPassword, isEmergencyUser, EMERGENCY_USER } from "./emergency-login";
 ```
 
-- [ ] **Step 8: 创建 better-auth 路由 `src/app/api/auth/[...all]/route.ts`**
+- [x] **Step 8: 创建 better-auth 路由 `src/app/api/auth/[...all]/route.ts`**
 
 ```typescript
 import { auth } from "@/lib/auth";
@@ -1692,7 +1692,7 @@ import { toNextJsHandler } from "better-auth/next-js";
 export const { GET, POST } = toNextJsHandler(auth.handler);
 ```
 
-- [ ] **Step 9: 验证 typecheck**
+- [x] **Step 9: 验证 typecheck**
 
 ```bash
 pnpm exec tsc --noEmit
@@ -1700,7 +1700,7 @@ pnpm exec tsc --noEmit
 
 Expected: 0 errors。
 
-- [ ] **Step 10: 启动 dev 验证 auth 路由**
+- [x] **Step 10: 启动 dev 验证 auth 路由**
 
 ```bash
 pnpm dev
@@ -1713,7 +1713,7 @@ curl -i http://localhost:3000/api/auth/get-session
 
 Expected: HTTP 200，body 是 JSON（可能是 `null` 或空 session）。Ctrl+C 关闭 dev。
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add src/lib/auth src/app/api src/db/schema src/db/migrations package.json pnpm-lock.yaml
@@ -1732,7 +1732,7 @@ git commit -m "feat: integrate better-auth with emergency backdoor login"
 > 真实 `DINGTALK_APP_KEY` / `DINGTALK_APP_SECRET` 由用户在钉钉开发者后台申请后填进 `.env.local`。
 > Phase 0 验收时**钉钉登录可以暂不实际工作**，只要应急登录工作即可。Phase 1 时配真实 token 后再验。
 
-- [ ] **Step 1: 创建 `src/lib/auth/dingtalk-provider.ts`**
+- [x] **Step 1: 创建 `src/lib/auth/dingtalk-provider.ts`**
 
 ```typescript
 import { env } from "@/lib/env";
@@ -1781,7 +1781,7 @@ export function isDingtalkProviderConfigured(): boolean {
 }
 ```
 
-- [ ] **Step 2: 修改 `src/lib/auth/config.ts` 接入钉钉 provider（条件注册）**
+- [x] **Step 2: 修改 `src/lib/auth/config.ts` 接入钉钉 provider（条件注册）**
 
 ```typescript
 import { betterAuth } from "better-auth";
@@ -1814,7 +1814,7 @@ export type Auth = typeof auth;
 
 > ⚠️ **此处实施提示**：better-auth 的 generic OAuth 集成方式可能随版本变化。Phase 0 只保留占位，Phase 1 再根据 better-auth 当时最新文档（用 context7 查最新版）完成对接。Phase 0 验收以"应急登录工作"为标准。
 
-- [ ] **Step 3: 验证 typecheck 仍通过**
+- [x] **Step 3: 验证 typecheck 仍通过**
 
 ```bash
 pnpm exec tsc --noEmit
@@ -1822,7 +1822,7 @@ pnpm exec tsc --noEmit
 
 Expected: 0 errors。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/auth
@@ -1836,13 +1836,13 @@ git commit -m "feat: scaffold DingTalk OAuth provider (Phase 1 will complete int
 **Files:**
 - Create: `src/app/(auth)/login/page.tsx`
 
-- [ ] **Step 1: 安装 Form 相关组件**
+- [x] **Step 1: 安装 Form 相关组件**
 
 ```bash
 pnpm dlx shadcn@latest add input label card
 ```
 
-- [ ] **Step 2: 创建 `src/app/(auth)/login/page.tsx`**
+- [x] **Step 2: 创建 `src/app/(auth)/login/page.tsx`**
 
 ```tsx
 "use client";
@@ -1939,7 +1939,7 @@ export default function LoginPage() {
 }
 ```
 
-- [ ] **Step 3: 在数据库手工建一个应急用户（一次性 seed）**
+- [x] **Step 3: 在数据库手工建一个应急用户（一次性 seed）**
 
 由于 better-auth 用 email/password，需要先在数据库里创建应急用户。最简单方法：通过 sign-up API。
 
@@ -1961,21 +1961,21 @@ Expected: HTTP 200，返回 user 对象。
 
 > 注：实际生产部署时，应通过专用 seed 脚本创建（Task 23 会做）。这里临时手工。
 
-- [ ] **Step 4: 访问登录页验证**
+- [x] **Step 4: 访问登录页验证**
 
 浏览器打开 `http://localhost:3000/login`，应看到登录卡片。
 
-- [ ] **Step 5: 用应急密码登录**
+- [x] **Step 5: 用应急密码登录**
 
 输入 `.env.local` 里的 `EMERGENCY_LOGIN_PASSWORD`，点"应急登录"。
 
 Expected: 跳转到 `/dashboard`（即将在 Task 17 创建）。如果 Task 17 还没做，会 404，**这是预期的**——只要登录成功（看到 cookie 被 set 即可）。
 
-- [ ] **Step 6: 验证应急登录通知**
+- [x] **Step 6: 验证应急登录通知**
 
 钉钉群应**不会**收到通知——因为通知逻辑写在 `verifyEmergencyPassword` 里，但 better-auth 走的是它自己的 email/password 流程。这个集成在 Phase 1 完善（需要写 better-auth 的钩子）。**Phase 0 暂不强制此通知**。
 
-- [ ] **Step 7: 关闭 dev，commit**
+- [x] **Step 7: 关闭 dev，commit**
 
 ```bash
 # Ctrl+C 关闭 dev
@@ -1992,7 +1992,7 @@ git commit -m "feat: add login page with emergency login form"
 - Create: `src/app/(dashboard)/layout.tsx`, `src/app/(dashboard)/dashboard/page.tsx`
 - Modify: `src/app/page.tsx`
 
-- [ ] **Step 1: 创建 dashboard 布局 `src/app/(dashboard)/layout.tsx`**
+- [x] **Step 1: 创建 dashboard 布局 `src/app/(dashboard)/layout.tsx`**
 
 ```tsx
 import { auth } from "@/lib/auth";
@@ -2027,7 +2027,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 }
 ```
 
-- [ ] **Step 2: 创建 dashboard 首页 `src/app/(dashboard)/dashboard/page.tsx`**
+- [x] **Step 2: 创建 dashboard 首页 `src/app/(dashboard)/dashboard/page.tsx`**
 
 ```tsx
 import { auth } from "@/lib/auth";
@@ -2061,7 +2061,7 @@ export default async function DashboardPage() {
 }
 ```
 
-- [ ] **Step 3: 修改 `src/app/page.tsx` 重定向到 dashboard 或 login**
+- [x] **Step 3: 修改 `src/app/page.tsx` 重定向到 dashboard 或 login**
 
 ```tsx
 import { auth } from "@/lib/auth";
@@ -2074,7 +2074,7 @@ export default async function Home() {
 }
 ```
 
-- [ ] **Step 4: 启动 dev 完整测一遍登录闭环**
+- [x] **Step 4: 启动 dev 完整测一遍登录闭环**
 
 ```bash
 pnpm dev
@@ -2088,7 +2088,7 @@ pnpm dev
 
 Ctrl+C 关闭 dev。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app
