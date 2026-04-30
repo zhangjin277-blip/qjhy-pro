@@ -134,7 +134,7 @@ export async function dingtalkGetToken(data: { code: string }): Promise<OAuth2To
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     accessTokenExpiresAt: new Date(Date.now() + tokens.expireIn * 1000),
-    scopes: ["openid", "corpid"],
+    scopes: ["openid", "Contact.User.Read"],
     raw: tokens as unknown as Record<string, unknown>,
   };
 }
