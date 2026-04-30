@@ -105,7 +105,7 @@ qjhy-pro/
 - Create: `package.json`, `tsconfig.json`, `next.config.ts`, `.editorconfig`, `.nvmrc`
 - Create: `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/globals.css`
 
-- [ ] **Step 1: 在 qjhy-pro 目录里初始化 Next.js 16 项目**
+- [x] **Step 1: 在 qjhy-pro 目录里初始化 Next.js 16 项目**
 
 ```bash
 cd /Users/zhangjin/qjhy-pro
@@ -125,7 +125,7 @@ Expected: 文件被覆盖前会问"directory not empty, continue?" → y。生�
 
 如果交互不便（在 agent 里），改用 `--yes` 跳过所有确认。
 
-- [ ] **Step 2: 安装依赖**
+- [x] **Step 2: 安装依赖**
 
 ```bash
 cd /Users/zhangjin/qjhy-pro
@@ -134,7 +134,7 @@ pnpm install
 
 Expected: 几十个包被装好，`pnpm-lock.yaml` 生成。
 
-- [ ] **Step 3: 修改 `tsconfig.json` 启用 strict 全部开关**
+- [x] **Step 3: 修改 `tsconfig.json` 启用 strict 全部开关**
 
 把 `compilerOptions` 改为：
 
@@ -169,7 +169,7 @@ Expected: 几十个包被装好，`pnpm-lock.yaml` 生成。
 }
 ```
 
-- [ ] **Step 4: 创建 `.editorconfig`**
+- [x] **Step 4: 创建 `.editorconfig`**
 
 ```ini
 root = true
@@ -183,13 +183,13 @@ trim_trailing_whitespace = true
 insert_final_newline = true
 ```
 
-- [ ] **Step 5: 创建 `.nvmrc`（锁定 Node 版本）**
+- [x] **Step 5: 创建 `.nvmrc`（锁定 Node 版本）**
 
 ```
 20
 ```
 
-- [ ] **Step 6: 验证编译可通过**
+- [x] **Step 6: 验证编译可通过**
 
 ```bash
 pnpm exec tsc --noEmit
@@ -197,7 +197,7 @@ pnpm exec tsc --noEmit
 
 Expected: 0 errors。如有错误（比如未使用变量），修到通过。
 
-- [ ] **Step 7: 验证 dev server 能启动**
+- [x] **Step 7: 验证 dev server 能启动**
 
 ```bash
 pnpm dev
@@ -205,7 +205,7 @@ pnpm dev
 
 Expected: `▲ Next.js 16.x` 启动信息，`http://localhost:3000` 可访问。手动 Ctrl+C 关闭。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml tsconfig.json next.config.ts \
