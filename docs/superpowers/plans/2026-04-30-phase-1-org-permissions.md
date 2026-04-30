@@ -137,7 +137,7 @@ NONE < SELF < TEAM < ALL
 - 回调域名：`http://localhost:3000`（dev）+ 未来生产域名
 - 权限点：`通讯录读权限`（必须）+ `身份验证扫码登录`
 
-- [ ] **Step 1: 在钉钉开发者后台创建应用，获取 credentials**
+- [x] **Step 1: 在钉钉开发者后台创建应用，获取 credentials**
 
 由你（用户）操作：
 1. 打开 https://open-dev.dingtalk.com/，用钉钉扫码登录企业管理员账号
@@ -158,7 +158,7 @@ NONE < SELF < TEAM < ALL
    - 服务器出口 IP：留空（开发期）
    - 接口调用回调域名：`localhost:3000`（dev）
 
-- [ ] **Step 2: 把 credentials 填入 `.env.local`**
+- [x] **Step 2: 把 credentials 填入 `.env.local`**
 
 ```bash
 # 编辑 /Users/zhangjin/qjhy-pro/.env.local
@@ -168,7 +168,7 @@ DINGTALK_APP_SECRET=填入appsecret
 DINGTALK_CORP_ID=填入corpid
 ```
 
-- [ ] **Step 3: 验证 env 加载**
+- [x] **Step 3: 验证 env 加载**
 
 ```bash
 cd /Users/zhangjin/qjhy-pro
@@ -178,7 +178,7 @@ pnpm exec tsx --env-file=.env.local -e \
 
 预期：`{ key: true, secret: true, corpid: true }`
 
-- [ ] **Step 4: 不要 commit（.env.local 已 ignore）**
+- [x] **Step 4: 不要 commit（.env.local 已 ignore）**
 
 ```bash
 git status   # .env.local 不应出现
