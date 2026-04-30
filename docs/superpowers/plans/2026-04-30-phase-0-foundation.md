@@ -2424,7 +2424,7 @@ git commit -m "feat: complete Docker Compose with web + worker containers"
 **Files:**
 - Create: `docs/raw-samples/README.md`, `docs/raw-samples/douyin-session-sample.md`
 
-- [ ] **Step 1: 创建 `docs/raw-samples/README.md`**
+- [x] **Step 1: 创建 `docs/raw-samples/README.md`**
 
 ```markdown
 # 平台数据样本
@@ -2453,7 +2453,7 @@ Phase 2 设计 `douyin_session` / `kuaishou_session` 等事实表时，必须知
 - `kuaishou-session-sample.md` - 快手单场数据
 ```
 
-- [ ] **Step 2: 在 PRO3 项目找抖音爬虫输出**
+- [x] **Step 2: 在 PRO3 项目找抖音爬虫输出**
 
 ```bash
 # 让用户帮忙定位
@@ -2478,7 +2478,7 @@ sqlite3 /Users/zhangjin/miracle-pro3/database.sqlite \
 
 如果 PRO3 已经做了"翻译"，dump 出的字段会是中文/拼音——这本身就是宝贵的"反面案例"，记录到 sample 里。
 
-- [ ] **Step 3: 创建 `docs/raw-samples/douyin-session-sample.md`**
+- [x] **Step 3: 创建 `docs/raw-samples/douyin-session-sample.md`**
 
 模板（用户填具体字段）：
 
@@ -2544,11 +2544,11 @@ PRO3 把字段翻译成了这些名字（**新中台禁止这样做**）：
 其他所有字段在 `raw` 里。
 ```
 
-- [ ] **Step 4: 实际填入数据（用户配合）**
+- [x] **Step 4: 实际填入数据（用户配合）**
 
 让用户跑爬虫或从 PRO3 dump 一条数据，填进上面的模板。**至少有 1 条真实样本就够 Phase 2 设计**。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/raw-samples/README.md docs/raw-samples/douyin-session-sample.md
@@ -2562,13 +2562,13 @@ git commit -m "docs: add Douyin raw data sample for Phase 2 schema design"
 **Files:**
 - Create: `docs/raw-samples/kuaishou-session-sample.md`
 
-- [ ] **Step 1-4: 重复 Task 20 的流程，但目标平台是快手**
+- [x] **Step 1-4: 重复 Task 20 的流程，但目标平台是快手**
 
 参考 Task 20 的模板，文件名 `docs/raw-samples/kuaishou-session-sample.md`。
 
 字段会和抖音不同——这是预期的。每平台一张表，**不必硬性对齐**。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/raw-samples/kuaishou-session-sample.md
@@ -2582,7 +2582,7 @@ git commit -m "docs: add Kuaishou raw data sample for Phase 2 schema design"
 **Files:**
 - Create: `README.md`
 
-- [ ] **Step 1: 创建 `README.md`**
+- [x] **Step 1: 创建 `README.md`**
 
 ```markdown
 # QJHY-Pro
@@ -2710,7 +2710,7 @@ qjhy-pro/
 - [开发规范](./CONTRIBUTING.md)
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add README.md
@@ -2725,7 +2725,7 @@ git commit -m "docs: add README with Phase 0 acceptance checklist"
 - Create: `src/db/seed/emergency-user.ts`
 - Modify: `package.json`
 
-- [ ] **Step 1: 创建 `src/db/seed/emergency-user.ts`**
+- [x] **Step 1: 创建 `src/db/seed/emergency-user.ts`**
 
 ```typescript
 /**
@@ -2772,7 +2772,7 @@ main().catch((err) => {
 });
 ```
 
-- [ ] **Step 2: 在 `package.json` 加 seed script**
+- [x] **Step 2: 在 `package.json` 加 seed script**
 
 ```json
 {
@@ -2782,7 +2782,7 @@ main().catch((err) => {
 }
 ```
 
-- [ ] **Step 3: 跑一遍 seed 脚本（idempotent）**
+- [x] **Step 3: 跑一遍 seed 脚本（idempotent）**
 
 ```bash
 pnpm db:seed:emergency
@@ -2790,7 +2790,7 @@ pnpm db:seed:emergency
 
 Expected: 输出"emergency user already exists"（之前 Task 16 手工创建过）。如果是干净环境，会输出 "created: xxx"。
 
-- [ ] **Step 4: Phase 0 完整端到端验收**
+- [x] **Step 4: Phase 0 完整端到端验收**
 
 执行以下完整流程，所有步骤都应成功：
 
@@ -2832,14 +2832,14 @@ docker-compose down
 
 如果任何一步失败，回到对应 task 修复后再重跑此清单。
 
-- [ ] **Step 5: 提交 seed 脚本**
+- [x] **Step 5: 提交 seed 脚本**
 
 ```bash
 git add src/db/seed package.json
 git commit -m "feat: add idempotent emergency-user seed script"
 ```
 
-- [ ] **Step 6: 打 Phase 0 完成 tag**
+- [x] **Step 6: 打 Phase 0 完成 tag**
 
 ```bash
 git tag -a v0.1.0-phase0 -m "Phase 0 foundation complete
@@ -2859,7 +2859,7 @@ git tag -a v0.1.0-phase0 -m "Phase 0 foundation complete
 "
 ```
 
-- [ ] **Step 7: 总结提交**
+- [x] **Step 7: 总结提交**
 
 更新 `CONTRIBUTING.md` 第 8 节"已注册模块清单"——Phase 0 没有业务模块，但可以加一行说明：
 
