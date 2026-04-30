@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { authClient } from "@/lib/auth/auth-client";
 
 export default function LoginPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [dingtalkLoading, setDingtalkLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleEmergencyLogin(e: React.FormEvent) {
@@ -38,8 +40,26 @@ export default function LoginPage() {
     }
   }
 
-  function handleDingtalkLogin() {
-    setError("钉钉登录将在 Phase 1 启用。请使用应急登录。");
+  async function handleDingtalkLogin() {
+    setDingtalkLoading(true);
+    setError(null);
+    try {
+      // genericOAuthClient 暴露 signIn.oauth2，会重定向到钉钉授权页。
+      // 钉钉授权后回调到 /api/auth/oauth2/callback/dingtalk，better-auth 处理后跳到 callbackURL。
+      const result = await authClient.signIn.oauth2({
+        providerId: "dingtalk",
+        callbackURL: "/dashboard",
+        errorCallbackURL: "/login",
+      });
+      // 正常情况下浏览器已被重定向，到这里说明返回了 url 但未自动跳。
+      if (result?.error) {
+        setError(`钉钉登录失败：${result.error.message ?? "未知错误"}`);
+      }
+    } catch (err) {
+      setError(`钉钉登录失败：${err instanceof Error ? err.message : "未知错误"}`);
+    } finally {
+      setDingtalkLoading(false);
+    }
   }
 
   return (
@@ -50,8 +70,8 @@ export default function LoginPage() {
           <CardDescription>使用钉钉扫码或应急账号登录</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button onClick={handleDingtalkLogin} className="w-full">
-            钉钉扫码登录（Phase 1 启用）
+          <Button onClick={handleDingtalkLogin} disabled={dingtalkLoading} className="w-full">
+            {dingtalkLoading ? "正在跳转钉钉..." : "钉钉扫码登录"}
           </Button>
 
           <div className="relative my-4">
