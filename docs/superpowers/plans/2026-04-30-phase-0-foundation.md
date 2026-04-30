@@ -957,7 +957,7 @@ git commit -m "docs: add CONTRIBUTING guidelines (project constitution)"
 **Files:**
 - Create: `docker-compose.yml`
 
-- [ ] **Step 1: 创建 `docker-compose.yml`**
+- [x] **Step 1: 创建 `docker-compose.yml`**
 
 ```yaml
 version: "3.9"
@@ -985,7 +985,7 @@ volumes:
   qjhy_postgres_data:
 ```
 
-- [ ] **Step 2: 启动 Postgres 容器**
+- [x] **Step 2: 启动 Postgres 容器**
 
 ```bash
 docker-compose up -d postgres
@@ -993,7 +993,7 @@ docker-compose up -d postgres
 
 Expected: 容器启动，5-10 秒后 health check 通过。
 
-- [ ] **Step 3: 验证可连接**
+- [x] **Step 3: 验证可连接**
 
 ```bash
 docker exec qjhy-postgres pg_isready -U qjhy -d qjhy
@@ -1001,7 +1001,7 @@ docker exec qjhy-postgres pg_isready -U qjhy -d qjhy
 
 Expected: `accepting connections`。
 
-- [ ] **Step 4: 用 psql 验证**
+- [x] **Step 4: 用 psql 验证**
 
 ```bash
 docker exec -it qjhy-postgres psql -U qjhy -d qjhy -c "SELECT version();"
@@ -1009,7 +1009,7 @@ docker exec -it qjhy-postgres psql -U qjhy -d qjhy -c "SELECT version();"
 
 Expected: 看到 PostgreSQL 16.x 版本信息。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docker-compose.yml
@@ -1024,14 +1024,14 @@ git commit -m "feat: add Docker Compose with Postgres 16"
 - Create: `drizzle.config.ts`, `src/db/client.ts`
 - Modify: `package.json`
 
-- [ ] **Step 1: 安装 Drizzle**
+- [x] **Step 1: 安装 Drizzle**
 
 ```bash
 pnpm add drizzle-orm postgres
 pnpm add -D drizzle-kit
 ```
 
-- [ ] **Step 2: 创建 `drizzle.config.ts`**
+- [x] **Step 2: 创建 `drizzle.config.ts`**
 
 ```typescript
 import { defineConfig } from "drizzle-kit";
@@ -1048,7 +1048,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 3: 创建 `src/db/client.ts`**
+- [x] **Step 3: 创建 `src/db/client.ts`**
 
 ```typescript
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -1066,7 +1066,7 @@ export const db = drizzle(queryClient);
 export type Db = typeof db;
 ```
 
-- [ ] **Step 4: 在 `package.json` 加 db scripts**
+- [x] **Step 4: 在 `package.json` 加 db scripts**
 
 ```json
 {
@@ -1079,7 +1079,7 @@ export type Db = typeof db;
 }
 ```
 
-- [ ] **Step 5: 验证连接（用 db:studio 短测）**
+- [x] **Step 5: 验证连接（用 db:studio 短测）**
 
 ```bash
 pnpm db:studio
@@ -1087,7 +1087,7 @@ pnpm db:studio
 
 Expected: Drizzle Studio 在 https://local.drizzle.studio 启动，连接 Postgres 成功（数据库为空）。Ctrl+C 关闭。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add drizzle.config.ts src/db/client.ts package.json pnpm-lock.yaml
@@ -1101,7 +1101,7 @@ git commit -m "feat: configure Drizzle ORM with PostgreSQL"
 **Files:**
 - Create: `src/db/schema/index.ts`, `src/db/schema/_meta.ts`
 
-- [ ] **Step 1: 创建 `src/db/schema/_meta.ts`（占位 + 健康检查表）**
+- [x] **Step 1: 创建 `src/db/schema/_meta.ts`（占位 + 健康检查表）**
 
 ```typescript
 import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
@@ -1118,13 +1118,13 @@ export const _meta = pgTable("_meta", {
 });
 ```
 
-- [ ] **Step 2: 创建 `src/db/schema/index.ts`**
+- [x] **Step 2: 创建 `src/db/schema/index.ts`**
 
 ```typescript
 export * from "./_meta";
 ```
 
-- [ ] **Step 3: 生成 migration**
+- [x] **Step 3: 生成 migration**
 
 ```bash
 pnpm db:generate
@@ -1132,7 +1132,7 @@ pnpm db:generate
 
 Expected: `src/db/migrations/0000_xxx.sql` 生成，包含 CREATE TABLE _meta。
 
-- [ ] **Step 4: 跑 migration**
+- [x] **Step 4: 跑 migration**
 
 ```bash
 pnpm db:migrate
@@ -1140,7 +1140,7 @@ pnpm db:migrate
 
 Expected: 输出 "Applied migrations"。
 
-- [ ] **Step 5: 验证表存在**
+- [x] **Step 5: 验证表存在**
 
 ```bash
 docker exec qjhy-postgres psql -U qjhy -d qjhy -c "\dt"
@@ -1148,7 +1148,7 @@ docker exec qjhy-postgres psql -U qjhy -d qjhy -c "\dt"
 
 Expected: 看到 `_meta` 表。
 
-- [ ] **Step 6: 在 `_meta` 表插入一条版本记录**
+- [x] **Step 6: 在 `_meta` 表插入一条版本记录**
 
 ```bash
 docker exec qjhy-postgres psql -U qjhy -d qjhy -c \
@@ -1161,7 +1161,7 @@ docker exec qjhy-postgres psql -U qjhy -d qjhy -c "SELECT * FROM _meta;"
 
 Expected: 返回一行 `schema_version | 0.1.0-phase0`。
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/db/schema src/db/migrations
