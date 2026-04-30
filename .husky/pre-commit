@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+
+echo "🔍 Pre-commit checks..."
+pnpm exec lint-staged
+echo "🔍 Type checking..."
+pnpm exec tsc --noEmit
+echo "✅ Pre-commit passed"
