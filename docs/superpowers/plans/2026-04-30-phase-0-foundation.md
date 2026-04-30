@@ -261,6 +261,129 @@ pnpm dlx shadcn@latest add button
 
 Expected: 生成 `src/components/ui/button.tsx`。
 
+- [ ] **Step 4.5: 应用 QJHY-Pro design tokens（覆盖 shadcn 默认色）**
+
+设计 token 完整定义见 [`docs/design/tokens.md`](../../design/tokens.md)。基于真实百应（抖音公会管理后台）UI 截图分析得出的字节 Semi Design 风格。
+
+把 `src/app/globals.css` **整个替换**为以下内容：
+
+```css
+@import "tailwindcss";
+
+/* ========== Primitives ========== */
+@theme {
+  /* 蓝色 scale - 字节蓝，主色调 */
+  --color-blue-50:  #EBF1FF;
+  --color-blue-100: #D6E4FF;
+  --color-blue-200: #ADC8FF;
+  --color-blue-300: #85ADFF;
+  --color-blue-400: #5C8AFF;
+  --color-blue-500: #4080FF;
+  --color-blue-600: #2B5CFF;
+  --color-blue-700: #1947FA;
+  --color-blue-800: #0E32CC;
+  --color-blue-900: #0A2399;
+
+  /* 灰色 scale - 中性 11 级 */
+  --color-gray-0:   #FFFFFF;
+  --color-gray-50:  #F7F8FA;
+  --color-gray-100: #F2F3F5;
+  --color-gray-200: #E5E6EB;
+  --color-gray-300: #C9CDD4;
+  --color-gray-400: #86909C;
+  --color-gray-500: #6B7785;
+  --color-gray-600: #4E5969;
+  --color-gray-700: #272E3B;
+  --color-gray-800: #1D2129;
+  --color-gray-900: #0F1419;
+
+  /* 状态 */
+  --color-success: #00B42A;
+  --color-warning: #FF7D00;
+  --color-danger:  #F53F3F;
+
+  /* 字体 - 中文优先 PingFang SC */
+  --font-sans:
+    "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+  /* radius */
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+/* ========== Semantic (light) ========== */
+:root {
+  --background: var(--color-gray-50);
+  --foreground: var(--color-gray-800);
+  --card: var(--color-gray-0);
+  --card-foreground: var(--color-gray-800);
+  --popover: var(--color-gray-0);
+  --popover-foreground: var(--color-gray-800);
+  --primary: var(--color-blue-600);
+  --primary-foreground: var(--color-gray-0);
+  --secondary: var(--color-gray-100);
+  --secondary-foreground: var(--color-gray-700);
+  --muted: var(--color-gray-100);
+  --muted-foreground: var(--color-gray-400);
+  --accent: var(--color-blue-50);
+  --accent-foreground: var(--color-blue-700);
+  --destructive: var(--color-danger);
+  --destructive-foreground: var(--color-gray-0);
+  --border: var(--color-gray-200);
+  --input: var(--color-gray-200);
+  --ring: var(--color-blue-100);
+
+  /* 业务语义 */
+  --sidebar: #F2F6FE;
+  --change-up: #F53F3F;     /* 涨红 */
+  --change-down: #00B42A;   /* 跌绿 */
+  --change-flat: var(--color-gray-400);
+}
+
+/* ========== Semantic (dark) - Phase 3 完善 ========== */
+.dark {
+  --background: #0F1419;
+  --foreground: var(--color-gray-50);
+  --card: #1A1F26;
+  --card-foreground: var(--color-gray-50);
+  --primary: var(--color-blue-500);
+  --primary-foreground: var(--color-gray-50);
+  --border: #2A3140;
+  --sidebar: #161B23;
+}
+
+/* ========== Base 样式 ========== */
+* { box-sizing: border-box; }
+html, body { font-family: var(--font-sans); }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 数据 KPI 数字工具类 */
+.kpi-value {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 涨跌色工具类（中国 B 端：涨红跌绿）*/
+.change-up   { color: var(--change-up); }
+.change-down { color: var(--change-down); }
+.change-flat { color: var(--change-flat); }
+```
+
+> ⚠️ **重要**：shadcn init 默认生成的 `globals.css` 用的是它自己的色板（`--primary` 是黑色），必须**整个替换**为以上内容才能让 shadcn 组件用我们的字节蓝。
+
 - [ ] **Step 5: 在首页验证 Button 渲染**
 
 修改 `src/app/page.tsx`：
@@ -271,29 +394,63 @@ import { Button } from "@/components/ui/button";
 export default function Home() {
   return (
     <main className="flex min-h-screen items-center justify-center">
-      <div className="space-y-4 text-center">
+      <div className="space-y-6 text-center">
         <h1 className="text-3xl font-bold">QJHY-Pro</h1>
         <p className="text-muted-foreground">新中台 · Phase 0 骨架</p>
-        <Button>Hello shadcn</Button>
+
+        {/* Token 应用验证：按钮 + KPI 数字 + 涨跌色 */}
+        <div className="flex gap-3 justify-center">
+          <Button>主按钮</Button>
+          <Button variant="secondary">次要</Button>
+          <Button variant="outline">轮廓</Button>
+          <Button variant="ghost">幽灵</Button>
+        </div>
+
+        <div className="rounded-lg bg-card p-6 shadow-sm border text-left max-w-sm mx-auto">
+          <p className="text-sm text-muted-foreground">音浪</p>
+          <p className="kpi-value">12.34万</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            昨日同期 10.59万 <span className="change-up">+16% ▲</span>
+          </p>
+          <p className="text-sm text-muted-foreground">
+            上周同期 16.00万 <span className="change-down">-23% ▼</span>
+          </p>
+        </div>
       </div>
     </main>
   );
 }
 ```
 
-- [ ] **Step 6: 启动 dev 验证**
+- [ ] **Step 6: 启动 dev 验证 design tokens 已生效**
 
 ```bash
 pnpm dev
 ```
 
-打开 `http://localhost:3000`，应看到 "QJHY-Pro" 标题和按钮。Ctrl+C 关闭。
+打开 `http://localhost:3000`，应看到：
+- ✅ 主按钮是**字节蓝** `#2B5CFF`（不是 shadcn 默认黑色）
+- ✅ 整页背景**浅灰** `#F7F8FA`（不是纯白）
+- ✅ 卡片白底 + 极轻阴影 + `8px` 圆角
+- ✅ "12.34万" 是大字号粗体（`32px / 700`）
+- ✅ "+16% ▲" **红色**（中国习惯：涨红）
+- ✅ "-23% ▼" **绿色**（中国习惯：跌绿）
+- ✅ 中文用 PingFang SC（macOS 上）
+
+如有问题，检查 `src/app/globals.css` 是否完整替换。
+
+Ctrl+C 关闭 dev。
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add src/lib/utils/cn.ts components.json src/components src/app/page.tsx src/app/globals.css package.json pnpm-lock.yaml
-git commit -m "feat: add Tailwind + shadcn/ui with Button component"
+git commit -m "feat: add Tailwind + shadcn/ui with QJHY-Pro design tokens
+
+- Apply Bytedance Semi Design inspired palette (字节蓝 #2B5CFF)
+- Sidebar bg, KPI typography scale, China-convention 涨红跌绿 colors
+- Override shadcn defaults via CSS variables in globals.css
+- Reference: docs/design/tokens.md"
 ```
 
 ---
