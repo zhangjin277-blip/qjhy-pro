@@ -21,18 +21,6 @@ export const DingtalkAccessTokenResponse = z.object({
 });
 export type DingtalkAccessTokenResponse = z.infer<typeof DingtalkAccessTokenResponse>;
 
-// ---------- 老版 topapi 通用响应封装 ----------
-
-/** 老版 topapi 接口统一外层结构：errcode === 0 表示成功 */
-export const DingtalkTopApiEnvelope = z.object({
-  errcode: z.number(),
-  errmsg: z.string().optional(),
-  // 不同接口的 result 形态各异，由具体调用方做二次校验
-  result: z.unknown().optional(),
-  request_id: z.string().optional(),
-});
-export type DingtalkTopApiEnvelope = z.infer<typeof DingtalkTopApiEnvelope>;
-
 // ---------- 部门 ----------
 
 /** 老版 /topapi/v2/department/listsub 返回的部门项 */
@@ -68,7 +56,12 @@ export const DingtalkUser = z.object({
   unionid: z.string().optional(),
   /** 由 fetchAllUsers 在去重时附加：用户所属的部门 ID 列表 */
   dept_id_list: z.array(z.number()).optional(),
-  /** 由 fetchAllUsers 在去重时附加：用户主部门名称（首次出现的部门）*/
+  /**
+   * DFS 顺序中第一次遇到该用户时的部门名（合成字段，非钉钉原生）。
+   * ⚠️ 注意：这不一定是钉钉里设置的"主部门"——准确主部门需要从 dept_order_list（order 最小）取，
+   * 但 listsimple 不返回该字段。Phase 3 接 /topapi/v2/user/get 时再补。
+   * 当前用于快速展示，不要在权限/业务逻辑里依赖此字段做决策。
+   */
   dept_name: z.string().optional(),
 });
 export type DingtalkUser = z.infer<typeof DingtalkUser>;

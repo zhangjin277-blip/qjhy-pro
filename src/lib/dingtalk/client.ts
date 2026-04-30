@@ -28,18 +28,39 @@ const NEW_API_BASE = "https://api.dingtalk.com";
 const TOPAPI_BASE = "https://oapi.dingtalk.com";
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
+/**
+ * 正在进行中的 token 拉取请求（共享锁）。
+ *
+ * 当 N 个并发请求同时发现缓存失效时，只有第一个会真正发起 fetch，
+ * 其余 N-1 个 await 同一个 Promise，避免对钉钉 token 接口造成 stampede
+ * （限流 100 次/分钟/appkey）。
+ */
+let inflightTokenRequest: Promise<string> | null = null;
 
 /**
- * 获取（带缓存的）access_token。
+ * 获取（带缓存 + 并发锁的）access_token。
  *
  * 钉钉 access_token 默认有效期 7200 秒，我们提前 100 秒刷新留余量。
- * 钉钉对 token 接口有限流（每个 appkey 100 次/分钟），但有缓存就不会触发。
+ * check-then-act 中间用 inflight Promise 共享锁防止并发 stampede。
  */
 async function getAccessToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
     return cachedToken.token;
   }
+  if (inflightTokenRequest) {
+    return inflightTokenRequest;
+  }
+  inflightTokenRequest = fetchTokenFresh().finally(() => {
+    inflightTokenRequest = null;
+  });
+  return inflightTokenRequest;
+}
 
+/**
+ * 实际拉取一次新 token 并写入缓存。仅由 getAccessToken 调用，
+ * 调用方负责并发控制（inflightTokenRequest 共享锁）。
+ */
+async function fetchTokenFresh(): Promise<string> {
   if (!env.DINGTALK_APP_KEY || !env.DINGTALK_APP_SECRET) {
     throw new AppError("DINGTALK_NOT_CONFIGURED", "钉钉 APP_KEY 或 APP_SECRET 未配置", 500);
   }
@@ -88,7 +109,7 @@ async function getAccessToken(): Promise<string> {
  * 老版返回结构：{ errcode, errmsg, result, request_id }
  * errcode === 0 才是成功。响应外层用 envelopeSchema 校验。
  */
-async function callTopApi<T>(
+async function callTopApi<T extends { errcode: number; errmsg?: string }>(
   path: string,
   body: Record<string, unknown>,
   envelopeSchema: import("zod").ZodType<T>,
@@ -123,8 +144,7 @@ async function callTopApi<T>(
     );
   }
 
-  // 所有 topapi 响应都有 errcode 字段，我们在 schema 里强制要求
-  const data = parsed.data as { errcode: number; errmsg?: string };
+  const data = parsed.data;
   if (data.errcode !== 0) {
     throw new AppError(
       "DINGTALK_API_FAILED",
@@ -134,7 +154,7 @@ async function callTopApi<T>(
     );
   }
 
-  return parsed.data;
+  return data;
 }
 
 /**
@@ -142,11 +162,17 @@ async function callTopApi<T>(
  *
  * 钉钉的 listsub 接口只返回直接子部门，需要递归遍历整棵树。
  * 根部门固定为 dept_id=1。
+ *
+ * 通过 visited set 防御异常脏数据导致的环路（钉钉理论上不会出现，但
+ * 防御式编程更稳）。
  */
 export async function fetchAllDepartments(): Promise<DingtalkDept[]> {
   const result: DingtalkDept[] = [];
 
-  async function walk(parentId: number): Promise<void> {
+  async function walk(parentId: number, visited: Set<number>): Promise<void> {
+    if (visited.has(parentId)) return;
+    visited.add(parentId);
+
     const resp = await callTopApi(
       "/topapi/v2/department/listsub",
       { dept_id: parentId },
@@ -160,11 +186,11 @@ export async function fetchAllDepartments(): Promise<DingtalkDept[]> {
         parent_id: parentId,
       });
       // 递归子部门
-      await walk(d.dept_id);
+      await walk(d.dept_id, visited);
     }
   }
 
-  await walk(1);
+  await walk(1, new Set<number>());
   return result;
 }
 
@@ -173,13 +199,26 @@ export async function fetchAllDepartments(): Promise<DingtalkDept[]> {
  *
  * 老版 listsimple 接口分页参数：cursor + size，size 最大 100，但 50 比较稳。
  * 返回 has_more=false 时翻页结束。
+ *
+ * 防护：
+ * - 1000 页硬上限：单部门 50 * 1000 = 50000 用户，远超合理规模
+ * - cursor 推进检查：如果 has_more=true 但 next_cursor 没动，立即报错
+ *   避免无限循环
  */
 export async function fetchUsersInDepartment(deptId: number): Promise<DingtalkUser[]> {
   const users: DingtalkUser[] = [];
   let cursor = 0;
   let hasMore = true;
+  let pageCount = 0;
 
   while (hasMore) {
+    if (pageCount++ > 1000) {
+      throw new AppError("DINGTALK_PAGINATION_RUNAWAY", `部门 ${deptId} 分页超过 1000 页`, 500, {
+        deptId,
+        pageCount,
+      });
+    }
+
     const resp = await callTopApi(
       "/topapi/user/listsimple",
       { dept_id: deptId, cursor, size: 50 },
@@ -188,7 +227,18 @@ export async function fetchUsersInDepartment(deptId: number): Promise<DingtalkUs
     const list = resp.result?.list ?? [];
     users.push(...list);
     hasMore = resp.result?.has_more ?? false;
-    cursor = resp.result?.next_cursor ?? 0;
+    const nextCursor = resp.result?.next_cursor ?? 0;
+
+    // has_more=true 但 cursor 不前进 → 必定死循环，立即中断
+    if (hasMore && nextCursor === cursor) {
+      throw new AppError(
+        "DINGTALK_PAGINATION_NO_PROGRESS",
+        `部门 ${deptId} cursor 未推进（cursor=${cursor}, next_cursor=${nextCursor}）`,
+        500,
+        { deptId, cursor, nextCursor },
+      );
+    }
+    cursor = nextCursor;
   }
 
   return users;
@@ -197,8 +247,9 @@ export async function fetchUsersInDepartment(deptId: number): Promise<DingtalkUs
 /**
  * 拉取组织内所有用户（按 userid 去重）。
  *
- * 同一用户可能挂在多个部门下，去重时合并 dept_id_list，记录首次出现的
- * 部门名作为 dept_name（与 PRO3 行为一致）。
+ * 同一用户可能挂在多个部门下，去重时合并 dept_id_list，记录 DFS 顺序中
+ * 首次遇到的部门名作为 dept_name。⚠️ dept_name 不一定是钉钉里的"主部门"
+ * （详见 types.ts 注释），仅用于展示。
  */
 export async function fetchAllUsers(): Promise<DingtalkUser[]> {
   const depts = await fetchAllDepartments();
@@ -228,10 +279,11 @@ export async function fetchAllUsers(): Promise<DingtalkUser[]> {
 }
 
 /**
- * 仅供测试使用：清空 token 缓存。
+ * 仅供测试使用：清空 token 缓存 + inflight 锁。
  *
  * 生产代码不要调用——会导致下次请求多一次 token RTT。
  */
 export function __resetTokenCacheForTest(): void {
   cachedToken = null;
+  inflightTokenRequest = null;
 }

@@ -5,4 +5,4 @@
  */
 export { fetchAllDepartments, fetchUsersInDepartment, fetchAllUsers } from "./client";
 
-export type { DingtalkDept, DingtalkUser, DingtalkAccessTokenResponse } from "./types";
+export type { DingtalkDept, DingtalkUser } from "./types";
