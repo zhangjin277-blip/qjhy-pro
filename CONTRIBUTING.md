@@ -78,6 +78,7 @@ src/app/(dashboard)/[feature]/page.tsx
 | 模块             | 路径                         | 简介                                            | 注册时间                |
 | ---------------- | ---------------------------- | ----------------------------------------------- | ----------------------- |
 | _基础设施_（非业务模块） | `src/lib/*`、`src/worker/*` | env、auth、errors、notify、worker scheduler | Phase 0 (2026-04-30) |
+| permissions | `src/modules/permissions/` | 三层叠加权限计算 + Server Actions + ScopeFilter | Phase 1 (2026-05-01) |
 
 > 每加一个业务模块，PR 里必须更新此表。
 
