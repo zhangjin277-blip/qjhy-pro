@@ -29,6 +29,13 @@
       "when": 1777597385496,
       "tag": "0003_foamy_joystick",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777597419683,
+      "tag": "0004_fine_big_bertha",
+      "breakpoints": true
     }
   ]
 }
