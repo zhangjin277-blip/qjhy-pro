@@ -1,17 +1,23 @@
 import "@/lib/env"; // 验证 env
 
 import { registerJob, startScheduler } from "./scheduler";
+import { syncDingtalk } from "./jobs/sync-dingtalk";
 
-// Phase 0 占位 job：每分钟打个心跳，证明 worker 在跑
+// 每天凌晨 02:00 全量同步钉钉组织架构
+registerJob({
+  name: "sync-dingtalk",
+  schedule: "0 2 * * *",
+  task: syncDingtalk,
+});
+
+// 心跳 job，每小时一次（证明 worker 进程活着）
 registerJob({
   name: "heartbeat",
-  schedule: "* * * * *",
+  schedule: "0 * * * *",
   task: async () => {
     console.log(`[heartbeat] ${new Date().toISOString()}`);
   },
 });
-
-// Phase 1 / 2 会在这里 register 钉钉同步、爬虫等任务
 
 console.log("[worker] qjhy-pro worker starting");
 startScheduler();
