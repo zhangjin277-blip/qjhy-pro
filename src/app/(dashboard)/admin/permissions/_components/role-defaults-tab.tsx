@@ -46,6 +46,13 @@ const EMPTY_ROLE: Role = {
   description: null,
 };
 
+const SCOPE_LABEL: Record<Scope, string> = {
+  none: "无权限",
+  self: "仅本人",
+  team: "本部门",
+  all: "全部",
+};
+
 export function RoleDefaultsTab() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [editing, setEditing] = useState<Role | null>(null);
@@ -112,7 +119,7 @@ export function RoleDefaultsTab() {
         <TableHeader>
           <TableRow>
             <TableHead>岗位</TableHead>
-            <TableHead>Scope</TableHead>
+            <TableHead>数据范围</TableHead>
             <TableHead className="text-center">可编辑</TableHead>
             <TableHead className="text-center">可导出</TableHead>
             <TableHead className="text-center">可管理</TableHead>
@@ -124,7 +131,7 @@ export function RoleDefaultsTab() {
           {roles.map((r) => (
             <TableRow key={r.position}>
               <TableCell className="font-medium">{r.position}</TableCell>
-              <TableCell className="font-mono">{r.scope}</TableCell>
+              <TableCell>{SCOPE_LABEL[r.scope]}</TableCell>
               <TableCell className="text-center">{r.can_edit ? "✓" : ""}</TableCell>
               <TableCell className="text-center">{r.can_export ? "✓" : ""}</TableCell>
               <TableCell className="text-center">{r.can_admin ? "✓" : ""}</TableCell>
@@ -158,7 +165,7 @@ export function RoleDefaultsTab() {
                 />
               </div>
               <div>
-                <Label>Scope</Label>
+                <Label>数据范围</Label>
                 <Select
                   value={editing.scope}
                   onValueChange={(v) => setEditing({ ...editing, scope: v as Scope })}
@@ -167,10 +174,10 @@ export function RoleDefaultsTab() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">none</SelectItem>
-                    <SelectItem value="self">self</SelectItem>
-                    <SelectItem value="team">team</SelectItem>
-                    <SelectItem value="all">all</SelectItem>
+                    <SelectItem value="none">无权限（看不到数据）</SelectItem>
+                    <SelectItem value="self">仅本人</SelectItem>
+                    <SelectItem value="team">本部门</SelectItem>
+                    <SelectItem value="all">全部</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -181,7 +188,7 @@ export function RoleDefaultsTab() {
                     checked={editing.can_edit}
                     onChange={(e) => setEditing({ ...editing, can_edit: e.target.checked })}
                   />
-                  can_edit
+                  可编辑
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -189,7 +196,7 @@ export function RoleDefaultsTab() {
                     checked={editing.can_export}
                     onChange={(e) => setEditing({ ...editing, can_export: e.target.checked })}
                   />
-                  can_export
+                  可导出
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -197,7 +204,7 @@ export function RoleDefaultsTab() {
                     checked={editing.can_admin}
                     onChange={(e) => setEditing({ ...editing, can_admin: e.target.checked })}
                   />
-                  can_admin
+                  可管理
                 </label>
               </div>
               <div>

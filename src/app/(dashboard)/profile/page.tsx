@@ -6,6 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
+import type { Scope } from "@/modules/permissions";
+
+const SCOPE_LABEL: Record<Scope, string> = {
+  none: "无权限",
+  self: "仅本人",
+  team: "本部门",
+  all: "全部",
+};
 
 export default async function ProfilePage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -99,7 +107,7 @@ export default async function ProfilePage() {
           <div className="rounded-lg bg-primary/10 border border-primary/20 p-3">
             <div>
               数据范围：
-              <strong className="text-primary font-mono text-base">{perm.scope}</strong>
+              <strong className="text-primary text-base">{SCOPE_LABEL[perm.scope]}</strong>
             </div>
             <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
               <div>可编辑：{perm.can_edit ? "✓" : "✗"}</div>

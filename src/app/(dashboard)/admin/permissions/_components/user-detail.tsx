@@ -23,6 +23,19 @@ import {
 } from "@/components/ui/select";
 import { setDeptLeader, removeDeptLeader, upsertOverride, type Scope } from "@/modules/permissions";
 
+const SCOPE_LABEL: Record<Scope, string> = {
+  none: "无权限",
+  self: "仅本人",
+  team: "本部门",
+  all: "全部",
+};
+
+const SOURCE_LABEL: Record<string, string> = {
+  default: "岗位默认",
+  dept_leader: "部门负责人",
+  override: "个体覆盖",
+};
+
 interface UserDetail {
   user_id: string;
   name: string;
@@ -110,14 +123,16 @@ export function UserDetailPanel({ userId }: { userId: string }) {
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <div>
-            最终生效权限：scope=<strong className="font-mono">{detail.permission.scope}</strong>，
-            edit=<span className="font-mono">{String(detail.permission.can_edit)}</span>， export=
-            <span className="font-mono">{String(detail.permission.can_export)}</span>， admin=
-            <span className="font-mono">{String(detail.permission.can_admin)}</span>
+            最终生效权限：数据范围=
+            <strong>{SCOPE_LABEL[detail.permission.scope]}</strong>， 可编辑=
+            {detail.permission.can_edit ? "是" : "否"}，可导出=
+            {detail.permission.can_export ? "是" : "否"}，可管理=
+            {detail.permission.can_admin ? "是" : "否"}
           </div>
           <div>
             权限来源：
-            {detail.permission.sources.map((s) => s.kind).join(" + ") || "无"}
+            {detail.permission.sources.map((s) => SOURCE_LABEL[s.kind] ?? s.kind).join(" + ") ||
+              "无"}
           </div>
         </CardContent>
       </Card>
@@ -194,16 +209,16 @@ export function UserDetailPanel({ userId }: { userId: string }) {
               </DialogHeader>
               <div className="space-y-3">
                 <div>
-                  <Label>Scope（可选，留空则不覆盖）</Label>
+                  <Label>数据范围（可选，留空则不覆盖）</Label>
                   <Select value={overrideScope} onValueChange={(v) => setOverrideScope(v as Scope)}>
                     <SelectTrigger>
                       <SelectValue placeholder="不覆盖" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">none</SelectItem>
-                      <SelectItem value="self">self</SelectItem>
-                      <SelectItem value="team">team</SelectItem>
-                      <SelectItem value="all">all</SelectItem>
+                      <SelectItem value="none">无权限（看不到数据）</SelectItem>
+                      <SelectItem value="self">仅本人</SelectItem>
+                      <SelectItem value="team">本部门</SelectItem>
+                      <SelectItem value="all">全部</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

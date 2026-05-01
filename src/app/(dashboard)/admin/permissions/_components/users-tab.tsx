@@ -33,6 +33,13 @@ interface DeptNode {
 
 const ROOT_PARENT_ID = "1"; // 钉钉根部门
 
+const SCOPE_LABEL: Record<Scope, string> = {
+  none: "无权限",
+  self: "仅本人",
+  team: "本部门",
+  all: "全部",
+};
+
 function buildDeptTree(depts: DeptRow[], users: UserRow[]): DeptNode[] {
   const nodeMap = new Map<string, DeptNode>();
   for (const d of depts) {
@@ -147,8 +154,7 @@ function DeptTreeNode({ node, depth, expanded, toggle, selected, setSelected }: 
             >
               <span className="text-sm font-medium">{u.name}</span>
               <span className="text-muted-foreground text-xs">
-                {u.title ?? "未填岗位"} · scope=
-                <span className="font-mono">{u.scope}</span>
+                {u.title ?? "未填岗位"} · 数据范围：{SCOPE_LABEL[u.scope]}
               </span>
             </button>
           ))}
@@ -259,8 +265,7 @@ export function UsersTab() {
                   >
                     <div className="font-medium">{u.name}</div>
                     <div className="text-muted-foreground text-xs">
-                      {u.title ?? "未填岗位"} · scope=
-                      <span className="font-mono">{u.scope}</span>
+                      {u.title ?? "未填岗位"} · 数据范围：{SCOPE_LABEL[u.scope]}
                     </div>
                   </button>
                 ))}
