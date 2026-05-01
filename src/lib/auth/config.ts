@@ -15,9 +15,10 @@ import {
  *
  * - 表通过 `schema` 显式映射 better-auth model name -> Drizzle 导出（因为我们的表名带 `auth_` 前缀）。
  * - emailAndPassword 用作应急后门通道（详见 emergency-login.ts）。
- * - 钉钉 OAuth 通过 `genericOAuth` 插件注册（Phase 1）：
- *   钉钉 token 端点返回 camelCase（accessToken/expireIn）、userinfo 端点用 x-acs-dingtalk-access-token header，
- *   两者都不符合标准 OAuth2，所以走 `getToken` + `getUserInfo` 自定义钩子。
+ * - 钉钉 OAuth 通过 `genericOAuth` 插件注册：用钉钉**旧版 sns 扫码**协议
+ *   （新版 OAuth + Contact.User.Read 实测无法走通，详见 dingtalk-provider.ts 注释）。
+ *   `getToken` 直接用 code 调 sns/getuserinfo_bycode 拿 user_info，塞到 tokens.raw；
+ *   `getUserInfo` 从 raw 读，不再发请求。
  *   回调路径由 better-auth 提供：`/api/auth/oauth2/callback/dingtalk`。
  */
 export const auth = betterAuth({
@@ -44,17 +45,21 @@ export const auth = betterAuth({
               providerId: "dingtalk",
               clientId: env.DINGTALK_APP_KEY,
               clientSecret: env.DINGTALK_APP_SECRET,
-              authorizationUrl: "https://login.dingtalk.com/oauth2/auth",
-              // tokenUrl 必填（即使被 getToken override），better-auth 用它做配置完整性校验
-              tokenUrl: "https://api.dingtalk.com/v1.0/oauth2/userAccessToken",
-              userInfoUrl: "https://api.dingtalk.com/v1.0/contact/users/me",
-              // 钉钉新版 scope（点分大小写）：openid 必需，Contact.User.Read 用于调
-              // /v1.0/contact/users/me 拿用户信息（403 错误信息明确要求这个 scope）。
-              // corpid 是老格式，新接口不再需要。
-              scopes: ["openid", "Contact.User.Read"],
-              // 钉钉 token endpoint 返回 camelCase，自己处理
+              // 旧版 sns 扫码授权页（注意是 oapi 域名，不是 login.dingtalk.com）
+              authorizationUrl: "https://oapi.dingtalk.com/connect/qrconnect",
+              // 旧版 sns 没有独立的 token endpoint。tokenUrl/userInfoUrl 必填仅用于
+              // better-auth 的配置完整性校验，实际不会被调用（被 getToken/getUserInfo override）。
+              tokenUrl: "https://oapi.dingtalk.com/sns/getuserinfo_bycode",
+              userInfoUrl: "https://oapi.dingtalk.com/sns/getuserinfo_bycode",
+              scopes: ["snsapi_login"],
+              // 钉钉旧版 qrconnect 文档要求参数名是 `appid`（不是标准 OAuth2 的 `client_id`）。
+              // better-auth 默认会发 client_id，这里额外补 appid 兼容。
+              authorizationUrlParams: {
+                appid: env.DINGTALK_APP_KEY,
+              },
+              // 旧版 sns：用 code 直接换 user_info，塞到 raw
               getToken: dingtalkGetToken,
-              // 钉钉 userinfo 用 x-acs-dingtalk-access-token header，自己处理
+              // 从 raw 读 user_info，不再调远端
               getUserInfo: dingtalkGetUserInfo,
             },
           ],
