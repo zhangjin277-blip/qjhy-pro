@@ -14,6 +14,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <header className="bg-background border-b">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <h1 className="text-lg font-semibold">QJHY-Pro</h1>
+          <nav className="flex gap-4 text-sm">
+            <a href="/dashboard" className="text-muted-foreground hover:text-primary">
+              仪表盘
+            </a>
+            <a href="/admin/permissions" className="text-muted-foreground hover:text-primary">
+              权限管理
+            </a>
+            <a href="/profile" className="text-muted-foreground hover:text-primary">
+              我的权限
+            </a>
+          </nav>
           <div className="text-muted-foreground text-sm">
             {session.user.name}
             <form action="/api/auth/sign-out" method="POST" className="ml-4 inline">
