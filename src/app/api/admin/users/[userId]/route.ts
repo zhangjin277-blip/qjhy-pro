@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db/client";
 import { dingtalk_dept, dingtalk_user, dept_leader } from "@/db/schema";
-import { resolvePermission } from "@/modules/permissions";
+import { resolvePermission } from "@/modules/permissions/server";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";

@@ -49,7 +49,7 @@ export default tseslint.config(
                 "./src/worker/**",
                 "./src/modules/!(permissions)/**",
               ],
-              from: "./src/modules/permissions/!(index).ts",
+              from: "./src/modules/permissions/!(index|server).ts",
               message: "跨模块只允许 import 对方的 index.ts。详见 CONTRIBUTING.md 第 10.2 节。",
             },
           ],
