@@ -35,7 +35,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-screen-2xl px-6 py-6">{children}</main>
+      <main className="w-full px-6 py-6">{children}</main>
     </div>
   );
 }
