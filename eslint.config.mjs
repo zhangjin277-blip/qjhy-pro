@@ -47,7 +47,6 @@ export default tseslint.config(
                 "./src/components/**",
                 "./src/lib/**",
                 "./src/worker/**",
-                "./src/db/**",
                 "./src/modules/!(permissions)/**",
               ],
               message: "跨模块只允许 import 对方的 index.ts。详见 CONTRIBUTING.md 第 10.2 节。",
