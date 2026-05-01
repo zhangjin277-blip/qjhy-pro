@@ -35,7 +35,9 @@ export async function GET() {
   const enriched = await Promise.all(
     users.map(async (u) => {
       const p = await resolvePermission(u.user_id);
-      return { ...u, scope: p.scope };
+      // 主部门：dept_ids 数组的第一个（多部门用户在树形展示中只挂一个节点）
+      const dept_id = u.dept_ids[0] ?? null;
+      return { ...u, dept_id, scope: p.scope };
     }),
   );
 
