@@ -5,6 +5,7 @@ export type {
   JobName,
   FetchSimplePayload,
   FetchPerAnchorPayload,
+  FetchSessionMgPayload,
   CheckDataReadyPayload,
 } from "./types";
 export {
@@ -46,3 +47,13 @@ export {
   type MinigameRow,
 } from "./adapters/minigame-live";
 export { fetchMinigameVideoForAnchor, parseMinigameVideoResponse } from "./adapters/minigame-video";
+export {
+  fetchPortraitCoreForAnchor,
+  parsePortraitCoreResponse,
+  type PortraitRow,
+} from "./adapters/portrait-core";
+export {
+  fetchSessionMinigame,
+  parseSessionMinigameResponse,
+  type SessionMgRow,
+} from "./adapters/session-minigame";
