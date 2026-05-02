@@ -22,6 +22,7 @@ import {
 } from "@/lib/dingtalk";
 import { writeAuditLog } from "@/lib/audit";
 import { notifyError } from "@/lib/notify";
+import { syncBrokerMappings } from "@/modules/brokers/server";
 
 export async function syncDingtalk(): Promise<void> {
   const startTime = Date.now();
@@ -56,7 +57,11 @@ export async function syncDingtalk(): Promise<void> {
       );
     }
 
-    // 4. 写审计日志
+    // 4. 同步经纪人映射
+    const brokerResult = await syncBrokerMappings();
+    console.log(`[sync-brokers] matched=${brokerResult.matched} pending=${brokerResult.pending}`);
+
+    // 5. 写审计日志
     await writeAuditLog({
       user_id: null,
       action: "DINGTALK_SYNC_SUCCESS",
