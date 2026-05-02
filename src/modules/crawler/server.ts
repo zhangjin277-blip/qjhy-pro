@@ -33,3 +33,10 @@ export {
   MAX_READINESS_ATTEMPTS,
   READINESS_RETRY_INTERVAL_MS,
 } from "./readiness";
+export {
+  fetchGamePromoForAnchor,
+  parseGamePromoResponse,
+  type GamePromoRow,
+  type BizMode,
+  type PromoteScene,
+} from "./adapters/game-promo";
