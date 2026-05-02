@@ -114,11 +114,30 @@ export async function listAnchors(
       broker_name: anchor_profile.broker_name,
       recruit_broker_name: anchor_profile.recruit_broker_name,
       anchor_health_score: anchor_profile.anchor_health_score,
+
       total_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.total_fan_ticket}), 0)`,
+      live_fan_ticket_no_guest: sql<string>`COALESCE(SUM(${anchor_daily.live_fan_ticket_no_guest}), 0)`,
+      property_fan_ticket_no_guest: sql<string>`COALESCE(SUM(${anchor_daily.property_fan_ticket_no_guest}), 0)`,
+      guest_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.guest_fan_ticket}), 0)`,
+      activity_fan_ticket_no_guest: sql<string>`COALESCE(SUM(${anchor_daily.activity_fan_ticket_no_guest}), 0)`,
+      special_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.special_fan_ticket}), 0)`,
+      subscribe_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.subscribe_fan_ticket}), 0)`,
+      star_guard_earn_score: sql<string>`COALESCE(SUM(${anchor_daily.star_guard_earn_score}), 0)`,
+
       live_duration: sql<string>`COALESCE(SUM(${anchor_daily.live_duration_1d}), 0)`,
+      valid_live_duration: sql<string>`COALESCE(SUM(${anchor_daily.valid_live_duration_1d}), 0)`,
       live_days: sql<number>`COUNT(*) FILTER (WHERE ${anchor_daily.live_duration_1d} > 0)`,
+      solo_valid_days: sql<number>`COALESCE(SUM(${anchor_daily.is_solo_valid_day}), 0)`,
       new_follow_fans: sql<number>`COALESCE(SUM(${anchor_daily.new_follow_fans_1d}), 0)`,
+      peak_per_minute_ucnt: sql<number>`COALESCE(MAX(${anchor_daily.peak_per_minute_ucnt}), 0)`,
+      feed_acu: sql<number>`COALESCE(MAX(${anchor_daily.feed_acu}), 0)`,
+      feed_watch_duration: sql<string>`COALESCE(SUM(${anchor_daily.feed_watch_duration_1d}), 0)`,
+
       video_view_count: sql<number>`COALESCE(SUM(${anchor_daily.video_view_count}), 0)`,
+      video_like_count: sql<number>`COALESCE(SUM(${anchor_daily.video_like_count}), 0)`,
+      video_comment_count: sql<number>`COALESCE(SUM(${anchor_daily.video_comment_count}), 0)`,
+
+      total_fans: sql<number>`COALESCE(MAX(${anchor_daily.total_fans}), 0)`,
     })
     .from(anchor_profile)
     .leftJoin(anchor_daily, and(eq(anchor_profile.anchor_id, anchor_daily.anchor_id), dateRange))
@@ -132,7 +151,7 @@ export async function listAnchors(
       anchor_profile.anchor_health_score,
     )
     .orderBy(sql`COALESCE(SUM(${anchor_daily.total_fan_ticket}), 0) DESC`)
-    .limit(500);
+    .limit(5000);
 
   const anchorIds = rows.map((r) => r.anchor_id);
   if (anchorIds.length === 0) return [];
@@ -170,6 +189,12 @@ export async function listAnchors(
   const mgMap = new Map(mgIncomes.map((r) => [r.anchor_id, Number(r.sum_income)]));
   const gameMap = new Map(gameIncomes.map((r) => [r.anchor_id, Number(r.sum_income)]));
 
+  const num = (v: unknown): number | null => {
+    if (v === null || v === undefined) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
   return rows.map((r) => ({
     anchor_id: r.anchor_id,
     nick_name: r.nick_name,
@@ -177,11 +202,30 @@ export async function listAnchors(
     broker_name: r.broker_name,
     recruit_broker_name: r.recruit_broker_name,
     anchor_health_score: r.anchor_health_score,
-    total_fan_ticket: r.total_fan_ticket !== null ? Number(r.total_fan_ticket) : null,
-    live_duration: r.live_duration !== null ? Number(r.live_duration) : null,
-    live_days: Number(r.live_days),
-    new_follow_fans: Number(r.new_follow_fans),
-    video_view_count: Number(r.video_view_count),
+    total_fans: num(r.total_fans),
+
+    total_fan_ticket: num(r.total_fan_ticket),
+    live_fan_ticket_no_guest: num(r.live_fan_ticket_no_guest),
+    property_fan_ticket_no_guest: num(r.property_fan_ticket_no_guest),
+    guest_fan_ticket: num(r.guest_fan_ticket),
+    activity_fan_ticket_no_guest: num(r.activity_fan_ticket_no_guest),
+    special_fan_ticket: num(r.special_fan_ticket),
+    subscribe_fan_ticket: num(r.subscribe_fan_ticket),
+    star_guard_earn_score: num(r.star_guard_earn_score),
+
+    live_duration: num(r.live_duration),
+    valid_live_duration: num(r.valid_live_duration),
+    live_days: num(r.live_days),
+    solo_valid_days: num(r.solo_valid_days),
+    new_follow_fans: num(r.new_follow_fans),
+    peak_per_minute_ucnt: num(r.peak_per_minute_ucnt),
+    feed_acu: num(r.feed_acu),
+    feed_watch_duration: num(r.feed_watch_duration),
+
+    video_view_count: num(r.video_view_count),
+    video_like_count: num(r.video_like_count),
+    video_comment_count: num(r.video_comment_count),
+
     minigame_income: mgMap.get(r.anchor_id) ?? null,
     game_income: gameMap.get(r.anchor_id) ?? null,
   }));

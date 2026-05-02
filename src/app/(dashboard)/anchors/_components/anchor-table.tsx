@@ -70,19 +70,39 @@ export function AnchorTable(): React.JSX.Element {
         <span>总涨粉 {totalRow.fans.toLocaleString("zh-CN")}</span>
       </div>
 
-      <div className="bg-card rounded-lg border">
-        <Table>
+      <div className="bg-card overflow-x-auto rounded-lg border">
+        <Table className="min-w-max">
           <TableHeader>
             <TableRow>
-              <TableHead>昵称</TableHead>
+              <TableHead className="sticky left-0 bg-card">昵称</TableHead>
               <TableHead>项目</TableHead>
               <TableHead>运营经纪人</TableHead>
-              <TableHead>健康分</TableHead>
-              <TableHead className="text-right">音浪</TableHead>
+              <TableHead>招募经纪人</TableHead>
+              <TableHead className="text-right">健康分</TableHead>
+              <TableHead className="text-right">粉丝数</TableHead>
+
+              <TableHead className="text-right">总音浪</TableHead>
+              <TableHead className="text-right">礼物音浪</TableHead>
+              <TableHead className="text-right">道具音浪</TableHead>
+              <TableHead className="text-right">嘉宾音浪</TableHead>
+              <TableHead className="text-right">活动音浪</TableHead>
+              <TableHead className="text-right">其他音浪</TableHead>
+              <TableHead className="text-right">会员订阅音浪</TableHead>
+              <TableHead className="text-right">星守护音浪</TableHead>
+
               <TableHead className="text-right">开播时长</TableHead>
+              <TableHead className="text-right">有效时长</TableHead>
               <TableHead className="text-right">开播天</TableHead>
+              <TableHead className="text-right">个播有效天</TableHead>
               <TableHead className="text-right">涨粉</TableHead>
+              <TableHead className="text-right">人气峰值</TableHead>
+              <TableHead className="text-right">feed看播</TableHead>
+              <TableHead className="text-right">feed_acu</TableHead>
+
               <TableHead className="text-right">视频播放</TableHead>
+              <TableHead className="text-right">视频点赞</TableHead>
+              <TableHead className="text-right">视频评论</TableHead>
+
               <TableHead className="text-right">小游戏分账</TableHead>
               <TableHead className="text-right">推广游戏分账</TableHead>
             </TableRow>
@@ -90,30 +110,54 @@ export function AnchorTable(): React.JSX.Element {
           <TableBody>
             {loading && rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={26} className="text-center text-sm text-muted-foreground">
                   加载中...
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={26} className="text-center text-sm text-muted-foreground">
                   无数据
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((r) => (
                 <TableRow key={r.anchor_id}>
-                  <TableCell>{r.nick_name}</TableCell>
+                  <TableCell className="sticky left-0 bg-card">{r.nick_name}</TableCell>
                   <TableCell>{r.is_threekingdoms ? "三国" : "斗地主"}</TableCell>
                   <TableCell>{r.broker_name ?? "—"}</TableCell>
-                  <TableCell>{r.anchor_health_score ?? "—"}</TableCell>
-                  <TableCell className="text-right">{fmt(r.total_fan_ticket)}</TableCell>
-                  <TableCell className="text-right">
-                    {r.live_duration !== null ? `${r.live_duration.toFixed(1)}h` : "—"}
+                  <TableCell>{r.recruit_broker_name ?? "—"}</TableCell>
+                  <TableCell className="text-right">{r.anchor_health_score ?? "—"}</TableCell>
+                  <TableCell className="text-right">{fmt(r.total_fans)}</TableCell>
+
+                  <TableCell className="text-right font-medium">
+                    {fmt(r.total_fan_ticket)}
                   </TableCell>
+                  <TableCell className="text-right">{fmt(r.live_fan_ticket_no_guest)}</TableCell>
+                  <TableCell className="text-right">
+                    {fmt(r.property_fan_ticket_no_guest)}
+                  </TableCell>
+                  <TableCell className="text-right">{fmt(r.guest_fan_ticket)}</TableCell>
+                  <TableCell className="text-right">
+                    {fmt(r.activity_fan_ticket_no_guest)}
+                  </TableCell>
+                  <TableCell className="text-right">{fmt(r.special_fan_ticket)}</TableCell>
+                  <TableCell className="text-right">{fmt(r.subscribe_fan_ticket)}</TableCell>
+                  <TableCell className="text-right">{fmt(r.star_guard_earn_score)}</TableCell>
+
+                  <TableCell className="text-right">{durh(r.live_duration)}</TableCell>
+                  <TableCell className="text-right">{durh(r.valid_live_duration)}</TableCell>
                   <TableCell className="text-right">{r.live_days ?? "—"}</TableCell>
+                  <TableCell className="text-right">{r.solo_valid_days ?? "—"}</TableCell>
                   <TableCell className="text-right">{fmt(r.new_follow_fans)}</TableCell>
+                  <TableCell className="text-right">{fmt(r.peak_per_minute_ucnt)}</TableCell>
+                  <TableCell className="text-right">{durh(r.feed_watch_duration)}</TableCell>
+                  <TableCell className="text-right">{fmt(r.feed_acu)}</TableCell>
+
                   <TableCell className="text-right">{fmt(r.video_view_count)}</TableCell>
+                  <TableCell className="text-right">{fmt(r.video_like_count)}</TableCell>
+                  <TableCell className="text-right">{fmt(r.video_comment_count)}</TableCell>
+
                   <TableCell className="text-right">{fmt(r.minigame_income)}</TableCell>
                   <TableCell className="text-right">{fmt(r.game_income)}</TableCell>
                 </TableRow>
@@ -129,4 +173,9 @@ export function AnchorTable(): React.JSX.Element {
 function fmt(n: number | null): string {
   if (n === null || n === 0) return "—";
   return n.toLocaleString("zh-CN");
+}
+
+function durh(n: number | null): string {
+  if (n === null || n === 0) return "—";
+  return `${n.toFixed(1)}h`;
 }
