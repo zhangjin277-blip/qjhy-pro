@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db/client";
 import { dingtalk_dept, dingtalk_user, dept_leader } from "@/db/schema";
 import { resolvePermission } from "@/modules/permissions/server";
+import { getDeptAliasMap } from "@/modules/aliases/server";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
@@ -28,14 +29,26 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
 
   const targetPerm = await resolvePermission(userId);
 
-  const leaderDepts = await db
-    .select({
-      dept_id: dept_leader.dept_id,
-      name: dingtalk_dept.name,
-    })
-    .from(dept_leader)
-    .innerJoin(dingtalk_dept, eq(dept_leader.dept_id, dingtalk_dept.dept_id))
-    .where(eq(dept_leader.user_id, userId));
+  const [leaderDepts, aliasMap] = await Promise.all([
+    db
+      .select({
+        dept_id: dept_leader.dept_id,
+        name: dingtalk_dept.name,
+      })
+      .from(dept_leader)
+      .innerJoin(dingtalk_dept, eq(dept_leader.dept_id, dingtalk_dept.dept_id))
+      .where(eq(dept_leader.user_id, userId)),
+    getDeptAliasMap(),
+  ]);
+
+  const enrichedManagedDepts = leaderDepts.map((d) => {
+    const a = aliasMap.get(d.dept_id);
+    return {
+      dept_id: d.dept_id,
+      name: d.name,
+      alias: a?.alias ?? null,
+    };
+  });
 
   return NextResponse.json({
     user_id: user.user_id,
@@ -43,6 +56,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
     title: user.title,
     dept_ids: user.dept_ids,
     permission: targetPerm,
-    managedDepts: leaderDepts,
+    managedDepts: enrichedManagedDepts,
   });
 }

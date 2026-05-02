@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db/client";
 import { dingtalk_dept, dingtalk_user } from "@/db/schema";
 import { resolvePermission } from "@/modules/permissions/server";
+import { getDeptAliasMap } from "@/modules/aliases/server";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
@@ -21,13 +22,25 @@ export async function GET() {
     if (!perm.can_admin) return NextResponse.json({ error: "AUTH_FORBIDDEN" }, { status: 403 });
   }
 
-  const depts = await db
-    .select({
-      dept_id: dingtalk_dept.dept_id,
-      name: dingtalk_dept.name,
-      parent_id: dingtalk_dept.parent_id,
-    })
-    .from(dingtalk_dept);
+  const [depts, aliasMap] = await Promise.all([
+    db
+      .select({
+        dept_id: dingtalk_dept.dept_id,
+        name: dingtalk_dept.name,
+        parent_id: dingtalk_dept.parent_id,
+      })
+      .from(dingtalk_dept),
+    getDeptAliasMap(),
+  ]);
 
-  return NextResponse.json({ depts });
+  const enriched = depts.map((d) => {
+    const a = aliasMap.get(d.dept_id);
+    return {
+      ...d,
+      alias: a?.alias ?? null,
+      note: a?.note ?? null,
+    };
+  });
+
+  return NextResponse.json({ depts: enriched });
 }

@@ -5,8 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UsersTab } from "./users-tab";
 import { RoleDefaultsTab } from "./role-defaults-tab";
 import { AuditLogTab } from "./audit-log-tab";
+import { DeptAliasesTab } from "./dept-aliases-tab";
 
-type TabValue = "users" | "roles" | "audit";
+type TabValue = "users" | "roles" | "dept-aliases" | "audit";
 
 export function PermissionsTabs() {
   const [tab, setTab] = useState<TabValue>("users");
@@ -15,6 +16,7 @@ export function PermissionsTabs() {
       <TabsList>
         <TabsTrigger value="users">按用户管理</TabsTrigger>
         <TabsTrigger value="roles">岗位默认权限</TabsTrigger>
+        <TabsTrigger value="dept-aliases">部门别名</TabsTrigger>
         <TabsTrigger value="audit">审计日志</TabsTrigger>
       </TabsList>
       <TabsContent value="users">
@@ -22,6 +24,9 @@ export function PermissionsTabs() {
       </TabsContent>
       <TabsContent value="roles">
         <RoleDefaultsTab />
+      </TabsContent>
+      <TabsContent value="dept-aliases">
+        <DeptAliasesTab />
       </TabsContent>
       <TabsContent value="audit">
         <AuditLogTab />

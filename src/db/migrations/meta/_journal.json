@@ -36,6 +36,13 @@
       "when": 1777597419683,
       "tag": "0004_fine_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777648424132,
+      "tag": "0005_strange_landau",
+      "breakpoints": true
     }
   ]
 }

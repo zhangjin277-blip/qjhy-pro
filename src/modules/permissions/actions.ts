@@ -1,16 +1,9 @@
 "use server";
 
 import { db } from "@/db/client";
-import {
-  auth_permission_override,
-  dept_leader,
-  role_default_permission,
-  dingtalk_user,
-} from "@/db/schema";
+import { auth_permission_override, dept_leader, role_default_permission } from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
-import { auth } from "@/lib/auth";
-import { AppError } from "@/lib/errors";
-import { headers } from "next/headers";
+import { requireAdmin } from "@/lib/admin-guard";
 import { eq, and } from "drizzle-orm";
 import {
   RemoveDeptLeaderInput,
@@ -18,46 +11,6 @@ import {
   UpsertOverrideInput,
   UpsertRoleDefaultInput,
 } from "./schema";
-import { resolvePermission } from "./resolve";
-
-/**
- * 校验当前调用者是 admin（can_admin=true）。
- *
- * better-auth 的 user.id 是钉钉 unionid，但权限模型查的是 dingtalk_user.user_id。
- * 这里通过 unionid → dingtalk_user.user_id 转换后再 resolve。
- *
- * 应急后门用户（emergency-admin）拥有 admin 权限。
- */
-async function requireAdmin(): Promise<{ userId: string }> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    throw new AppError("AUTH_NOT_LOGGED_IN", "未登录", 401);
-  }
-
-  // 应急后门
-  if (session.user.email === "emergency@qjhy.local") {
-    return { userId: session.user.id };
-  }
-
-  // 钉钉登录用户：通过 unionid 查 dingtalk_user 拿 user_id
-  const [du] = await db
-    .select({ user_id: dingtalk_user.user_id })
-    .from(dingtalk_user)
-    .where(eq(dingtalk_user.unionid, session.user.id));
-  if (!du) {
-    throw new AppError(
-      "AUTH_USER_NOT_SYNCED",
-      "用户尚未同步到 dingtalk_user 表，无法计算权限",
-      403,
-    );
-  }
-
-  const perm = await resolvePermission(du.user_id);
-  if (!perm.can_admin) {
-    throw new AppError("AUTH_FORBIDDEN", "需要管理员权限", 403);
-  }
-  return { userId: du.user_id };
-}
 
 export async function setDeptLeader(input: unknown): Promise<{ ok: true }> {
   const data = SetDeptLeaderInput.parse(input);
