@@ -100,6 +100,12 @@ export async function listAnchors(
     if (condition) where.push(condition);
   }
 
+  // 主表: anchor_profile LEFT JOIN anchor_daily(日期范围内) GROUP BY anchor_id 做汇总
+  const dateRange = and(
+    sql`${anchor_daily.date} >= ${filters.date_from}`,
+    sql`${anchor_daily.date} <= ${filters.date_to}`,
+  );
+
   const rows = await db
     .select({
       anchor_id: anchor_profile.anchor_id,
@@ -108,22 +114,26 @@ export async function listAnchors(
       broker_name: anchor_profile.broker_name,
       recruit_broker_name: anchor_profile.recruit_broker_name,
       anchor_health_score: anchor_profile.anchor_health_score,
-      total_fan_ticket: anchor_daily.total_fan_ticket,
-      live_duration_1d: anchor_daily.live_duration_1d,
+      total_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.total_fan_ticket}), 0)`,
+      live_duration: sql<string>`COALESCE(SUM(${anchor_daily.live_duration_1d}), 0)`,
+      live_days: sql<number>`COUNT(*) FILTER (WHERE ${anchor_daily.live_duration_1d} > 0)`,
+      new_follow_fans: sql<number>`COALESCE(SUM(${anchor_daily.new_follow_fans_1d}), 0)`,
+      video_view_count: sql<number>`COALESCE(SUM(${anchor_daily.video_view_count}), 0)`,
     })
     .from(anchor_profile)
-    .leftJoin(
-      anchor_daily,
-      and(
-        eq(anchor_profile.anchor_id, anchor_daily.anchor_id),
-        eq(anchor_daily.date, filters.date),
-      ),
-    )
+    .leftJoin(anchor_daily, and(eq(anchor_profile.anchor_id, anchor_daily.anchor_id), dateRange))
     .where(where.length > 0 ? and(...where) : undefined)
-    .orderBy(sql`${anchor_daily.total_fan_ticket} DESC NULLS LAST`)
+    .groupBy(
+      anchor_profile.anchor_id,
+      anchor_profile.nick_name,
+      anchor_profile.is_threekingdoms,
+      anchor_profile.broker_name,
+      anchor_profile.recruit_broker_name,
+      anchor_profile.anchor_health_score,
+    )
+    .orderBy(sql`COALESCE(SUM(${anchor_daily.total_fan_ticket}), 0) DESC`)
     .limit(500);
 
-  // 补全 minigame / game income（单查询附加）
   const anchorIds = rows.map((r) => r.anchor_id);
   if (anchorIds.length === 0) return [];
 
@@ -136,7 +146,8 @@ export async function listAnchors(
     .where(
       and(
         inArray(anchor_minigame_daily.anchor_id, anchorIds),
-        eq(anchor_minigame_daily.date, filters.date),
+        sql`${anchor_minigame_daily.date} >= ${filters.date_from}`,
+        sql`${anchor_minigame_daily.date} <= ${filters.date_to}`,
       ),
     )
     .groupBy(anchor_minigame_daily.anchor_id);
@@ -150,7 +161,8 @@ export async function listAnchors(
     .where(
       and(
         inArray(anchor_game_promo_daily.anchor_id, anchorIds),
-        eq(anchor_game_promo_daily.date, filters.date),
+        sql`${anchor_game_promo_daily.date} >= ${filters.date_from}`,
+        sql`${anchor_game_promo_daily.date} <= ${filters.date_to}`,
       ),
     )
     .groupBy(anchor_game_promo_daily.anchor_id);
@@ -159,9 +171,17 @@ export async function listAnchors(
   const gameMap = new Map(gameIncomes.map((r) => [r.anchor_id, Number(r.sum_income)]));
 
   return rows.map((r) => ({
-    ...r,
-    // live_duration_1d is numeric in DB → comes back as string; coerce to number | null
-    live_duration_1d: r.live_duration_1d !== null ? Number(r.live_duration_1d) : null,
+    anchor_id: r.anchor_id,
+    nick_name: r.nick_name,
+    is_threekingdoms: r.is_threekingdoms,
+    broker_name: r.broker_name,
+    recruit_broker_name: r.recruit_broker_name,
+    anchor_health_score: r.anchor_health_score,
+    total_fan_ticket: r.total_fan_ticket !== null ? Number(r.total_fan_ticket) : null,
+    live_duration: r.live_duration !== null ? Number(r.live_duration) : null,
+    live_days: Number(r.live_days),
+    new_follow_fans: Number(r.new_follow_fans),
+    video_view_count: Number(r.video_view_count),
     minigame_income: mgMap.get(r.anchor_id) ?? null,
     game_income: gameMap.get(r.anchor_id) ?? null,
   }));

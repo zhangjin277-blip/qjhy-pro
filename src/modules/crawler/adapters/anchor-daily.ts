@@ -27,6 +27,14 @@ const FIELDS = [
   "perMinuteUcnt1d",
   "guestFanTicket",
   "anchorInfo",
+  // 补充：涨粉 + 视频统计 + 星守护
+  "newFollowFansUcnt1d",
+  "VideoCountRaw",
+  "ViewCountRaw",
+  "LikeCountRaw",
+  "CommentCountRaw",
+  "starGuardEarnScore",
+  "profitShareRatio",
 ];
 
 export interface AnchorDailyRow {

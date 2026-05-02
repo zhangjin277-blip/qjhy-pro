@@ -31,8 +31,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const sp = req.nextUrl.searchParams;
+  const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
   const parseResult = AnchorListFiltersSchema.safeParse({
-    date: sp.get("date") ?? new Date(Date.now() - 86400_000).toISOString().slice(0, 10),
+    date_from: sp.get("date_from") ?? sp.get("date") ?? yesterday,
+    date_to: sp.get("date_to") ?? sp.get("date") ?? yesterday,
     project: sp.get("project") ?? undefined,
     broker_ids: sp.getAll("broker_id").filter(Boolean),
     health_min: sp.get("health_min") ? Number(sp.get("health_min")) : undefined,

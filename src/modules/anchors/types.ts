@@ -1,7 +1,10 @@
 export type ProjectFilter = "all" | "ddz" | "three";
 
 export interface AnchorListFilters {
-  date: string; // YYYY-MM-DD
+  /** 日期范围起始（含），YYYY-MM-DD */
+  date_from: string;
+  /** 日期范围截止（含），YYYY-MM-DD。等于 date_from 时为单日 */
+  date_to: string;
   project?: ProjectFilter;
   broker_ids?: string[];
   health_min?: number;
@@ -15,8 +18,18 @@ export interface AnchorListRow {
   broker_name: string | null;
   recruit_broker_name: string | null;
   anchor_health_score: number | null;
-  total_fan_ticket: number | null; // 当日
-  live_duration_1d: number | null;
-  minigame_income: number | null; // after_divided_author_income SUM
-  game_income: number | null; // promote_anchor_income_1d SUM
+  /** 区间内总音浪 (SUM) */
+  total_fan_ticket: number | null;
+  /** 区间内总开播时长 小时 (SUM) */
+  live_duration: number | null;
+  /** 区间内有效开播天数 */
+  live_days: number | null;
+  /** 区间内总涨粉 */
+  new_follow_fans: number | null;
+  /** 区间内总视频播放 */
+  video_view_count: number | null;
+  /** 小游戏分账 SUM (待 game adapter 后续) */
+  minigame_income: number | null;
+  /** 推广游戏分账 SUM (待 game adapter 后续) */
+  game_income: number | null;
 }
