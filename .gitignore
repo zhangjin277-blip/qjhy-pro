@@ -58,3 +58,6 @@ Thumbs.db
 
 # Next.js auto-generated
 next-env.d.ts
+
+# 设计稿预览（HTML mockup，不进 git）
+.tmp-design-preview/
