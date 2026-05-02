@@ -25,7 +25,7 @@ export const anchor_profile = pgTable(
     // 身份/基础（10）
     nick_name: text("nick_name").notNull(),
     avatar: text("avatar"),
-    gender: integer("gender"), // 0/1/2
+    gender: integer("gender"), // 0=未知, 1=男, 2=女（抖音平台编码）
     aweme_display_id: text("aweme_display_id"),
     aweme_short_id: text("aweme_short_id"),
     hotsoon_display_id: text("hotsoon_display_id"),
@@ -35,11 +35,11 @@ export const anchor_profile = pgTable(
 
     // 状态/标签（7）
     last_live_time: bigint("last_live_time", { mode: "number" }), // unix
-    live_status: integer("live_status"),
+    live_status: integer("live_status"), // 0=未直播, 1=直播中（抖音平台编码）
     anchor_health_score: integer("anchor_health_score"),
-    anchor_health_score_level: integer("anchor_health_score_level"),
-    anchor_ban_30d: integer("anchor_ban_30d"),
-    anchor_violation_30d: integer("anchor_violation_30d"),
+    anchor_health_score_level: integer("anchor_health_score_level"), // 健康分等级（1=最高，递增数字代表更低等级，具体含义平台未公开）
+    anchor_ban_30d: integer("anchor_ban_30d"), // 风控指标 — 近 30 天封禁次数
+    anchor_violation_30d: integer("anchor_violation_30d"), // 风控指标 — 近 30 天违规次数
     notes: text("notes"),
 
     // 签约/经纪人（13）
@@ -65,16 +65,17 @@ export const anchor_profile = pgTable(
 
     // 分成比（2）
     income_percent: numeric("income_percent", { precision: 5, scale: 4 }),
-    percent_map: jsonb("percent_map"),
+    percent_map: jsonb("percent_map").$type<Record<string, string>>(), // 多场景分成比 map：键=场景代码（如 "17","1","3","4","15"），值=分成比例字符串（"0"-"100"）
 
     // 业务标识 + 时长汇总（16，统一拍 jsonb 不一一建列，避免列爆炸）
-    misc: jsonb("misc"), // 存其他 12+4 字段
+    misc: jsonb("misc").$type<Record<string, unknown>>(), // 业务标识 12 + 时长汇总 4 字段，详见 .tmp-design-preview/anchor-tables-fields-final.md "其他业务字段" 段
 
     // 项目归属（采集后 derived）
+    // derive 规则：采集 anchor_profile 时 — recruit_broker_name === '三国项目' 即标记为 true
     is_threekingdoms: boolean("is_threekingdoms").notNull().default(false),
 
     // 系统
-    raw: jsonb("raw").notNull(),
+    raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow(),
@@ -113,11 +114,13 @@ export const anchor_daily = pgTable(
     link_screen_fan_ticket: bigint("link_screen_fan_ticket", { mode: "number" }),
     link_screen_room_fan_ticket: bigint("link_screen_room_fan_ticket", { mode: "number" }),
 
-    // 时长（4，单位：小时 numeric 6,2）
+    // 时长（3，单位：小时 numeric 6,2）
     live_duration_1d: numeric("live_duration_1d", { precision: 6, scale: 2 }),
     valid_live_duration_1d: numeric("valid_live_duration_1d", { precision: 6, scale: 2 }),
-    is_solo_valid_day: integer("is_solo_valid_day"),
     feed_watch_duration_1d: numeric("feed_watch_duration_1d", { precision: 6, scale: 2 }),
+
+    // 天数标记（1）
+    is_solo_valid_day: integer("is_solo_valid_day"),
 
     // 看播/人气（2）
     feed_acu: integer("feed_acu"),
@@ -145,7 +148,7 @@ export const anchor_daily = pgTable(
     broker_snapshot: text("broker_snapshot"),
     signing_type_snapshot: text("signing_type_snapshot"),
     last_live_time_snapshot: text("last_live_time_snapshot"), // 字符串快照如 "17小时前"
-    is_new: integer("is_new"),
+    is_new: integer("is_new"), // 主播身份编码 — 0=老主播, 1=新主播（保留 integer 不转 boolean，遵循"字段原始性"原则）
 
     // 其他（4）
     anchor_info: text("anchor_info"),
@@ -156,7 +159,7 @@ export const anchor_daily = pgTable(
     }),
 
     // 系统
-    raw: jsonb("raw").notNull(),
+    raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
     created_at: timestamp("created_at").notNull().defaultNow(),
   },
@@ -192,7 +195,7 @@ export const anchor_game_promo_daily = pgTable(
     promote_pay_amount_1d: bigint("promote_pay_amount_1d", { mode: "number" }),
     promote_pay_ucnt_1d: integer("promote_pay_ucnt_1d"),
 
-    raw: jsonb("raw").notNull(),
+    raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
     created_at: timestamp("created_at").notNull().defaultNow(),
   },
@@ -200,6 +203,7 @@ export const anchor_game_promo_daily = pgTable(
     pk: primaryKey({
       columns: [t.anchor_id, t.date, t.promote_scene, t.biz_mode, t.game_name],
     }),
+    // 索引名缩写以适应 PG 63 字符限制
     idx_date: index("idx_game_promo_date").on(t.date),
     idx_anchor: index("idx_game_promo_anchor").on(t.anchor_id),
   }),
@@ -234,7 +238,7 @@ export const anchor_minigame_daily = pgTable(
     }),
     cps_bind_uv: integer("cps_bind_uv"),
 
-    raw: jsonb("raw").notNull(),
+    raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
     created_at: timestamp("created_at").notNull().defaultNow(),
   },
@@ -261,7 +265,7 @@ export const anchor_portrait_daily = pgTable(
     pay_ucnt: integer("pay_ucnt"),
     pay_ratio: numeric("pay_ratio", { precision: 5, scale: 4 }),
 
-    raw: jsonb("raw").notNull(),
+    raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
     created_at: timestamp("created_at").notNull().defaultNow(),
   },
@@ -301,7 +305,7 @@ export const session_minigame_convert = pgTable(
     open_game_click_per: numeric("open_game_click_per", { precision: 5, scale: 4 }),
     open_game_pay_per: numeric("open_game_pay_per", { precision: 5, scale: 4 }),
 
-    raw: jsonb("raw").notNull(),
+    raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
     created_at: timestamp("created_at").notNull().defaultNow(),
   },

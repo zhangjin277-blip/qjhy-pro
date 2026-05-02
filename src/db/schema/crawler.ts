@@ -1,4 +1,13 @@
-import { index, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 /**
  * 爬虫 Cookie 储存。
@@ -7,7 +16,7 @@ import { index, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/
  */
 export const crawler_cookie_session = pgTable("crawler_cookie_session", {
   basecamp: text("basecamp", { enum: ["cs", "nc1", "nc2"] }).primaryKey(),
-  cookies: jsonb("cookies").notNull(), // {sid_guard, sessionid, msToken, ttwid, passport_csrf_token, ...}
+  cookies: jsonb("cookies").notNull().$type<Record<string, string>>(), // {sid_guard, sessionid, msToken, ttwid, passport_csrf_token, ...}
   captured_at: timestamp("captured_at").notNull().defaultNow(),
   expires_at: timestamp("expires_at"),
   status: text("status", { enum: ["active", "expired"] })
@@ -29,10 +38,8 @@ export const field_alias = pgTable(
     field_name: text("field_name").notNull(),
     chinese_name: text("chinese_name").notNull(),
     unit: text("unit"), // 小时 / 分 / 元 / % / null
-    hidden: text("hidden", { enum: ["true", "false"] })
-      .notNull()
-      .default("false"),
-    sort_order: text("sort_order").notNull().default("0"),
+    hidden: boolean("hidden").notNull().default(false),
+    sort_order: integer("sort_order").notNull().default(0),
     description: text("description"),
     updated_by: text("updated_by"),
     updated_at: timestamp("updated_at").notNull().defaultNow(),

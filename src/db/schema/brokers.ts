@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 /**
  * 经纪人 ↔ 钉钉 user 映射。
@@ -19,7 +19,6 @@ export const broker_user_mapping = pgTable(
     updated_at: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => ({
-    idx_user: index("idx_broker_mapping_user").on(t.dingtalk_user_id),
-    uniq_user: unique("uq_broker_mapping_user").on(t.dingtalk_user_id), // 一个钉钉 user 只能对应一个 broker
+    uniq_user: unique("uq_broker_mapping_user").on(t.dingtalk_user_id), // 一个钉钉 user 只能对应一个 broker；unique 约束已隐含 btree 索引，无需再建 idx_user
   }),
 );
