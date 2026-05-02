@@ -63,6 +63,17 @@ export default tseslint.config(
               from: "./src/modules/aliases/!(index|server).ts",
               message: "跨模块只允许 import 对方的 index.ts。详见 CONTRIBUTING.md 第 10.2 节。",
             },
+            {
+              target: [
+                "./src/app/**",
+                "./src/components/**",
+                "./src/lib/**",
+                "./src/worker/**",
+                "./src/modules/!(crawler)/**",
+              ],
+              from: "./src/modules/crawler/!(index|server).ts",
+              message: "跨模块只允许 import 对方的 index.ts。详见 CONTRIBUTING.md 第 10.2 节。",
+            },
           ],
         },
       ],
