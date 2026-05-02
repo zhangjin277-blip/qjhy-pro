@@ -37,8 +37,8 @@ Next.js 16.2.4 + TypeScript strict + PostgreSQL 16 + Drizzle ORM + better-auth 1
 
 - AppKey: `dingo1r3hn448vbtevj0`（在 `.env.local`，不进 git）
 - CorpID: `dingfe99581e9ca94e8da1320dcb25e91351`
-- **OAuth 用旧版 sns 协议**（`snsapi_login` + `oapi.dingtalk.com/sns/getuserinfo_bycode` + HMAC-SHA256），不是新版 `Contact.User.Read`（实测拿不到 token）
-- 代价：**没有"自动识别本机钉钉账号"功能**，必须扫码
+- OAuth 用钉钉统一授权入口（`login.dingtalk.com/oauth2/auth` + `openid`），支持桌面钉钉已登录时一键确认。
+- token/userinfo 用自定义交换逻辑：`userAccessToken` 走 JSON body，`contact/users/me` 走 `x-acs-dingtalk-access-token`。
 - 钉钉机器人 webhook 关键词："报错"
 
 ## 数据库当前状态（11 张表）

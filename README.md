@@ -100,7 +100,7 @@ docker-compose --env-file=.env.local up -d
 ## Phase 1 验收清单
 
 - [x] 钉钉 API client（token 缓存 + 并发锁 + 递归保护 + 分页 cursor 检查）
-- [x] 钉钉旧版 sns OAuth 集成（snsapi_login + HMAC-SHA256 签名，浏览器扫码登录闭环）
+- [x] 钉钉统一授权 OAuth 集成（桌面钉钉一键确认 + 浏览器登录闭环）
 - [x] 钉钉每日同步 job（28 部门 + 146 用户，全量 upsert）
 - [x] 权限三层叠加（role default + dept_leader + override）
 - [x] applyScopeFilter helper（防止裸查询）

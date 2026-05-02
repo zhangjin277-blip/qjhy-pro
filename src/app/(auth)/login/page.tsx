@@ -44,7 +44,7 @@ export default function LoginPage() {
     setDingtalkLoading(true);
     setError(null);
     try {
-      // genericOAuthClient 暴露 signIn.oauth2，会重定向到钉钉授权页。
+      // genericOAuthClient 暴露 signIn.oauth2，会重定向到钉钉统一授权页。
       // 钉钉授权后回调到 /api/auth/oauth2/callback/dingtalk，better-auth 处理后跳到 callbackURL。
       const result = await authClient.signIn.oauth2({
         providerId: "dingtalk",
@@ -67,11 +67,11 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>QJHY-Pro 登录</CardTitle>
-          <CardDescription>使用钉钉扫码或应急账号登录</CardDescription>
+          <CardDescription>使用钉钉或应急账号登录</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button onClick={handleDingtalkLogin} disabled={dingtalkLoading} className="w-full">
-            {dingtalkLoading ? "正在跳转钉钉..." : "钉钉扫码登录"}
+            {dingtalkLoading ? "正在跳转钉钉..." : "钉钉登录"}
           </Button>
 
           <div className="relative my-4">

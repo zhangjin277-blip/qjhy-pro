@@ -1,22 +1,24 @@
-import { createHmac } from "node:crypto";
+import { z } from "zod";
 import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 
 /**
- * 钉钉旧版 sns 扫码登录 provider 实现。
+ * 钉钉统一授权登录 provider 实现。
  *
- * 背景：钉钉新版 OAuth (api.dingtalk.com/v1.0/oauth2/userAccessToken + Contact.User.Read)
- * 多次实测都返回 403 / token 不带 Contact.User.Read scope，无法走通。
- * 切换到钉钉**旧版 sns 扫码**——这是钉钉公开扫码登录的标准方式，所有应用类型都支持，
- * 只需 `snsapi_login` scope（默认）+ HMAC-SHA256 签名换 user info。
+ * 这里使用新版 `login.dingtalk.com/oauth2/auth`，它支持已登录桌面钉钉的一键确认；
+ * 旧版 sns/qrconnect 只能扫码，无法识别本机钉钉登录态。
  *
- * 接入方式：仍走 better-auth 1.6.9 的 `genericOAuth` 插件，但 `getToken` 把
- * "用 code 换 user info" 这一步直接做完，user_info 塞到 tokens.raw；
- * `getUserInfo` 从 tokens.raw 直接读，不再调远端。
+ * 钉钉的 token/userinfo 接口不是标准 OAuth2 形态：
+ * - token 交换需要 JSON body: { clientId, clientSecret, code, grantType }
+ * - userinfo 需要 header: x-acs-dingtalk-access-token
+ * 所以仍走 better-auth genericOAuth，但覆写 `getToken` / `getUserInfo`。
  *
  * 钉钉开发者后台需配置回调地址（在「登录与分享」→「扫码登录」处）：
  *   http://localhost:3000/api/auth/oauth2/callback/dingtalk        (dev)
  *   https://qjhy.<domain>/api/auth/oauth2/callback/dingtalk        (prod)
+ *
+ * 同时需要在「权限管理」里给应用开通「通讯录个人信息读权限」等个人权限；
+ * OAuth URL 的 scope 只传 `openid`，不要把接口权限名塞进 scope。
  */
 
 /**
@@ -43,110 +45,130 @@ interface OAuth2UserInfo {
   emailVerified: boolean;
 }
 
-/** 钉钉 sns/getuserinfo_bycode 接口实际返回（小写下划线风格） */
-export interface DingtalkSnsUserInfo {
-  nick: string;
-  unionid: string;
-  openid: string;
-  /** 钉钉历史字段，部分账号还会带 */
-  dingId?: string;
-  /** 文档里没明确声明，但实测部分账号会返回 */
-  avatar?: string;
-}
+const DINGTALK_USER_ACCESS_TOKEN_URL = "https://api.dingtalk.com/v1.0/oauth2/userAccessToken";
+const DINGTALK_USER_INFO_URL = "https://api.dingtalk.com/v1.0/contact/users/me";
 
-const SNS_USERINFO_URL = "https://oapi.dingtalk.com/sns/getuserinfo_bycode";
+const dingtalkTokenSchema = z.object({
+  accessToken: z.string().min(1),
+  refreshToken: z.string().optional(),
+  expireIn: z.number().optional(),
+  corpId: z.string().optional(),
+});
 
-/**
- * 用 timestamp 和 APP_SECRET 算 HMAC-SHA256 签名（钉钉 sns 接口要求）。
- * 钉钉文档：signature = Base64(HMAC-SHA256(timestamp_ms, APP_SECRET))
- */
-function signTimestamp(timestamp: string): string {
-  return createHmac("sha256", env.DINGTALK_APP_SECRET).update(timestamp).digest("base64");
-}
+const dingtalkUserInfoSchema = z.object({
+  nick: z.string().optional(),
+  unionId: z.string().min(1),
+  avatarUrl: z.string().optional(),
+  openId: z.string().optional(),
+  mobile: z.string().optional(),
+  stateCode: z.string().optional(),
+});
 
-/**
- * 用 tmp_auth_code 换用户信息（钉钉 sns 旧版接口）。
- * 旧版 sns 没有独立的 token endpoint，code 直接换 user_info。
- */
-export async function fetchSnsUserInfoByCode(code: string): Promise<DingtalkSnsUserInfo> {
-  const timestamp = String(Date.now());
-  const signature = signTimestamp(timestamp);
-  const url = new URL(SNS_USERINFO_URL);
-  url.searchParams.set("signature", signature);
-  url.searchParams.set("timestamp", timestamp);
-  url.searchParams.set("accessKey", env.DINGTALK_APP_KEY);
-
-  const res = await fetch(url.toString(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tmp_auth_code: code }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new AppError(
-      "DINGTALK_SNS_HTTP_ERROR",
-      `钉钉 sns 接口 HTTP 错误: ${res.status} ${body}`,
-      500,
-    );
-  }
-  const data = (await res.json()) as {
-    errcode?: number;
-    errmsg?: string;
-    user_info?: DingtalkSnsUserInfo;
-  };
-  if (data.errcode !== 0 || !data.user_info) {
-    throw new AppError(
-      "DINGTALK_SNS_API_FAILED",
-      `钉钉 sns 接口返回错误: errcode=${data.errcode} errmsg=${data.errmsg}`,
-      500,
-      { errcode: data.errcode, errmsg: data.errmsg },
-    );
-  }
-  return data.user_info;
-}
+export type DingtalkOAuthUserInfo = z.infer<typeof dingtalkUserInfoSchema>;
 
 export function isDingtalkProviderConfigured(): boolean {
   return Boolean(env.DINGTALK_APP_KEY && env.DINGTALK_APP_SECRET);
 }
 
-/**
- * 把钉钉 sns user_info 映射为 better-auth 的 OAuth2UserInfo。
- *
- * 注意：钉钉 sns 返回 unionid（小写），与我们 db schema 的 dingtalk_user.unionid 一致。
- * 新版 OAuth 返回的是 unionId（驼峰），如果以后切回需注意大小写。
- */
-export function mapSnsUserInfoToUser(info: DingtalkSnsUserInfo): OAuth2UserInfo {
+export async function fetchDingtalkUserAccessToken(code: string): Promise<OAuth2Tokens> {
+  const res = await fetch(DINGTALK_USER_ACCESS_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      clientId: env.DINGTALK_APP_KEY,
+      clientSecret: env.DINGTALK_APP_SECRET,
+      code,
+      grantType: "authorization_code",
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new AppError(
+      "DINGTALK_OAUTH_TOKEN_HTTP_ERROR",
+      `钉钉用户 token 接口 HTTP 错误: ${res.status} ${body}`,
+      500,
+    );
+  }
+
+  const json = (await res.json()) as unknown;
+  const parsed = dingtalkTokenSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new AppError(
+      "DINGTALK_OAUTH_TOKEN_INVALID_RESPONSE",
+      `钉钉用户 token 接口响应格式异常: ${parsed.error.message}`,
+      500,
+      { response: json },
+    );
+  }
+
+  const token = parsed.data;
   return {
-    id: info.unionid,
-    email: `${info.unionid}@dingtalk.local`,
+    tokenType: "Bearer",
+    accessToken: token.accessToken,
+    refreshToken: token.refreshToken,
+    accessTokenExpiresAt: token.expireIn ? new Date(Date.now() + token.expireIn * 1000) : undefined,
+    scopes: ["openid"],
+    raw: token,
+  };
+}
+
+export async function fetchDingtalkUserInfo(accessToken: string): Promise<DingtalkOAuthUserInfo> {
+  const res = await fetch(DINGTALK_USER_INFO_URL, {
+    method: "GET",
+    headers: {
+      "x-acs-dingtalk-access-token": accessToken,
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new AppError(
+      "DINGTALK_OAUTH_USERINFO_HTTP_ERROR",
+      `钉钉用户信息接口 HTTP 错误: ${res.status} ${body}`,
+      500,
+    );
+  }
+
+  const json = (await res.json()) as unknown;
+  const parsed = dingtalkUserInfoSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new AppError(
+      "DINGTALK_OAUTH_USERINFO_INVALID_RESPONSE",
+      `钉钉用户信息接口响应格式异常: ${parsed.error.message}`,
+      500,
+      { response: json },
+    );
+  }
+  return parsed.data;
+}
+
+export function mapDingtalkUserInfoToUser(info: DingtalkOAuthUserInfo): OAuth2UserInfo {
+  return {
+    id: info.unionId,
+    email: `${info.unionId}@dingtalk.local`,
     name: info.nick,
-    image: info.avatar,
+    image: info.avatarUrl,
     emailVerified: true,
   };
 }
 
 /**
  * better-auth genericOAuth 的 `getToken` 钩子。
- * 钉钉旧版 sns 没有标准 token endpoint——直接用 code 拉 user_info，
- * 把 user_info 塞到 tokens.raw 里（getUserInfo 从 raw 读，不再调远端）。
+ * 钉钉 token endpoint 使用 JSON body，不兼容标准 form-urlencoded 换 token。
  */
 export async function dingtalkGetToken(data: { code: string }): Promise<OAuth2Tokens> {
-  const userInfo = await fetchSnsUserInfoByCode(data.code);
-  return {
-    accessToken: `sns:${userInfo.unionid}`, // 占位 token，旧版 sns 不发 access_token
-    scopes: ["snsapi_login"],
-    raw: userInfo as unknown as Record<string, unknown>,
-  };
+  return fetchDingtalkUserAccessToken(data.code);
 }
 
 /**
  * better-auth genericOAuth 的 `getUserInfo` 钩子。
- * 直接从 tokens.raw 拿 user_info，不再发请求。
+ * 钉钉用户信息接口使用 `x-acs-dingtalk-access-token`，不兼容标准 Bearer header。
  */
 export async function dingtalkGetUserInfo(tokens: OAuth2Tokens): Promise<OAuth2UserInfo | null> {
-  const raw = tokens.raw as DingtalkSnsUserInfo | undefined;
-  if (!raw || !raw.unionid) {
+  if (!tokens.accessToken) {
     return null;
   }
-  return mapSnsUserInfoToUser(raw);
+  const userInfo = await fetchDingtalkUserInfo(tokens.accessToken);
+  return mapDingtalkUserInfoToUser(userInfo);
 }

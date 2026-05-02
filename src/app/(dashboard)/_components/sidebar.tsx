@@ -193,7 +193,7 @@ function SidebarInner({
                       return (
                         <span
                           key={it.key}
-                          className="text-muted-foreground/50 truncate rounded px-2 py-1.5 text-left text-xs"
+                          className="text-sidebar-leaf-foreground truncate rounded px-2 py-1.5 text-left text-xs"
                           title="即将上线（Phase 2）"
                         >
                           {it.label}
@@ -209,7 +209,7 @@ function SidebarInner({
                           "truncate rounded px-2 py-1.5 text-left text-xs transition-colors",
                           active
                             ? "bg-primary/10 text-primary font-medium"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                            : "text-sidebar-leaf-foreground hover:bg-muted hover:text-foreground",
                         )}
                       >
                         {it.label}
