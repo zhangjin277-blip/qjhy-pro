@@ -1,0 +1,66 @@
+import { db } from "@/db/client";
+import { anchor_profile } from "@/db/schema";
+import { openDouyinPage, CookieExpiredError } from "@/lib/puppeteer";
+import {
+  getActiveCookies,
+  markCookieExpired,
+  notifyCrawlerError,
+  fetchAnchorList,
+  parseAnchorListResponse,
+  type FetchSimplePayload,
+} from "@/modules/crawler/server";
+
+export async function fetchProfileHandler(payload: FetchSimplePayload): Promise<void> {
+  const { basecamp } = payload;
+  let cookies: Record<string, string>;
+  try {
+    cookies = await getActiveCookies(basecamp);
+  } catch (e) {
+    await notifyCrawlerError({
+      type: "cookie_expired",
+      detail: `No active cookie for ${basecamp}: ${(e as Error).message}`,
+      action: "Admin 扫码续期",
+    });
+    throw e;
+  }
+
+  const page = await openDouyinPage(cookies);
+  try {
+    const list = await fetchAnchorList(page);
+    const fakeRaw = { status_code: 0, data: { list, total_amount: list.length } };
+    const rows = parseAnchorListResponse(fakeRaw);
+
+    // 全量 upsert
+    for (const row of rows) {
+      // numeric 列 Drizzle 期望 string，将 number | null 序列化
+      const dbRow = {
+        ...row,
+        income_percent: row.income_percent != null ? String(row.income_percent) : null,
+        synced_at: new Date(),
+        updated_at: new Date(),
+      };
+      await db.insert(anchor_profile).values(dbRow).onConflictDoUpdate({
+        target: anchor_profile.anchor_id,
+        set: dbRow,
+      });
+    }
+    console.log(`[fetch-profile] synced ${rows.length} anchors for ${basecamp}`);
+  } catch (e) {
+    if (e instanceof CookieExpiredError) {
+      await markCookieExpired(basecamp);
+      await notifyCrawlerError({
+        type: "cookie_expired",
+        detail: e.message,
+        action: "Admin 扫码续期",
+      });
+    } else {
+      await notifyCrawlerError({
+        type: "job_failed",
+        detail: `fetch-profile failed: ${(e as Error).message}`,
+      });
+    }
+    throw e;
+  } finally {
+    await page.close();
+  }
+}
