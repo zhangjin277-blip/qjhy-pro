@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -48,11 +47,20 @@ interface UserDetail {
     can_admin: boolean;
     sources: { kind: string; [k: string]: unknown }[];
   };
-  managedDepts: { dept_id: string; name: string }[];
+  managedDepts: { dept_id: string; name: string; alias: string | null }[];
+}
+
+interface DeptRow {
+  dept_id: string;
+  name: string;
+  parent_id: string | null;
+  alias: string | null;
+  note: string | null;
 }
 
 export function UserDetailPanel({ userId }: { userId: string }) {
   const [detail, setDetail] = useState<UserDetail | null>(null);
+  const [allDepts, setAllDepts] = useState<DeptRow[]>([]);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [overrideScope, setOverrideScope] = useState<Scope | "">("");
@@ -65,15 +73,28 @@ export function UserDetailPanel({ userId }: { userId: string }) {
       .then(setDetail);
   }, [userId]);
 
+  useEffect(() => {
+    fetch("/api/admin/depts")
+      .then((r) => r.json() as Promise<{ depts: DeptRow[] }>)
+      .then((d) => setAllDepts(d.depts))
+      .catch(() => setAllDepts([]));
+  }, []);
+
   if (!detail) return <p className="text-muted-foreground">加载中...</p>;
 
+  // 筛掉已经管理的部门
+  const managedSet = new Set(detail.managedDepts.map((d) => d.dept_id));
+  const availableDepts = allDepts
+    .filter((d) => !managedSet.has(d.dept_id))
+    .sort((a, b) => (a.alias ?? a.name).localeCompare(b.alias ?? b.name, "zh-CN"));
+
   async function handleAddDeptLeader() {
-    if (!newDeptId.trim()) {
-      alert("请输入 dept_id");
+    if (!newDeptId) {
+      alert("请选择部门");
       return;
     }
     try {
-      await setDeptLeader({ dept_id: newDeptId.trim(), user_id: userId });
+      await setDeptLeader({ dept_id: newDeptId, user_id: userId });
       setAddDeptOpen(false);
       setNewDeptId("");
       location.reload();
@@ -148,8 +169,9 @@ export function UserDetailPanel({ userId }: { userId: string }) {
             <ul className="space-y-1">
               {detail.managedDepts.map((d) => (
                 <li key={d.dept_id} className="flex items-center justify-between text-sm">
-                  <span>
-                    {d.name} <code className="text-xs text-muted-foreground">({d.dept_id})</code>
+                  <span title={d.alias ? `原名：${d.name}` : undefined}>
+                    {d.alias ?? d.name}{" "}
+                    <code className="text-muted-foreground text-xs">({d.dept_id})</code>
                   </span>
                   <Button
                     size="sm"
@@ -172,18 +194,42 @@ export function UserDetailPanel({ userId }: { userId: string }) {
             />
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>添加部门</DialogTitle>
+                <DialogTitle>添加管理部门</DialogTitle>
               </DialogHeader>
               <p className="text-sm text-muted-foreground">
-                MVP 简化：直接输入钉钉部门 dept_id（数字字符串）。
+                设为该部门负责人后，该用户将获得 <strong>本部门</strong> 数据范围。
               </p>
-              <Input
-                placeholder="例如 1071560406"
-                value={newDeptId}
-                onChange={(e) => setNewDeptId(e.target.value)}
-              />
+              <div>
+                <Label>选择部门</Label>
+                <Select value={newDeptId} onValueChange={(v) => setNewDeptId(v ?? "")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="搜索或选择部门..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableDepts.length === 0 ? (
+                      <div className="text-muted-foreground px-2 py-3 text-center text-xs">
+                        无可选部门
+                      </div>
+                    ) : (
+                      availableDepts.map((d) => (
+                        <SelectItem key={d.dept_id} value={d.dept_id}>
+                          {d.alias ?? d.name}
+                          {d.alias && (
+                            <span className="text-muted-foreground/70 ml-1 text-xs">
+                              · {d.name}
+                            </span>
+                          )}
+                          <span className="text-muted-foreground ml-2 text-xs">({d.dept_id})</span>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
               <DialogFooter>
-                <Button onClick={handleAddDeptLeader}>确认添加</Button>
+                <Button onClick={handleAddDeptLeader} disabled={!newDeptId}>
+                  确认添加
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

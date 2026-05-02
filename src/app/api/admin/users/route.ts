@@ -37,7 +37,15 @@ export async function GET() {
       const p = await resolvePermission(u.user_id);
       // 主部门：dept_ids 数组的第一个（多部门用户在树形展示中只挂一个节点）
       const dept_id = u.dept_ids[0] ?? null;
-      return { ...u, dept_id, scope: p.scope };
+      return {
+        ...u,
+        dept_id,
+        scope: p.scope,
+        can_edit: p.can_edit,
+        can_export: p.can_export,
+        can_admin: p.can_admin,
+        source_kinds: p.sources.map((s) => s.kind),
+      };
     }),
   );
 
