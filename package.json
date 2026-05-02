@@ -31,6 +31,7 @@
     "lucide-react": "^1.14.0",
     "next": "16.2.4",
     "node-cron": "^4.2.1",
+    "pg-boss": "10",
     "postgres": "^3.4.9",
     "puppeteer-core": "24",
     "puppeteer-extra": "^3.3.6",

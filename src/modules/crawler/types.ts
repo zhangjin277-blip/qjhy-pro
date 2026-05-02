@@ -1,0 +1,34 @@
+export const JOB_NAMES = {
+  CHECK_DATA_READY: "crawler:check_data_ready",
+  FETCH_PROFILE: "crawler:fetch_profile",
+  FETCH_DAILY: "crawler:fetch_daily",
+  FETCH_GAME: "crawler:fetch_game", // per anchor
+  FETCH_MINIGAME: "crawler:fetch_minigame", // per anchor
+  FETCH_PORTRAIT: "crawler:fetch_portrait", // per anchor
+  FETCH_SESSION_MG: "crawler:fetch_session_mg", // per room_id
+} as const;
+
+export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
+
+export interface FetchPerAnchorPayload {
+  anchor_id: string;
+  date: string; // YYYY-MM-DD
+  basecamp: "cs" | "nc1" | "nc2";
+}
+
+export interface FetchSessionMgPayload {
+  room_id: string;
+  anchor_id: string;
+  basecamp: "cs" | "nc1" | "nc2";
+}
+
+export interface FetchSimplePayload {
+  date: string;
+  basecamp: "cs" | "nc1" | "nc2";
+}
+
+export interface CheckDataReadyPayload {
+  date: string;
+  basecamp: "cs" | "nc1" | "nc2";
+  attempt: number; // 1..8
+}
