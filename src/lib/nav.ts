@@ -44,6 +44,7 @@ export const NAV: NavItem[] = [
     label: "主播管理",
     icon: Users,
     children: [
+      { key: "anchor-detail", label: "主播明细", href: "/anchors" },
       { key: "anchor-list", label: "主播列表", href: "/anchors/list", disabled: true },
       { key: "anchor-recruit", label: "主播招募", href: "/anchors/recruit", disabled: true },
       { key: "anchor-profile", label: "主播档案", href: "/anchors/profile", disabled: true },
@@ -55,6 +56,7 @@ export const NAV: NavItem[] = [
     label: "直播数据",
     icon: BarChart3,
     children: [
+      { key: "data-brokers", label: "经纪人聚合", href: "/brokers" },
       { key: "data-realtime", label: "实时数据", href: "/live/realtime", disabled: true },
       { key: "data-daily", label: "主播日报", href: "/live/daily", disabled: true },
       { key: "data-rank", label: "排行榜", href: "/live/rank", disabled: true },
@@ -78,9 +80,10 @@ export const NAV: NavItem[] = [
     icon: Shield,
     children: [
       { key: "sys-permission", label: "用户与权限", href: "/admin/permissions" },
+      { key: "sys-brokers", label: "经纪人映射", href: "/admin/brokers" },
       { key: "sys-dept", label: "部门架构", href: "/admin/depts", disabled: true },
       { key: "sys-alias", label: "字段别名", href: "/admin/aliases", disabled: true },
-      { key: "sys-crawler", label: "爬虫监控", href: "/admin/crawler", disabled: true },
+      { key: "sys-crawler", label: "采集监控", href: "/admin/crawler" },
     ],
   },
   {

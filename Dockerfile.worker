@@ -1,7 +1,15 @@
 # syntax=docker/dockerfile:1.7
 
 FROM node:20-alpine AS base
-RUN apk add --no-cache libc6-compat
+# chromium + 依赖（Puppeteer 无头浏览器爬虫）
+RUN apk add --no-cache \
+    libc6-compat \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable
@@ -14,6 +22,9 @@ RUN pnpm install --frozen-lockfile
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# Puppeteer: 使用系统安装的 chromium（alpine 包），跳过内置 chromium 下载
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 CMD ["pnpm", "exec", "tsx", "src/worker/index.ts"]

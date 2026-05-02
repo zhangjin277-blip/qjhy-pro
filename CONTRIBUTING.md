@@ -79,6 +79,10 @@ src/app/(dashboard)/[feature]/page.tsx
 | ---------------- | ---------------------------- | ----------------------------------------------- | ----------------------- |
 | _基础设施_（非业务模块） | `src/lib/*`、`src/worker/*` | env、auth、errors、notify、worker scheduler | Phase 0 (2026-04-30) |
 | permissions | `src/modules/permissions/` | 三层叠加权限计算 + Server Actions + ScopeFilter | Phase 1 (2026-05-01) |
+| anchors | `src/modules/anchors/` | 主播档案查询（按权限过滤）| Phase 2 (2026-05-02) |
+| brokers | `src/modules/brokers/` | 经纪人 ↔ 钉钉用户映射 + fuzzy matcher | Phase 2 (2026-05-02) |
+| crawler | `src/modules/crawler/` | 抖音爬虫 + 队列 + Cookie | Phase 2 (2026-05-02) |
+| dashboard | `src/modules/dashboard/` | 看板聚合查询 | Phase 2 (2026-05-02) |
 
 > 每加一个业务模块，PR 里必须更新此表。
 
