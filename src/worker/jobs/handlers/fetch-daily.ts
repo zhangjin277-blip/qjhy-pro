@@ -85,6 +85,10 @@ async function enqueueDownstream(
     })
     .from(anchor_profile);
 
+  // portrait 用 batch 模式（一次性拉所有开播主播）
+  await enqueue(JOB_NAMES.FETCH_PORTRAIT, { date, basecamp });
+
+  // game/minigame 仍 per-anchor（待 P2/P3 改 download 模式后再优化）
   for (const a of allAnchors) {
     if (a.is_three) {
       await enqueue(JOB_NAMES.FETCH_MINIGAME, {
@@ -99,10 +103,5 @@ async function enqueueDownstream(
         basecamp,
       } satisfies FetchPerAnchorPayload);
     }
-    await enqueue(JOB_NAMES.FETCH_PORTRAIT, {
-      anchor_id: a.anchor_id,
-      date,
-      basecamp,
-    } satisfies FetchPerAnchorPayload);
   }
 }

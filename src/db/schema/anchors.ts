@@ -250,8 +250,9 @@ export const anchor_minigame_daily = pgTable(
 );
 
 /**
- * 主播 portrait 直播数据（仅曝光人数 + 几个邻接漏斗字段）。
- * 来源：portrait/core_day_stats/{cid}
+ * 主播 portrait 直播数据（曝光/进房/打赏/转化 9 字段）。
+ * 来源：portrait/core_day_stats/{cid}（per-anchor 同步 API + cid）
+ * 字段对齐 PRO3 ANCHOR_STATS。
  */
 export const anchor_portrait_daily = pgTable(
   "anchor_portrait_daily",
@@ -259,11 +260,15 @@ export const anchor_portrait_daily = pgTable(
     anchor_id: text("anchor_id").notNull(),
     date: text("date").notNull(),
 
-    show_uv: integer("show_uv"),
-    enter_uv: integer("enter_uv"),
-    enter_ratio: numeric("enter_ratio", { precision: 5, scale: 4 }),
-    pay_ucnt: integer("pay_ucnt"),
-    pay_ratio: numeric("pay_ratio", { precision: 5, scale: 4 }),
+    show_uv: integer("show_uv"), // 曝光人数
+    show_cnt: integer("show_cnt"), // 曝光次数
+    watch_uv: integer("watch_uv"), // 进房人数
+    watch_cnt: integer("watch_cnt"), // 进房次数
+    enter_room_rate: numeric("enter_room_rate", { precision: 7, scale: 6 }), // 进房率
+    avg_watch_duration: numeric("avg_watch_duration", { precision: 10, scale: 2 }), // 人均观看时长(秒)
+    consume_uv: integer("consume_uv"), // 打赏人数
+    consume_cnt: integer("consume_cnt"), // 打赏次数
+    consume_rate: numeric("consume_rate", { precision: 7, scale: 6 }), // 付费转化率
 
     raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
