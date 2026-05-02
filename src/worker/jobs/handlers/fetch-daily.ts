@@ -1,5 +1,5 @@
 import { db } from "@/db/client";
-import { anchor_daily, anchor_profile } from "@/db/schema";
+import { anchor_daily } from "@/db/schema";
 import { openDouyinPage, CookieExpiredError } from "@/lib/puppeteer";
 import {
   getActiveCookies,
@@ -10,7 +10,7 @@ import {
   fetchAnchorDaily,
   parseAnchorDailyResponse,
 } from "@/modules/crawler/server";
-import type { FetchSimplePayload, FetchPerAnchorPayload } from "@/modules/crawler/server";
+import type { FetchSimplePayload } from "@/modules/crawler/server";
 
 export async function fetchDailyHandler(payload: FetchSimplePayload): Promise<void> {
   const { date, basecamp } = payload;
@@ -73,35 +73,9 @@ export async function fetchDailyHandler(payload: FetchSimplePayload): Promise<vo
   }
 }
 
-async function enqueueDownstream(
-  date: string,
-  basecamp: FetchPerAnchorPayload["basecamp"],
-): Promise<void> {
-  // 取所有主播，按项目归属分发不同下游 job
-  const allAnchors = await db
-    .select({
-      anchor_id: anchor_profile.anchor_id,
-      is_three: anchor_profile.is_threekingdoms,
-    })
-    .from(anchor_profile);
-
-  // portrait 用 batch 模式（一次性拉所有开播主播）
+async function enqueueDownstream(date: string, basecamp: "cs" | "nc1" | "nc2"): Promise<void> {
+  // 全部下游 job 改 batch 模式（一次性 download CSV 处理所有主播）
   await enqueue(JOB_NAMES.FETCH_PORTRAIT, { date, basecamp });
-
-  // game/minigame 仍 per-anchor（待 P2/P3 改 download 模式后再优化）
-  for (const a of allAnchors) {
-    if (a.is_three) {
-      await enqueue(JOB_NAMES.FETCH_MINIGAME, {
-        anchor_id: a.anchor_id,
-        date,
-        basecamp,
-      } satisfies FetchPerAnchorPayload);
-    } else {
-      await enqueue(JOB_NAMES.FETCH_GAME, {
-        anchor_id: a.anchor_id,
-        date,
-        basecamp,
-      } satisfies FetchPerAnchorPayload);
-    }
-  }
+  await enqueue(JOB_NAMES.FETCH_GAME, { date, basecamp });
+  await enqueue(JOB_NAMES.FETCH_MINIGAME, { date, basecamp });
 }

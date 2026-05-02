@@ -30,18 +30,19 @@ export const MAX_READINESS_ATTEMPTS = 8;
 export const READINESS_RETRY_INTERVAL_MS = 30 * 60 * 1000;
 export { checkDataReady, runExport, parseCsv } from "./download-helper";
 export {
-  fetchGamePromoForAnchor,
-  parseGamePromoResponse,
+  fetchAllGamePromo,
+  parseGamePromoRow,
   type GamePromoRow,
+  type GamePromoTaskResult,
   type BizMode,
   type PromoteScene,
 } from "./adapters/game-promo";
 export {
-  fetchMinigameLiveForAnchor,
-  parseMinigameLiveResponse,
+  fetchMinigameLive,
+  parseMinigameRow,
   type MinigameRow,
+  type MinigameScene,
 } from "./adapters/minigame-live";
-export { fetchMinigameVideoForAnchor, parseMinigameVideoResponse } from "./adapters/minigame-video";
 export {
   fetchPortraitCoreForAnchor,
   parsePortraitCoreResponse,

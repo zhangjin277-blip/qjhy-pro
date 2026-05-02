@@ -171,8 +171,13 @@ export const anchor_daily = pgTable(
 );
 
 /**
- * 推广游戏数据（斗地主主播）。
- * 来源：faction/game/game_anchor_detail_list × 3 bizMode (cps_all / cpc / poi) × 2 promote_scene
+ * 推广游戏数据（download 模式拉 CSV）。
+ * 来源 4 个 download task:
+ *   live + cps        → 直播流水分成（基础+看播+互动+转化+付费+分账）
+ *   live + cps_all    → 直播下载/活跃激励（额外分账金额）
+ *   video + cps       → 短视频流水分成
+ *   video + cps_all   → 短视频下载/活跃激励
+ * cps 行 + cps_all 行通过 (anchor_id, date, scene, biz_mode, game_name) 区分。
  */
 export const anchor_game_promo_daily = pgTable(
   "anchor_game_promo_daily",
@@ -180,20 +185,73 @@ export const anchor_game_promo_daily = pgTable(
     anchor_id: text("anchor_id").notNull(),
     date: text("date").notNull(),
     promote_scene: text("promote_scene", { enum: ["live", "video"] }).notNull(),
-    biz_mode: text("biz_mode", { enum: ["cps_all", "cpc", "poi"] }).notNull(),
+    biz_mode: text("biz_mode", { enum: ["cps", "cps_all"] }).notNull(),
     game_name: text("game_name").notNull(),
+    anchor_name_snapshot: text("anchor_name_snapshot"),
 
-    // 基础
-    promote_live_cnt_1d: integer("promote_live_cnt_1d"),
-    promote_live_duration_1d: numeric("promote_live_duration_1d", { precision: 6, scale: 2 }),
+    // 直播专属
+    promote_live_cnt_1d: integer("promote_live_cnt_1d"), // 直播场次
+    promote_live_duration_1d: numeric("promote_live_duration_1d", { precision: 8, scale: 2 }), // 时长(h)
+    promote_live_duration_avg: numeric("promote_live_duration_avg", { precision: 8, scale: 2 }),
+    promote_live_watch_ucnt_1d: integer("promote_live_watch_ucnt_1d"), // 看播 UV
+    promote_live_watch_duration_1d: numeric("promote_live_watch_duration_1d", {
+      precision: 10,
+      scale: 2,
+    }),
+    promote_live_watch_duration_uavg_1d: numeric("promote_live_watch_duration_uavg_1d", {
+      precision: 8,
+      scale: 2,
+    }),
     acu: integer("acu"),
     pcu: integer("pcu"),
+    promote_live_like_ucnt_1d: integer("promote_live_like_ucnt_1d"),
+    promote_live_comment_ucnt_1d: integer("promote_live_comment_ucnt_1d"),
+    promote_live_follow_ucnt_1d: integer("promote_live_follow_ucnt_1d"),
 
-    // 看播 / 互动 / 转化漏斗 / 付费 / 分账 — 全部拍进 raw, 仅核心字段 indexed
-    promote_anchor_income_1d: bigint("promote_anchor_income_1d", { mode: "number" }), // 主播分账后
-    promote_faction_income_1d: bigint("promote_faction_income_1d", { mode: "number" }),
-    promote_pay_amount_1d: bigint("promote_pay_amount_1d", { mode: "number" }),
+    // 视频专属
+    promote_video_publish_cnt_1d: integer("promote_video_publish_cnt_1d"),
+    promote_item_vv_1d: bigint("promote_item_vv_1d", { mode: "number" }), // VV
+    promote_item_uv_1d: integer("promote_item_uv_1d"), // UV
+
+    // 转化漏斗（直播+视频共用）
+    promote_click_download_ucnt_1d: integer("promote_click_download_ucnt_1d"),
+    promote_start_download_ucnt_1d: integer("promote_start_download_ucnt_1d"),
+    promote_download_finish_ucnt_1d: integer("promote_download_finish_ucnt_1d"),
+    promote_install_finish_ucnt_1d: integer("promote_install_finish_ucnt_1d"),
+    promote_active_ucnt_1d: integer("promote_active_ucnt_1d"),
+
+    // 付费
     promote_pay_ucnt_1d: integer("promote_pay_ucnt_1d"),
+    promote_pay_amount_1d: bigint("promote_pay_amount_1d", { mode: "number" }),
+    promote_charge_pay_ucnt_1d: integer("promote_charge_pay_ucnt_1d"),
+
+    // 道具付费
+    props_pay_amount_1d: bigint("props_pay_amount_1d", { mode: "number" }),
+    props_anchor_pay_amount_1d: bigint("props_anchor_pay_amount_1d", { mode: "number" }),
+    props_faction_pay_amount_1d: bigint("props_faction_pay_amount_1d", { mode: "number" }),
+
+    // 分账（cps 给的）
+    promote_anchor_income_1d: bigint("promote_anchor_income_1d", { mode: "number" }),
+    promote_faction_income_1d: bigint("promote_faction_income_1d", { mode: "number" }),
+
+    // 下载激励 (cps_all 给的)
+    promote_download_pay_ucnt_1d: integer("promote_download_pay_ucnt_1d"),
+    promote_download_pay_amount_1d: bigint("promote_download_pay_amount_1d", { mode: "number" }),
+    promote_anchor_download_pay_amount_1d: bigint("promote_anchor_download_pay_amount_1d", {
+      mode: "number",
+    }),
+    promote_faction_download_pay_amount_1d: bigint("promote_faction_download_pay_amount_1d", {
+      mode: "number",
+    }),
+
+    // 活跃激励 (cps_all 给的)
+    promote_active_pay_ucnt_1d: integer("promote_active_pay_ucnt_1d"),
+    promote_anchor_active_pay_amount_1d: bigint("promote_anchor_active_pay_amount_1d", {
+      mode: "number",
+    }),
+    promote_faction_active_pay_amount_1d: bigint("promote_faction_active_pay_amount_1d", {
+      mode: "number",
+    }),
 
     raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
@@ -203,7 +261,6 @@ export const anchor_game_promo_daily = pgTable(
     pk: primaryKey({
       columns: [t.anchor_id, t.date, t.promote_scene, t.biz_mode, t.game_name],
     }),
-    // 索引名缩写以适应 PG 63 字符限制
     idx_date: index("idx_game_promo_date").on(t.date),
     idx_anchor: index("idx_game_promo_anchor").on(t.anchor_id),
   }),
@@ -221,29 +278,50 @@ export const anchor_minigame_daily = pgTable(
     anchor_id: text("anchor_id").notNull(),
     date: text("date").notNull(),
     scene: text("scene", { enum: ["live", "video"] }).notNull(),
+    mp_name: text("mp_name").notNull().default(""), // 小游戏名称（PK 一部分，无名时用空字符串）
+    anchor_name_snapshot: text("anchor_name_snapshot"),
 
-    // 共性（命名风格用 live 那套，video 字段在 adapter 里映射进来）
-    live_room_cnt: integer("live_room_cnt"),
-    live_duration: numeric("live_duration", { precision: 6, scale: 2 }),
-    watch_ucnt: integer("watch_ucnt"),
-    gm_click_ucnt: integer("gm_click_ucnt"),
-    gm_active_ucnt: integer("gm_active_ucnt"),
-    gm_pay_ucnt: integer("gm_pay_ucnt"),
+    // 基础（live + video 共性）
+    live_room_cnt: integer("live_room_cnt"), // 开播场次（video: 投稿数）
+    live_duration: numeric("live_duration", { precision: 8, scale: 2 }), // 开播时长(h)
+    avg_room_live_duration: numeric("avg_room_live_duration", { precision: 8, scale: 2 }),
+    avg_user_watch_duration: numeric("avg_user_watch_duration", { precision: 8, scale: 2 }),
+    watch_ucnt: integer("watch_ucnt"), // 看播 UV
+    watch_duration: numeric("watch_duration", { precision: 10, scale: 2 }),
+    acu: integer("acu"),
+    pcu: integer("pcu"),
 
-    // 分账（核心）
-    before_divided_income: bigint("before_divided_income", { mode: "number" }),
-    after_divided_author_income: bigint("after_divided_author_income", { mode: "number" }), // 主播分账后
+    // 互动
+    like_ucnt: integer("like_ucnt"),
+    follow_ucnt: integer("follow_ucnt"),
+    comment_ucnt: integer("comment_ucnt"),
+
+    // 小游戏漏斗
+    gm_click_ucnt: integer("gm_click_ucnt"), // 点击
+    gm_active_ucnt: integer("gm_active_ucnt"), // 激活
+    gm_pay_ucnt: integer("gm_pay_ucnt"), // 付费
+
+    // 分账
+    before_divided_income: bigint("before_divided_income", { mode: "number" }), // 分成前流水
+    after_divided_author_income: bigint("after_divided_author_income", { mode: "number" }),
     after_divided_trade_union_income: bigint("after_divided_trade_union_income", {
       mode: "number",
     }),
     cps_bind_uv: integer("cps_bind_uv"),
+
+    // video 专属
+    play_cnt: bigint("play_cnt", { mode: "number" }), // 视频播放数
+    play_uv: integer("play_uv"), // 视频播放人数
+    play_cnt_avg: numeric("play_cnt_avg", { precision: 8, scale: 2 }),
+    finish_play_uv: integer("finish_play_uv"),
+    finish_play_ratio: numeric("finish_play_ratio", { precision: 5, scale: 4 }),
 
     raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
     created_at: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.anchor_id, t.date, t.scene] }),
+    pk: primaryKey({ columns: [t.anchor_id, t.date, t.scene, t.mp_name] }),
     idx_date: index("idx_minigame_date").on(t.date),
     idx_anchor: index("idx_minigame_anchor").on(t.anchor_id),
   }),
