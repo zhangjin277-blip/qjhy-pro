@@ -207,11 +207,32 @@ export const anchor_game_promo_daily = pgTable(
     promote_live_like_ucnt_1d: integer("promote_live_like_ucnt_1d"),
     promote_live_comment_ucnt_1d: integer("promote_live_comment_ucnt_1d"),
     promote_live_follow_ucnt_1d: integer("promote_live_follow_ucnt_1d"),
+    /** 点赞率（平台 promoteLiveLikeUAvg1d，0-1） */
+    promote_live_like_uavg_1d: numeric("promote_live_like_uavg_1d", { precision: 8, scale: 6 }),
+    /** 评论率 */
+    promote_live_comment_uavg_1d: numeric("promote_live_comment_uavg_1d", {
+      precision: 8,
+      scale: 6,
+    }),
+    /** 关注率 */
+    promote_live_follow_uavg_1d: numeric("promote_live_follow_uavg_1d", {
+      precision: 8,
+      scale: 6,
+    }),
 
     // 视频专属
     promote_video_publish_cnt_1d: integer("promote_video_publish_cnt_1d"),
     promote_item_vv_1d: bigint("promote_item_vv_1d", { mode: "number" }), // VV
     promote_item_uv_1d: integer("promote_item_uv_1d"), // UV
+    /** 人均视频播放数 (video) */
+    promote_item_uavg_1d: numeric("promote_item_uavg_1d", { precision: 8, scale: 2 }),
+    /** 完播人数 (video) */
+    promote_finish_play_ucnt_1d: integer("promote_finish_play_ucnt_1d"),
+    /** 完播率 (video，0-1) */
+    promote_finish_play_ratio_1d: numeric("promote_finish_play_ratio_1d", {
+      precision: 8,
+      scale: 6,
+    }),
 
     // 转化漏斗（直播+视频共用）
     promote_click_download_ucnt_1d: integer("promote_click_download_ucnt_1d"),
@@ -295,6 +316,12 @@ export const anchor_minigame_daily = pgTable(
     like_ucnt: integer("like_ucnt"),
     follow_ucnt: integer("follow_ucnt"),
     comment_ucnt: integer("comment_ucnt"),
+    /** 点赞率（平台 likeUcntRatio，0-1） */
+    like_ucnt_ratio: numeric("like_ucnt_ratio", { precision: 8, scale: 6 }),
+    /** 关注率 */
+    follow_ucnt_ratio: numeric("follow_ucnt_ratio", { precision: 8, scale: 6 }),
+    /** 评论率 */
+    comment_ucnt_ratio: numeric("comment_ucnt_ratio", { precision: 8, scale: 6 }),
 
     // 小游戏漏斗
     gm_click_ucnt: integer("gm_click_ucnt"), // 点击

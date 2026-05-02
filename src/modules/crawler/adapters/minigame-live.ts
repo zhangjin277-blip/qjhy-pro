@@ -1,7 +1,6 @@
 import "server-only";
 import type { Page } from "puppeteer-core";
 import { runExport, type DownloadTask } from "../download-helper";
-import { parseDuration } from "../parsers";
 
 /**
  * 小游戏数据（download 模式）。
@@ -62,6 +61,9 @@ export interface MinigameRow {
   like_ucnt: number | null;
   follow_ucnt: number | null;
   comment_ucnt: number | null;
+  like_ucnt_ratio: number | null;
+  follow_ucnt_ratio: number | null;
+  comment_ucnt_ratio: number | null;
 
   gm_click_ucnt: number | null;
   gm_active_ucnt: number | null;
@@ -135,21 +137,25 @@ export function parseMinigameRow(
     anchor_name_snapshot: get("主播昵称", "昵称", "anchorNickname"),
 
     live_room_cnt: numOrNull(get("小游戏开播场次", "开播场次", "投稿数")),
-    live_duration: parseDuration(get("小游戏开播时长", "开播时长") ?? ""),
-    avg_room_live_duration: parseDuration(get("场均开播时长") ?? ""),
-    avg_user_watch_duration: parseDuration(get("人均观看时长") ?? ""),
+    // minigame CSV 时长字段是纯数字（无"小时/分钟"后缀），按字面值存
+    live_duration: numOrNull(get("小游戏开播时长", "开播时长")),
+    avg_room_live_duration: numOrNull(get("场均小游戏开播时长", "场均开播时长")),
+    avg_user_watch_duration: numOrNull(get("人均小游戏看播时长", "人均观看时长")),
     watch_ucnt: numOrNull(get("看播人数", "小游戏看播人数")),
-    watch_duration: parseDuration(get("看播时长") ?? ""),
+    watch_duration: numOrNull(get("小游戏看播时长", "看播时长")),
     acu: numOrNull(get("ACU", "平均在线")),
     pcu: numOrNull(get("PCU", "最高在线")),
 
     like_ucnt: numOrNull(get("点赞人数")),
     follow_ucnt: numOrNull(get("涨粉数", "关注人数")),
     comment_ucnt: numOrNull(get("评论人数")),
+    like_ucnt_ratio: pctOrNull(get("点赞率")),
+    follow_ucnt_ratio: pctOrNull(get("关注率")),
+    comment_ucnt_ratio: pctOrNull(get("评论率")),
 
     gm_click_ucnt: numOrNull(get("小游戏点击人数", "点击人数")),
-    gm_active_ucnt: numOrNull(get("小游戏激活人数", "激活人数")),
-    gm_pay_ucnt: numOrNull(get("小游戏付费人数", "付费人数")),
+    gm_active_ucnt: numOrNull(get("小游戏活跃用户数", "小游戏激活人数", "激活人数")),
+    gm_pay_ucnt: numOrNull(get("小游戏内购付费用户数", "小游戏付费人数", "付费人数")),
 
     before_divided_income: numOrNull(get("直播-小游戏流水(分成前)", "分成前流水", "小游戏流水")),
     after_divided_author_income: numOrNull(

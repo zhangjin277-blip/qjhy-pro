@@ -92,21 +92,39 @@ const TASKS: TaskSpec[] = [
     fields: [
       "anchorName",
       "gameName",
+      // 投稿
+      "promoteVideoPublishCnt1d",
+      // 流量（VV / UV / 人均VV）
+      "promoteItemVV1d",
+      "promoteItemUV1d",
+      "promoteItemUAvg1d", // FIXME 推测：人均游戏视频播放数
+      // 互动（人数 + 率 — 平台共用 live 命名一套，按 cid+scene 区分）
+      "promoteFinishPlayUcnt1d", // FIXME 推测：完播人数
+      "promoteLiveLikeUcnt1d",
+      "promoteLiveFollowUcnt1d",
+      "promoteLiveCommentUcnt1d",
+      "promoteFinishPlayRatio1d", // FIXME 推测：完播率
+      "promoteLiveLikeUAvg1d",
+      "promoteLiveFollowUAvg1d",
+      "promoteLiveCommentUAvg1d",
+      // 转化漏斗
+      "promoteClickDownloadUcnt1d",
+      "promoteStartDownloadUcnt1d",
+      "promoteDownloadFinishUcnt1d",
+      "promoteInstallFinishUcnt1d",
+      // 收益
+      "promoteActiveUcnt1d",
+      "promoteChargePayUcnt1d",
       "promotePayAmount1d",
       "promoteAnchorIncome1d",
       "promoteFactionIncome1d",
-      "promoteVideoPublishCnt1d",
-      "promoteItemVV1d",
-      "promoteItemUV1d",
-      "promoteClickDownloadUcnt1d",
-      "promoteActiveUcnt1d",
-      "promoteChargePayUcnt1d",
     ],
     filename: "游戏数据-创作者详情数据-流水分成",
   },
   {
     scene: "video",
     bizMode: "cps_all",
+    // FIXME 平台 status=20001 reject — 实测 5/01 cid 已失效，需要重新从 DevTools 抓真实 cid
     cid: "cm58etbc77udnv3lummg",
     taskScene: "tinker_cijsa9rc77u482q9pu40",
     fields: [
@@ -185,10 +203,16 @@ export interface GamePromoRow {
   promote_live_like_ucnt_1d: number | null;
   promote_live_comment_ucnt_1d: number | null;
   promote_live_follow_ucnt_1d: number | null;
+  promote_live_like_uavg_1d: number | null;
+  promote_live_comment_uavg_1d: number | null;
+  promote_live_follow_uavg_1d: number | null;
 
   promote_video_publish_cnt_1d: number | null;
   promote_item_vv_1d: number | null;
   promote_item_uv_1d: number | null;
+  promote_item_uavg_1d: number | null;
+  promote_finish_play_ucnt_1d: number | null;
+  promote_finish_play_ratio_1d: number | null;
 
   promote_click_download_ucnt_1d: number | null;
   promote_start_download_ucnt_1d: number | null;
@@ -228,18 +252,16 @@ export function parseGamePromoRow(
   bizMode: BizMode,
   date: string,
 ): Omit<GamePromoRow, "anchor_id"> & { _aweme_id: string | null } {
+  // 严格按 CSV 中文 header 匹配（实测 4/30 + 5/01）：
+  //   live+cps:    游戏开播场次/游戏看播人数/直播-主播游戏收入(分成后) ...
+  //   live+cps_all: 下载充值玩家/主播促进玩家下载分成收入 ...
+  //   video+cps:   游戏视频投稿数/短视频-创作者游戏收入(分成后) ...
+  //   video+cps_all: 创作者促进玩家... （task 当前 cid 失效，未实测）
+  // 不用 contains 兜底，避免"活跃"匹配到"活跃用户数"等错配。
   const get = (...keys: string[]): string | null => {
     for (const k of keys) {
       const v = r[k];
       if (v !== undefined && v !== "") return v;
-    }
-    const headerKeys = Object.keys(r);
-    for (const k of keys) {
-      const found = headerKeys.find((h) => h.includes(k));
-      if (found) {
-        const v = r[found];
-        if (v !== undefined && v !== "") return v;
-      }
     }
     return null;
   };
@@ -250,57 +272,72 @@ export function parseGamePromoRow(
     promote_scene: scene,
     biz_mode: bizMode,
     game_name: get("游戏名称", "游戏") ?? "未知",
-    anchor_name_snapshot: get("主播昵称", "昵称", "创作者"),
+    anchor_name_snapshot: get("昵称", "主播昵称", "创作者"),
 
-    promote_live_cnt_1d: numOrNull(get("直播场次")),
-    promote_live_duration_1d: parseDuration(get("直播时长") ?? ""),
-    promote_live_duration_avg: parseDuration(get("平均场次时长", "平均场时长") ?? ""),
-    promote_live_watch_ucnt_1d: numOrNull(get("游戏看播人数", "看播人数")),
-    promote_live_watch_duration_1d: parseDuration(get("看播时长") ?? ""),
-    promote_live_watch_duration_uavg_1d: parseDuration(get("人均看播时长", "人均观看时长") ?? ""),
-    acu: numOrNull(get("ACU", "平均在线人数")),
-    pcu: numOrNull(get("PCU", "最高在线人数")),
+    // 开播
+    promote_live_cnt_1d: numOrNull(get("游戏开播场次")),
+    promote_live_duration_1d: parseDuration(get("游戏开播时长") ?? ""),
+    promote_live_duration_avg: parseDuration(get("场均游戏开播时长") ?? ""),
+
+    // 流量
+    promote_live_watch_ucnt_1d: numOrNull(get("游戏看播人数")),
+    promote_live_watch_duration_1d: parseDuration(get("游戏看播时长") ?? ""),
+    promote_live_watch_duration_uavg_1d: parseDuration(get("人均游戏看播时长") ?? ""),
+    acu: numOrNull(get("ACU")),
+    pcu: numOrNull(get("PCU")),
+
+    // 互动
     promote_live_like_ucnt_1d: numOrNull(get("点赞人数")),
     promote_live_comment_ucnt_1d: numOrNull(get("评论人数")),
     promote_live_follow_ucnt_1d: numOrNull(get("关注人数")),
+    promote_live_like_uavg_1d: pctOrNull(get("点赞率")),
+    promote_live_comment_uavg_1d: pctOrNull(get("评论率")),
+    promote_live_follow_uavg_1d: pctOrNull(get("关注率")),
 
-    promote_video_publish_cnt_1d: numOrNull(get("发布视频数", "发布场次", "投稿数")),
-    promote_item_vv_1d: numOrNull(get("视频播放数", "VV", "游戏视频播放数")),
-    promote_item_uv_1d: numOrNull(get("视频播放人数", "视频UV")),
+    // 视频专属（video scene；live scene CSV 不返回这些）
+    promote_video_publish_cnt_1d: numOrNull(get("游戏视频投稿数")),
+    promote_item_vv_1d: numOrNull(get("游戏视频播放数")),
+    promote_item_uv_1d: numOrNull(get("游戏视频播放人数")),
+    promote_item_uavg_1d: numOrNull(get("人均游戏视频播放数")),
+    promote_finish_play_ucnt_1d: numOrNull(get("完播人数")),
+    promote_finish_play_ratio_1d: pctOrNull(get("完播率")),
 
-    promote_click_download_ucnt_1d: numOrNull(get("点击下载人数")),
-    promote_start_download_ucnt_1d: numOrNull(get("开始下载人数")),
-    promote_download_finish_ucnt_1d: numOrNull(get("下载完成人数")),
-    promote_install_finish_ucnt_1d: numOrNull(get("安装完成人数", "安卓游戏安装完成人数", "安装")),
-    promote_active_ucnt_1d: numOrNull(get("激活人数", "活跃人数")),
+    // 转化漏斗（live + video 共用）
+    promote_click_download_ucnt_1d: numOrNull(get("游戏下载点击人数")),
+    promote_start_download_ucnt_1d: numOrNull(get("安卓游戏下载开始人数")),
+    promote_download_finish_ucnt_1d: numOrNull(get("安卓游戏下载完成人数")),
+    promote_install_finish_ucnt_1d: numOrNull(get("安卓游戏安装完成人数")),
 
-    promote_pay_ucnt_1d: numOrNull(get("付费人数")),
-    promote_pay_amount_1d: numOrNull(
-      get("付费金额", "直播-游戏流水(分成前)", "短视频-游戏流水(分成前)", "流水"),
+    // 收益（live + video 共用同一字段，按 promote_scene 区分）
+    promote_active_ucnt_1d: numOrNull(get("游戏活跃用户数")),
+    promote_pay_ucnt_1d: numOrNull(get("游戏内购付费用户数")),
+    promote_charge_pay_ucnt_1d: numOrNull(get("游戏内购付费用户数")),
+    promote_pay_amount_1d: numOrNull(get("直播-游戏流水(分成前)", "短视频-游戏流水(分成前)")),
+    promote_anchor_income_1d: numOrNull(
+      get("直播-主播游戏收入(分成后)", "短视频-创作者游戏收入(分成后)"),
     ),
-    promote_charge_pay_ucnt_1d: numOrNull(get("充值付费人数")),
+    promote_faction_income_1d: numOrNull(
+      get("直播-机构游戏收入(分成后)", "短视频-机构游戏收入(分成后)"),
+    ),
 
-    props_pay_amount_1d: numOrNull(get("道具付费金额", "道具流水")),
-    props_anchor_pay_amount_1d: numOrNull(get("主播道具分成", "道具主播分成")),
-    props_faction_pay_amount_1d: numOrNull(get("机构道具分成", "道具机构分成")),
+    // 道具（live 专属）
+    props_pay_amount_1d: numOrNull(get("道具推广流水(分成前)")),
+    props_anchor_pay_amount_1d: numOrNull(get("主播道具推广收入(分成后)")),
+    props_faction_pay_amount_1d: numOrNull(get("机构道具推广收入(分成后)")),
 
-    promote_anchor_income_1d: numOrNull(get("主播分账", "主播分成", "主播活跃")),
-    promote_faction_income_1d: numOrNull(get("机构分账", "机构分成", "公会活跃")),
-
-    promote_download_pay_ucnt_1d: numOrNull(get("下载激励付费人数", "下载激励-付费UV")),
-    promote_download_pay_amount_1d: numOrNull(get("下载激励付费金额", "下载激励-付费金额")),
+    // cps_all（下载+活跃激励），主播/创作者两种命名
+    promote_download_pay_ucnt_1d: numOrNull(get("下载充值玩家")),
+    promote_download_pay_amount_1d: numOrNull(get("下载充值流水")),
     promote_anchor_download_pay_amount_1d: numOrNull(
-      get("主播下载激励分账", "下载激励-主播分账", "主播下载"),
+      get("主播促进玩家下载分成收入", "创作者促进玩家下载分成收入"),
     ),
-    promote_faction_download_pay_amount_1d: numOrNull(
-      get("机构下载激励分账", "下载激励-机构分账", "机构下载"),
-    ),
+    promote_faction_download_pay_amount_1d: numOrNull(get("机构促进玩家下载分成收入")),
 
-    promote_active_pay_ucnt_1d: numOrNull(get("活跃激励付费人数", "活跃激励-付费UV")),
-    promote_anchor_active_pay_amount_1d: numOrNull(get("主播活跃激励分账", "活跃激励-主播分账")),
-    promote_faction_active_pay_amount_1d: numOrNull(
-      get("机构活跃激励分账", "活跃激励-机构分账", "公会活跃"),
+    promote_active_pay_ucnt_1d: numOrNull(get("活跃充值玩家")),
+    promote_anchor_active_pay_amount_1d: numOrNull(
+      get("主播促进玩家活跃分成收入", "创作者促进玩家活跃分成收入"),
     ),
+    promote_faction_active_pay_amount_1d: numOrNull(get("机构促进玩家活跃分成收入")),
 
     raw: r as Record<string, unknown>,
   };
@@ -308,8 +345,34 @@ export function parseGamePromoRow(
 
 function numOrNull(v: string | null): number | null {
   if (v === null || v === "") return null;
+  // strip 千位分隔符 + 常见中文后缀（元/个/人/次/分钟/小时）
+  let cleaned = v
+    .replace(/,/g, "")
+    .replace(/(元|个|人|次|分钟|小时)$/g, "")
+    .trim();
+  if (cleaned === "" || cleaned === "-" || cleaned === "—") return null;
+  // 处理 万/亿 倍率（"1.5万"→15000，"2.3亿"→230_000_000）
+  let multiplier = 1;
+  if (cleaned.endsWith("万")) {
+    multiplier = 10_000;
+    cleaned = cleaned.slice(0, -1);
+  } else if (cleaned.endsWith("亿")) {
+    multiplier = 100_000_000;
+    cleaned = cleaned.slice(0, -1);
+  }
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n * multiplier : null;
+}
+
+function pctOrNull(v: string | null): number | null {
+  if (v === null || v === "") return null;
   const cleaned = v.replace(/,/g, "").trim();
   if (cleaned === "" || cleaned === "-" || cleaned === "—") return null;
+  if (cleaned.endsWith("%")) {
+    const n = Number(cleaned.slice(0, -1));
+    return Number.isFinite(n) ? n / 100 : null;
+  }
   const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  if (!Number.isFinite(n)) return null;
+  return n > 1 ? n / 100 : n;
 }

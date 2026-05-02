@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ChevronUp, ChevronDown, X } from "lucide-react";
+import { GripVertical, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ALL_COLUMNS, ALL_GROUPS, getColumnsByGroup, type ColumnDef } from "./column-presets";
+import {
+  ALL_COLUMNS,
+  ALL_GROUPS,
+  getColumnsByGroup,
+  getColumnsBySubGroup,
+  type ColumnDef,
+} from "./column-presets";
 import { cn } from "@/lib/utils/cn";
 
 type ColKey = (typeof ALL_COLUMNS)[number]["key"];
@@ -64,6 +70,12 @@ export function ColumnCustomizer({
     );
   }, [activeGroup, search]);
 
+  // 按 subGroup 切块（仅在无搜索时分块；搜索时扁平展示）
+  const midBlocks = useMemo(() => {
+    if (search.trim()) return null;
+    return getColumnsBySubGroup(activeGroup);
+  }, [activeGroup, search]);
+
   // 左栏：分组 + 已选计数
   const groupCounts = useMemo(() => {
     const map: Record<string, { selected: number; total: number }> = {};
@@ -95,24 +107,17 @@ export function ColumnCustomizer({
     }
   }
 
-  function moveUp(idx: number): void {
-    if (idx <= 0) return;
-    setWorking((prev) => {
-      const next = [...prev] as ColKey[];
-      const tmp = next[idx - 1] as ColKey;
-      next[idx - 1] = next[idx] as ColKey;
-      next[idx] = tmp;
-      return next;
-    });
-  }
+  // 拖拽排序状态
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
 
-  function moveDown(idx: number): void {
+  function reorder(from: number, to: number): void {
+    if (from === to) return;
     setWorking((prev) => {
-      if (idx >= prev.length - 1) return prev;
-      const next = [...prev] as ColKey[];
-      const tmp = next[idx] as ColKey;
-      next[idx] = next[idx + 1] as ColKey;
-      next[idx + 1] = tmp;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      if (!moved) return prev;
+      next.splice(to, 0, moved);
       return next;
     });
   }
@@ -134,12 +139,12 @@ export function ColumnCustomizer({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-5xl p-0 gap-0 overflow-hidden sm:max-w-5xl">
+      <DialogContent className="max-w-6xl p-0 gap-0 overflow-hidden sm:max-w-6xl">
         <DialogHeader className="px-5 pt-4 pb-3 border-b">
           <DialogTitle className="text-base font-semibold">自定义列</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-[160px_minmax(280px,1fr)_240px] h-[500px] overflow-hidden">
+        <div className="grid grid-cols-[180px_minmax(420px,1fr)_240px] h-[560px] overflow-hidden">
           {/* 左栏：分组导航 */}
           <div className="border-r overflow-y-auto bg-muted/30">
             {ALL_GROUPS.map((g) => {
@@ -192,30 +197,63 @@ export function ColumnCustomizer({
                   <span>全选 ({midAllKeys.length})</span>
                 </label>
               )}
-              {midColumns.map((c) => {
-                const checked = workingSet.has(c.key);
-                return (
-                  <label
-                    key={c.key}
-                    className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/50 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleKey(c.key)}
-                      className="accent-primary"
-                    />
-                    <span>{c.label}</span>
-                  </label>
-                );
-              })}
+              {midBlocks ? (
+                midBlocks.map((block, blockIdx) => (
+                  <div key={block.subGroup ?? `_${blockIdx}`}>
+                    {block.subGroup && (
+                      <div className="px-3 pt-3 pb-1.5 text-xs font-semibold text-muted-foreground bg-muted/20">
+                        {block.subGroup}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-2 px-2 py-1">
+                      {block.columns.map((c) => {
+                        const checked = workingSet.has(c.key);
+                        return (
+                          <label
+                            key={c.key}
+                            className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleKey(c.key)}
+                              className="accent-primary shrink-0"
+                            />
+                            <span className="truncate">{c.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-2 px-2 py-1">
+                  {midColumns.map((c) => {
+                    const checked = workingSet.has(c.key);
+                    return (
+                      <label
+                        key={c.key}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleKey(c.key)}
+                          className="accent-primary shrink-0"
+                        />
+                        <span className="truncate">{c.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
               {midColumns.length === 0 && (
                 <p className="text-muted-foreground text-sm px-3 py-4 text-center">无匹配指标</p>
               )}
             </div>
           </div>
 
-          {/* 右栏：已选列（有序） */}
+          {/* 右栏：已选列（拖拽排序） */}
           <div className="flex flex-col overflow-hidden min-w-0">
             <div className="px-3 py-2 border-b shrink-0 text-sm font-medium text-muted-foreground">
               已选 {working.length} 列
@@ -224,24 +262,42 @@ export function ColumnCustomizer({
               {working.map((key, idx) => (
                 <div
                   key={key}
-                  className="flex items-center gap-1 px-2 py-1.5 hover:bg-muted/50 text-sm group"
+                  draggable
+                  onDragStart={(e) => {
+                    setDragIdx(idx);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (dropIdx !== idx) setDropIdx(idx);
+                  }}
+                  onDragLeave={() => {
+                    if (dropIdx === idx) setDropIdx(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragIdx !== null) reorder(dragIdx, idx);
+                    setDragIdx(null);
+                    setDropIdx(null);
+                  }}
+                  onDragEnd={() => {
+                    setDragIdx(null);
+                    setDropIdx(null);
+                  }}
+                  className={cn(
+                    "flex items-center gap-1 px-1 py-1.5 text-sm group cursor-grab active:cursor-grabbing border-t-2 border-b-2 border-transparent",
+                    dragIdx === idx && "opacity-40",
+                    dropIdx === idx &&
+                      dragIdx !== null &&
+                      dragIdx !== idx &&
+                      (dragIdx > idx ? "border-t-primary" : "border-b-primary"),
+                    dragIdx !== idx && "hover:bg-muted/50",
+                  )}
                 >
-                  <span className="flex-1 truncate">{labelMap.get(key) ?? key}</span>
+                  <GripVertical className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                  <span className="flex-1 truncate select-none">{labelMap.get(key) ?? key}</span>
                   <div className="flex items-center gap-0.5 shrink-0">
-                    <button
-                      onClick={() => moveUp(idx)}
-                      disabled={idx === 0}
-                      className="p-0.5 rounded hover:bg-muted disabled:opacity-20"
-                    >
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => moveDown(idx)}
-                      disabled={idx === working.length - 1}
-                      className="p-0.5 rounded hover:bg-muted disabled:opacity-20"
-                    >
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </button>
                     <button
                       onClick={() => removeKey(key)}
                       className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"

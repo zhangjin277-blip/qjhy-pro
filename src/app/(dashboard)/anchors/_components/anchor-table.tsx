@@ -7,6 +7,7 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  Music2,
   Settings2,
 } from "lucide-react";
 import { Filters } from "./filters";
@@ -20,14 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils/cn";
 import type { AnchorListRow, AnchorListFilters } from "@/modules/anchors";
 import {
@@ -228,11 +222,11 @@ export function AnchorTable(): React.JSX.Element {
         </span>
       </div>
 
-      {/* 表格 */}
+      {/* 表格 — 使用原生 <table> 避开 shadcn Table 的内层 overflow wrapper（否则 sticky 表头失效） */}
       <div className="bg-card overflow-hidden rounded-lg border shadow-sm">
         <div className="max-h-[calc(100vh-320px)] overflow-auto">
-          <Table className="min-w-max">
-            <TableHeader className="sticky top-0 z-10 bg-secondary">
+          <table className="w-full caption-bottom text-sm min-w-max">
+            <TableHeader className="sticky top-0 z-20 bg-secondary [&_th]:bg-secondary">
               <TableRow className="border-b-2 hover:bg-secondary">
                 {visibleColumns.map((c) => {
                   const active = sortKey === c.key;
@@ -243,6 +237,7 @@ export function AnchorTable(): React.JSX.Element {
                       className={cn(
                         "h-10 px-3 cursor-pointer select-none transition-colors whitespace-nowrap",
                         c.align === "right" && "text-right",
+                        c.fmt === "anchor_info" && "w-[220px] max-w-[220px]",
                         c.sticky && "sticky left-0 z-20 bg-secondary",
                         active ? "text-primary font-semibold" : "text-foreground hover:bg-muted",
                       )}
@@ -285,7 +280,49 @@ export function AnchorTable(): React.JSX.Element {
                   <TableRow key={r.anchor_id} className="hover:bg-accent/30">
                     {visibleColumns.map((c) => {
                       const v = getValue(r, c.key);
-                      // avatar 列单独渲染
+                      // 主播信息合并列：头像 + 昵称 + 抖音号 + UID 三行
+                      if (c.fmt === "anchor_info") {
+                        return (
+                          <TableCell
+                            key={c.key}
+                            className={cn(
+                              "px-3 py-2 w-[220px] max-w-[220px]",
+                              c.sticky && "sticky left-0 bg-card",
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              {r.avatar ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={r.avatar}
+                                  alt={r.nick_name}
+                                  className="size-10 rounded-full bg-muted object-cover shrink-0"
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className="size-10 rounded-full bg-muted shrink-0" />
+                              )}
+                              <div className="flex flex-col min-w-0 flex-1 leading-tight">
+                                <span className="text-sm font-medium truncate" title={r.nick_name}>
+                                  {r.nick_name || "—"}
+                                </span>
+                                {r.aweme_display_id && (
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 min-w-0">
+                                    <Music2 className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">{r.aweme_display_id}</span>
+                                  </span>
+                                )}
+                                <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 min-w-0">
+                                  <span className="text-[10px] shrink-0">UID</span>
+                                  <span className="truncate">{r.anchor_id}</span>
+                                </span>
+                              </div>
+                            </div>
+                          </TableCell>
+                        );
+                      }
+                      // 头像列单独渲染（兼容旧 fmt）
                       if (c.fmt === "avatar") {
                         return (
                           <TableCell key={c.key} className="px-3 py-1">
@@ -325,7 +362,7 @@ export function AnchorTable(): React.JSX.Element {
                 ))
               )}
             </TableBody>
-          </Table>
+          </table>
         </div>
       </div>
 

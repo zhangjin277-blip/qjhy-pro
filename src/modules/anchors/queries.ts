@@ -240,22 +240,26 @@ export async function listAnchors(
   const anchorIds = rows.map((r) => r.anchor_id);
   if (anchorIds.length === 0) return [];
 
-  // ── 子查询: game_promo cps（直播流水分账） ─────────────────────────────
+  // ── 子查询: game_promo live + cps（直播流水分成） ─────────────────────
   const gameCps = await db
     .select({
       anchor_id: anchor_game_promo_daily.anchor_id,
       g_live_cnt: sql<number>`SUM(${anchor_game_promo_daily.promote_live_cnt_1d})`,
       g_live_duration: sql<string>`SUM(${anchor_game_promo_daily.promote_live_duration_1d})`,
+      g_live_duration_avg: sql<string>`COALESCE(AVG(${anchor_game_promo_daily.promote_live_duration_avg}), 0)`,
       g_watch_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_live_watch_ucnt_1d})`,
+      g_watch_duration: sql<string>`SUM(${anchor_game_promo_daily.promote_live_watch_duration_1d})`,
+      g_watch_duration_uavg: sql<string>`COALESCE(AVG(${anchor_game_promo_daily.promote_live_watch_duration_uavg_1d}), 0)`,
       g_acu: sql<number>`COALESCE(MAX(${anchor_game_promo_daily.acu}), 0)`,
       g_pcu: sql<number>`COALESCE(MAX(${anchor_game_promo_daily.pcu}), 0)`,
       g_like_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_live_like_ucnt_1d})`,
       g_comment_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_live_comment_ucnt_1d})`,
       g_follow_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_live_follow_ucnt_1d})`,
-      g_video_publish_cnt: sql<number>`SUM(${anchor_game_promo_daily.promote_video_publish_cnt_1d})`,
-      g_video_vv: sql<number>`SUM(${anchor_game_promo_daily.promote_item_vv_1d})`,
-      g_video_uv: sql<number>`SUM(${anchor_game_promo_daily.promote_item_uv_1d})`,
+      g_like_uavg: sql<string>`COALESCE(AVG(${anchor_game_promo_daily.promote_live_like_uavg_1d}), 0)`,
+      g_comment_uavg: sql<string>`COALESCE(AVG(${anchor_game_promo_daily.promote_live_comment_uavg_1d}), 0)`,
+      g_follow_uavg: sql<string>`COALESCE(AVG(${anchor_game_promo_daily.promote_live_follow_uavg_1d}), 0)`,
       g_click_download: sql<number>`SUM(${anchor_game_promo_daily.promote_click_download_ucnt_1d})`,
+      g_start_download: sql<number>`SUM(${anchor_game_promo_daily.promote_start_download_ucnt_1d})`,
       g_download_finish: sql<number>`SUM(${anchor_game_promo_daily.promote_download_finish_ucnt_1d})`,
       g_install_finish: sql<number>`SUM(${anchor_game_promo_daily.promote_install_finish_ucnt_1d})`,
       g_active_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_active_ucnt_1d})`,
@@ -272,13 +276,14 @@ export async function listAnchors(
       and(
         inArray(anchor_game_promo_daily.anchor_id, anchorIds),
         eq(anchor_game_promo_daily.biz_mode, "cps"),
+        eq(anchor_game_promo_daily.promote_scene, "live"),
         sql`${anchor_game_promo_daily.date} >= ${filters.date_from}`,
         sql`${anchor_game_promo_daily.date} <= ${filters.date_to}`,
       ),
     )
     .groupBy(anchor_game_promo_daily.anchor_id);
 
-  // ── 子查询: game_promo cps_all（下载/活跃激励） ───────────────────────
+  // ── 子查询: game_promo live + cps_all（直播促活分成） ──────────────────
   const gameCpsAll = await db
     .select({
       anchor_id: anchor_game_promo_daily.anchor_id,
@@ -295,6 +300,69 @@ export async function listAnchors(
       and(
         inArray(anchor_game_promo_daily.anchor_id, anchorIds),
         eq(anchor_game_promo_daily.biz_mode, "cps_all"),
+        eq(anchor_game_promo_daily.promote_scene, "live"),
+        sql`${anchor_game_promo_daily.date} >= ${filters.date_from}`,
+        sql`${anchor_game_promo_daily.date} <= ${filters.date_to}`,
+      ),
+    )
+    .groupBy(anchor_game_promo_daily.anchor_id);
+
+  // ── 子查询: game_promo video + cps（短视频流水分成） ───────────────────
+  const videoCps = await db
+    .select({
+      anchor_id: anchor_game_promo_daily.anchor_id,
+      v_publish_cnt: sql<number>`SUM(${anchor_game_promo_daily.promote_video_publish_cnt_1d})`,
+      v_vv: sql<number>`SUM(${anchor_game_promo_daily.promote_item_vv_1d})`,
+      v_uv: sql<number>`SUM(${anchor_game_promo_daily.promote_item_uv_1d})`,
+      v_uavg: sql<string>`COALESCE(AVG(${anchor_game_promo_daily.promote_item_uavg_1d}), 0)`,
+      v_finish_play_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_finish_play_ucnt_1d})`,
+      v_finish_play_ratio: sql<string>`COALESCE(AVG(${anchor_game_promo_daily.promote_finish_play_ratio_1d}), 0)`,
+      v_like_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_live_like_ucnt_1d})`,
+      v_follow_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_live_follow_ucnt_1d})`,
+      v_comment_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_live_comment_ucnt_1d})`,
+      v_like_uavg: sql<string>`COALESCE(AVG(${anchor_game_promo_daily.promote_live_like_uavg_1d}), 0)`,
+      v_follow_uavg: sql<string>`COALESCE(AVG(${anchor_game_promo_daily.promote_live_follow_uavg_1d}), 0)`,
+      v_comment_uavg: sql<string>`COALESCE(AVG(${anchor_game_promo_daily.promote_live_comment_uavg_1d}), 0)`,
+      v_click_download: sql<number>`SUM(${anchor_game_promo_daily.promote_click_download_ucnt_1d})`,
+      v_start_download: sql<number>`SUM(${anchor_game_promo_daily.promote_start_download_ucnt_1d})`,
+      v_download_finish: sql<number>`SUM(${anchor_game_promo_daily.promote_download_finish_ucnt_1d})`,
+      v_install_finish: sql<number>`SUM(${anchor_game_promo_daily.promote_install_finish_ucnt_1d})`,
+      v_active_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_active_ucnt_1d})`,
+      v_charge_pay_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_charge_pay_ucnt_1d})`,
+      v_pay_amount: sql<number>`SUM(${anchor_game_promo_daily.promote_pay_amount_1d})`,
+      v_anchor_income: sql<number>`SUM(${anchor_game_promo_daily.promote_anchor_income_1d})`,
+      v_faction_income: sql<number>`SUM(${anchor_game_promo_daily.promote_faction_income_1d})`,
+    })
+    .from(anchor_game_promo_daily)
+    .where(
+      and(
+        inArray(anchor_game_promo_daily.anchor_id, anchorIds),
+        eq(anchor_game_promo_daily.biz_mode, "cps"),
+        eq(anchor_game_promo_daily.promote_scene, "video"),
+        sql`${anchor_game_promo_daily.date} >= ${filters.date_from}`,
+        sql`${anchor_game_promo_daily.date} <= ${filters.date_to}`,
+      ),
+    )
+    .groupBy(anchor_game_promo_daily.anchor_id);
+
+  // ── 子查询: game_promo video + cps_all（短视频促活分成） ───────────────
+  const videoCpsAll = await db
+    .select({
+      anchor_id: anchor_game_promo_daily.anchor_id,
+      v_download_pay_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_download_pay_ucnt_1d})`,
+      v_download_pay_amount: sql<number>`SUM(${anchor_game_promo_daily.promote_download_pay_amount_1d})`,
+      v_anchor_download_pay: sql<number>`SUM(${anchor_game_promo_daily.promote_anchor_download_pay_amount_1d})`,
+      v_faction_download_pay: sql<number>`SUM(${anchor_game_promo_daily.promote_faction_download_pay_amount_1d})`,
+      v_active_pay_ucnt: sql<number>`SUM(${anchor_game_promo_daily.promote_active_pay_ucnt_1d})`,
+      v_anchor_active_pay: sql<number>`SUM(${anchor_game_promo_daily.promote_anchor_active_pay_amount_1d})`,
+      v_faction_active_pay: sql<number>`SUM(${anchor_game_promo_daily.promote_faction_active_pay_amount_1d})`,
+    })
+    .from(anchor_game_promo_daily)
+    .where(
+      and(
+        inArray(anchor_game_promo_daily.anchor_id, anchorIds),
+        eq(anchor_game_promo_daily.biz_mode, "cps_all"),
+        eq(anchor_game_promo_daily.promote_scene, "video"),
         sql`${anchor_game_promo_daily.date} >= ${filters.date_from}`,
         sql`${anchor_game_promo_daily.date} <= ${filters.date_to}`,
       ),
@@ -307,13 +375,18 @@ export async function listAnchors(
       anchor_id: anchor_minigame_daily.anchor_id,
       mg_room_cnt: sql<number>`SUM(${anchor_minigame_daily.live_room_cnt})`,
       mg_duration: sql<string>`SUM(${anchor_minigame_daily.live_duration})`,
+      mg_avg_room_live_duration: sql<string>`COALESCE(AVG(${anchor_minigame_daily.avg_room_live_duration}), 0)`,
       mg_watch_ucnt: sql<number>`SUM(${anchor_minigame_daily.watch_ucnt})`,
       mg_watch_duration: sql<string>`SUM(${anchor_minigame_daily.watch_duration})`,
+      mg_avg_user_watch_duration: sql<string>`COALESCE(AVG(${anchor_minigame_daily.avg_user_watch_duration}), 0)`,
       mg_acu: sql<number>`COALESCE(MAX(${anchor_minigame_daily.acu}), 0)`,
       mg_pcu: sql<number>`COALESCE(MAX(${anchor_minigame_daily.pcu}), 0)`,
       mg_like_ucnt: sql<number>`SUM(${anchor_minigame_daily.like_ucnt})`,
       mg_follow_ucnt: sql<number>`SUM(${anchor_minigame_daily.follow_ucnt})`,
       mg_comment_ucnt: sql<number>`SUM(${anchor_minigame_daily.comment_ucnt})`,
+      mg_like_ratio: sql<string>`COALESCE(AVG(${anchor_minigame_daily.like_ucnt_ratio}), 0)`,
+      mg_follow_ratio: sql<string>`COALESCE(AVG(${anchor_minigame_daily.follow_ucnt_ratio}), 0)`,
+      mg_comment_ratio: sql<string>`COALESCE(AVG(${anchor_minigame_daily.comment_ucnt_ratio}), 0)`,
       mg_click_ucnt: sql<number>`SUM(${anchor_minigame_daily.gm_click_ucnt})`,
       mg_active_ucnt: sql<number>`SUM(${anchor_minigame_daily.gm_active_ucnt})`,
       mg_pay_ucnt: sql<number>`SUM(${anchor_minigame_daily.gm_pay_ucnt})`,
@@ -339,6 +412,8 @@ export async function listAnchors(
   // ── 构建 Maps ──────────────────────────────────────────────────────────
   const gameCpsMap = new Map(gameCps.map((r) => [r.anchor_id, r]));
   const gameCpsAllMap = new Map(gameCpsAll.map((r) => [r.anchor_id, r]));
+  const videoCpsMap = new Map(videoCps.map((r) => [r.anchor_id, r]));
+  const videoCpsAllMap = new Map(videoCpsAll.map((r) => [r.anchor_id, r]));
   const mgMap = new Map(mgRows.map((r) => [r.anchor_id, r]));
 
   const num = (v: unknown): number | null => {
@@ -354,6 +429,8 @@ export async function listAnchors(
   return rows.map((r) => {
     const gc = gameCpsMap.get(r.anchor_id);
     const ga = gameCpsAllMap.get(r.anchor_id);
+    const vc = videoCpsMap.get(r.anchor_id);
+    const va = videoCpsAllMap.get(r.anchor_id);
     const mg = mgMap.get(r.anchor_id);
 
     return {
@@ -443,16 +520,20 @@ export async function listAnchors(
       // game cps
       g_live_cnt: gc ? num(gc.g_live_cnt) : null,
       g_live_duration: gc ? num(gc.g_live_duration) : null,
+      g_live_duration_avg: gc ? num(gc.g_live_duration_avg) : null,
       g_watch_ucnt: gc ? num(gc.g_watch_ucnt) : null,
+      g_watch_duration: gc ? num(gc.g_watch_duration) : null,
+      g_watch_duration_uavg: gc ? num(gc.g_watch_duration_uavg) : null,
       g_acu: gc ? num(gc.g_acu) : null,
       g_pcu: gc ? num(gc.g_pcu) : null,
       g_like_ucnt: gc ? num(gc.g_like_ucnt) : null,
       g_comment_ucnt: gc ? num(gc.g_comment_ucnt) : null,
       g_follow_ucnt: gc ? num(gc.g_follow_ucnt) : null,
-      g_video_publish_cnt: gc ? num(gc.g_video_publish_cnt) : null,
-      g_video_vv: gc ? num(gc.g_video_vv) : null,
-      g_video_uv: gc ? num(gc.g_video_uv) : null,
+      g_like_uavg: gc ? num(gc.g_like_uavg) : null,
+      g_comment_uavg: gc ? num(gc.g_comment_uavg) : null,
+      g_follow_uavg: gc ? num(gc.g_follow_uavg) : null,
       g_click_download: gc ? num(gc.g_click_download) : null,
+      g_start_download: gc ? num(gc.g_start_download) : null,
       g_download_finish: gc ? num(gc.g_download_finish) : null,
       g_install_finish: gc ? num(gc.g_install_finish) : null,
       g_active_ucnt: gc ? num(gc.g_active_ucnt) : null,
@@ -464,7 +545,7 @@ export async function listAnchors(
       g_anchor_income: gc ? num(gc.g_anchor_income) : null,
       g_faction_income: gc ? num(gc.g_faction_income) : null,
 
-      // game cps_all
+      // game cps_all (live)
       g_download_pay_ucnt: ga ? num(ga.g_download_pay_ucnt) : null,
       g_download_pay_amount: ga ? num(ga.g_download_pay_amount) : null,
       g_anchor_download_pay: ga ? num(ga.g_anchor_download_pay) : null,
@@ -473,16 +554,53 @@ export async function listAnchors(
       g_anchor_active_pay: ga ? num(ga.g_anchor_active_pay) : null,
       g_faction_active_pay: ga ? num(ga.g_faction_active_pay) : null,
 
+      // video cps（短视频流水分成）
+      v_publish_cnt: vc ? num(vc.v_publish_cnt) : null,
+      v_vv: vc ? num(vc.v_vv) : null,
+      v_uv: vc ? num(vc.v_uv) : null,
+      v_uavg: vc ? num(vc.v_uavg) : null,
+      v_finish_play_ucnt: vc ? num(vc.v_finish_play_ucnt) : null,
+      v_finish_play_ratio: vc ? num(vc.v_finish_play_ratio) : null,
+      v_like_ucnt: vc ? num(vc.v_like_ucnt) : null,
+      v_follow_ucnt: vc ? num(vc.v_follow_ucnt) : null,
+      v_comment_ucnt: vc ? num(vc.v_comment_ucnt) : null,
+      v_like_uavg: vc ? num(vc.v_like_uavg) : null,
+      v_follow_uavg: vc ? num(vc.v_follow_uavg) : null,
+      v_comment_uavg: vc ? num(vc.v_comment_uavg) : null,
+      v_click_download: vc ? num(vc.v_click_download) : null,
+      v_start_download: vc ? num(vc.v_start_download) : null,
+      v_download_finish: vc ? num(vc.v_download_finish) : null,
+      v_install_finish: vc ? num(vc.v_install_finish) : null,
+      v_active_ucnt: vc ? num(vc.v_active_ucnt) : null,
+      v_charge_pay_ucnt: vc ? num(vc.v_charge_pay_ucnt) : null,
+      v_pay_amount: vc ? num(vc.v_pay_amount) : null,
+      v_anchor_income: vc ? num(vc.v_anchor_income) : null,
+      v_faction_income: vc ? num(vc.v_faction_income) : null,
+
+      // video cps_all（短视频促活分成）
+      v_download_pay_ucnt: va ? num(va.v_download_pay_ucnt) : null,
+      v_download_pay_amount: va ? num(va.v_download_pay_amount) : null,
+      v_anchor_download_pay: va ? num(va.v_anchor_download_pay) : null,
+      v_faction_download_pay: va ? num(va.v_faction_download_pay) : null,
+      v_active_pay_ucnt: va ? num(va.v_active_pay_ucnt) : null,
+      v_anchor_active_pay: va ? num(va.v_anchor_active_pay) : null,
+      v_faction_active_pay: va ? num(va.v_faction_active_pay) : null,
+
       // minigame
       mg_room_cnt: mg ? num(mg.mg_room_cnt) : null,
       mg_duration: mg ? num(mg.mg_duration) : null,
+      mg_avg_room_live_duration: mg ? num(mg.mg_avg_room_live_duration) : null,
       mg_watch_ucnt: mg ? num(mg.mg_watch_ucnt) : null,
       mg_watch_duration: mg ? num(mg.mg_watch_duration) : null,
+      mg_avg_user_watch_duration: mg ? num(mg.mg_avg_user_watch_duration) : null,
       mg_acu: mg ? num(mg.mg_acu) : null,
       mg_pcu: mg ? num(mg.mg_pcu) : null,
       mg_like_ucnt: mg ? num(mg.mg_like_ucnt) : null,
       mg_follow_ucnt: mg ? num(mg.mg_follow_ucnt) : null,
       mg_comment_ucnt: mg ? num(mg.mg_comment_ucnt) : null,
+      mg_like_ratio: mg ? num(mg.mg_like_ratio) : null,
+      mg_follow_ratio: mg ? num(mg.mg_follow_ratio) : null,
+      mg_comment_ratio: mg ? num(mg.mg_comment_ratio) : null,
       mg_click_ucnt: mg ? num(mg.mg_click_ucnt) : null,
       mg_active_ucnt: mg ? num(mg.mg_active_ucnt) : null,
       mg_pay_ucnt: mg ? num(mg.mg_pay_ucnt) : null,

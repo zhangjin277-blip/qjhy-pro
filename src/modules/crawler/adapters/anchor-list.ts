@@ -53,6 +53,10 @@ export interface RawListResponse {
 
 /**
  * 从平台 API 抓取分页主播列表，自动翻页直到拉完。
+ *
+ * FIXME 当前 query 漏拉"注销主播"，DB 1217~1289 vs 平台后台 1590（差额≈"注销主播 355"）。
+ * 平台 UI 上"全部主播 1590"对应一个 sub-tab 切换，需额外 query 参数（猜测 status / sub_tab / include_inactive）
+ * 才能拿到含注销的全集。从浏览器 DevTools 抓"全部主播"和"注销主播"两次请求对比 query string 即可补齐。
  */
 export async function fetchAnchorList(page: Page): Promise<Record<string, unknown>[]> {
   const all: Record<string, unknown>[] = [];

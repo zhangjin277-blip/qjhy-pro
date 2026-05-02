@@ -82,6 +82,9 @@ export async function fetchMinigameHandler(payload: FetchSimplePayload): Promise
         watch_duration: s(rowData.watch_duration),
         play_cnt_avg: s(rowData.play_cnt_avg),
         finish_play_ratio: s(rowData.finish_play_ratio),
+        like_ucnt_ratio: s(rowData.like_ucnt_ratio),
+        follow_ucnt_ratio: s(rowData.follow_ucnt_ratio),
+        comment_ucnt_ratio: s(rowData.comment_ucnt_ratio),
         synced_at: new Date(),
       };
       await db

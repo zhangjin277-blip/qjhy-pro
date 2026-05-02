@@ -73,6 +73,7 @@ export async function fetchGameHandler(payload: FetchSimplePayload): Promise<voi
           promote_charge_pay_ucnt_1d: i(rowData.promote_charge_pay_ucnt_1d),
           promote_download_pay_ucnt_1d: i(rowData.promote_download_pay_ucnt_1d),
           promote_active_pay_ucnt_1d: i(rowData.promote_active_pay_ucnt_1d),
+          promote_finish_play_ucnt_1d: i(rowData.promote_finish_play_ucnt_1d),
           // bigint 列防小数
           promote_item_vv_1d: i(rowData.promote_item_vv_1d),
           promote_pay_amount_1d: i(rowData.promote_pay_amount_1d),
@@ -91,6 +92,11 @@ export async function fetchGameHandler(payload: FetchSimplePayload): Promise<voi
           promote_live_duration_avg: s(rowData.promote_live_duration_avg),
           promote_live_watch_duration_1d: s(rowData.promote_live_watch_duration_1d),
           promote_live_watch_duration_uavg_1d: s(rowData.promote_live_watch_duration_uavg_1d),
+          promote_live_like_uavg_1d: s(rowData.promote_live_like_uavg_1d),
+          promote_live_comment_uavg_1d: s(rowData.promote_live_comment_uavg_1d),
+          promote_live_follow_uavg_1d: s(rowData.promote_live_follow_uavg_1d),
+          promote_item_uavg_1d: s(rowData.promote_item_uavg_1d),
+          promote_finish_play_ratio_1d: s(rowData.promote_finish_play_ratio_1d),
           synced_at: new Date(),
         };
         await db

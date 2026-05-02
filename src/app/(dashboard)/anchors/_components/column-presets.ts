@@ -1,22 +1,47 @@
 import type { AnchorListRow } from "@/modules/anchors";
 
-export type ColFmt = "text" | "number" | "duration" | "percent" | "timestamp" | "avatar";
+export type ColFmt =
+  | "text"
+  | "number"
+  | "duration"
+  | "percent"
+  | "timestamp"
+  | "avatar"
+  | "anchor_info";
 
 export interface ColumnDef {
   key: keyof AnchorListRow | "project";
   label: string;
   group: string;
+  /** 二级分组（中栏 customizer 显示，无则不分块） */
+  subGroup?: string;
   align: "left" | "right";
   fmt: ColFmt;
   sticky?: boolean;
   bold?: boolean;
 }
 
-/** 全量列定义（110+ 列，按 9 大分组） */
+/**
+ * 全量列定义。group 严格按 API 来源分类（与爬虫 adapters 对应）：
+ *   基础 / 签约           ← anchor-list (anchor_profile)
+ *   主播数据              ← anchor-daily ("主播概览列表" CSV download)
+ *   直播流水分成          ← game-promo live+cps task
+ *   流水分成（下载+活跃激励）← game-promo live+cps_all task
+ *   短视频                ← game-promo video task
+ *   小游戏                ← minigame
+ *   主播详情              ← portrait/core_day_stats
+ */
 export const ALL_COLUMNS: ColumnDef[] = [
-  // ── 1. 基础信息 ──────────────────────────────────────────────────────────
-  { key: "avatar", label: "头像", group: "基础", align: "left", fmt: "avatar" },
-  { key: "nick_name", label: "昵称", group: "基础", align: "left", fmt: "text", sticky: true },
+  // ── 1. 基础（anchor-list 身份/状态）────────────────────────────────────────
+  // 合并列：头像 + 昵称 + 抖音号 + UID（cell 用 fmt=anchor_info 自定义渲染）
+  {
+    key: "nick_name",
+    label: "主播信息",
+    group: "基础",
+    align: "left",
+    fmt: "anchor_info",
+    sticky: true,
+  },
   { key: "project", label: "项目", group: "基础", align: "left", fmt: "text" },
   { key: "anchor_health_score", label: "健康分", group: "基础", align: "right", fmt: "number" },
   {
@@ -44,7 +69,7 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { key: "gender", label: "性别", group: "基础", align: "right", fmt: "number" },
   { key: "notes", label: "备注", group: "基础", align: "left", fmt: "text" },
 
-  // ── 2. 签约 & 经纪人 ──────────────────────────────────────────────────────
+  // ── 2. 签约（anchor-list 签约/经纪人）─────────────────────────────────────
   { key: "broker_name", label: "运营经纪人", group: "签约", align: "left", fmt: "text" },
   {
     key: "recruit_broker_name",
@@ -104,7 +129,8 @@ export const ALL_COLUMNS: ColumnDef[] = [
   {
     key: "total_fan_ticket",
     label: "总音浪",
-    group: "音浪",
+    group: "主播数据",
+    subGroup: "音浪",
     align: "right",
     fmt: "number",
     bold: true,
@@ -112,346 +138,946 @@ export const ALL_COLUMNS: ColumnDef[] = [
   {
     key: "live_fan_ticket_no_guest",
     label: "礼物音浪",
-    group: "音浪",
+    group: "主播数据",
+    subGroup: "音浪",
     align: "right",
     fmt: "number",
   },
   {
     key: "property_fan_ticket_no_guest",
     label: "道具音浪",
-    group: "音浪",
+    group: "主播数据",
+    subGroup: "音浪",
     align: "right",
     fmt: "number",
   },
-  { key: "guest_fan_ticket", label: "嘉宾音浪", group: "音浪", align: "right", fmt: "number" },
+  {
+    key: "guest_fan_ticket",
+    label: "嘉宾音浪",
+    group: "主播数据",
+    subGroup: "音浪",
+    align: "right",
+    fmt: "number",
+  },
   {
     key: "activity_fan_ticket_no_guest",
     label: "活动音浪",
-    group: "音浪",
+    group: "主播数据",
+    subGroup: "音浪",
     align: "right",
     fmt: "number",
   },
-  { key: "special_fan_ticket", label: "其他音浪", group: "音浪", align: "right", fmt: "number" },
+  {
+    key: "special_fan_ticket",
+    label: "其他音浪",
+    group: "主播数据",
+    subGroup: "音浪",
+    align: "right",
+    fmt: "number",
+  },
   {
     key: "subscribe_fan_ticket",
     label: "会员订阅音浪",
-    group: "音浪",
+    group: "主播数据",
+    subGroup: "音浪",
     align: "right",
     fmt: "number",
   },
-  { key: "pk_fan_ticket", label: "PK音浪", group: "音浪", align: "right", fmt: "number" },
+  {
+    key: "pk_fan_ticket",
+    label: "PK音浪",
+    group: "主播数据",
+    subGroup: "音浪",
+    align: "right",
+    fmt: "number",
+  },
   {
     key: "link_screen_fan_ticket",
     label: "连屏音浪",
-    group: "音浪",
+    group: "主播数据",
+    subGroup: "音浪",
     align: "right",
     fmt: "number",
   },
   {
     key: "link_screen_room_fan_ticket",
     label: "连屏房间音浪",
-    group: "音浪",
+    group: "主播数据",
+    subGroup: "音浪",
     align: "right",
     fmt: "number",
   },
   {
     key: "star_guard_earn_score",
     label: "星守护音浪",
-    group: "音浪",
+    group: "主播数据",
+    subGroup: "音浪",
     align: "right",
     fmt: "number",
   },
   {
     key: "stat_guard_enter_account_earn_score",
     label: "星守护入账",
-    group: "音浪",
+    group: "主播数据",
+    subGroup: "音浪",
     align: "right",
     fmt: "number",
   },
   {
     key: "total_ticket_outside_link",
     label: "跨公会连线音浪",
-    group: "音浪",
+    group: "主播数据",
+    subGroup: "音浪",
     align: "right",
     fmt: "number",
   },
 
   // ── 4. 时长 & 天数 ────────────────────────────────────────────────────────
-  { key: "live_duration", label: "开播时长", group: "时长", align: "right", fmt: "duration" },
+  {
+    key: "live_duration",
+    label: "开播时长",
+    group: "主播数据",
+    subGroup: "时长",
+    align: "right",
+    fmt: "duration",
+  },
   {
     key: "valid_live_duration",
     label: "有效时长",
-    group: "时长",
+    group: "主播数据",
+    subGroup: "时长",
     align: "right",
     fmt: "duration",
   },
   {
     key: "feed_watch_duration",
     label: "feed看播时长",
-    group: "时长",
+    group: "主播数据",
+    subGroup: "时长",
     align: "right",
     fmt: "duration",
   },
-  { key: "live_days", label: "开播天", group: "时长", align: "right", fmt: "number" },
-  { key: "solo_valid_days", label: "个播有效天", group: "时长", align: "right", fmt: "number" },
-
-  // ── 5. 互动 & 粉丝 ────────────────────────────────────────────────────────
-  { key: "total_fans", label: "粉丝数", group: "互动", align: "right", fmt: "number" },
-  { key: "new_follow_fans", label: "涨粉", group: "互动", align: "right", fmt: "number" },
   {
-    key: "peak_per_minute_ucnt",
-    label: "人气峰值",
-    group: "互动",
+    key: "live_days",
+    label: "开播天",
+    group: "主播数据",
+    subGroup: "时长",
     align: "right",
     fmt: "number",
   },
-  { key: "feed_acu", label: "feed_acu", group: "互动", align: "right", fmt: "number" },
-  { key: "current_percent", label: "主分成比快照", group: "互动", align: "right", fmt: "percent" },
+  {
+    key: "solo_valid_days",
+    label: "个播有效天",
+    group: "主播数据",
+    subGroup: "时长",
+    align: "right",
+    fmt: "number",
+  },
+
+  // ── 5. 互动 & 粉丝 ────────────────────────────────────────────────────────
+  {
+    key: "total_fans",
+    label: "粉丝数",
+    group: "主播数据",
+    subGroup: "互动",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "new_follow_fans",
+    label: "涨粉",
+    group: "主播数据",
+    subGroup: "互动",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "peak_per_minute_ucnt",
+    label: "人气峰值",
+    group: "主播数据",
+    subGroup: "互动",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "feed_acu",
+    label: "feed_acu",
+    group: "主播数据",
+    subGroup: "互动",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "current_percent",
+    label: "主分成比快照",
+    group: "主播数据",
+    subGroup: "分成比",
+    align: "right",
+    fmt: "percent",
+  },
   {
     key: "game_share_percent",
     label: "游戏分成比",
-    group: "互动",
+    group: "主播数据",
+    subGroup: "分成比",
     align: "right",
     fmt: "percent",
   },
   {
     key: "pay_money_connect_share_percent",
     label: "付费连线分成比",
-    group: "互动",
+    group: "主播数据",
+    subGroup: "分成比",
     align: "right",
     fmt: "percent",
   },
   {
     key: "profit_share_ratio",
     label: "会员收益比例",
-    group: "互动",
+    group: "主播数据",
+    subGroup: "分成比",
     align: "right",
     fmt: "percent",
   },
 
   // ── 6. 视频统计 ───────────────────────────────────────────────────────────
-  { key: "video_view_count", label: "视频播放", group: "视频", align: "right", fmt: "number" },
-  { key: "video_like_count", label: "视频点赞", group: "视频", align: "right", fmt: "number" },
-  { key: "video_comment_count", label: "视频评论", group: "视频", align: "right", fmt: "number" },
+  {
+    key: "video_view_count",
+    label: "视频播放",
+    group: "主播数据",
+    subGroup: "视频",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "video_like_count",
+    label: "视频点赞",
+    group: "主播数据",
+    subGroup: "视频",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "video_comment_count",
+    label: "视频评论",
+    group: "主播数据",
+    subGroup: "视频",
+    align: "right",
+    fmt: "number",
+  },
 
   // ── 7. 直播曝光转化 ───────────────────────────────────────────────────────
-  { key: "show_uv", label: "曝光人数", group: "曝光转化", align: "right", fmt: "number" },
-  { key: "show_cnt", label: "曝光次数", group: "曝光转化", align: "right", fmt: "number" },
-  { key: "watch_uv", label: "进房人数", group: "曝光转化", align: "right", fmt: "number" },
-  { key: "watch_cnt", label: "进房次数", group: "曝光转化", align: "right", fmt: "number" },
-  { key: "enter_room_rate", label: "进房率", group: "曝光转化", align: "right", fmt: "percent" },
+  { key: "show_uv", label: "曝光人数", group: "主播详情", align: "right", fmt: "number" },
+  { key: "show_cnt", label: "曝光次数", group: "主播详情", align: "right", fmt: "number" },
+  { key: "watch_uv", label: "进房人数", group: "主播详情", align: "right", fmt: "number" },
+  { key: "watch_cnt", label: "进房次数", group: "主播详情", align: "right", fmt: "number" },
+  { key: "enter_room_rate", label: "进房率", group: "主播详情", align: "right", fmt: "percent" },
   {
     key: "avg_watch_duration",
     label: "人均观看时长(s)",
-    group: "曝光转化",
+    group: "主播详情",
     align: "right",
     fmt: "number",
   },
-  { key: "consume_uv", label: "打赏人数", group: "曝光转化", align: "right", fmt: "number" },
-  { key: "consume_cnt", label: "打赏次数", group: "曝光转化", align: "right", fmt: "number" },
-  { key: "consume_rate", label: "付费转化率", group: "曝光转化", align: "right", fmt: "percent" },
+  { key: "consume_uv", label: "打赏人数", group: "主播详情", align: "right", fmt: "number" },
+  { key: "consume_cnt", label: "打赏次数", group: "主播详情", align: "right", fmt: "number" },
+  { key: "consume_rate", label: "付费转化率", group: "主播详情", align: "right", fmt: "percent" },
 
-  // ── 8. 推广游戏 ──────────────────────────────────────────────────────────
-  { key: "g_live_cnt", label: "G-直播场次", group: "推广游戏", align: "right", fmt: "number" },
+  // ── 4. 直播流水分成（game-promo live + cps task）─────────────────────────
+  {
+    key: "g_live_cnt",
+    label: "直播场次",
+    group: "直播流水分成",
+    subGroup: "开播指标",
+    align: "right",
+    fmt: "number",
+  },
   {
     key: "g_live_duration",
-    label: "G-直播时长",
-    group: "推广游戏",
+    label: "游戏开播时长",
+    group: "直播流水分成",
+    subGroup: "开播指标",
     align: "right",
     fmt: "duration",
   },
-  { key: "g_watch_ucnt", label: "G-看播人数", group: "推广游戏", align: "right", fmt: "number" },
-  { key: "g_acu", label: "G-ACU", group: "推广游戏", align: "right", fmt: "number" },
-  { key: "g_pcu", label: "G-PCU", group: "推广游戏", align: "right", fmt: "number" },
-  { key: "g_like_ucnt", label: "G-点赞人数", group: "推广游戏", align: "right", fmt: "number" },
-  { key: "g_comment_ucnt", label: "G-评论人数", group: "推广游戏", align: "right", fmt: "number" },
-  { key: "g_follow_ucnt", label: "G-关注人数", group: "推广游戏", align: "right", fmt: "number" },
   {
-    key: "g_video_publish_cnt",
-    label: "G-发布视频数",
-    group: "推广游戏",
+    key: "g_live_duration_avg",
+    label: "场均游戏开播时长",
+    group: "直播流水分成",
+    subGroup: "开播指标",
+    align: "right",
+    fmt: "duration",
+  },
+  {
+    key: "g_watch_ucnt",
+    label: "游戏看播人数",
+    group: "直播流水分成",
+    subGroup: "流量指标",
     align: "right",
     fmt: "number",
   },
-  { key: "g_video_vv", label: "G-视频VV", group: "推广游戏", align: "right", fmt: "number" },
-  { key: "g_video_uv", label: "G-视频UV", group: "推广游戏", align: "right", fmt: "number" },
+  {
+    key: "g_watch_duration",
+    label: "游戏看播时长",
+    group: "直播流水分成",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "duration",
+  },
+  {
+    key: "g_watch_duration_uavg",
+    label: "人均游戏看播时长",
+    group: "直播流水分成",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "duration",
+  },
+  {
+    key: "g_acu",
+    label: "ACU",
+    group: "直播流水分成",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "g_pcu",
+    label: "PCU",
+    group: "直播流水分成",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "g_like_ucnt",
+    label: "点赞人数",
+    group: "直播流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "g_follow_ucnt",
+    label: "关注人数",
+    group: "直播流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "g_comment_ucnt",
+    label: "评论人数",
+    group: "直播流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "g_like_uavg",
+    label: "点赞率",
+    group: "直播流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "percent",
+  },
+  {
+    key: "g_follow_uavg",
+    label: "关注率",
+    group: "直播流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "percent",
+  },
+  {
+    key: "g_comment_uavg",
+    label: "评论率",
+    group: "直播流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "percent",
+  },
   {
     key: "g_click_download",
-    label: "G-点击下载",
-    group: "推广游戏",
+    label: "游戏下载点击人数",
+    group: "直播流水分成",
+    subGroup: "转化指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "g_start_download",
+    label: "安卓游戏下载开始人数",
+    group: "直播流水分成",
+    subGroup: "转化指标",
     align: "right",
     fmt: "number",
   },
   {
     key: "g_download_finish",
-    label: "G-下载完成",
-    group: "推广游戏",
+    label: "下载完成",
+    group: "直播流水分成",
+    subGroup: "转化指标",
     align: "right",
     fmt: "number",
   },
   {
     key: "g_install_finish",
-    label: "G-安装完成",
-    group: "推广游戏",
+    label: "安装完成",
+    group: "直播流水分成",
+    subGroup: "转化指标",
     align: "right",
     fmt: "number",
   },
-  { key: "g_active_ucnt", label: "G-激活人数", group: "推广游戏", align: "right", fmt: "number" },
-  { key: "g_pay_ucnt", label: "G-付费人数", group: "推广游戏", align: "right", fmt: "number" },
-  { key: "g_pay_amount", label: "G-付费金额", group: "推广游戏", align: "right", fmt: "number" },
+  {
+    key: "g_active_ucnt",
+    label: "激活人数",
+    group: "直播流水分成",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "g_pay_ucnt",
+    label: "付费人数",
+    group: "直播流水分成",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "g_pay_amount",
+    label: "付费金额",
+    group: "直播流水分成",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
   {
     key: "g_props_pay_amount",
-    label: "G-道具流水",
-    group: "推广游戏",
+    label: "道具流水",
+    group: "直播流水分成",
+    subGroup: "收益指标",
     align: "right",
     fmt: "number",
   },
   {
     key: "g_props_anchor_amount",
-    label: "G-主播道具分成",
-    group: "推广游戏",
+    label: "主播道具分成",
+    group: "直播流水分成",
+    subGroup: "收益指标",
     align: "right",
     fmt: "number",
   },
   {
     key: "g_props_faction_amount",
-    label: "G-机构道具分成",
-    group: "推广游戏",
+    label: "机构道具分成",
+    group: "直播流水分成",
+    subGroup: "收益指标",
     align: "right",
     fmt: "number",
   },
   {
     key: "g_anchor_income",
-    label: "G-主播分账",
-    group: "推广游戏",
+    label: "主播分账",
+    group: "直播流水分成",
+    subGroup: "收益指标",
     align: "right",
     fmt: "number",
     bold: true,
   },
   {
     key: "g_faction_income",
-    label: "G-机构分账",
-    group: "推广游戏",
+    label: "机构分账",
+    group: "直播流水分成",
+    subGroup: "收益指标",
     align: "right",
     fmt: "number",
   },
+
+  // ── 5. 流水分成（下载+活跃激励）（game-promo live + cps_all task）────────
   {
     key: "g_download_pay_ucnt",
-    label: "G-下载激励付费人数",
-    group: "推广游戏",
+    label: "下载激励付费人数",
+    group: "直播流水分成（下载+活跃激励）",
     align: "right",
     fmt: "number",
   },
   {
     key: "g_download_pay_amount",
-    label: "G-下载激励金额",
-    group: "推广游戏",
+    label: "下载激励金额",
+    group: "直播流水分成（下载+活跃激励）",
     align: "right",
     fmt: "number",
   },
   {
     key: "g_anchor_download_pay",
-    label: "G-下载激励主播",
-    group: "推广游戏",
+    label: "下载激励主播",
+    group: "直播流水分成（下载+活跃激励）",
     align: "right",
     fmt: "number",
   },
   {
     key: "g_faction_download_pay",
-    label: "G-下载激励机构",
-    group: "推广游戏",
+    label: "下载激励机构",
+    group: "直播流水分成（下载+活跃激励）",
     align: "right",
     fmt: "number",
   },
   {
     key: "g_active_pay_ucnt",
-    label: "G-活跃激励付费人数",
-    group: "推广游戏",
+    label: "活跃激励付费人数",
+    group: "直播流水分成（下载+活跃激励）",
     align: "right",
     fmt: "number",
   },
   {
     key: "g_anchor_active_pay",
-    label: "G-活跃激励主播",
-    group: "推广游戏",
+    label: "活跃激励主播",
+    group: "直播流水分成（下载+活跃激励）",
     align: "right",
     fmt: "number",
   },
   {
     key: "g_faction_active_pay",
-    label: "G-活跃激励机构",
-    group: "推广游戏",
+    label: "活跃激励机构",
+    group: "直播流水分成（下载+活跃激励）",
     align: "right",
     fmt: "number",
   },
 
-  // ── 9. 小游戏 ────────────────────────────────────────────────────────────
-  { key: "mg_room_cnt", label: "MG-开播场次", group: "小游戏", align: "right", fmt: "number" },
-  { key: "mg_duration", label: "MG-开播时长", group: "小游戏", align: "right", fmt: "duration" },
-  { key: "mg_watch_ucnt", label: "MG-看播人数", group: "小游戏", align: "right", fmt: "number" },
+  // ── 6. 短视频流水分成（game-promo video + cps）─────────────────────────
+  // 投稿
   {
-    key: "mg_watch_duration",
-    label: "MG-看播时长",
+    key: "v_publish_cnt",
+    label: "游戏视频投稿数",
+    group: "短视频流水分成",
+    subGroup: "投稿指标",
+    align: "right",
+    fmt: "number",
+  },
+  // 流量
+  {
+    key: "v_vv",
+    label: "游戏视频播放数",
+    group: "短视频流水分成",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_uv",
+    label: "游戏视频播放人数",
+    group: "短视频流水分成",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_uavg",
+    label: "人均游戏视频播放数",
+    group: "短视频流水分成",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "number",
+  },
+  // 互动
+  {
+    key: "v_finish_play_ucnt",
+    label: "完播人数",
+    group: "短视频流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_like_ucnt",
+    label: "点赞人数",
+    group: "短视频流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_follow_ucnt",
+    label: "关注人数",
+    group: "短视频流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_comment_ucnt",
+    label: "评论人数",
+    group: "短视频流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_finish_play_ratio",
+    label: "完播率",
+    group: "短视频流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "percent",
+  },
+  {
+    key: "v_like_uavg",
+    label: "点赞率",
+    group: "短视频流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "percent",
+  },
+  {
+    key: "v_follow_uavg",
+    label: "关注率",
+    group: "短视频流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "percent",
+  },
+  {
+    key: "v_comment_uavg",
+    label: "评论率",
+    group: "短视频流水分成",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "percent",
+  },
+  // 转化
+  {
+    key: "v_click_download",
+    label: "游戏下载点击人数",
+    group: "短视频流水分成",
+    subGroup: "转化指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_start_download",
+    label: "安卓游戏下载开始人数",
+    group: "短视频流水分成",
+    subGroup: "转化指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_download_finish",
+    label: "安卓游戏下载完成人数",
+    group: "短视频流水分成",
+    subGroup: "转化指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_install_finish",
+    label: "安卓游戏安装完成人数",
+    group: "短视频流水分成",
+    subGroup: "转化指标",
+    align: "right",
+    fmt: "number",
+  },
+  // 收益
+  {
+    key: "v_active_ucnt",
+    label: "游戏活跃用户数",
+    group: "短视频流水分成",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_charge_pay_ucnt",
+    label: "游戏内购付费用户数",
+    group: "短视频流水分成",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_pay_amount",
+    label: "短视频-游戏流水(分成前)",
+    group: "短视频流水分成",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_anchor_income",
+    label: "短视频-创作者游戏收入(分成后)",
+    group: "短视频流水分成",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+    bold: true,
+  },
+  {
+    key: "v_faction_income",
+    label: "短视频-机构游戏收入(分成后)",
+    group: "短视频流水分成",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+
+  // ── 6b. 短视频促活分成（game-promo video + cps_all）─────────────────────
+  {
+    key: "v_download_pay_ucnt",
+    label: "下载充值玩家",
+    group: "短视频流水分成（下载+活跃激励）",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_download_pay_amount",
+    label: "下载充值流水",
+    group: "短视频流水分成（下载+活跃激励）",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_anchor_download_pay",
+    label: "创作者促进玩家下载分成收入",
+    group: "短视频流水分成（下载+活跃激励）",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_faction_download_pay",
+    label: "机构促进玩家下载分成收入",
+    group: "短视频流水分成（下载+活跃激励）",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_active_pay_ucnt",
+    label: "活跃充值玩家",
+    group: "短视频流水分成（下载+活跃激励）",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_anchor_active_pay",
+    label: "创作者促进玩家活跃分成收入",
+    group: "短视频流水分成（下载+活跃激励）",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "v_faction_active_pay",
+    label: "机构促进玩家活跃分成收入",
+    group: "短视频流水分成（下载+活跃激励）",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+
+  // ── 7. 小游戏（minigame）─────────────────────────────────────────────────
+  {
+    key: "mg_room_cnt",
+    label: "小游戏开播场次",
     group: "小游戏",
+    subGroup: "开播指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "mg_duration",
+    label: "小游戏开播时长",
+    group: "小游戏",
+    subGroup: "开播指标",
     align: "right",
     fmt: "duration",
   },
-  { key: "mg_acu", label: "MG-ACU", group: "小游戏", align: "right", fmt: "number" },
-  { key: "mg_pcu", label: "MG-PCU", group: "小游戏", align: "right", fmt: "number" },
-  { key: "mg_like_ucnt", label: "MG-点赞人数", group: "小游戏", align: "right", fmt: "number" },
-  { key: "mg_follow_ucnt", label: "MG-关注人数", group: "小游戏", align: "right", fmt: "number" },
+  {
+    key: "mg_avg_room_live_duration",
+    label: "场均小游戏开播时长",
+    group: "小游戏",
+    subGroup: "开播指标",
+    align: "right",
+    fmt: "duration",
+  },
+  {
+    key: "mg_watch_ucnt",
+    label: "小游戏看播人数",
+    group: "小游戏",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "mg_watch_duration",
+    label: "小游戏看播时长",
+    group: "小游戏",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "duration",
+  },
+  {
+    key: "mg_avg_user_watch_duration",
+    label: "人均小游戏看播时长",
+    group: "小游戏",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "duration",
+  },
+  {
+    key: "mg_acu",
+    label: "ACU",
+    group: "小游戏",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "mg_pcu",
+    label: "PCU",
+    group: "小游戏",
+    subGroup: "流量指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "mg_like_ucnt",
+    label: "点赞人数",
+    group: "小游戏",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "mg_follow_ucnt",
+    label: "关注人数",
+    group: "小游戏",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "number",
+  },
   {
     key: "mg_comment_ucnt",
-    label: "MG-评论人数",
+    label: "评论人数",
     group: "小游戏",
+    subGroup: "互动指标",
     align: "right",
     fmt: "number",
   },
-  { key: "mg_click_ucnt", label: "MG-点击人数", group: "小游戏", align: "right", fmt: "number" },
+  {
+    key: "mg_like_ratio",
+    label: "点赞率",
+    group: "小游戏",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "percent",
+  },
+  {
+    key: "mg_follow_ratio",
+    label: "关注率",
+    group: "小游戏",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "percent",
+  },
+  {
+    key: "mg_comment_ratio",
+    label: "评论率",
+    group: "小游戏",
+    subGroup: "互动指标",
+    align: "right",
+    fmt: "percent",
+  },
+  {
+    key: "mg_click_ucnt",
+    label: "小游戏点击人数",
+    group: "小游戏",
+    subGroup: "转化指标",
+    align: "right",
+    fmt: "number",
+  },
   {
     key: "mg_active_ucnt",
-    label: "MG-激活人数",
+    label: "激活人数",
     group: "小游戏",
+    subGroup: "转化指标",
     align: "right",
     fmt: "number",
   },
-  { key: "mg_pay_ucnt", label: "MG-付费人数", group: "小游戏", align: "right", fmt: "number" },
+  {
+    key: "mg_pay_ucnt",
+    label: "付费人数",
+    group: "小游戏",
+    subGroup: "转化指标",
+    align: "right",
+    fmt: "number",
+  },
   {
     key: "mg_before_income",
-    label: "MG-分成前流水",
+    label: "分成前流水",
     group: "小游戏",
+    subGroup: "收益指标",
     align: "right",
     fmt: "number",
   },
   {
     key: "mg_anchor_income",
-    label: "MG-主播分成",
+    label: "主播分成",
     group: "小游戏",
+    subGroup: "收益指标",
     align: "right",
     fmt: "number",
     bold: true,
   },
   {
     key: "mg_union_income",
-    label: "MG-公会分成",
+    label: "公会分成",
     group: "小游戏",
+    subGroup: "收益指标",
     align: "right",
     fmt: "number",
   },
-  { key: "mg_cps_bind", label: "MG-CPS绑定", group: "小游戏", align: "right", fmt: "number" },
-  { key: "mg_play_cnt", label: "MG-视频播放数", group: "小游戏", align: "right", fmt: "number" },
-  { key: "mg_play_uv", label: "MG-视频播放人数", group: "小游戏", align: "right", fmt: "number" },
+  {
+    key: "mg_cps_bind",
+    label: "CPS绑定",
+    group: "小游戏",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "mg_play_cnt",
+    label: "视频播放数",
+    group: "小游戏",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
+  {
+    key: "mg_play_uv",
+    label: "视频播放人数",
+    group: "小游戏",
+    subGroup: "收益指标",
+    align: "right",
+    fmt: "number",
+  },
   {
     key: "mg_finish_play_uv",
-    label: "MG-完播人数",
+    label: "完播人数",
     group: "小游戏",
+    subGroup: "收益指标",
     align: "right",
     fmt: "number",
   },
   {
     key: "mg_finish_play_ratio",
-    label: "MG-完播率",
+    label: "完播率",
     group: "小游戏",
+    subGroup: "收益指标",
     align: "right",
     fmt: "percent",
   },
@@ -464,7 +1090,6 @@ type ColKey = (typeof ALL_COLUMNS)[number]["key"];
 
 /** 基础常驻列（所有预设都包含） */
 const BASE_KEYS: ColKey[] = [
-  "avatar",
   "nick_name",
   "project",
   "broker_name",
@@ -579,11 +1204,14 @@ export const PRESETS: Preset[] = [
   },
 ];
 
+// v3: 头像+昵称合并为"主播信息"列后 bump，让 v2 旧缓存失效
+const STORAGE_KEY_PREFIX = "anchor_columns_v3_";
+
 /** 从 localStorage 读取保存的列配置，SSR 安全（返回 null） */
 export function loadSavedColumns(presetId: PresetId): ColKey[] | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(`anchor_columns_${presetId}`);
+    const raw = window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${presetId}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return null;
@@ -600,7 +1228,7 @@ export function loadSavedColumns(presetId: PresetId): ColKey[] | null {
 export function saveColumns(presetId: PresetId, keys: ColKey[]): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(`anchor_columns_${presetId}`, JSON.stringify(keys));
+    window.localStorage.setItem(`${STORAGE_KEY_PREFIX}${presetId}`, JSON.stringify(keys));
   } catch {
     // ignore
   }
@@ -617,15 +1245,33 @@ export function getColumnsByGroup(group: string): ColumnDef[] {
   return ALL_COLUMNS.filter((c) => c.group === group);
 }
 
-/** 所有分组名称（有序） */
+/** 按 subGroup 切块返回（保持 ALL_COLUMNS 原顺序）。无 subGroup 的列归入 null 块。 */
+export function getColumnsBySubGroup(
+  group: string,
+): { subGroup: string | null; columns: ColumnDef[] }[] {
+  const cols = getColumnsByGroup(group);
+  const blocks: { subGroup: string | null; columns: ColumnDef[] }[] = [];
+  for (const c of cols) {
+    const sg = c.subGroup ?? null;
+    const last = blocks[blocks.length - 1];
+    if (last && last.subGroup === sg) {
+      last.columns.push(c);
+    } else {
+      blocks.push({ subGroup: sg, columns: [c] });
+    }
+  }
+  return blocks;
+}
+
+/** 所有分组名称（按 API 来源 + 用户预期顺序，game-promo 4 task 对称） */
 export const ALL_GROUPS = [
   "基础",
   "签约",
-  "音浪",
-  "时长",
-  "互动",
-  "视频",
-  "曝光转化",
-  "推广游戏",
+  "主播数据",
+  "直播流水分成",
+  "直播流水分成（下载+活跃激励）",
+  "短视频流水分成",
+  "短视频流水分成（下载+活跃激励）",
   "小游戏",
+  "主播详情",
 ] as const;

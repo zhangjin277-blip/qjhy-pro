@@ -109,8 +109,14 @@ export interface AnchorListRow {
   g_live_cnt: number | null;
   /** 直播时长 h (cps) */
   g_live_duration: number | null;
+  /** 场均开播时长 (cps) */
+  g_live_duration_avg: number | null;
   /** 看播人数 UV (cps) */
   g_watch_ucnt: number | null;
+  /** 看播时长 h (cps) */
+  g_watch_duration: number | null;
+  /** 人均看播时长 (cps) */
+  g_watch_duration_uavg: number | null;
   /** ACU (cps) */
   g_acu: number | null;
   /** PCU (cps) */
@@ -121,14 +127,16 @@ export interface AnchorListRow {
   g_comment_ucnt: number | null;
   /** 关注人数 (cps) */
   g_follow_ucnt: number | null;
-  /** 发布视频数 (cps) */
-  g_video_publish_cnt: number | null;
-  /** 视频VV (cps) */
-  g_video_vv: number | null;
-  /** 视频UV (cps) */
-  g_video_uv: number | null;
+  /** 点赞率 (cps，0-1) */
+  g_like_uavg: number | null;
+  /** 评论率 (cps，0-1) */
+  g_comment_uavg: number | null;
+  /** 关注率 (cps，0-1) */
+  g_follow_uavg: number | null;
   /** 点击下载 (cps) */
   g_click_download: number | null;
+  /** 下载开始 (cps) */
+  g_start_download: number | null;
   /** 下载完成 (cps) */
   g_download_finish: number | null;
   /** 安装完成 (cps) */
@@ -164,15 +172,51 @@ export interface AnchorListRow {
   /** 活跃激励机构分账 (cps_all) */
   g_faction_active_pay: number | null;
 
+  // ── 短视频流水分成（anchor_game_promo_daily scene=video, biz_mode=cps）
+  v_publish_cnt: number | null;
+  v_vv: number | null;
+  v_uv: number | null;
+  v_uavg: number | null;
+  v_finish_play_ucnt: number | null;
+  v_finish_play_ratio: number | null;
+  v_like_ucnt: number | null;
+  v_follow_ucnt: number | null;
+  v_comment_ucnt: number | null;
+  v_like_uavg: number | null;
+  v_follow_uavg: number | null;
+  v_comment_uavg: number | null;
+  v_click_download: number | null;
+  v_start_download: number | null;
+  v_download_finish: number | null;
+  v_install_finish: number | null;
+  v_active_ucnt: number | null;
+  v_charge_pay_ucnt: number | null;
+  v_pay_amount: number | null;
+  v_anchor_income: number | null;
+  v_faction_income: number | null;
+
+  // ── 短视频促活分成（scene=video, biz_mode=cps_all）
+  v_download_pay_ucnt: number | null;
+  v_download_pay_amount: number | null;
+  v_anchor_download_pay: number | null;
+  v_faction_download_pay: number | null;
+  v_active_pay_ucnt: number | null;
+  v_anchor_active_pay: number | null;
+  v_faction_active_pay: number | null;
+
   // ── 9. 小游戏（anchor_minigame_daily，mg_ 前缀）──────────
   /** 开播场次 */
   mg_room_cnt: number | null;
   /** 开播时长 h */
   mg_duration: number | null;
+  /** 场均开播时长 */
+  mg_avg_room_live_duration: number | null;
   /** 看播人数 UV */
   mg_watch_ucnt: number | null;
   /** 看播时长 */
   mg_watch_duration: number | null;
+  /** 人均看播时长 */
+  mg_avg_user_watch_duration: number | null;
   /** ACU */
   mg_acu: number | null;
   /** PCU */
@@ -183,6 +227,12 @@ export interface AnchorListRow {
   mg_follow_ucnt: number | null;
   /** 评论人数 */
   mg_comment_ucnt: number | null;
+  /** 点赞率（0-1） */
+  mg_like_ratio: number | null;
+  /** 关注率（0-1） */
+  mg_follow_ratio: number | null;
+  /** 评论率（0-1） */
+  mg_comment_ratio: number | null;
   /** 小游戏点击人数 */
   mg_click_ucnt: number | null;
   /** 小游戏激活人数 */
