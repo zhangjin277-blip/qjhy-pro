@@ -40,3 +40,9 @@ export {
   type BizMode,
   type PromoteScene,
 } from "./adapters/game-promo";
+export {
+  fetchMinigameLiveForAnchor,
+  parseMinigameLiveResponse,
+  type MinigameRow,
+} from "./adapters/minigame-live";
+export { fetchMinigameVideoForAnchor, parseMinigameVideoResponse } from "./adapters/minigame-video";
