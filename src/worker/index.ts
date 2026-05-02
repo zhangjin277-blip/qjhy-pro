@@ -1,16 +1,26 @@
-import "@/lib/env"; // 验证 env
+import "@/lib/env";
 
 import { registerJob, startScheduler } from "./scheduler";
 import { syncDingtalk } from "./jobs/sync-dingtalk";
+import { crawlOrchestrator } from "./jobs/crawl-orchestrator";
+import { registerCrawlerHandlers } from "./jobs/handlers/register";
+import { stopBoss } from "@/modules/crawler/server";
+import { closeBrowser } from "@/lib/puppeteer";
 
-// 每天凌晨 02:00 全量同步钉钉组织架构
+// Phase 1: 钉钉同步
 registerJob({
   name: "sync-dingtalk",
   schedule: "0 2 * * *",
   task: syncDingtalk,
 });
 
-// 心跳 job，每小时一次（证明 worker 进程活着）
+// Phase 2: 抖音爬虫每日 10:00 入口
+registerJob({
+  name: "crawl-orchestrator",
+  schedule: "0 10 * * *",
+  task: crawlOrchestrator,
+});
+
 registerJob({
   name: "heartbeat",
   schedule: "0 * * * *",
@@ -19,10 +29,17 @@ registerJob({
   },
 });
 
-console.log("[worker] qjhy-pro worker starting");
-startScheduler();
+(async () => {
+  console.log("[worker] qjhy-pro worker starting");
+  await registerCrawlerHandlers();
+  startScheduler();
+})();
 
-process.on("SIGTERM", () => {
-  console.log("[worker] SIGTERM received, shutting down");
+const shutdown = async () => {
+  console.log("[worker] shutting down");
+  await stopBoss();
+  await closeBrowser();
   process.exit(0);
-});
+};
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
