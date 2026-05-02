@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Settings2,
+} from "lucide-react";
 import { Filters } from "./filters";
 import { CsvExportButton } from "./csv-export";
+import { ColumnCustomizer } from "./column-customizer";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -22,59 +30,35 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils/cn";
 import type { AnchorListRow, AnchorListFilters } from "@/modules/anchors";
+import {
+  ALL_COLUMNS,
+  PRESETS,
+  getColumnsByKeys,
+  loadSavedColumns,
+  saveColumns,
+  type ColumnDef,
+  type PresetId,
+} from "./column-presets";
 
 const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
 
-type ColAlign = "left" | "right";
-type ColFmt = "text" | "number" | "duration";
-
-interface Column {
-  key: keyof AnchorListRow | "project";
-  label: string;
-  align: ColAlign;
-  fmt: ColFmt;
-  sticky?: boolean;
-  bold?: boolean;
-}
-
-const COLUMNS: Column[] = [
-  { key: "nick_name", label: "昵称", align: "left", fmt: "text", sticky: true },
-  { key: "project", label: "项目", align: "left", fmt: "text" },
-  { key: "broker_name", label: "运营经纪人", align: "left", fmt: "text" },
-  { key: "recruit_broker_name", label: "招募经纪人", align: "left", fmt: "text" },
-  { key: "anchor_health_score", label: "健康分", align: "right", fmt: "number" },
-  { key: "total_fans", label: "粉丝数", align: "right", fmt: "number" },
-
-  { key: "total_fan_ticket", label: "总音浪", align: "right", fmt: "number", bold: true },
-  { key: "live_fan_ticket_no_guest", label: "礼物音浪", align: "right", fmt: "number" },
-  { key: "property_fan_ticket_no_guest", label: "道具音浪", align: "right", fmt: "number" },
-  { key: "guest_fan_ticket", label: "嘉宾音浪", align: "right", fmt: "number" },
-  { key: "activity_fan_ticket_no_guest", label: "活动音浪", align: "right", fmt: "number" },
-  { key: "special_fan_ticket", label: "其他音浪", align: "right", fmt: "number" },
-  { key: "subscribe_fan_ticket", label: "会员订阅音浪", align: "right", fmt: "number" },
-  { key: "star_guard_earn_score", label: "星守护音浪", align: "right", fmt: "number" },
-
-  { key: "live_duration", label: "开播时长", align: "right", fmt: "duration" },
-  { key: "valid_live_duration", label: "有效时长", align: "right", fmt: "duration" },
-  { key: "live_days", label: "开播天", align: "right", fmt: "number" },
-  { key: "solo_valid_days", label: "个播有效天", align: "right", fmt: "number" },
-  { key: "new_follow_fans", label: "涨粉", align: "right", fmt: "number" },
-  { key: "peak_per_minute_ucnt", label: "人气峰值", align: "right", fmt: "number" },
-  { key: "feed_watch_duration", label: "feed看播", align: "right", fmt: "duration" },
-  { key: "feed_acu", label: "feed_acu", align: "right", fmt: "number" },
-
-  { key: "video_view_count", label: "视频播放", align: "right", fmt: "number" },
-  { key: "video_like_count", label: "视频点赞", align: "right", fmt: "number" },
-  { key: "video_comment_count", label: "视频评论", align: "right", fmt: "number" },
-
-  { key: "minigame_income", label: "小游戏分账", align: "right", fmt: "number" },
-  { key: "game_income", label: "推广游戏分账", align: "right", fmt: "number" },
-];
+type ColKey = (typeof ALL_COLUMNS)[number]["key"];
 
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZES = [50, 100, 200] as const;
 type PageSize = (typeof PAGE_SIZES)[number];
+
+const DEFAULT_PRESET: PresetId = "ddz";
+
+function getInitialColumns(presetId: PresetId): ColKey[] {
+  const saved = loadSavedColumns(presetId);
+  if (saved) return saved;
+  const preset = PRESETS.find((p) => p.id === presetId);
+  // PRESETS always has at least one element (ddz), safe fallback
+  const fallback = PRESETS[0];
+  return preset ? (preset.keys as ColKey[]) : ((fallback?.keys ?? []) as ColKey[]);
+}
 
 export function AnchorTable(): React.JSX.Element {
   const [filters, setFilters] = useState<AnchorListFilters>({
@@ -84,10 +68,16 @@ export function AnchorTable(): React.JSX.Element {
   });
   const [rows, setRows] = useState<AnchorListRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [sortKey, setSortKey] = useState<Column["key"]>("total_fan_ticket");
+  const [sortKey, setSortKey] = useState<ColKey>("total_fan_ticket");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(50);
+
+  const [activePreset, setActivePreset] = useState<PresetId>(DEFAULT_PRESET);
+  const [visibleKeys, setVisibleKeys] = useState<ColKey[]>(() => getInitialColumns(DEFAULT_PRESET));
+  const [customizerOpen, setCustomizerOpen] = useState(false);
+
+  const visibleColumns = useMemo(() => getColumnsByKeys(visibleKeys), [visibleKeys]);
 
   useEffect(() => {
     const sp = new URLSearchParams();
@@ -122,7 +112,6 @@ export function AnchorTable(): React.JSX.Element {
     return copy;
   }, [rows, sortKey, sortDir]);
 
-  // 排序变化重置到第 1 页
   useEffect(() => {
     setPage(1);
   }, [sortKey, sortDir, pageSize]);
@@ -131,13 +120,34 @@ export function AnchorTable(): React.JSX.Element {
   const safePage = Math.min(page, totalPages);
   const pagedRows = sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  function toggleSort(key: Column["key"]): void {
+  function toggleSort(key: ColKey): void {
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
       setSortDir("desc");
     }
+  }
+
+  function applyPreset(presetId: PresetId): void {
+    setActivePreset(presetId);
+    if (presetId === "custom") {
+      // 打开自定义弹窗
+      setCustomizerOpen(true);
+      return;
+    }
+    const saved = loadSavedColumns(presetId);
+    if (saved) {
+      setVisibleKeys(saved);
+    } else {
+      const preset = PRESETS.find((p) => p.id === presetId);
+      if (preset) setVisibleKeys(preset.keys as ColKey[]);
+    }
+  }
+
+  function handleCustomizerConfirm(keys: ColKey[]): void {
+    setVisibleKeys(keys);
+    saveColumns(activePreset, keys);
   }
 
   const isRange = filters.date_from !== filters.date_to;
@@ -152,11 +162,43 @@ export function AnchorTable(): React.JSX.Element {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
+      {/* 顶部：筛选 + 导出 + 自定义列 */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Filters filters={filters} onChange={setFilters} />
-        <CsvExportButton rows={sortedRows} />
+        <div className="flex items-center gap-2">
+          <CsvExportButton rows={sortedRows} visibleColumns={visibleColumns} />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCustomizerOpen(true)}
+            className="gap-1"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            自定义列
+          </Button>
+        </div>
       </div>
 
+      {/* 产品预设 chips */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-muted-foreground text-xs mr-1">预设:</span>
+        {PRESETS.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => applyPreset(p.id)}
+            className={cn(
+              "px-2.5 py-0.5 rounded-full text-xs border transition-colors",
+              activePreset === p.id
+                ? "bg-primary text-primary-foreground border-primary"
+                : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 摘要行 */}
       <div className="text-muted-foreground flex flex-wrap gap-x-6 gap-y-1 text-sm tabular-nums">
         <span>
           范围 <strong className="text-foreground">{filters.date_from}</strong>
@@ -181,21 +223,25 @@ export function AnchorTable(): React.JSX.Element {
           总涨粉{" "}
           <strong className="text-foreground">{totalRow.fans.toLocaleString("zh-CN")}</strong>
         </span>
+        <span className="text-xs">
+          列数 <strong className="text-foreground">{visibleColumns.length}</strong>
+        </span>
       </div>
 
+      {/* 表格 */}
       <div className="bg-card overflow-hidden rounded-lg border shadow-sm">
-        <div className="max-h-[calc(100vh-280px)] overflow-auto">
+        <div className="max-h-[calc(100vh-320px)] overflow-auto">
           <Table className="min-w-max">
             <TableHeader className="sticky top-0 z-10 bg-secondary">
               <TableRow className="border-b-2 hover:bg-secondary">
-                {COLUMNS.map((c) => {
+                {visibleColumns.map((c) => {
                   const active = sortKey === c.key;
                   return (
                     <TableHead
                       key={c.key}
                       onClick={() => toggleSort(c.key)}
                       className={cn(
-                        "h-10 px-3 cursor-pointer select-none transition-colors",
+                        "h-10 px-3 cursor-pointer select-none transition-colors whitespace-nowrap",
                         c.align === "right" && "text-right",
                         c.sticky && "sticky left-0 z-20 bg-secondary",
                         active ? "text-primary font-semibold" : "text-foreground hover:bg-muted",
@@ -219,7 +265,7 @@ export function AnchorTable(): React.JSX.Element {
               {loading && rows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={COLUMNS.length}
+                    colSpan={visibleColumns.length}
                     className="text-muted-foreground h-24 text-center text-sm"
                   >
                     加载中...
@@ -228,7 +274,7 @@ export function AnchorTable(): React.JSX.Element {
               ) : pagedRows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={COLUMNS.length}
+                    colSpan={visibleColumns.length}
                     className="text-muted-foreground h-24 text-center text-sm"
                   >
                     无数据
@@ -237,7 +283,7 @@ export function AnchorTable(): React.JSX.Element {
               ) : (
                 pagedRows.map((r) => (
                   <TableRow key={r.anchor_id} className="hover:bg-accent/30">
-                    {COLUMNS.map((c) => {
+                    {visibleColumns.map((c) => {
                       const v = getValue(r, c.key);
                       const display = formatCell(v, c.fmt);
                       const muted = display === "—";
@@ -245,7 +291,7 @@ export function AnchorTable(): React.JSX.Element {
                         <TableCell
                           key={c.key}
                           className={cn(
-                            "px-3 py-2 text-sm",
+                            "px-3 py-2 text-sm whitespace-nowrap",
                             c.align === "right" && "text-right tabular-nums",
                             c.sticky && "sticky left-0 bg-card",
                             c.bold && "font-semibold",
@@ -272,9 +318,52 @@ export function AnchorTable(): React.JSX.Element {
         onPage={setPage}
         onPageSize={setPageSize}
       />
+
+      {/* 自定义列弹窗 */}
+      <ColumnCustomizer
+        open={customizerOpen}
+        onOpenChange={setCustomizerOpen}
+        selectedKeys={visibleKeys}
+        onConfirm={handleCustomizerConfirm}
+      />
     </div>
   );
 }
+
+// ─── 工具函数 ──────────────────────────────────────────────────────────────────
+
+function getValue(r: AnchorListRow, key: ColKey): string | number | null {
+  if (key === "project") return r.is_threekingdoms ? "三国" : "斗地主";
+  const v = r[key as keyof AnchorListRow];
+  if (typeof v === "boolean") return v ? 1 : 0;
+  return (v as string | number | null) ?? null;
+}
+
+function formatCell(v: string | number | null, fmt: ColumnDef["fmt"]): string {
+  if (v === null || v === undefined) return "—";
+  if (fmt === "duration") {
+    if (typeof v !== "number" || v === 0) return "—";
+    return `${v.toFixed(1)}h`;
+  }
+  if (fmt === "number") {
+    if (typeof v !== "number" || v === 0) return "—";
+    return v.toLocaleString("zh-CN");
+  }
+  if (fmt === "percent") {
+    if (typeof v !== "number" || v === 0) return "—";
+    // 值为 0-1 小数
+    return `${(v * 100).toFixed(2)}%`;
+  }
+  if (fmt === "timestamp") {
+    if (typeof v !== "number" || v === 0) return "—";
+    // unix ms or unix s
+    const ms = v > 1e10 ? v : v * 1000;
+    return new Date(ms).toLocaleDateString("zh-CN");
+  }
+  return String(v) || "—";
+}
+
+// ─── Pagination ───────────────────────────────────────────────────────────────
 
 function Pagination({
   page,
@@ -359,7 +448,6 @@ function Pagination({
   );
 }
 
-/** 智能分页号: 显示首页/末页/当前邻近，多余用 ... 折叠 */
 function pageNumbers(current: number, total: number): (number | "...")[] {
   if (total <= 7) {
     return Array.from({ length: total }, (_, i) => i + 1);
@@ -372,26 +460,6 @@ function pageNumbers(current: number, total: number): (number | "...")[] {
   if (right < total - 1) out.push("...");
   out.push(total);
   return out;
-}
-
-function getValue(r: AnchorListRow, key: Column["key"]): string | number | null {
-  if (key === "project") return r.is_threekingdoms ? "三国" : "斗地主";
-  const v = r[key as keyof AnchorListRow];
-  if (typeof v === "boolean") return v ? 1 : 0;
-  return (v as string | number | null) ?? null;
-}
-
-function formatCell(v: string | number | null, fmt: ColFmt): string {
-  if (v === null || v === undefined) return "—";
-  if (fmt === "duration") {
-    if (typeof v !== "number" || v === 0) return "—";
-    return `${v.toFixed(1)}h`;
-  }
-  if (fmt === "number") {
-    if (typeof v !== "number" || v === 0) return "—";
-    return v.toLocaleString("zh-CN");
-  }
-  return String(v) || "—";
 }
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }): React.JSX.Element {
