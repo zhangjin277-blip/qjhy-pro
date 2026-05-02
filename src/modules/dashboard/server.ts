@@ -1,2 +1,2 @@
 import "server-only";
-export { getDashboardCards, getTrend } from "./queries";
+export { getDashboardCards, getTrend, getBrokerAggregates } from "./queries";

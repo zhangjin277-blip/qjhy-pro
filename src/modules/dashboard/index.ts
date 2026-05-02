@@ -1,1 +1,1 @@
-export type { DashboardCards, TrendPoint } from "./types";
+export type { DashboardCards, TrendPoint, BrokerAggregate } from "./types";

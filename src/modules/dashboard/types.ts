@@ -12,3 +12,14 @@ export interface TrendPoint {
   total_fan_ticket: number;
   total_duration: number;
 }
+
+export interface BrokerAggregate {
+  broker_id: string;
+  broker_name: string;
+  user_name: string | null;
+  anchor_count: number;
+  total_fan_ticket: number;
+  total_duration: number;
+  total_minigame_income: number;
+  avg_health_score: number | null;
+}
