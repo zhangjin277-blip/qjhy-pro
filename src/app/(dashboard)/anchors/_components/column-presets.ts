@@ -1,6 +1,6 @@
 import type { AnchorListRow } from "@/modules/anchors";
 
-export type ColFmt = "text" | "number" | "duration" | "percent" | "timestamp";
+export type ColFmt = "text" | "number" | "duration" | "percent" | "timestamp" | "avatar";
 
 export interface ColumnDef {
   key: keyof AnchorListRow | "project";
@@ -15,6 +15,7 @@ export interface ColumnDef {
 /** 全量列定义（110+ 列，按 9 大分组） */
 export const ALL_COLUMNS: ColumnDef[] = [
   // ── 1. 基础信息 ──────────────────────────────────────────────────────────
+  { key: "avatar", label: "头像", group: "基础", align: "left", fmt: "avatar" },
   { key: "nick_name", label: "昵称", group: "基础", align: "left", fmt: "text", sticky: true },
   { key: "project", label: "项目", group: "基础", align: "left", fmt: "text" },
   { key: "anchor_health_score", label: "健康分", group: "基础", align: "right", fmt: "number" },
@@ -463,6 +464,7 @@ type ColKey = (typeof ALL_COLUMNS)[number]["key"];
 
 /** 基础常驻列（所有预设都包含） */
 const BASE_KEYS: ColKey[] = [
+  "avatar",
   "nick_name",
   "project",
   "broker_name",

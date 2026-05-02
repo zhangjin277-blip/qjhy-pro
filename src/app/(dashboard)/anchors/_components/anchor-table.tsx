@@ -285,6 +285,25 @@ export function AnchorTable(): React.JSX.Element {
                   <TableRow key={r.anchor_id} className="hover:bg-accent/30">
                     {visibleColumns.map((c) => {
                       const v = getValue(r, c.key);
+                      // avatar 列单独渲染
+                      if (c.fmt === "avatar") {
+                        return (
+                          <TableCell key={c.key} className="px-3 py-1">
+                            {typeof v === "string" && v ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={v}
+                                alt={r.nick_name}
+                                className="size-8 rounded-full bg-muted object-cover"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="size-8 rounded-full bg-muted" />
+                            )}
+                          </TableCell>
+                        );
+                      }
                       const display = formatCell(v, c.fmt);
                       const muted = display === "—";
                       return (
