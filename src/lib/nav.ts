@@ -107,7 +107,7 @@ export function findActiveSectionKey(pathname: string): string | null {
     if (sec.single) {
       if (isHrefActive(sec.href, pathname)) return sec.key;
     } else {
-      if (sec.children.some((c) => isHrefActive(c.href, pathname))) return sec.key;
+      if (sec.children.some((c) => !c.disabled && isHrefActive(c.href, pathname))) return sec.key;
     }
   }
   return null;

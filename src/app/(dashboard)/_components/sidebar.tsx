@@ -164,6 +164,11 @@ function SidebarInner({
             );
           }
 
+          const visibleChildren = sec.children.filter((it) => !it.disabled);
+          if (visibleChildren.length === 0) {
+            return null;
+          }
+
           const open = openSections.has(sec.key);
           return (
             <div key={sec.key} className="mb-1">
@@ -187,19 +192,8 @@ function SidebarInner({
               </button>
               {open && showLabels && (
                 <div className="border-border/60 mt-0.5 ml-2 grid grid-cols-2 gap-0.5 border-l pl-4">
-                  {sec.children.map((it) => {
+                  {visibleChildren.map((it) => {
                     const active = isHrefActive(it.href, pathname);
-                    if (it.disabled) {
-                      return (
-                        <span
-                          key={it.key}
-                          className="text-sidebar-leaf-disabled-foreground truncate rounded px-2 py-1.5 text-left text-xs"
-                          title="即将上线（Phase 2）"
-                        >
-                          {it.label}
-                        </span>
-                      );
-                    }
                     return (
                       <Link
                         key={it.key}

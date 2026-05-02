@@ -134,14 +134,14 @@ export function ColumnCustomizer({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-5xl p-0 gap-0 overflow-hidden sm:max-w-5xl">
         <DialogHeader className="px-5 pt-4 pb-3 border-b">
           <DialogTitle className="text-base font-semibold">自定义列</DialogTitle>
         </DialogHeader>
 
-        <div className="flex h-[500px] overflow-hidden">
+        <div className="grid grid-cols-[160px_minmax(280px,1fr)_240px] h-[500px] overflow-hidden">
           {/* 左栏：分组导航 */}
-          <div className="w-36 shrink-0 border-r overflow-y-auto bg-muted/30">
+          <div className="border-r overflow-y-auto bg-muted/30">
             {ALL_GROUPS.map((g) => {
               const cnt = groupCounts[g] ?? { selected: 0, total: 0 };
               const isActive = activeGroup === g;
@@ -170,7 +170,7 @@ export function ColumnCustomizer({
           </div>
 
           {/* 中栏：指标列表 */}
-          <div className="flex-1 flex flex-col overflow-hidden border-r">
+          <div className="flex flex-col overflow-hidden border-r min-w-0">
             <div className="px-3 py-2 border-b shrink-0">
               <Input
                 placeholder="搜索指标..."
@@ -216,7 +216,7 @@ export function ColumnCustomizer({
           </div>
 
           {/* 右栏：已选列（有序） */}
-          <div className="w-52 shrink-0 flex flex-col overflow-hidden">
+          <div className="flex flex-col overflow-hidden min-w-0">
             <div className="px-3 py-2 border-b shrink-0 text-sm font-medium text-muted-foreground">
               已选 {working.length} 列
             </div>
