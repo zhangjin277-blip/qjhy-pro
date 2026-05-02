@@ -69,6 +69,7 @@
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-leaf-foreground: var(--sidebar-leaf-foreground);
+  --color-sidebar-leaf-disabled-foreground: var(--sidebar-leaf-disabled-foreground);
 }
 
 /* ========== Semantic (light) ========== */
@@ -96,6 +97,7 @@
   /* 业务语义 */
   --sidebar: #f2f6fe;
   --sidebar-leaf-foreground: var(--color-gray-700);
+  --sidebar-leaf-disabled-foreground: var(--color-gray-400);
   --change-up: #f53f3f; /* 涨红 */
   --change-down: #00b42a; /* 跌绿 */
   --change-flat: var(--color-gray-600);

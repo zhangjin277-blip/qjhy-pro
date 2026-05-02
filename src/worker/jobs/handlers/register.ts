@@ -20,6 +20,10 @@ function runFirst<T>(fn: (data: T) => Promise<void>): (jobs: PgBoss.Job<T>[]) =>
 
 export async function registerCrawlerHandlers(): Promise<void> {
   const boss = await getBoss();
+  // pg-boss v10 要求显式 createQueue
+  for (const name of Object.values(JOB_NAMES)) {
+    await boss.createQueue(name);
+  }
   await boss.work(JOB_NAMES.CHECK_DATA_READY, { batchSize: 1 }, runFirst(checkDataReadyHandler));
   await boss.work(JOB_NAMES.FETCH_PROFILE, { batchSize: 1 }, runFirst(fetchProfileHandler));
   await boss.work(JOB_NAMES.FETCH_DAILY, { batchSize: 1 }, runFirst(fetchDailyHandler));

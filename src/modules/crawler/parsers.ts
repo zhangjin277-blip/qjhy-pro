@@ -62,5 +62,5 @@ export function parseChineseNumber(input: string | number | null | undefined): n
   if (Number.isNaN(n)) return null;
   if (m[2] === "万") return Math.round(n * 10000);
   if (m[2] === "亿") return Math.round(n * 100000000);
-  return n;
+  return Math.round(n);
 }

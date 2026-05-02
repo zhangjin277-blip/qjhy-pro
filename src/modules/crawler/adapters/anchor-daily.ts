@@ -1,112 +1,33 @@
 import "server-only";
 import type { Page } from "puppeteer-core";
-import { pageFetch } from "@/lib/puppeteer";
+import { runExport } from "../download-helper";
 import { parseDuration, parsePercent, parseChineseNumber } from "../parsers";
 
-const ENDPOINT =
-  "https://union.bytedance.com/ark/api/data/pugna_component/data/v2/union/data_center/anchor_list";
+const ENDPOINT = "/ark/api/data/pugna_component/download/v2/union/data_center/anchor_list";
 
 /**
- * 91 字段全集（meta.field 里 91 项的 key）。
- * fields= 参数显式声明全集，避免平台默认只返 39 字段。
+ * 抖音公会平台导出"主播概览列表"。
+ * 走 download 模式（同步 API 只返 19 字段，download 才能拿全指标）。
+ *
+ * 这 14 字段是平台前端导出按钮真实使用的 fields，平台后端会自动加上身份/经纪人/分成比等默认字段，
+ * 最终 CSV 约 30+ 列。
  */
-export const ANCHOR_DAILY_FIELDS = [
-  "anchorID",
-  "nicknameRaw",
-  "coverUrlRaw",
-  "awemeIDRaw",
-  "awemeShortIDRaw",
-  "hotsoonIDRaw",
-  "hotsoonShortIDRaw",
-  "xiguaDisplayIdRaw",
-  "totalFansRaw",
-  "lastLiveTimeRaw",
-  "signingTypeRaw",
-  "brokerRaw",
-  "anchorTagType",
-  "isNew",
-  "anchorInfo",
+const FIELDS = [
   "totalFanTicket",
   "liveFanTicketWithoutGuest",
-  "propertyFanTicketWithoutGuest",
-  "guestFanTicket",
   "activityFanTicketWithoutGuest",
-  "specialFanTicket",
+  "propertyFanTicketWithoutGuest",
   "subscribeFanTicket",
-  "pkFanTicket",
-  "linkScreenFanTicket",
-  "linkScreenRoomFanTicket",
-  "squareWandererFanTicket",
-  "squareNowandererFanTicket",
-  "squareNoguestFanTicket",
-  "voiceWandererFanTicket",
-  "voiceNoguestFanTicket",
-  "voiceNowandererFanTicket",
-  "voiceChatNoguestFanTicket",
-  "voiceChatNowandererFanTicket",
-  "voiceChatWandererFanTicket",
-  "radioLinkFanTicket",
-  "radioLinkFanWithoutGuestTicket",
-  "totalTicketOutsideLink",
-  "voiceTotalTicketOutsideLink",
-  "voiceChatTotalTicketOutsideLink",
-  "radioTotalTicketOutsideLink",
-  "videoTotalTicketOutsideLink",
-  "groupNoMemberFanTicket",
-  "groupMemberFanTicket",
-  "luckyNumBoxTicket",
-  "starGuardEarnScore",
-  "starGuardUcnt",
-  "statGuardEnterAccountEarnScore",
-  "aiCloneFanTicket",
-  "aiCloneConsumeUcnt",
-  "virtualIncome",
-  "virtualPremiumIdentityIncome",
+  "specialFanTicket",
+  "isSingleThan1hLiveValidDay",
   "liveDuration1d",
   "single25minValidLiveDuration1d",
-  "isSingleThan1hLiveValidDay",
-  "feedWatchDuration1d",
-  "voiceLiveDurationWithoutPause",
-  "single25minVoiceLiveDuration",
-  "voiceChatLiveDuration1d",
-  "voiceChatLinkDuration1d",
-  "single25minVoiceChatLiveDuration1d",
-  "voiceChatLiveVaildDay",
-  "voiceChatLinkVaildDay",
-  "squareLiveDurationWithoutPauseVoiceRaw",
-  "squareSingle25minValidLiveDurationFromStWithoutPauseVoiceRaw",
-  "squareSingle60minValidLiveDayFromStWithoutPauseVoiceRaw",
-  "squareLinkDuration1d",
-  "squareLiveSingle60minValidLiveDayFromStWithoutPauseVoiceRaw",
-  "single60minVoiceLiveCntFromStWithoutPause",
-  "validRadioLiveDuration",
-  "validRadioLiveDay",
-  "radioLiveDuration",
-  "virtualLiveDuration",
-  "virtualLiveVaildDuration",
-  "virtualLiveVaildDay",
-  "voiceChatroomConnectNum",
-  "voiceGuestConnectNum",
-  "voiceGuestConnectValidTimeDuration",
-  "voiceGuestConnectIncomeSingleHour",
   "feedAcuRaw",
+  "feedWatchDuration1d",
   "perMinuteUcnt1d",
-  "newFollowFansUcnt1d",
-  "VideoCountRaw",
-  "LikeCountRaw",
-  "CommentCountRaw",
-  "ViewCountRaw",
-  "CurrentPercentRaw",
-  "GameSharePercentRaw",
-  "PayMoneyConnectSharePercentRaw",
-  "profitShareRatio",
-  "QrcodeRaw",
-  "pkCnt",
-  "pkWinCnt",
-  "pkScores",
-  "pkFinishCnt",
-  "pkFanTicketPercent",
-] as const;
+  "guestFanTicket",
+  "anchorInfo",
+];
 
 export interface AnchorDailyRow {
   anchor_id: string;
@@ -157,111 +78,109 @@ export interface AnchorDailyRow {
   raw: Record<string, unknown>;
 }
 
-interface RawDailyResponse {
-  data: { data_string: string };
-}
-
-export interface ParsedDailyInner {
-  data: { series: Record<string, unknown>[] };
-  meta: string;
-}
-
+/**
+ * 触发导出 + 轮询 + 下载 CSV + 返回中文表头行。
+ * 整个过程 30s-3min。
+ */
 export async function fetchAnchorDaily(
   page: Page,
   date: string,
-  pageNum = 1,
-  size = 100,
-): Promise<{ list: Record<string, unknown>[]; total: number }> {
-  const fields = ANCHOR_DAILY_FIELDS.join(",");
-  const url =
-    `${ENDPOINT}?beginDate=${date}&endDate=${date}&page=${pageNum}&size=${size}` +
-    `&orderField=totalFanTicket&sortType=desc&fields=${fields}`;
-  const res = await pageFetch<RawDailyResponse>(page, url, {
-    headers: { "X-Appid": "3000" },
+): Promise<Record<string, string>[]> {
+  return runExport(page, {
+    endpoint: ENDPOINT,
+    filename: "主播概览列表",
+    params: {
+      page: 1,
+      size: 10,
+      fields: FIELDS,
+      gray: "with_invite_broker",
+      begin_date: date,
+      end_date: date,
+      order_field: "totalFanTicket",
+      sort_type: "desc",
+    },
   });
-  const inner = JSON.parse(res.data.data_string) as ParsedDailyInner;
-  return { list: inner.data.series, total: inner.data.series.length };
 }
 
-export function parseAnchorDailyResponse(inner: ParsedDailyInner, date: string): AnchorDailyRow[] {
-  return inner.data.series.map((r) => mapOne(r, date));
+/**
+ * 中文 CSV 行 → AnchorDailyRow。
+ */
+export function parseAnchorDailyResponse(
+  rows: Record<string, string>[],
+  date: string,
+): AnchorDailyRow[] {
+  return rows.map((r) => mapOne(r, date));
 }
 
-function mapOne(r: Record<string, unknown>, date: string): AnchorDailyRow {
+function mapOne(r: Record<string, string>, date: string): AnchorDailyRow {
+  const get = (...keys: string[]): string | null => {
+    for (const k of keys) {
+      const v = r[k];
+      if (v !== undefined && v !== "") return v;
+    }
+    return null;
+  };
+
   return {
-    anchor_id: String(r.anchorID ?? ""),
+    anchor_id: String(get("主播ID") ?? ""),
     date,
-    nickname_snapshot: strOrNull(r.nicknameRaw),
+    nickname_snapshot: get("主播昵称", "昵称"),
 
-    total_fan_ticket: parseChineseNumber(r.totalFanTicket as string | number),
-    live_fan_ticket_no_guest: parseChineseNumber(r.liveFanTicketWithoutGuest as string | number),
-    property_fan_ticket_no_guest: parseChineseNumber(
-      r.propertyFanTicketWithoutGuest as string | number,
-    ),
-    guest_fan_ticket: parseChineseNumber(r.guestFanTicket as string | number),
-    activity_fan_ticket_no_guest: parseChineseNumber(
-      r.activityFanTicketWithoutGuest as string | number,
-    ),
-    special_fan_ticket: parseChineseNumber(r.specialFanTicket as string | number),
-    subscribe_fan_ticket: parseChineseNumber(r.subscribeFanTicket as string | number),
-    pk_fan_ticket: parseChineseNumber(r.pkFanTicket as string | number),
-    link_screen_fan_ticket: parseChineseNumber(r.linkScreenFanTicket as string | number),
-    link_screen_room_fan_ticket: parseChineseNumber(r.linkScreenRoomFanTicket as string | number),
+    total_fan_ticket: parseChineseNumber(get("总音浪")),
+    live_fan_ticket_no_guest: parseChineseNumber(get("礼物音浪")),
+    property_fan_ticket_no_guest: parseChineseNumber(get("道具音浪")),
+    guest_fan_ticket: parseChineseNumber(get("嘉宾音浪")),
+    activity_fan_ticket_no_guest: parseChineseNumber(get("活动音浪")),
+    special_fan_ticket: parseChineseNumber(get("其他音浪")),
+    subscribe_fan_ticket: parseChineseNumber(get("会员订阅音浪")),
+    pk_fan_ticket: null, // 不在导出 CSV 里
+    link_screen_fan_ticket: null,
+    link_screen_room_fan_ticket: null,
 
-    live_duration_1d: parseDuration(r.liveDuration1d as string),
-    valid_live_duration_1d: parseDuration(r.single25minValidLiveDuration1d as string),
-    is_solo_valid_day: numOrNull(r.isSingleThan1hLiveValidDay),
-    feed_watch_duration_1d: parseDuration(r.feedWatchDuration1d as string),
+    live_duration_1d: parseDuration(get("开播总时长")),
+    valid_live_duration_1d: parseDuration(get("开播有效时长")),
+    is_solo_valid_day: numOrNull(get("视频个播有效天")),
+    feed_watch_duration_1d: parseDuration(get("feed看播时长")),
 
-    feed_acu: numOrNull(r.feedAcuRaw),
-    peak_per_minute_ucnt: numOrNull(r.perMinuteUcnt1d),
+    feed_acu: numOrNull(get("feed_acu")),
+    peak_per_minute_ucnt: numOrNull(get("人气峰值")),
 
-    total_fans: parseChineseNumber(r.totalFansRaw as string | number),
-    new_follow_fans_1d: numOrNull(r.newFollowFansUcnt1d),
+    total_fans: parseChineseNumber(get("粉丝数")),
+    new_follow_fans_1d: numOrNull(get("涨粉")),
 
-    video_view_count: parseChineseNumber(r.ViewCountRaw as string | number),
-    video_like_count: parseChineseNumber(r.LikeCountRaw as string | number),
-    video_comment_count: parseChineseNumber(r.CommentCountRaw as string | number),
+    video_view_count: parseChineseNumber(get("视频播放量")),
+    video_like_count: parseChineseNumber(get("视频点赞量")),
+    video_comment_count: parseChineseNumber(get("视频评论量")),
 
-    current_percent: parsePercentOrNum(r.CurrentPercentRaw),
-    game_share_percent: parsePercentOrNum(r.GameSharePercentRaw),
-    pay_money_connect_share_percent: parsePercentOrNum(r.PayMoneyConnectSharePercentRaw),
-    profit_share_ratio: parsePercent(r.profitShareRatio as string),
+    current_percent: parsePercentOrNum(get("分成比-直播音浪收益")),
+    game_share_percent: null,
+    pay_money_connect_share_percent: null,
+    profit_share_ratio: parsePercent(get("会员收益比例")),
 
-    broker_snapshot: strOrNull(r.brokerRaw),
-    signing_type_snapshot: strOrNull(r.signingTypeRaw),
-    last_live_time_snapshot: strOrNull(r.lastLiveTimeRaw),
-    is_new: numOrNull(r.isNew),
+    broker_snapshot: get("运营经纪人", "经纪人"),
+    signing_type_snapshot: get("签约类型"),
+    last_live_time_snapshot: get("上次开播时间"),
+    is_new: null,
 
-    anchor_info: strOrNull(r.anchorInfo),
-    star_guard_earn_score: parseChineseNumber(r.starGuardEarnScore as string | number),
-    total_ticket_outside_link: parseChineseNumber(r.totalTicketOutsideLink as string | number),
-    stat_guard_enter_account_earn_score: parseChineseNumber(
-      r.statGuardEnterAccountEarnScore as string | number,
-    ),
+    anchor_info: get("主播标签"),
+    star_guard_earn_score: parseChineseNumber(get("星守护音浪")),
+    total_ticket_outside_link: null,
+    stat_guard_enter_account_earn_score: null,
 
-    raw: r,
+    raw: r as Record<string, unknown>,
   };
 }
 
-function strOrNull(v: unknown): string | null {
-  if (v === null || v === undefined || v === "") return null;
-  return String(v);
-}
-
-function numOrNull(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null;
+function numOrNull(v: string | null): number | null {
+  if (!v) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-function parsePercentOrNum(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  if (typeof v === "string") {
-    if (v.endsWith("%")) return parsePercent(v);
-    const n = Number(v);
-    return Number.isFinite(n) ? (n > 1 ? n / 100 : n) : null;
-  }
-  if (typeof v === "number") return v > 1 ? v / 100 : v;
-  return null;
+function parsePercentOrNum(v: string | null): number | null {
+  if (!v) return null;
+  if (v.endsWith("%")) return parsePercent(v);
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n > 1 ? n / 100 : n;
 }

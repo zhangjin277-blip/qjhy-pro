@@ -21,13 +21,6 @@ export function Header({ userName, userTitle, onOpenMobile }: HeaderProps) {
         <Menu className="h-5 w-5" />
       </button>
 
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-medium">直播服务平台</span>
-        <span className="ring-amber-200/60 inline-flex items-center rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700 ring-1 ring-inset">
-          长沙奇迹互娱
-        </span>
-      </div>
-
       <div className="flex-1" />
 
       <div className="flex items-center gap-2 border-l pl-3">

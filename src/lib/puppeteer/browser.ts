@@ -36,16 +36,19 @@ export async function closeBrowser(): Promise<void> {
 /**
  * 打开抖音公会平台 page，注入 Cookie。
  * 调用方负责关闭 page。
+ *
+ * 流程：先 setCookie（不需要先 goto，puppeteer 24+ 支持），再 goto 业务页面让平台前端 SDK 加载，
+ * 平台 SDK 会自动 hook fetch 加签名（X-Bogus / msToken / _signature）。
  */
 export async function openDouyinPage(cookies: Record<string, string>): Promise<Page> {
   const browser = await getBrowser();
   const page = await browser.newPage();
   await page.setUserAgent(
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-      "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
   );
-  // 先访问主域名才能 setCookie
-  await page.goto("https://union.bytedance.com/", { waitUntil: "domcontentloaded" });
+
+  console.log("[puppeteer] setting cookies for", Object.keys(cookies).length, "keys");
   const cookieEntries = Object.entries(cookies).map(([name, value]) => ({
     name,
     value,
@@ -53,5 +56,16 @@ export async function openDouyinPage(cookies: Record<string, string>): Promise<P
     path: "/",
   }));
   await page.setCookie(...cookieEntries);
+
+  console.log("[puppeteer] navigating to anchor list page (loads platform SDK)");
+  await page.goto("https://union.bytedance.com/open/portal/anchor/list", {
+    waitUntil: "networkidle2",
+    timeout: 60_000,
+  });
+  // 等待 SDK 完成 SPA router 二次跳转 + 平台前端 fetch hook 注入完成
+  // 不加这段会触发 "Execution context was destroyed, most likely because of a navigation"
+  await new Promise((r) => setTimeout(r, 5000));
+  console.log("[puppeteer] page ready, url=", page.url());
+
   return page;
 }

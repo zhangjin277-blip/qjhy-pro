@@ -130,11 +130,11 @@ function SidebarInner({
           <Radio className="h-[18px] w-[18px] text-white" strokeWidth={2.4} />
         </div>
         {showLabels && (
-          <div className="overflow-hidden leading-tight">
-            <div className="text-muted-foreground truncate text-[11px] tracking-wide">
-              QJHY · Pro
-            </div>
-            <div className="truncate text-sm font-semibold tracking-tight">直播中台</div>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm font-semibold">直播服务平台</span>
+            <span className="ring-amber-200/60 inline-flex shrink-0 items-center rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700 ring-1 ring-inset">
+              长沙奇迹互娱
+            </span>
           </div>
         )}
       </div>
@@ -193,7 +193,7 @@ function SidebarInner({
                       return (
                         <span
                           key={it.key}
-                          className="text-sidebar-leaf-foreground truncate rounded px-2 py-1.5 text-left text-xs"
+                          className="text-sidebar-leaf-disabled-foreground truncate rounded px-2 py-1.5 text-left text-xs"
                           title="即将上线（Phase 2）"
                         >
                           {it.label}

@@ -17,45 +17,37 @@ export async function fetchDailyHandler(payload: FetchSimplePayload): Promise<vo
   const cookies = await getActiveCookies(basecamp);
   const page = await openDouyinPage(cookies);
   try {
-    let pageNum = 1;
+    // download 模式：触发导出 → 轮询 → 下载 CSV → 解析中文表头
+    const csvRows = await fetchAnchorDaily(page, date);
+    const rows = parseAnchorDailyResponse(csvRows, date);
     let totalFetched = 0;
-    while (true) {
-      const { list } = await fetchAnchorDaily(page, date, pageNum, 100);
-      if (list.length === 0) break;
-      const fakeInner = { data: { series: list }, meta: "" };
-      const rows = parseAnchorDailyResponse(fakeInner, date);
-      for (const row of rows) {
-        // numeric 列 Drizzle 期望 string，将 number | null 序列化
-        const dbRow = {
-          ...row,
-          live_duration_1d: row.live_duration_1d != null ? String(row.live_duration_1d) : null,
-          valid_live_duration_1d:
-            row.valid_live_duration_1d != null ? String(row.valid_live_duration_1d) : null,
-          feed_watch_duration_1d:
-            row.feed_watch_duration_1d != null ? String(row.feed_watch_duration_1d) : null,
-          current_percent: row.current_percent != null ? String(row.current_percent) : null,
-          game_share_percent:
-            row.game_share_percent != null ? String(row.game_share_percent) : null,
-          pay_money_connect_share_percent:
-            row.pay_money_connect_share_percent != null
-              ? String(row.pay_money_connect_share_percent)
-              : null,
-          profit_share_ratio:
-            row.profit_share_ratio != null ? String(row.profit_share_ratio) : null,
-          synced_at: new Date(),
-        };
-        await db
-          .insert(anchor_daily)
-          .values(dbRow)
-          .onConflictDoUpdate({
-            target: [anchor_daily.anchor_id, anchor_daily.date],
-            set: dbRow,
-          });
-      }
-      totalFetched += rows.length;
-      if (list.length < 100) break;
-      pageNum++;
-      await new Promise((r) => setTimeout(r, 300));
+    for (const row of rows) {
+      if (!row.anchor_id) continue; // CSV 可能含合计行无 ID
+      // numeric 列 Drizzle 期望 string
+      const dbRow = {
+        ...row,
+        live_duration_1d: row.live_duration_1d != null ? String(row.live_duration_1d) : null,
+        valid_live_duration_1d:
+          row.valid_live_duration_1d != null ? String(row.valid_live_duration_1d) : null,
+        feed_watch_duration_1d:
+          row.feed_watch_duration_1d != null ? String(row.feed_watch_duration_1d) : null,
+        current_percent: row.current_percent != null ? String(row.current_percent) : null,
+        game_share_percent: row.game_share_percent != null ? String(row.game_share_percent) : null,
+        pay_money_connect_share_percent:
+          row.pay_money_connect_share_percent != null
+            ? String(row.pay_money_connect_share_percent)
+            : null,
+        profit_share_ratio: row.profit_share_ratio != null ? String(row.profit_share_ratio) : null,
+        synced_at: new Date(),
+      };
+      await db
+        .insert(anchor_daily)
+        .values(dbRow)
+        .onConflictDoUpdate({
+          target: [anchor_daily.anchor_id, anchor_daily.date],
+          set: dbRow,
+        });
+      totalFetched++;
     }
     console.log(`[fetch-daily] synced ${totalFetched} rows for ${date}`);
 
