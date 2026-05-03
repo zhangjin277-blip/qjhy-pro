@@ -22,12 +22,12 @@ export interface AnchorListRow {
   hotsoon_display_id: string | null;
   anchor_health_score: number | null;
   last_live_time: number | null;
+  /** 小手柄流水（计算字段）= g_total_amount + v_total_amount */
+  controller_total_amount: number | null;
 
   // ── 2. 签约 & 经纪人 ──────────────────────────────────────
   broker_name: string | null;
   recruit_broker_name: string | null;
-  anchor_sign_type: number | null;
-  anchor_sign_out: number | null;
   signing_time: number | null;
   sign_start_time: number | null;
   sign_end_time: number | null;
@@ -35,7 +35,6 @@ export interface AnchorListRow {
   auto_renewal: boolean | null;
   join_time: number | null;
   first_live_time_in_faction: number | null;
-  leave_time: number | null;
   wait_for_leave: boolean | null;
   income_percent: number | null;
 
@@ -44,15 +43,10 @@ export interface AnchorListRow {
   live_fan_ticket_no_guest: number | null;
   property_fan_ticket_no_guest: number | null;
   guest_fan_ticket: number | null;
-  activity_fan_ticket_no_guest: number | null;
-  special_fan_ticket: number | null;
   subscribe_fan_ticket: number | null;
   pk_fan_ticket: number | null;
-  link_screen_fan_ticket: number | null;
-  link_screen_room_fan_ticket: number | null;
   star_guard_earn_score: number | null;
   stat_guard_enter_account_earn_score: number | null;
-  total_ticket_outside_link: number | null;
 
   // ── 4. 时长 & 天数（anchor_daily SUM）───────────────────
   /** 区间内总开播时长 小时 (SUM) */
@@ -73,10 +67,6 @@ export interface AnchorListRow {
   feed_acu: number | null;
   /** 主分成比快照 (最新) */
   current_percent: number | null;
-  /** 游戏分成比 */
-  game_share_percent: number | null;
-  /** 付费连线分成比 */
-  pay_money_connect_share_percent: number | null;
   /** 会员收益比例 */
   profit_share_ratio: number | null;
 
@@ -163,6 +153,10 @@ export interface AnchorListRow {
   g_anchor_active_pay: number | null;
   /** 活跃激励机构分账 (cps_all) */
   g_faction_active_pay: number | null;
+  /** 促活流水（计算字段）= (g_anchor_active_pay + g_faction_active_pay) / 0.4 */
+  g_promote_active_amount: number | null;
+  /** 当日流水（计算字段）= 促活流水 + g_download_pay_amount */
+  g_total_amount: number | null;
 
   // ── 短视频流水分成（anchor_game_promo_daily scene=video, biz_mode=cps）
   v_publish_cnt: number | null;
@@ -195,6 +189,10 @@ export interface AnchorListRow {
   v_active_pay_ucnt: number | null;
   v_anchor_active_pay: number | null;
   v_faction_active_pay: number | null;
+  /** 短视频促活流水（计算字段）= (v_anchor_active_pay + v_faction_active_pay) / 0.4 */
+  v_promote_active_amount: number | null;
+  /** 短视频当日流水（计算字段）= 短视频促活流水 + v_download_pay_amount */
+  v_total_amount: number | null;
 
   // ── 9. 小游戏（anchor_minigame_daily，mg_ 前缀）──────────
   /** 开播场次 */
@@ -239,14 +237,6 @@ export interface AnchorListRow {
   mg_union_income: number | null;
   /** CPS 绑定人数 */
   mg_cps_bind: number | null;
-  /** 视频播放数 */
-  mg_play_cnt: number | null;
-  /** 视频播放人数 */
-  mg_play_uv: number | null;
-  /** 完播人数 */
-  mg_finish_play_uv: number | null;
-  /** 完播率 */
-  mg_finish_play_ratio: number | null;
 
   // ── 旧兼容字段（保留，用于平滑迁移）────────────────────
   /** @deprecated 用 mg_anchor_income */

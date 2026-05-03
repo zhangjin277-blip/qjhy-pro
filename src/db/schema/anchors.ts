@@ -34,9 +34,7 @@ export const anchor_profile = pgTable(
     last_live_time: bigint("last_live_time", { mode: "number" }), // unix
     anchor_health_score: integer("anchor_health_score"),
 
-    // 签约/经纪人（13）
-    anchor_sign_type: integer("anchor_sign_type"),
-    anchor_sign_out: integer("anchor_sign_out"),
+    // 签约/经纪人
     signing_time: bigint("signing_time", { mode: "number" }),
     sign_start_time: bigint("sign_start_time", { mode: "number" }),
     sign_end_time: bigint("sign_end_time", { mode: "number" }),
@@ -44,7 +42,6 @@ export const anchor_profile = pgTable(
     auto_renewal: boolean("auto_renewal"),
     join_time: bigint("join_time", { mode: "number" }),
     first_live_time_in_faction: bigint("first_live_time_in_faction", { mode: "number" }),
-    leave_time: bigint("leave_time", { mode: "number" }),
     wait_for_leave: boolean("wait_for_leave"),
     have_operate_relation: boolean("have_operate_relation"),
     have_recruit_relation: boolean("have_recruit_relation"),
@@ -99,12 +96,8 @@ export const anchor_daily = pgTable(
     live_fan_ticket_no_guest: bigint("live_fan_ticket_no_guest", { mode: "number" }),
     property_fan_ticket_no_guest: bigint("property_fan_ticket_no_guest", { mode: "number" }),
     guest_fan_ticket: bigint("guest_fan_ticket", { mode: "number" }),
-    activity_fan_ticket_no_guest: bigint("activity_fan_ticket_no_guest", { mode: "number" }),
-    special_fan_ticket: bigint("special_fan_ticket", { mode: "number" }),
     subscribe_fan_ticket: bigint("subscribe_fan_ticket", { mode: "number" }),
     pk_fan_ticket: bigint("pk_fan_ticket", { mode: "number" }),
-    link_screen_fan_ticket: bigint("link_screen_fan_ticket", { mode: "number" }),
-    link_screen_room_fan_ticket: bigint("link_screen_room_fan_ticket", { mode: "number" }),
 
     // 时长（3，单位：小时 numeric 6,2）
     live_duration_1d: numeric("live_duration_1d", { precision: 6, scale: 2 }),
@@ -127,13 +120,8 @@ export const anchor_daily = pgTable(
     video_like_count: integer("video_like_count"),
     video_comment_count: integer("video_comment_count"),
 
-    // 分成比（4，0-1 小数）
+    // 分成比（2，0-1 小数）
     current_percent: numeric("current_percent", { precision: 5, scale: 4 }),
-    game_share_percent: numeric("game_share_percent", { precision: 5, scale: 4 }),
-    pay_money_connect_share_percent: numeric("pay_money_connect_share_percent", {
-      precision: 5,
-      scale: 4,
-    }),
     profit_share_ratio: numeric("profit_share_ratio", { precision: 5, scale: 4 }),
 
     // 状态/档案（4，当日快照）
@@ -145,7 +133,6 @@ export const anchor_daily = pgTable(
     // 其他（4）
     anchor_info: text("anchor_info"),
     star_guard_earn_score: bigint("star_guard_earn_score", { mode: "number" }),
-    total_ticket_outside_link: bigint("total_ticket_outside_link", { mode: "number" }),
     stat_guard_enter_account_earn_score: bigint("stat_guard_enter_account_earn_score", {
       mode: "number",
     }),
@@ -320,20 +307,17 @@ export const anchor_minigame_daily = pgTable(
     gm_active_ucnt: integer("gm_active_ucnt"), // 激活
     gm_pay_ucnt: integer("gm_pay_ucnt"), // 付费
 
-    // 分账
-    before_divided_income: bigint("before_divided_income", { mode: "number" }), // 分成前流水
-    after_divided_author_income: bigint("after_divided_author_income", { mode: "number" }),
-    after_divided_trade_union_income: bigint("after_divided_trade_union_income", {
-      mode: "number",
+    // 分账（金额带小数，平台返回 14.77 / 376.65 等，需 numeric 保精度）
+    before_divided_income: numeric("before_divided_income", { precision: 12, scale: 2 }),
+    after_divided_author_income: numeric("after_divided_author_income", {
+      precision: 12,
+      scale: 2,
+    }),
+    after_divided_trade_union_income: numeric("after_divided_trade_union_income", {
+      precision: 12,
+      scale: 2,
     }),
     cps_bind_uv: integer("cps_bind_uv"),
-
-    // video 专属
-    play_cnt: bigint("play_cnt", { mode: "number" }), // 视频播放数
-    play_uv: integer("play_uv"), // 视频播放人数
-    play_cnt_avg: numeric("play_cnt_avg", { precision: 8, scale: 2 }),
-    finish_play_uv: integer("finish_play_uv"),
-    finish_play_ratio: numeric("finish_play_ratio", { precision: 5, scale: 4 }),
 
     raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),

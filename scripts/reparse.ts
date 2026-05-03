@@ -122,15 +122,10 @@ async function main(): Promise<void> {
       gm_click_ucnt: i(reparsed.gm_click_ucnt),
       gm_active_ucnt: i(reparsed.gm_active_ucnt),
       gm_pay_ucnt: i(reparsed.gm_pay_ucnt),
-      before_divided_income: i(reparsed.before_divided_income),
-      after_divided_author_income: i(reparsed.after_divided_author_income),
-      after_divided_trade_union_income: i(reparsed.after_divided_trade_union_income),
+      before_divided_income: s(reparsed.before_divided_income),
+      after_divided_author_income: s(reparsed.after_divided_author_income),
+      after_divided_trade_union_income: s(reparsed.after_divided_trade_union_income),
       cps_bind_uv: i(reparsed.cps_bind_uv),
-      play_cnt: i(reparsed.play_cnt),
-      play_uv: i(reparsed.play_uv),
-      play_cnt_avg: s(reparsed.play_cnt_avg),
-      finish_play_uv: i(reparsed.finish_play_uv),
-      finish_play_ratio: s(reparsed.finish_play_ratio),
     };
     await db
       .update(anchor_minigame_daily)

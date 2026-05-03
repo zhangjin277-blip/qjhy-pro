@@ -7,8 +7,8 @@ import { fetchMinigameLive, parseMinigameRow } from "@/modules/crawler/adapters/
 import type { FetchSimplePayload } from "@/modules/crawler/server";
 
 /**
- * Batch 模式：用 download API 一次拉所有三国主播 × 所有小游戏的数据。
- * scene 当前只 live（download endpoint 包含 live 数据，video 需另外探查）。
+ * Batch 模式：用 JSON 直查 API 一次拉所有三国主播 × 所有小游戏的数据。
+ * scene 当前只 live。
  */
 export async function fetchMinigameHandler(payload: FetchSimplePayload): Promise<void> {
   const { date, basecamp } = payload;
@@ -33,16 +33,11 @@ export async function fetchMinigameHandler(payload: FetchSimplePayload): Promise
   const page = await openDouyinPage(cookies);
 
   try {
-    const csvRows = await fetchMinigameLive(page, date);
-    console.log(`[fetch-minigame] CSV rows=${csvRows.length}`);
-    if (csvRows.length > 0) {
-      console.log(`[fetch-minigame] CSV headers: ${Object.keys(csvRows[0] ?? {}).join(", ")}`);
-      console.log(`[fetch-minigame] First row:`, csvRows[0]);
-    }
+    const rows = await fetchMinigameLive(page, date);
 
     let total = 0;
     let unmatched = 0;
-    for (const r of csvRows) {
+    for (const r of rows) {
       const parsed = parseMinigameRow(r, "live", date);
       const anchorId = parsed._aweme_id ? awemeToAnchor.get(parsed._aweme_id) : null;
       if (!anchorId) {
@@ -56,7 +51,7 @@ export async function fetchMinigameHandler(payload: FetchSimplePayload): Promise
       const dbRow = {
         anchor_id: anchorId,
         ...rowData,
-        // integer 列：round 防 "81.06" 报错
+        // integer 列 round 防小数报错
         acu: i(rowData.acu),
         pcu: i(rowData.pcu),
         live_room_cnt: i(rowData.live_room_cnt),
@@ -68,20 +63,15 @@ export async function fetchMinigameHandler(payload: FetchSimplePayload): Promise
         gm_active_ucnt: i(rowData.gm_active_ucnt),
         gm_pay_ucnt: i(rowData.gm_pay_ucnt),
         cps_bind_uv: i(rowData.cps_bind_uv),
-        play_uv: i(rowData.play_uv),
-        finish_play_uv: i(rowData.finish_play_uv),
-        // bigint 列：CSV 给元值带小数（如 "16.72"），直接 round（精度损失 1 元以内）
-        before_divided_income: i(rowData.before_divided_income),
-        after_divided_author_income: i(rowData.after_divided_author_income),
-        after_divided_trade_union_income: i(rowData.after_divided_trade_union_income),
-        play_cnt: i(rowData.play_cnt),
+        // 金额（numeric 列）：保留 2 位小数，传 string
+        before_divided_income: s(rowData.before_divided_income),
+        after_divided_author_income: s(rowData.after_divided_author_income),
+        after_divided_trade_union_income: s(rowData.after_divided_trade_union_income),
         // numeric 列：转 string
         live_duration: s(rowData.live_duration),
         avg_room_live_duration: s(rowData.avg_room_live_duration),
         avg_user_watch_duration: s(rowData.avg_user_watch_duration),
         watch_duration: s(rowData.watch_duration),
-        play_cnt_avg: s(rowData.play_cnt_avg),
-        finish_play_ratio: s(rowData.finish_play_ratio),
         like_ucnt_ratio: s(rowData.like_ucnt_ratio),
         follow_ucnt_ratio: s(rowData.follow_ucnt_ratio),
         comment_ucnt_ratio: s(rowData.comment_ucnt_ratio),

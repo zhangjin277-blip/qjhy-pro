@@ -34,6 +34,7 @@ const FIELDS = [
   "LikeCountRaw",
   "CommentCountRaw",
   "starGuardEarnScore",
+  "statGuardEnterAccountEarnScore",
   "profitShareRatio",
 ];
 
@@ -46,12 +47,8 @@ export interface AnchorDailyRow {
   live_fan_ticket_no_guest: number | null;
   property_fan_ticket_no_guest: number | null;
   guest_fan_ticket: number | null;
-  activity_fan_ticket_no_guest: number | null;
-  special_fan_ticket: number | null;
   subscribe_fan_ticket: number | null;
   pk_fan_ticket: number | null;
-  link_screen_fan_ticket: number | null;
-  link_screen_room_fan_ticket: number | null;
 
   live_duration_1d: number | null;
   valid_live_duration_1d: number | null;
@@ -69,8 +66,6 @@ export interface AnchorDailyRow {
   video_comment_count: number | null;
 
   current_percent: number | null;
-  game_share_percent: number | null;
-  pay_money_connect_share_percent: number | null;
   profit_share_ratio: number | null;
 
   broker_snapshot: string | null;
@@ -80,7 +75,6 @@ export interface AnchorDailyRow {
 
   anchor_info: string | null;
   star_guard_earn_score: number | null;
-  total_ticket_outside_link: number | null;
   stat_guard_enter_account_earn_score: number | null;
 
   raw: Record<string, unknown>;
@@ -138,12 +132,8 @@ function mapOne(r: Record<string, string>, date: string): AnchorDailyRow {
     live_fan_ticket_no_guest: parseChineseNumber(get("礼物音浪")),
     property_fan_ticket_no_guest: parseChineseNumber(get("道具音浪")),
     guest_fan_ticket: parseChineseNumber(get("嘉宾音浪")),
-    activity_fan_ticket_no_guest: parseChineseNumber(get("活动音浪")),
-    special_fan_ticket: parseChineseNumber(get("其他音浪")),
     subscribe_fan_ticket: parseChineseNumber(get("会员订阅音浪")),
     pk_fan_ticket: null, // 不在导出 CSV 里
-    link_screen_fan_ticket: null,
-    link_screen_room_fan_ticket: null,
 
     live_duration_1d: parseDuration(get("开播总时长")),
     valid_live_duration_1d: parseDuration(get("开播有效时长")),
@@ -161,8 +151,6 @@ function mapOne(r: Record<string, string>, date: string): AnchorDailyRow {
     video_comment_count: parseChineseNumber(get("视频评论量")),
 
     current_percent: parsePercentOrNum(get("分成比-直播音浪收益")),
-    game_share_percent: null,
-    pay_money_connect_share_percent: null,
     profit_share_ratio: parsePercent(get("会员收益比例")),
 
     broker_snapshot: get("运营经纪人", "经纪人"),
@@ -172,8 +160,7 @@ function mapOne(r: Record<string, string>, date: string): AnchorDailyRow {
 
     anchor_info: get("主播标签"),
     star_guard_earn_score: parseChineseNumber(get("星守护音浪")),
-    total_ticket_outside_link: null,
-    stat_guard_enter_account_earn_score: null,
+    stat_guard_enter_account_earn_score: parseChineseNumber(get("星守护入账音浪")),
 
     raw: r as Record<string, unknown>,
   };

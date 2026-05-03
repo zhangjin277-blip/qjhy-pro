@@ -14,8 +14,6 @@ export interface AnchorProfileRow {
   hotsoon_short_id: string | null;
   last_live_time: number | null;
   anchor_health_score: number | null;
-  anchor_sign_type: number | null;
-  anchor_sign_out: number | null;
   signing_time: number | null;
   sign_start_time: number | null;
   sign_end_time: number | null;
@@ -23,7 +21,6 @@ export interface AnchorProfileRow {
   auto_renewal: boolean | null;
   join_time: number | null;
   first_live_time_in_faction: number | null;
-  leave_time: number | null;
   wait_for_leave: boolean | null;
   have_operate_relation: boolean | null;
   have_recruit_relation: boolean | null;
@@ -128,8 +125,6 @@ function mapOne(r: Record<string, unknown>): AnchorProfileRow {
     last_live_time: numOrNull(r.last_live_time),
     anchor_health_score: numOrNull(baseInfo.anchor_health_score),
 
-    anchor_sign_type: numOrNull(r.anchor_sign_type),
-    anchor_sign_out: numOrNull(r.anchor_sign_out),
     signing_time: numOrNull(signing.signing_time),
     sign_start_time: numOrNull(factionInfo.sign_start_time),
     sign_end_time: numOrNull(factionInfo.sign_end_time),
@@ -137,7 +132,6 @@ function mapOne(r: Record<string, unknown>): AnchorProfileRow {
     auto_renewal: boolOrNull(factionInfo.auto_renewal),
     join_time: numOrNull(factionInfo.join_time),
     first_live_time_in_faction: numOrNull(factionInfo.first_live_time_in_faction),
-    leave_time: numOrNull(factionInfo.leave_time),
     wait_for_leave: boolOrNull(factionInfo.wait_for_leave),
     have_operate_relation: boolOrNull(r.have_operate_relation),
     have_recruit_relation: boolOrNull(r.have_recruit_relation),

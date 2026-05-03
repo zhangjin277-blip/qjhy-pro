@@ -32,11 +32,6 @@ export async function fetchDailyHandler(payload: FetchSimplePayload): Promise<vo
         feed_watch_duration_1d:
           row.feed_watch_duration_1d != null ? String(row.feed_watch_duration_1d) : null,
         current_percent: row.current_percent != null ? String(row.current_percent) : null,
-        game_share_percent: row.game_share_percent != null ? String(row.game_share_percent) : null,
-        pay_money_connect_share_percent:
-          row.pay_money_connect_share_percent != null
-            ? String(row.pay_money_connect_share_percent)
-            : null,
         profit_share_ratio: row.profit_share_ratio != null ? String(row.profit_share_ratio) : null,
         synced_at: new Date(),
       };

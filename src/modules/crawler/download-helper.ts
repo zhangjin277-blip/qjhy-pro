@@ -238,6 +238,41 @@ export async function checkDataReady(
   return { ready: total > 0, detail: `totalFanTicket=${total}` };
 }
 
+/**
+ * 直查 pugna_component JSON 端点（不走 download/CSV）。
+ * 平台返回结构：
+ *   { status_code: 0, data: { data_string: "{\"data\": {\"series\": [...], \"total\": N}}" } }
+ *
+ * 比 download 模式快 100×（0.7s vs 60s+），且字段更全（CSV 仅平台预设导出列；
+ * JSON 直接返回 schema 全字段）。
+ *
+ * 已知 endpoint:
+ *   - /ark/api/data/pugna_component/data/simple/faction/micro_game/live_anchor_list
+ *   - /ark/api/data/pugna_component/data/v2/faction/game/game_anchor_detail_list
+ */
+export async function pugnaJsonFetch(
+  page: Page,
+  apiPath: string,
+  params: Record<string, string | number | string[]>,
+): Promise<{ series: Record<string, unknown>[]; total: number }> {
+  const qs = buildQueryString(params);
+  const url = `${BASE}${apiPath}?${qs}`;
+  interface Resp {
+    status_code: number;
+    message?: string;
+    data?: { data_string?: string };
+  }
+  const res = await pageFetch<Resp>(page, url, {
+    headers: { "x-appid": "3000", "x-appid-gray": "1", "x-language": "zh" },
+  });
+  if (res.status_code !== 0 || !res.data?.data_string) {
+    throw new Error(`pugna json failed: status=${res.status_code} msg=${res.message ?? ""}`);
+  }
+  const inner = safeParseJson(res.data.data_string);
+  const data = (inner?.data as { series?: Record<string, unknown>[]; total?: number }) ?? {};
+  return { series: data.series ?? [], total: data.total ?? 0 };
+}
+
 function safeParseJson(s: string): Record<string, unknown> | null {
   try {
     return JSON.parse(s) as Record<string, unknown>;

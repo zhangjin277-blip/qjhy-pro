@@ -125,8 +125,6 @@ export async function listAnchors(
       // 签约/经纪人
       broker_name: anchor_profile.broker_name,
       recruit_broker_name: anchor_profile.recruit_broker_name,
-      anchor_sign_type: anchor_profile.anchor_sign_type,
-      anchor_sign_out: anchor_profile.anchor_sign_out,
       signing_time: anchor_profile.signing_time,
       sign_start_time: anchor_profile.sign_start_time,
       sign_end_time: anchor_profile.sign_end_time,
@@ -134,7 +132,6 @@ export async function listAnchors(
       auto_renewal: anchor_profile.auto_renewal,
       join_time: anchor_profile.join_time,
       first_live_time_in_faction: anchor_profile.first_live_time_in_faction,
-      leave_time: anchor_profile.leave_time,
       wait_for_leave: anchor_profile.wait_for_leave,
       income_percent: anchor_profile.income_percent,
 
@@ -143,15 +140,10 @@ export async function listAnchors(
       live_fan_ticket_no_guest: sql<string>`COALESCE(SUM(${anchor_daily.live_fan_ticket_no_guest}), 0)`,
       property_fan_ticket_no_guest: sql<string>`COALESCE(SUM(${anchor_daily.property_fan_ticket_no_guest}), 0)`,
       guest_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.guest_fan_ticket}), 0)`,
-      activity_fan_ticket_no_guest: sql<string>`COALESCE(SUM(${anchor_daily.activity_fan_ticket_no_guest}), 0)`,
-      special_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.special_fan_ticket}), 0)`,
       subscribe_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.subscribe_fan_ticket}), 0)`,
       pk_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.pk_fan_ticket}), 0)`,
-      link_screen_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.link_screen_fan_ticket}), 0)`,
-      link_screen_room_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.link_screen_room_fan_ticket}), 0)`,
       star_guard_earn_score: sql<string>`COALESCE(SUM(${anchor_daily.star_guard_earn_score}), 0)`,
       stat_guard_enter_account_earn_score: sql<string>`COALESCE(SUM(${anchor_daily.stat_guard_enter_account_earn_score}), 0)`,
-      total_ticket_outside_link: sql<string>`COALESCE(SUM(${anchor_daily.total_ticket_outside_link}), 0)`,
 
       // 时长/天数
       live_duration: sql<string>`COALESCE(SUM(${anchor_daily.live_duration_1d}), 0)`,
@@ -166,8 +158,6 @@ export async function listAnchors(
       peak_per_minute_ucnt: sql<number>`COALESCE(MAX(${anchor_daily.peak_per_minute_ucnt}), 0)`,
       feed_acu: sql<number>`COALESCE(MAX(${anchor_daily.feed_acu}), 0)`,
       current_percent: sql<string>`COALESCE(MAX(${anchor_daily.current_percent}), 0)`,
-      game_share_percent: sql<string>`COALESCE(MAX(${anchor_daily.game_share_percent}), 0)`,
-      pay_money_connect_share_percent: sql<string>`COALESCE(MAX(${anchor_daily.pay_money_connect_share_percent}), 0)`,
       profit_share_ratio: sql<string>`COALESCE(MAX(${anchor_daily.profit_share_ratio}), 0)`,
 
       // 视频统计
@@ -205,8 +195,6 @@ export async function listAnchors(
       anchor_profile.last_live_time,
       anchor_profile.broker_name,
       anchor_profile.recruit_broker_name,
-      anchor_profile.anchor_sign_type,
-      anchor_profile.anchor_sign_out,
       anchor_profile.signing_time,
       anchor_profile.sign_start_time,
       anchor_profile.sign_end_time,
@@ -214,7 +202,6 @@ export async function listAnchors(
       anchor_profile.auto_renewal,
       anchor_profile.join_time,
       anchor_profile.first_live_time_in_faction,
-      anchor_profile.leave_time,
       anchor_profile.wait_for_leave,
       anchor_profile.income_percent,
     )
@@ -378,10 +365,6 @@ export async function listAnchors(
       mg_anchor_income: sql<number>`SUM(${anchor_minigame_daily.after_divided_author_income})`,
       mg_union_income: sql<number>`SUM(${anchor_minigame_daily.after_divided_trade_union_income})`,
       mg_cps_bind: sql<number>`SUM(${anchor_minigame_daily.cps_bind_uv})`,
-      mg_play_cnt: sql<number>`SUM(${anchor_minigame_daily.play_cnt})`,
-      mg_play_uv: sql<number>`SUM(${anchor_minigame_daily.play_uv})`,
-      mg_finish_play_uv: sql<number>`SUM(${anchor_minigame_daily.finish_play_uv})`,
-      mg_finish_play_ratio: sql<string>`COALESCE(AVG(${anchor_minigame_daily.finish_play_ratio}), 0)`,
     })
     .from(anchor_minigame_daily)
     .where(
@@ -432,8 +415,6 @@ export async function listAnchors(
       // 签约
       broker_name: r.broker_name,
       recruit_broker_name: r.recruit_broker_name,
-      anchor_sign_type: r.anchor_sign_type,
-      anchor_sign_out: r.anchor_sign_out,
       signing_time: r.signing_time,
       sign_start_time: r.sign_start_time,
       sign_end_time: r.sign_end_time,
@@ -441,7 +422,6 @@ export async function listAnchors(
       auto_renewal: r.auto_renewal,
       join_time: r.join_time,
       first_live_time_in_faction: r.first_live_time_in_faction,
-      leave_time: r.leave_time,
       wait_for_leave: r.wait_for_leave,
       income_percent: num(r.income_percent),
 
@@ -450,15 +430,10 @@ export async function listAnchors(
       live_fan_ticket_no_guest: num(r.live_fan_ticket_no_guest),
       property_fan_ticket_no_guest: num(r.property_fan_ticket_no_guest),
       guest_fan_ticket: num(r.guest_fan_ticket),
-      activity_fan_ticket_no_guest: num(r.activity_fan_ticket_no_guest),
-      special_fan_ticket: num(r.special_fan_ticket),
       subscribe_fan_ticket: num(r.subscribe_fan_ticket),
       pk_fan_ticket: num(r.pk_fan_ticket),
-      link_screen_fan_ticket: num(r.link_screen_fan_ticket),
-      link_screen_room_fan_ticket: num(r.link_screen_room_fan_ticket),
       star_guard_earn_score: num(r.star_guard_earn_score),
       stat_guard_enter_account_earn_score: num(r.stat_guard_enter_account_earn_score),
-      total_ticket_outside_link: num(r.total_ticket_outside_link),
 
       // 时长
       live_duration: num(r.live_duration),
@@ -473,8 +448,6 @@ export async function listAnchors(
       peak_per_minute_ucnt: num(r.peak_per_minute_ucnt),
       feed_acu: num(r.feed_acu),
       current_percent: num(r.current_percent),
-      game_share_percent: num(r.game_share_percent),
-      pay_money_connect_share_percent: num(r.pay_money_connect_share_percent),
       profit_share_ratio: num(r.profit_share_ratio),
 
       // 视频
@@ -530,6 +503,21 @@ export async function listAnchors(
       g_anchor_active_pay: ga ? num(ga.g_anchor_active_pay) : null,
       g_faction_active_pay: ga ? num(ga.g_faction_active_pay) : null,
 
+      // 计算字段：促活流水 = (主播+机构 active_pay) / 0.4；当日流水 = 促活流水 + 下载充值流水
+      g_promote_active_amount: (() => {
+        const a = ga ? num(ga.g_anchor_active_pay) : null;
+        const f = ga ? num(ga.g_faction_active_pay) : null;
+        if (a === null && f === null) return null;
+        return ((a ?? 0) + (f ?? 0)) / 0.4;
+      })(),
+      g_total_amount: (() => {
+        const a = ga ? num(ga.g_anchor_active_pay) : null;
+        const f = ga ? num(ga.g_faction_active_pay) : null;
+        const d = ga ? num(ga.g_download_pay_amount) : null;
+        if (a === null && f === null && d === null) return null;
+        return ((a ?? 0) + (f ?? 0)) / 0.4 + (d ?? 0);
+      })(),
+
       // video cps（短视频流水分成）
       v_publish_cnt: vc ? num(vc.v_publish_cnt) : null,
       v_vv: vc ? num(vc.v_vv) : null,
@@ -562,6 +550,36 @@ export async function listAnchors(
       v_anchor_active_pay: va ? num(va.v_anchor_active_pay) : null,
       v_faction_active_pay: va ? num(va.v_faction_active_pay) : null,
 
+      // 计算字段：短视频促活流水 = (创作者+机构 active_pay) / 0.4；短视频当日流水 = 促活流水 + 下载充值流水
+      v_promote_active_amount: (() => {
+        const a = va ? num(va.v_anchor_active_pay) : null;
+        const f = va ? num(va.v_faction_active_pay) : null;
+        if (a === null && f === null) return null;
+        return ((a ?? 0) + (f ?? 0)) / 0.4;
+      })(),
+      v_total_amount: (() => {
+        const a = va ? num(va.v_anchor_active_pay) : null;
+        const f = va ? num(va.v_faction_active_pay) : null;
+        const d = va ? num(va.v_download_pay_amount) : null;
+        if (a === null && f === null && d === null) return null;
+        return ((a ?? 0) + (f ?? 0)) / 0.4 + (d ?? 0);
+      })(),
+
+      // 小手柄流水（计算字段）= 直播当日流水 + 短视频当日流水
+      controller_total_amount: (() => {
+        const gA = ga ? num(ga.g_anchor_active_pay) : null;
+        const gF = ga ? num(ga.g_faction_active_pay) : null;
+        const gD = ga ? num(ga.g_download_pay_amount) : null;
+        const vA = va ? num(va.v_anchor_active_pay) : null;
+        const vF = va ? num(va.v_faction_active_pay) : null;
+        const vD = va ? num(va.v_download_pay_amount) : null;
+        if (gA === null && gF === null && gD === null && vA === null && vF === null && vD === null)
+          return null;
+        const gTotal = ((gA ?? 0) + (gF ?? 0)) / 0.4 + (gD ?? 0);
+        const vTotal = ((vA ?? 0) + (vF ?? 0)) / 0.4 + (vD ?? 0);
+        return gTotal + vTotal;
+      })(),
+
       // minigame
       mg_room_cnt: mg ? num(mg.mg_room_cnt) : null,
       mg_duration: mg ? num(mg.mg_duration) : null,
@@ -584,10 +602,6 @@ export async function listAnchors(
       mg_anchor_income: mg ? num(mg.mg_anchor_income) : null,
       mg_union_income: mg ? num(mg.mg_union_income) : null,
       mg_cps_bind: mg ? num(mg.mg_cps_bind) : null,
-      mg_play_cnt: mg ? num(mg.mg_play_cnt) : null,
-      mg_play_uv: mg ? num(mg.mg_play_uv) : null,
-      mg_finish_play_uv: mg ? num(mg.mg_finish_play_uv) : null,
-      mg_finish_play_ratio: mg ? num(mg.mg_finish_play_ratio) : null,
 
       // 旧兼容字段
       minigame_income: mg ? numOrNull(mg.mg_anchor_income) : null,

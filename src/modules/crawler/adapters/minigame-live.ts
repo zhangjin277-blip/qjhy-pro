@@ -1,18 +1,16 @@
 import "server-only";
 import type { Page } from "puppeteer-core";
-import { runExport, type DownloadTask } from "../download-helper";
+import { pugnaJsonFetch } from "../download-helper";
 
 /**
- * 小游戏数据（download 模式）。
+ * 小游戏数据（JSON 模式 — pugna_component/data/simple/faction/micro_game/live_anchor_list）。
  * cid: cnt6sd3c77u3h6jjtt40
- * scene: tinker_cnomtkrc77u66b1th8vg
- * filename: 小游戏数据-主播详情数据
  *
- * 这个 endpoint 一次返回所有主播 × 所有小游戏的数据。video scene 暂只复用此接口（如不区分），
- * 后续如有专属 video creator endpoint 再扩。
+ * 这个 endpoint 一次返所有主播 × 所有小游戏的数据。比 CSV download 快 100×，
+ * 字段更全（含 beforeDividedIncome / gmUndividedIncome 等 CSV 没有的字段）。
  */
 
-const ENDPOINT = "/ark/api/data/download/common/task";
+const ENDPOINT = "/ark/api/data/pugna_component/data/simple/faction/micro_game/live_anchor_list";
 
 const FIELDS = [
   "anchorNickname",
@@ -38,6 +36,7 @@ const FIELDS = [
   "cpsBindUv",
   "afterDividedAuthorIncome",
   "afterDividedTradeUnionIncome",
+  "beforeDividedIncome", // CSV 拿不到
 ];
 
 export type MinigameScene = "live" | "video";
@@ -74,123 +73,95 @@ export interface MinigameRow {
   after_divided_trade_union_income: number | null;
   cps_bind_uv: number | null;
 
-  play_cnt: number | null;
-  play_uv: number | null;
-  play_cnt_avg: number | null;
-  finish_play_uv: number | null;
-  finish_play_ratio: number | null;
-
   raw: Record<string, unknown>;
 }
 
 export async function fetchMinigameLive(
   page: Page,
   date: string,
-): Promise<Record<string, string>[]> {
-  const task: DownloadTask = {
-    endpoint: ENDPOINT,
-    filename: "小游戏数据-主播详情数据",
-    params: {
-      os: "all",
-      trafficType: "all",
-      beginDate: date,
-      endDate: date,
-      page: 1,
-      size: 10,
-      orderField: "watchUcnt",
-      orderType: "desc",
-      fields: FIELDS,
-      cid: "cnt6sd3c77u3h6jjtt40",
-      anchorID: "",
-      scene: "tinker_cnomtkrc77u66b1th8vg",
-    },
-  };
-  return runExport(page, task);
+): Promise<Record<string, unknown>[]> {
+  const { series, total } = await pugnaJsonFetch(page, ENDPOINT, {
+    beginDate: date,
+    endDate: date,
+    os: "all",
+    trafficType: "all",
+    page: 1,
+    size: 2000,
+    orderField: "watchUcnt",
+    orderType: "desc",
+    fields: FIELDS,
+    cid: "cnt6sd3c77u3h6jjtt40",
+    anchorID: "",
+  });
+  console.log(`[minigame-live] ${series.length}/${total} rows`);
+  return series;
 }
 
 export function parseMinigameRow(
-  r: Record<string, string>,
+  r: Record<string, unknown>,
   scene: MinigameScene,
   date: string,
 ): Omit<MinigameRow, "anchor_id"> & { _aweme_id: string | null } {
-  const get = (...keys: string[]): string | null => {
-    for (const k of keys) {
-      const v = r[k];
-      if (v !== undefined && v !== "") return v;
-    }
-    const headerKeys = Object.keys(r);
-    for (const k of keys) {
-      const found = headerKeys.find((h) => h.includes(k));
-      if (found) {
-        const v = r[found];
-        if (v !== undefined && v !== "") return v;
-      }
-    }
-    return null;
+  const get = (key: string): string | null => {
+    const v = r[key];
+    if (v === null || v === undefined || v === "") return null;
+    return typeof v === "string" ? v : String(v);
   };
 
   return {
-    _aweme_id: get("抖音号", "awemeID"),
+    _aweme_id: get("shortID") ?? get("awemeID"),
     date,
     scene,
-    mp_name: get("小游戏名称", "游戏名称") ?? "",
-    anchor_name_snapshot: get("主播昵称", "昵称", "anchorNickname"),
+    mp_name: get("mpName") ?? "",
+    anchor_name_snapshot: get("anchorNickname"),
 
-    live_room_cnt: numOrNull(get("小游戏开播场次", "开播场次", "投稿数")),
-    // minigame CSV 时长字段是纯数字（无"小时/分钟"后缀），按字面值存
-    live_duration: numOrNull(get("小游戏开播时长", "开播时长")),
-    avg_room_live_duration: numOrNull(get("场均小游戏开播时长", "场均开播时长")),
-    avg_user_watch_duration: numOrNull(get("人均小游戏看播时长", "人均观看时长")),
-    watch_ucnt: numOrNull(get("看播人数", "小游戏看播人数")),
-    watch_duration: numOrNull(get("小游戏看播时长", "看播时长")),
-    acu: numOrNull(get("ACU", "平均在线")),
-    pcu: numOrNull(get("PCU", "最高在线")),
+    // duration 单位混合：total 字段（liveDuration / watchDuration）API 直接返小时；
+    // avg 字段（avgRoomLiveDuration / avgUserWatchDuration）API 返分钟需 /60。
+    live_room_cnt: numOrNull(get("liveRoomCnt")),
+    live_duration: numOrNull(get("liveDuration")),
+    avg_room_live_duration: minToHour(numOrNull(get("avgRoomLiveDuration"))),
+    avg_user_watch_duration: minToHour(numOrNull(get("avgUserWatchDuration"))),
+    watch_ucnt: numOrNull(get("watchUcnt")),
+    watch_duration: numOrNull(get("watchDuration")),
+    acu: numOrNull(get("acu")),
+    pcu: numOrNull(get("pcu")),
 
-    like_ucnt: numOrNull(get("点赞人数")),
-    follow_ucnt: numOrNull(get("涨粉数", "关注人数")),
-    comment_ucnt: numOrNull(get("评论人数")),
-    like_ucnt_ratio: pctOrNull(get("点赞率")),
-    follow_ucnt_ratio: pctOrNull(get("关注率")),
-    comment_ucnt_ratio: pctOrNull(get("评论率")),
+    like_ucnt: numOrNull(get("likeUcnt")),
+    follow_ucnt: numOrNull(get("followUcnt")),
+    comment_ucnt: numOrNull(get("commentUcnt")),
+    like_ucnt_ratio: pctOrNull(get("likeUcntRatio")),
+    follow_ucnt_ratio: pctOrNull(get("followUcntRatio")),
+    comment_ucnt_ratio: pctOrNull(get("commentUcntRatio")),
 
-    gm_click_ucnt: numOrNull(get("小游戏点击人数", "点击人数")),
-    gm_active_ucnt: numOrNull(get("小游戏活跃用户数", "小游戏激活人数", "激活人数")),
-    gm_pay_ucnt: numOrNull(get("小游戏内购付费用户数", "小游戏付费人数", "付费人数")),
+    gm_click_ucnt: numOrNull(get("gmClickUcnt")),
+    gm_active_ucnt: numOrNull(get("gmActiveUcnt")),
+    gm_pay_ucnt: numOrNull(get("gmPayUcnt")),
 
-    before_divided_income: numOrNull(get("直播-小游戏流水(分成前)", "分成前流水", "小游戏流水")),
-    after_divided_author_income: numOrNull(
-      get("直播-小游戏收入主播分成(分成后)", "主播分成", "主播分账"),
-    ),
-    after_divided_trade_union_income: numOrNull(
-      get("直播-小游戏收入公会分成(分成后)", "公会分成", "机构分账"),
-    ),
-    cps_bind_uv: numOrNull(get("小游戏cps绑定人数", "cps绑定人数", "cps绑定UV")),
+    before_divided_income: numOrNull(get("beforeDividedIncome")),
+    after_divided_author_income: numOrNull(get("afterDividedAuthorIncome")),
+    after_divided_trade_union_income: numOrNull(get("afterDividedTradeUnionIncome")),
+    cps_bind_uv: numOrNull(get("cpsBindUv")),
 
-    play_cnt: numOrNull(get("视频播放数")),
-    play_uv: numOrNull(get("视频播放人数")),
-    play_cnt_avg: numOrNull(get("人均视频播放数")),
-    finish_play_uv: numOrNull(get("完播人数")),
-    finish_play_ratio: pctOrNull(get("完播率")),
-
-    raw: r as Record<string, unknown>,
+    raw: r,
   };
 }
 
+function minToHour(v: number | null): number | null {
+  if (v === null) return null;
+  return Math.round((v / 60) * 100) / 100;
+}
+
 function numOrNull(v: string | null): number | null {
-  if (v === null || v === "") return null;
+  if (v === null || v === "" || v === "-" || v === "—") return null;
   const cleaned = v.replace(/,/g, "").trim();
-  if (cleaned === "" || cleaned === "-" || cleaned === "—") return null;
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
 }
 
 function pctOrNull(v: string | null): number | null {
-  if (v === null || v === "") return null;
-  if (v.endsWith("%")) {
-    const n = Number(v.slice(0, -1));
-    return Number.isFinite(n) ? n / 100 : null;
-  }
-  const n = Number(v);
+  if (v === null || v === "" || v === "-" || v === "—") return null;
+  const cleaned = v.replace(/%/g, "").trim();
+  const n = Number(cleaned);
   if (!Number.isFinite(n)) return null;
   return n > 1 ? n / 100 : n;
 }
