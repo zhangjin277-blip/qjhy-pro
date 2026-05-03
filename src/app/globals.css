@@ -70,6 +70,10 @@
   --color-sidebar: var(--sidebar);
   --color-sidebar-leaf-foreground: var(--sidebar-leaf-foreground);
   --color-sidebar-leaf-disabled-foreground: var(--sidebar-leaf-disabled-foreground);
+  /* 涨跌色：暴露给 Tailwind utility (text-change-up / bg-change-up / etc.) */
+  --color-change-up: var(--change-up);
+  --color-change-down: var(--change-down);
+  --color-change-flat: var(--change-flat);
 }
 
 /* ========== Semantic (light) ========== */

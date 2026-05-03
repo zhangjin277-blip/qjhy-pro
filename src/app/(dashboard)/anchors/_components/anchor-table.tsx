@@ -14,6 +14,7 @@ import { Filters } from "./filters";
 import { CsvExportButton } from "./csv-export";
 import { ColumnCustomizer } from "./column-customizer";
 import { Button } from "@/components/ui/button";
+import type { UserColumnPreset } from "@/modules/column-presets";
 import {
   Select,
   SelectContent,
@@ -62,6 +63,9 @@ export function AnchorTable(): React.JSX.Element {
     project: "all",
   });
   const [rows, setRows] = useState<AnchorListRow[]>([]);
+  const [previousRows, setPreviousRows] = useState<AnchorListRow[]>([]);
+  const [periodDays, setPeriodDays] = useState(1);
+  const [showCompare, setShowCompare] = useState(true);
   const [loading, setLoading] = useState(false);
   const [sortKey, setSortKey] = useState<ColKey>("total_fan_ticket");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -71,6 +75,58 @@ export function AnchorTable(): React.JSX.Element {
   const [activePreset, setActivePreset] = useState<PresetId>(DEFAULT_PRESET);
   const [visibleKeys, setVisibleKeys] = useState<ColKey[]>(() => getInitialColumns(DEFAULT_PRESET));
   const [customizerOpen, setCustomizerOpen] = useState(false);
+
+  // 用户自定义预设（持久化到 DB，跨设备同步）
+  const [userPresets, setUserPresets] = useState<UserColumnPreset[]>([]);
+  // 激活预设 key：系统预设 "sys:ddz" / 用户预设 "user:123"
+  const [activeUserPresetId, setActiveUserPresetId] = useState<number | null>(null);
+
+  // 首次加载用户预设
+  useEffect(() => {
+    fetch("/api/column-presets")
+      .then((r) => r.json() as Promise<{ presets: UserColumnPreset[] }>)
+      .then((d) => setUserPresets(d.presets ?? []))
+      .catch(() => setUserPresets([]));
+  }, []);
+
+  async function saveAsNewPreset(): Promise<void> {
+    const name = window.prompt("预设名称（最长 40 字）");
+    if (!name || !name.trim()) return;
+    const res = await fetch("/api/column-presets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), columns: visibleKeys }),
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: string };
+      window.alert(err.error === "NAME_EXISTS" ? "已有同名预设" : "保存失败");
+      return;
+    }
+    const { preset } = (await res.json()) as { preset: UserColumnPreset };
+    setUserPresets((arr) => [...arr, preset]);
+    setActiveUserPresetId(preset.id);
+    setActivePreset("custom");
+  }
+
+  async function deleteUserPreset(id: number, name: string): Promise<void> {
+    if (!window.confirm(`删除预设「${name}」？`)) return;
+    const res = await fetch(`/api/column-presets/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      window.alert("删除失败");
+      return;
+    }
+    setUserPresets((arr) => arr.filter((p) => p.id !== id));
+    if (activeUserPresetId === id) {
+      setActiveUserPresetId(null);
+      applyPreset(DEFAULT_PRESET);
+    }
+  }
+
+  function applyUserPreset(p: UserColumnPreset): void {
+    setActiveUserPresetId(p.id);
+    setActivePreset("custom");
+    setVisibleKeys(p.columns as ColKey[]);
+  }
 
   // 永远在最前渲染 pinned 列（主播信息），不能在 customizer 取消/排序
   const visibleColumns = useMemo(
@@ -86,13 +142,29 @@ export function AnchorTable(): React.JSX.Element {
     if (filters.search) sp.set("search", filters.search);
     setLoading(true);
     fetch(`/api/anchors?${sp.toString()}`)
-      .then((r) => r.json() as Promise<{ rows: AnchorListRow[] }>)
+      .then(
+        (r) =>
+          r.json() as Promise<{
+            rows: AnchorListRow[];
+            previousRows: AnchorListRow[];
+            days: number;
+          }>,
+      )
       .then((d) => {
         setRows(d.rows);
+        setPreviousRows(d.previousRows ?? []);
+        setPeriodDays(d.days ?? 1);
         setPage(1);
       })
       .finally(() => setLoading(false));
   }, [filters]);
+
+  // 前一周期数据按 anchor_id 索引
+  const prevByAnchorId = useMemo(() => {
+    const m = new Map<string, AnchorListRow>();
+    for (const r of previousRows) m.set(r.anchor_id, r);
+    return m;
+  }, [previousRows]);
 
   const sortedRows = useMemo(() => {
     const copy = [...rows];
@@ -135,6 +207,14 @@ export function AnchorTable(): React.JSX.Element {
       setCustomizerOpen(true);
       return;
     }
+    // 同步项目筛选：斗地主/三国预设自动切到对应项目，公会/全部默认不限项目
+    const projectByPreset: Record<Exclude<PresetId, "custom">, "all" | "ddz" | "three"> = {
+      ddz: "ddz",
+      three: "three",
+      guild: "all",
+      all: "all",
+    };
+    setFilters((f) => ({ ...f, project: projectByPreset[presetId] }));
     const saved = loadSavedColumns(presetId);
     if (saved) {
       setVisibleKeys(saved);
@@ -150,14 +230,24 @@ export function AnchorTable(): React.JSX.Element {
   }
 
   const isRange = filters.date_from !== filters.date_to;
-  const totalRow = rows.reduce(
-    (acc, r) => ({
-      ticket: acc.ticket + (r.total_fan_ticket ?? 0),
-      duration: acc.duration + (r.live_duration ?? 0),
-      fans: acc.fans + (r.new_follow_fans ?? 0),
-    }),
-    { ticket: 0, duration: 0, fans: 0 },
-  );
+
+  // KPI 卡片（按 preset 决定指标集；当前 ddz 用以下 6 项）
+  const kpiMetrics: { key: keyof AnchorListRow; label: string; fmt: "number" }[] = [
+    { key: "total_fan_ticket", label: "总音浪", fmt: "number" },
+    { key: "controller_total_amount", label: "小手柄流水", fmt: "number" },
+    { key: "g_total_amount", label: "直播流水", fmt: "number" },
+    { key: "v_total_amount", label: "短视频流水", fmt: "number" },
+    { key: "show_uv", label: "曝光人数", fmt: "number" },
+    { key: "g_watch_ucnt", label: "游戏直播看播人数", fmt: "number" },
+  ];
+  function sumKey(rs: AnchorListRow[], key: keyof AnchorListRow): number {
+    return rs.reduce((acc, r) => acc + (Number(r[key] ?? 0) || 0), 0);
+  }
+  const kpiData = kpiMetrics.map((m) => ({
+    ...m,
+    cur: sumKey(rows, m.key),
+    prev: sumKey(previousRows, m.key),
+  }));
 
   return (
     <div className="space-y-3">
@@ -165,6 +255,15 @@ export function AnchorTable(): React.JSX.Element {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Filters filters={filters} onChange={setFilters} />
         <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showCompare}
+              onChange={(e) => setShowCompare(e.target.checked)}
+              className="size-3.5 accent-primary cursor-pointer"
+            />
+            显示同比
+          </label>
           <CsvExportButton rows={sortedRows} visibleColumns={visibleColumns} />
           <Button
             size="sm"
@@ -175,19 +274,25 @@ export function AnchorTable(): React.JSX.Element {
             <Settings2 className="h-3.5 w-3.5" />
             自定义列
           </Button>
+          <Button size="sm" variant="outline" onClick={saveAsNewPreset}>
+            保存预设
+          </Button>
         </div>
       </div>
 
       {/* 产品预设 chips */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-muted-foreground text-xs mr-1">预设:</span>
-        {PRESETS.map((p) => (
+        {PRESETS.filter((p) => p.id !== "custom").map((p) => (
           <button
             key={p.id}
-            onClick={() => applyPreset(p.id)}
+            onClick={() => {
+              setActiveUserPresetId(null);
+              applyPreset(p.id);
+            }}
             className={cn(
               "px-2.5 py-0.5 rounded-full text-xs border transition-colors",
-              activePreset === p.id
+              activePreset === p.id && activeUserPresetId === null
                 ? "bg-primary text-primary-foreground border-primary"
                 : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
             )}
@@ -195,10 +300,67 @@ export function AnchorTable(): React.JSX.Element {
             {p.label}
           </button>
         ))}
+
+        {/* 用户自定义预设 */}
+        {userPresets.length > 0 && <span className="text-muted-foreground text-xs mx-1">|</span>}
+        {userPresets.map((p) => (
+          <span key={p.id} className="inline-flex items-center group">
+            <button
+              onClick={() => applyUserPreset(p)}
+              className={cn(
+                "pl-2.5 pr-1.5 py-0.5 rounded-l-full text-xs border border-r-0 transition-colors",
+                activeUserPresetId === p.id
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
+              )}
+            >
+              {p.name}
+            </button>
+            <button
+              onClick={() => deleteUserPreset(p.id, p.name)}
+              className={cn(
+                "px-1.5 py-0.5 rounded-r-full text-xs border transition-colors",
+                activeUserPresetId === p.id
+                  ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
+                  : "border-border text-muted-foreground hover:border-change-up/60 hover:text-change-up",
+              )}
+              title="删除预设"
+            >
+              ×
+            </button>
+          </span>
+        ))}
       </div>
 
-      {/* 摘要行 */}
-      <div className="text-muted-foreground flex flex-wrap gap-x-6 gap-y-1 text-sm tabular-nums">
+      {/* KPI 卡片 */}
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        {kpiData.map((m) => {
+          const compare = formatCompare(m.cur, m.prev, periodDays);
+          return (
+            <div key={m.key} className="bg-card rounded-lg border border-border px-4 py-3">
+              <div className="text-muted-foreground text-xs">{m.label}</div>
+              <div className="kpi-value mt-1">{formatChineseNumber(m.cur)}</div>
+              {compare && (
+                <div className="text-muted-foreground mt-1 text-xs">
+                  <span className="text-muted-foreground/70">{compare.text.split(" ")[0]}</span>
+                  <span
+                    className={cn(
+                      "ml-1",
+                      compare.kind === "up" && "text-change-up",
+                      compare.kind === "down" && "text-change-down",
+                    )}
+                  >
+                    {compare.text.split(" ").slice(1).join(" ")}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 摘要小字 */}
+      <div className="text-muted-foreground flex flex-wrap gap-x-6 gap-y-1 text-xs tabular-nums">
         <span>
           范围 <strong className="text-foreground">{filters.date_from}</strong>
           {isRange && (
@@ -212,17 +374,6 @@ export function AnchorTable(): React.JSX.Element {
           主播 <strong className="text-foreground">{rows.length}</strong>
         </span>
         <span>
-          总音浪{" "}
-          <strong className="text-foreground">{totalRow.ticket.toLocaleString("zh-CN")}</strong>
-        </span>
-        <span>
-          总时长 <strong className="text-foreground">{totalRow.duration.toFixed(1)}h</strong>
-        </span>
-        <span>
-          总涨粉{" "}
-          <strong className="text-foreground">{totalRow.fans.toLocaleString("zh-CN")}</strong>
-        </span>
-        <span className="text-xs">
           列数 <strong className="text-foreground">{visibleColumns.length}</strong>
         </span>
       </div>
@@ -348,18 +499,57 @@ export function AnchorTable(): React.JSX.Element {
                       }
                       const display = formatCell(v, c.fmt);
                       const muted = display === "—";
+                      // 数值类列加上「较前 N 日」对比（受顶部勾选控制）
+                      const isNumericCol =
+                        (c.fmt === "number" || c.fmt === "duration" || c.fmt === "percent") &&
+                        typeof v === "number";
+                      const enableCompare = showCompare && isNumericCol;
+                      const prev = enableCompare ? prevByAnchorId.get(r.anchor_id) : undefined;
+                      const prevValRaw = prev ? getValue(prev, c.key) : null;
+                      const prevVal = typeof prevValRaw === "number" ? prevValRaw : null;
+                      const compare = enableCompare
+                        ? formatCompare(v as number, prevVal, periodDays)
+                        : null;
                       return (
                         <TableCell
                           key={c.key}
                           className={cn(
-                            "px-3 py-2 text-sm whitespace-nowrap",
+                            "px-3 py-3 text-sm whitespace-nowrap",
                             c.align === "right" && "text-right tabular-nums",
                             c.sticky && "sticky left-0 bg-card",
                             c.bold && "font-semibold",
                             muted && "text-muted-foreground",
                           )}
                         >
-                          {display}
+                          <div>{display}</div>
+                          {compare && (
+                            <div
+                              className={cn(
+                                "text-xs font-normal mt-1 text-muted-foreground",
+                                c.bold && "font-normal",
+                              )}
+                            >
+                              <span className="text-muted-foreground/70">
+                                {compare.text.split(" ")[0]}
+                              </span>
+                              {compare.kind !== "flat" && compare.kind !== "none" && (
+                                <span
+                                  className={cn(
+                                    "ml-1",
+                                    compare.kind === "up" && "text-change-up",
+                                    compare.kind === "down" && "text-change-down",
+                                  )}
+                                >
+                                  {compare.text.split(" ").slice(1).join(" ")}
+                                </span>
+                              )}
+                              {(compare.kind === "flat" || compare.kind === "none") && (
+                                <span className="ml-1">
+                                  {compare.text.split(" ").slice(1).join(" ")}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </TableCell>
                       );
                     })}
@@ -400,18 +590,46 @@ function getValue(r: AnchorListRow, key: ColKey): string | number | null {
   return (v as string | number | null) ?? null;
 }
 
+/** 数字缩写：>= 1万 显示 X.XX万，>= 1亿 显示 X.XX亿；否则千分位 */
+function formatChineseNumber(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 100_000_000) return `${(n / 100_000_000).toFixed(2).replace(/\.?0+$/, "")}亿`;
+  if (abs >= 10_000) return `${(n / 10_000).toFixed(2).replace(/\.?0+$/, "")}万`;
+  return n.toLocaleString("zh-CN");
+}
+
+/** 同比对比：对比当前值 vs 前一周期同长度的值，返回带箭头的小字 */
+function formatCompare(
+  cur: number,
+  prev: number | null,
+  periodDays: number,
+): { text: string; kind: "up" | "down" | "flat" | "none" } | null {
+  const label = `较前${periodDays}日`;
+  if (prev === null || prev === 0) {
+    if (cur === 0) return { text: `${label} 持平`, kind: "flat" };
+    return { text: `${label} —`, kind: "none" };
+  }
+  if (cur === prev) return { text: `${label} 持平`, kind: "flat" };
+  const pct = ((cur - prev) / Math.abs(prev)) * 100;
+  if (Math.abs(pct) < 0.01) return { text: `${label} 持平`, kind: "flat" };
+  const arrow = pct > 0 ? "↑" : "↓";
+  return {
+    text: `${label} ${arrow}${Math.abs(pct).toFixed(2)}%`,
+    kind: pct > 0 ? "up" : "down",
+  };
+}
+
 function formatCell(v: string | number | null, fmt: ColumnDef["fmt"]): string {
-  if (v === null || v === undefined) return "—";
   if (fmt === "duration") {
-    if (typeof v !== "number" || v === 0) return "—";
+    if (typeof v !== "number") return "0h";
     return `${v.toFixed(1)}h`;
   }
   if (fmt === "number") {
-    if (typeof v !== "number" || v === 0) return "—";
-    return v.toLocaleString("zh-CN");
+    if (typeof v !== "number") return "0";
+    return formatChineseNumber(v);
   }
   if (fmt === "percent") {
-    if (typeof v !== "number" || v === 0) return "—";
+    if (typeof v !== "number") return "0%";
     // 值为 0-1 小数
     return `${(v * 100).toFixed(2)}%`;
   }
@@ -421,7 +639,8 @@ function formatCell(v: string | number | null, fmt: ColumnDef["fmt"]): string {
     const ms = v > 1e10 ? v : v * 1000;
     return new Date(ms).toLocaleDateString("zh-CN");
   }
-  return String(v) || "—";
+  if (v === null || v === undefined || v === "") return "—";
+  return String(v);
 }
 
 // ─── Pagination ───────────────────────────────────────────────────────────────

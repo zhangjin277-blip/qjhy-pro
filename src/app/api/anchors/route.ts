@@ -48,6 +48,25 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const rows = await listAnchors(dingtalkUserId, parseResult.data);
-  return NextResponse.json({ rows });
+  const filters = parseResult.data;
+
+  // 计算前一周期（与当前周期等长，紧邻在前）
+  const dFrom = new Date(filters.date_from);
+  const dTo = new Date(filters.date_to);
+  const days = Math.round((dTo.getTime() - dFrom.getTime()) / 86400_000) + 1;
+  const prevTo = new Date(dFrom);
+  prevTo.setDate(prevTo.getDate() - 1);
+  const prevFrom = new Date(prevTo);
+  prevFrom.setDate(prevFrom.getDate() - (days - 1));
+  const prevFilters = {
+    ...filters,
+    date_from: prevFrom.toISOString().slice(0, 10),
+    date_to: prevTo.toISOString().slice(0, 10),
+  };
+
+  const [rows, previousRows] = await Promise.all([
+    listAnchors(dingtalkUserId, filters),
+    listAnchors(dingtalkUserId, prevFilters),
+  ]);
+  return NextResponse.json({ rows, previousRows, days });
 }
