@@ -8,20 +8,12 @@ export interface AnchorProfileRow {
   anchor_id: string;
   nick_name: string;
   avatar: string | null;
-  gender: number | null;
   aweme_display_id: string | null;
   aweme_short_id: string | null;
   hotsoon_display_id: string | null;
   hotsoon_short_id: string | null;
-  xigua_display_id: string | null;
-  real_name: string | null;
   last_live_time: number | null;
-  live_status: number | null;
   anchor_health_score: number | null;
-  anchor_health_score_level: number | null;
-  anchor_ban_30d: number | null;
-  anchor_violation_30d: number | null;
-  notes: string | null;
   anchor_sign_type: number | null;
   anchor_sign_out: number | null;
   signing_time: number | null;
@@ -120,7 +112,6 @@ export function parseAnchorListResponse(raw: RawListResponse): AnchorProfileRow[
 function mapOne(r: Record<string, unknown>): AnchorProfileRow {
   const baseInfo = (r.anchor_base_info ?? {}) as Record<string, unknown>;
   const factionInfo = (r.anchor_faction_info ?? {}) as Record<string, unknown>;
-  const card = (r.anchor_card ?? {}) as Record<string, unknown>;
   const signing = (r.signing_info ?? {}) as Record<string, unknown>;
 
   const recruit_broker_name = (factionInfo.recruit_broker_name as string) ?? null;
@@ -129,21 +120,13 @@ function mapOne(r: Record<string, unknown>): AnchorProfileRow {
     anchor_id: String(baseInfo.anchor_id ?? r.anchor_id ?? ""),
     nick_name: String(baseInfo.nick_name ?? ""),
     avatar: (baseInfo.avatar as string) ?? null,
-    gender: numOrNull(baseInfo.gender),
     aweme_display_id: strOrNull(baseInfo.aweme_display_id),
     aweme_short_id: strOrNull(baseInfo.aweme_short_id),
     hotsoon_display_id: strOrNull(baseInfo.hotsoon_display_id),
     hotsoon_short_id: strOrNull(baseInfo.hotsoon_short_id),
-    xigua_display_id: strOrNull(baseInfo.xigua_display_id),
-    real_name: strOrNull(baseInfo.real_name),
 
     last_live_time: numOrNull(r.last_live_time),
-    live_status: numOrNull(card.live_status),
     anchor_health_score: numOrNull(baseInfo.anchor_health_score),
-    anchor_health_score_level: numOrNull(baseInfo.anchor_health_score_level),
-    anchor_ban_30d: numOrNull(card.anchor_ban_30d),
-    anchor_violation_30d: numOrNull(card.anchor_violation_30d),
-    notes: strOrNull(baseInfo.notes),
 
     anchor_sign_type: numOrNull(r.anchor_sign_type),
     anchor_sign_out: numOrNull(r.anchor_sign_out),

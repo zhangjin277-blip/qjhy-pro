@@ -17,18 +17,10 @@ export interface AnchorListRow {
   nick_name: string;
   is_threekingdoms: boolean;
   avatar: string | null;
-  gender: number | null;
   aweme_display_id: string | null;
   aweme_short_id: string | null;
   hotsoon_display_id: string | null;
-  xigua_display_id: string | null;
-  real_name: string | null;
   anchor_health_score: number | null;
-  anchor_health_score_level: number | null;
-  anchor_ban_30d: number | null;
-  anchor_violation_30d: number | null;
-  notes: string | null;
-  live_status: number | null;
   last_live_time: number | null;
 
   // ── 2. 签约 & 经纪人 ──────────────────────────────────────

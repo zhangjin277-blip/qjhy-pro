@@ -48,16 +48,6 @@ export const ALL_COLUMNS: ColumnDef[] = [
   },
   { key: "project", label: "项目", group: "基础", align: "left", fmt: "text" },
   { key: "anchor_health_score", label: "健康分", group: "基础", align: "right", fmt: "number" },
-  {
-    key: "anchor_health_score_level",
-    label: "健康分等级",
-    group: "基础",
-    align: "right",
-    fmt: "number",
-  },
-  { key: "anchor_ban_30d", label: "30天封禁", group: "基础", align: "right", fmt: "number" },
-  { key: "anchor_violation_30d", label: "30天违规", group: "基础", align: "right", fmt: "number" },
-  { key: "live_status", label: "直播状态", group: "基础", align: "right", fmt: "number" },
   { key: "last_live_time", label: "最近开播", group: "基础", align: "right", fmt: "timestamp" },
   { key: "aweme_display_id", label: "抖音号", group: "基础", align: "left", fmt: "text" },
   { key: "aweme_short_id", label: "抖音号(原)", group: "基础", align: "left", fmt: "text" },
@@ -68,10 +58,6 @@ export const ALL_COLUMNS: ColumnDef[] = [
     align: "left",
     fmt: "text",
   },
-  { key: "xigua_display_id", label: "西瓜号", group: "基础", align: "left", fmt: "text" },
-  { key: "real_name", label: "实名", group: "基础", align: "left", fmt: "text" },
-  { key: "gender", label: "性别", group: "基础", align: "right", fmt: "number" },
-  { key: "notes", label: "备注", group: "基础", align: "left", fmt: "text" },
 
   // ── 2. 签约（anchor-list 签约/经纪人）─────────────────────────────────────
   { key: "broker_name", label: "运营经纪人", group: "签约", align: "left", fmt: "text" },
@@ -1167,8 +1153,6 @@ const SIGN_KEYS: ColKey[] = [
   "sign_start_time",
   "sign_end_time",
   "income_percent",
-  "anchor_ban_30d",
-  "anchor_violation_30d",
 ];
 
 export type PresetId = "ddz" | "three" | "guild" | "all" | "custom";

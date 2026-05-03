@@ -22,25 +22,17 @@ export const anchor_profile = pgTable(
   {
     anchor_id: text("anchor_id").primaryKey(),
 
-    // 身份/基础（10）
+    // 身份/基础
     nick_name: text("nick_name").notNull(),
     avatar: text("avatar"),
-    gender: integer("gender"), // 0=未知, 1=男, 2=女（抖音平台编码）
     aweme_display_id: text("aweme_display_id"),
     aweme_short_id: text("aweme_short_id"),
     hotsoon_display_id: text("hotsoon_display_id"),
     hotsoon_short_id: text("hotsoon_short_id"),
-    xigua_display_id: text("xigua_display_id"),
-    real_name: text("real_name"),
 
-    // 状态/标签（7）
+    // 状态/标签
     last_live_time: bigint("last_live_time", { mode: "number" }), // unix
-    live_status: integer("live_status"), // 0=未直播, 1=直播中（抖音平台编码）
     anchor_health_score: integer("anchor_health_score"),
-    anchor_health_score_level: integer("anchor_health_score_level"), // 健康分等级（1=最高，递增数字代表更低等级，具体含义平台未公开）
-    anchor_ban_30d: integer("anchor_ban_30d"), // 风控指标 — 近 30 天封禁次数
-    anchor_violation_30d: integer("anchor_violation_30d"), // 风控指标 — 近 30 天违规次数
-    notes: text("notes"),
 
     // 签约/经纪人（13）
     anchor_sign_type: integer("anchor_sign_type"),

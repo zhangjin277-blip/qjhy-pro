@@ -8,7 +8,7 @@ import {
   broker_user_mapping,
   dingtalk_user,
 } from "@/db/schema";
-import { and, eq, sql, inArray, gt } from "drizzle-orm";
+import { and, eq, sql, inArray } from "drizzle-orm";
 import { resolvePermission, getManagedDeptIds } from "@/modules/permissions/server";
 import type { BrokerAggregate, DashboardCards, TrendPoint } from "./types";
 
@@ -69,7 +69,6 @@ export async function getDashboardCards(userId: string, date: string): Promise<D
     minigame_income_today: 0,
     game_income_today: 0,
     health_warn_count: 0,
-    violation_count: 0,
   };
   if (brokerIds !== null && brokerIds.length === 0) return empty;
 
@@ -110,19 +109,12 @@ export async function getDashboardCards(userId: string, date: string): Promise<D
     .from(anchor_profile)
     .where(and(sql`${anchor_profile.anchor_health_score} < 60`, profileFilter));
 
-  // 5. 违规
-  const violations = await db
-    .select({ c: sql<number>`COUNT(*)` })
-    .from(anchor_profile)
-    .where(and(gt(anchor_profile.anchor_violation_30d, 0), profileFilter));
-
   return {
     total_fan_ticket_today: Number(dailyAgg[0]?.total_ft ?? 0),
     active_anchors_today: Number(dailyAgg[0]?.active ?? 0),
     minigame_income_today: Number(mgAgg[0]?.sum ?? 0),
     game_income_today: Number(gameAgg[0]?.sum ?? 0),
     health_warn_count: Number(warn[0]?.c ?? 0),
-    violation_count: Number(violations[0]?.c ?? 0),
   };
 }
 

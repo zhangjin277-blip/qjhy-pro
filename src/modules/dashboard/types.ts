@@ -4,7 +4,6 @@ export interface DashboardCards {
   minigame_income_today: number;
   game_income_today: number;
   health_warn_count: number;
-  violation_count: number;
 }
 
 export interface TrendPoint {

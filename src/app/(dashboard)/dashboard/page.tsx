@@ -41,11 +41,6 @@ export default async function DashboardPage(): Promise<React.JSX.Element> {
         <CardItem title="小游戏总流水" value={cards.minigame_income_today.toLocaleString()} />
         <CardItem title="推广游戏总流水" value={cards.game_income_today.toLocaleString()} />
         <CardItem title="健康分异常" value={cards.health_warn_count.toString()} hint="< 60 分" />
-        <CardItem
-          title="近 30 日违规"
-          value={cards.violation_count.toString()}
-          hint="violation > 0"
-        />
       </div>
     </div>
   );
