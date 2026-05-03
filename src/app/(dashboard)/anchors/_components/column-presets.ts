@@ -19,6 +19,8 @@ export interface ColumnDef {
   fmt: ColFmt;
   sticky?: boolean;
   bold?: boolean;
+  /** 固定列，永远渲染在最前；不出现在 customizer 中栏，不参与已选/排序 */
+  pinned?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export interface ColumnDef {
 export const ALL_COLUMNS: ColumnDef[] = [
   // ── 1. 基础（anchor-list 身份/状态）────────────────────────────────────────
   // 合并列：头像 + 昵称 + 抖音号 + UID（cell 用 fmt=anchor_info 自定义渲染）
+  // pinned: 固定在最前，不在 customizer 出现，不可拖动/取消勾选
   {
     key: "nick_name",
     label: "主播信息",
@@ -41,6 +44,7 @@ export const ALL_COLUMNS: ColumnDef[] = [
     align: "left",
     fmt: "anchor_info",
     sticky: true,
+    pinned: true,
   },
   { key: "project", label: "项目", group: "基础", align: "left", fmt: "text" },
   { key: "anchor_health_score", label: "健康分", group: "基础", align: "right", fmt: "number" },
@@ -1088,9 +1092,8 @@ type ColKey = (typeof ALL_COLUMNS)[number]["key"];
 
 // ── 预设字段集 ────────────────────────────────────────────────────────────────
 
-/** 基础常驻列（所有预设都包含） */
+/** 基础常驻列（所有预设都包含；nick_name 是 pinned 列，渲染时自动加，不放预设里） */
 const BASE_KEYS: ColKey[] = [
-  "nick_name",
   "project",
   "broker_name",
   "recruit_broker_name",
@@ -1204,8 +1207,11 @@ export const PRESETS: Preset[] = [
   },
 ];
 
-// v3: 头像+昵称合并为"主播信息"列后 bump，让 v2 旧缓存失效
-const STORAGE_KEY_PREFIX = "anchor_columns_v3_";
+// v4: 主播信息列改为 pinned（自动渲染、不入预设），bump 让旧缓存失效
+const STORAGE_KEY_PREFIX = "anchor_columns_v4_";
+
+/** 固定列（pinned: true 的，永远渲染在最前；不参与 customizer） */
+export const PINNED_COLUMNS: ColumnDef[] = ALL_COLUMNS.filter((c) => c.pinned);
 
 /** 从 localStorage 读取保存的列配置，SSR 安全（返回 null） */
 export function loadSavedColumns(presetId: PresetId): ColKey[] | null {
@@ -1215,8 +1221,8 @@ export function loadSavedColumns(presetId: PresetId): ColKey[] | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return null;
-    // 验证所有 key 都合法
-    const validKeys = new Set(ALL_COLUMNS.map((c) => c.key));
+    // 验证 key 合法 + 过滤掉 pinned 列（pinned 不入预设）
+    const validKeys = new Set(ALL_COLUMNS.filter((c) => !c.pinned).map((c) => c.key));
     const filtered = (parsed as string[]).filter((k) => validKeys.has(k as ColKey));
     return filtered.length > 0 ? (filtered as ColKey[]) : null;
   } catch {
@@ -1240,9 +1246,9 @@ export function getColumnsByKeys(keys: ColKey[]): ColumnDef[] {
   return keys.map((k) => map.get(k)).filter(Boolean) as ColumnDef[];
 }
 
-/** 按组获取所有列（中栏展示用） */
+/** 按组获取所有列（中栏展示用，pinned 列不显示） */
 export function getColumnsByGroup(group: string): ColumnDef[] {
-  return ALL_COLUMNS.filter((c) => c.group === group);
+  return ALL_COLUMNS.filter((c) => c.group === group && !c.pinned);
 }
 
 /** 按 subGroup 切块返回（保持 ALL_COLUMNS 原顺序）。无 subGroup 的列归入 null 块。 */

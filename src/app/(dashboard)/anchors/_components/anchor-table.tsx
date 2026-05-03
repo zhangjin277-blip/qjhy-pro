@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils/cn";
 import type { AnchorListRow, AnchorListFilters } from "@/modules/anchors";
 import {
   ALL_COLUMNS,
+  PINNED_COLUMNS,
   PRESETS,
   getColumnsByKeys,
   loadSavedColumns,
@@ -71,7 +72,11 @@ export function AnchorTable(): React.JSX.Element {
   const [visibleKeys, setVisibleKeys] = useState<ColKey[]>(() => getInitialColumns(DEFAULT_PRESET));
   const [customizerOpen, setCustomizerOpen] = useState(false);
 
-  const visibleColumns = useMemo(() => getColumnsByKeys(visibleKeys), [visibleKeys]);
+  // 永远在最前渲染 pinned 列（主播信息），不能在 customizer 取消/排序
+  const visibleColumns = useMemo(
+    () => [...PINNED_COLUMNS, ...getColumnsByKeys(visibleKeys)],
+    [visibleKeys],
+  );
 
   useEffect(() => {
     const sp = new URLSearchParams();
