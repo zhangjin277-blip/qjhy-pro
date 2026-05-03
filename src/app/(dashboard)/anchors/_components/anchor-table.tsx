@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   ArrowDown,
   ArrowUp,
@@ -13,7 +14,12 @@ import {
 import { Filters } from "./filters";
 import { CsvExportButton } from "./csv-export";
 import { ColumnCustomizer } from "./column-customizer";
+import { KpiPicker } from "./kpi-picker";
+import { formatChineseNumber, formatCompare } from "./format";
+import { AnchorDetailDrawer } from "./anchor-detail-drawer";
 import { Button } from "@/components/ui/button";
+import { PromptDialog } from "@/components/ui/prompt-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { UserColumnPreset } from "@/modules/column-presets";
 import {
   Select,
@@ -76,10 +82,20 @@ export function AnchorTable(): React.JSX.Element {
   const [visibleKeys, setVisibleKeys] = useState<ColKey[]>(() => getInitialColumns(DEFAULT_PRESET));
   const [customizerOpen, setCustomizerOpen] = useState(false);
 
+  // drill-down 抽屉
+  const [selectedAnchor, setSelectedAnchor] = useState<AnchorListRow | null>(null);
+
   // 用户自定义预设（持久化到 DB，跨设备同步）
   const [userPresets, setUserPresets] = useState<UserColumnPreset[]>([]);
   // 激活预设 key：系统预设 "sys:ddz" / 用户预设 "user:123"
   const [activeUserPresetId, setActiveUserPresetId] = useState<number | null>(null);
+
+  // 自定义弹窗状态：保存为预设（PromptDialog）
+  const [savePromptOpen, setSavePromptOpen] = useState(false);
+  const [pendingSaveColumns, setPendingSaveColumns] = useState<ColKey[] | null>(null);
+
+  // 删除确认弹窗
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string } | null>(null);
 
   // 首次加载用户预设
   useEffect(() => {
@@ -89,30 +105,66 @@ export function AnchorTable(): React.JSX.Element {
       .catch(() => setUserPresets([]));
   }, []);
 
-  async function saveAsNewPreset(): Promise<void> {
-    const name = window.prompt("预设名称（最长 40 字）");
-    if (!name || !name.trim()) return;
+  async function saveAsNewPreset(columns?: ColKey[]): Promise<void> {
+    setPendingSaveColumns(columns ?? visibleKeys);
+    setSavePromptOpen(true);
+  }
+
+  async function doSaveAsNewPreset(name: string): Promise<void> {
+    const cols = pendingSaveColumns ?? visibleKeys;
     const res = await fetch("/api/column-presets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), columns: visibleKeys }),
+      body: JSON.stringify({
+        name,
+        columns: cols,
+        project: filters.project ?? "all",
+      }),
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { error?: string };
-      window.alert(err.error === "NAME_EXISTS" ? "已有同名预设" : "保存失败");
+      toast.error(err.error === "NAME_EXISTS" ? "已有同名预设" : "保存失败");
       return;
     }
     const { preset } = (await res.json()) as { preset: UserColumnPreset };
     setUserPresets((arr) => [...arr, preset]);
     setActiveUserPresetId(preset.id);
     setActivePreset("custom");
+    setPendingSaveColumns(null);
+    toast.success(`预设「${preset.name}」已保存`);
   }
 
-  async function deleteUserPreset(id: number, name: string): Promise<void> {
-    if (!window.confirm(`删除预设「${name}」？`)) return;
+  async function updateCurrentPreset(columns?: ColKey[]): Promise<void> {
+    if (!activeUserPresetId) return;
+    const cols = columns ?? visibleKeys;
+    const res = await fetch(`/api/column-presets/${activeUserPresetId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        columns: cols,
+        project: filters.project ?? "all",
+      }),
+    });
+    if (!res.ok) {
+      toast.error("更新失败");
+      return;
+    }
+    const { preset } = (await res.json()) as { preset: UserColumnPreset };
+    setUserPresets((arr) => arr.map((p) => (p.id === preset.id ? preset : p)));
+    setVisibleKeys(cols);
+    toast.success(`预设「${preset.name}」已更新`);
+  }
+
+  function deleteUserPreset(id: number, name: string): void {
+    setDeleteConfirm({ id, name });
+  }
+
+  async function doDeleteUserPreset(): Promise<void> {
+    if (!deleteConfirm) return;
+    const { id, name } = deleteConfirm;
     const res = await fetch(`/api/column-presets/${id}`, { method: "DELETE" });
     if (!res.ok) {
-      window.alert("删除失败");
+      toast.error("删除失败");
       return;
     }
     setUserPresets((arr) => arr.filter((p) => p.id !== id));
@@ -120,12 +172,14 @@ export function AnchorTable(): React.JSX.Element {
       setActiveUserPresetId(null);
       applyPreset(DEFAULT_PRESET);
     }
+    toast.success(`预设「${name}」已删除`);
   }
 
   function applyUserPreset(p: UserColumnPreset): void {
     setActiveUserPresetId(p.id);
     setActivePreset("custom");
     setVisibleKeys(p.columns as ColKey[]);
+    setFilters((f) => ({ ...f, project: p.project ?? "all" }));
   }
 
   // 永远在最前渲染 pinned 列（主播信息），不能在 customizer 取消/排序
@@ -212,7 +266,6 @@ export function AnchorTable(): React.JSX.Element {
       ddz: "ddz",
       three: "three",
       guild: "all",
-      all: "all",
     };
     setFilters((f) => ({ ...f, project: projectByPreset[presetId] }));
     const saved = loadSavedColumns(presetId);
@@ -231,23 +284,100 @@ export function AnchorTable(): React.JSX.Element {
 
   const isRange = filters.date_from !== filters.date_to;
 
-  // KPI 卡片（按 preset 决定指标集；当前 ddz 用以下 6 项）
-  const kpiMetrics: { key: keyof AnchorListRow; label: string; fmt: "number" }[] = [
-    { key: "total_fan_ticket", label: "总音浪", fmt: "number" },
-    { key: "controller_total_amount", label: "小手柄流水", fmt: "number" },
-    { key: "g_total_amount", label: "直播流水", fmt: "number" },
-    { key: "v_total_amount", label: "短视频流水", fmt: "number" },
-    { key: "show_uv", label: "曝光人数", fmt: "number" },
-    { key: "g_watch_ucnt", label: "游戏直播看播人数", fmt: "number" },
-  ];
-  function sumKey(rs: AnchorListRow[], key: keyof AnchorListRow): number {
-    return rs.reduce((acc, r) => acc + (Number(r[key] ?? 0) || 0), 0);
+  // KPI 卡片：默认按 preset 决定，用户可在卡片上 × 删除 / ⊕ 添加，保存到 localStorage
+  const defaultKpiKeysForPreset = (preset: PresetId): ColKey[] => {
+    if (preset === "three") {
+      return [
+        "total_fan_ticket",
+        "minigame_total_amount",
+        "show_uv",
+        "mg_watch_ucnt",
+        "mg_active_ucnt",
+        "mg_duration",
+      ];
+    }
+    return [
+      "total_fan_ticket",
+      "controller_total_amount",
+      "g_total_amount",
+      "v_total_amount",
+      "show_uv",
+      "g_watch_ucnt",
+    ];
+  };
+
+  function loadKpiKeys(preset: PresetId): ColKey[] {
+    if (typeof window === "undefined") return defaultKpiKeysForPreset(preset);
+    try {
+      const raw = localStorage.getItem(`anchor_kpi_v1_${preset}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as string[];
+        const valid = ALL_COLUMNS.map((c) => c.key as string);
+        const filtered = parsed.filter((k) => valid.includes(k)) as ColKey[];
+        if (filtered.length > 0) return filtered;
+      }
+    } catch {
+      /* fall through */
+    }
+    return defaultKpiKeysForPreset(preset);
   }
-  const kpiData = kpiMetrics.map((m) => ({
-    ...m,
-    cur: sumKey(rows, m.key),
-    prev: sumKey(previousRows, m.key),
-  }));
+
+  const [kpiKeys, setKpiKeys] = useState<ColKey[]>(() => loadKpiKeys(DEFAULT_PRESET));
+  const [kpiPickerOpen, setKpiPickerOpen] = useState(false);
+  // 切换预设时同步 KPI（除非用户已自定义）
+  useEffect(() => {
+    setKpiKeys(loadKpiKeys(activePreset));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePreset]);
+  function persistKpi(preset: PresetId, keys: ColKey[]): void {
+    try {
+      localStorage.setItem(`anchor_kpi_v1_${preset}`, JSON.stringify(keys));
+    } catch {
+      /* ignore */
+    }
+  }
+  function removeKpi(key: ColKey): void {
+    const next = kpiKeys.filter((k) => k !== key);
+    setKpiKeys(next);
+    persistKpi(activePreset, next);
+  }
+  function addKpis(keys: ColKey[]): void {
+    const next = [...kpiKeys, ...keys.filter((k) => !kpiKeys.includes(k))];
+    setKpiKeys(next);
+    persistKpi(activePreset, next);
+  }
+  function resetKpis(): void {
+    const def = defaultKpiKeysForPreset(activePreset);
+    setKpiKeys(def);
+    try {
+      localStorage.removeItem(`anchor_kpi_v1_${activePreset}`);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function aggregate(rs: AnchorListRow[], key: ColKey, fmt: ColumnDef["fmt"]): number {
+    const get = (r: AnchorListRow): unknown => (r as unknown as Record<string, unknown>)[key];
+    if (fmt === "percent") {
+      const vals = rs.map((r) => Number(get(r) ?? NaN)).filter((n) => Number.isFinite(n));
+      if (vals.length === 0) return 0;
+      return vals.reduce((a, b) => a + b, 0) / vals.length;
+    }
+    return rs.reduce((acc, r) => acc + (Number(get(r) ?? 0) || 0), 0);
+  }
+  const kpiData = kpiKeys
+    .map((k) => ALL_COLUMNS.find((c) => c.key === k))
+    .filter(
+      (c): c is ColumnDef =>
+        !!c && (c.fmt === "number" || c.fmt === "duration" || c.fmt === "percent"),
+    )
+    .map((c) => ({
+      key: c.key as ColKey,
+      label: c.label,
+      fmt: c.fmt,
+      cur: aggregate(rows, c.key as ColKey, c.fmt),
+      prev: aggregate(previousRows, c.key as ColKey, c.fmt),
+    }));
 
   return (
     <div className="space-y-3">
@@ -274,8 +404,8 @@ export function AnchorTable(): React.JSX.Element {
             <Settings2 className="h-3.5 w-3.5" />
             自定义列
           </Button>
-          <Button size="sm" variant="outline" onClick={saveAsNewPreset}>
-            保存预设
+          <Button size="sm" variant="outline" onClick={() => setKpiPickerOpen(true)}>
+            KPI
           </Button>
         </div>
       </div>
@@ -336,10 +466,26 @@ export function AnchorTable(): React.JSX.Element {
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         {kpiData.map((m) => {
           const compare = formatCompare(m.cur, m.prev, periodDays);
+          const display =
+            m.fmt === "percent"
+              ? `${(m.cur * 100).toFixed(2)}%`
+              : m.fmt === "duration"
+                ? `${m.cur.toFixed(1)}h`
+                : formatChineseNumber(m.cur);
           return (
-            <div key={m.key} className="bg-card rounded-lg border border-border px-4 py-3">
+            <div
+              key={m.key}
+              className="group bg-card rounded-lg border border-border px-4 py-3 relative"
+            >
+              <button
+                onClick={() => removeKpi(m.key)}
+                className="absolute top-1 right-1 size-5 rounded-full text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-change-up transition"
+                title="移除"
+              >
+                ×
+              </button>
               <div className="text-muted-foreground text-xs">{m.label}</div>
-              <div className="kpi-value mt-1">{formatChineseNumber(m.cur)}</div>
+              <div className="kpi-value mt-1">{display}</div>
               {compare && (
                 <div className="text-muted-foreground mt-1 text-xs">
                   <span className="text-muted-foreground/70">{compare.text.split(" ")[0]}</span>
@@ -358,6 +504,15 @@ export function AnchorTable(): React.JSX.Element {
           );
         })}
       </div>
+
+      {/* KPI 选择器 */}
+      <KpiPicker
+        open={kpiPickerOpen}
+        onOpenChange={setKpiPickerOpen}
+        excluded={kpiKeys}
+        onAdd={addKpis}
+        onReset={resetKpis}
+      />
 
       {/* 摘要小字 */}
       <div className="text-muted-foreground flex flex-wrap gap-x-6 gap-y-1 text-xs tabular-nums">
@@ -447,18 +602,26 @@ export function AnchorTable(): React.JSX.Element {
                             )}
                           >
                             <div className="flex items-center gap-2">
-                              {r.avatar ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={r.avatar}
-                                  alt={r.nick_name}
-                                  className="size-10 rounded-full bg-muted object-cover shrink-0"
-                                  loading="lazy"
-                                  referrerPolicy="no-referrer"
-                                />
-                              ) : (
-                                <div className="size-10 rounded-full bg-muted shrink-0" />
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAnchor(r)}
+                                className="shrink-0 rounded-full ring-offset-2 ring-offset-card cursor-pointer hover:ring-2 hover:ring-primary/40 transition-shadow"
+                                title="查看日明细"
+                                aria-label={`查看 ${r.nick_name} 的日明细`}
+                              >
+                                {r.avatar ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={r.avatar}
+                                    alt={r.nick_name}
+                                    className="size-10 rounded-full bg-muted object-cover block"
+                                    loading="lazy"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  <div className="size-10 rounded-full bg-muted" />
+                                )}
+                              </button>
                               <div className="flex flex-col min-w-0 flex-1 leading-tight">
                                 <span className="text-sm font-medium truncate" title={r.nick_name}>
                                   {r.nick_name || "—"}
@@ -576,6 +739,54 @@ export function AnchorTable(): React.JSX.Element {
         onOpenChange={setCustomizerOpen}
         selectedKeys={visibleKeys}
         onConfirm={handleCustomizerConfirm}
+        activeUserPresetName={
+          activeUserPresetId !== null
+            ? (userPresets.find((p) => p.id === activeUserPresetId)?.name ?? null)
+            : null
+        }
+        onUpdatePreset={updateCurrentPreset}
+        onSaveAsNewPreset={saveAsNewPreset}
+      />
+
+      <AnchorDetailDrawer
+        anchor={selectedAnchor}
+        dateFrom={filters.date_from}
+        dateTo={filters.date_to}
+        kpiColumns={kpiKeys
+          .map((k) => ALL_COLUMNS.find((c) => c.key === k))
+          .filter((c): c is ColumnDef => !!c)}
+        visibleColumns={visibleColumns}
+        onOpenChange={(open) => {
+          if (!open) setSelectedAnchor(null);
+        }}
+      />
+
+      <PromptDialog
+        open={savePromptOpen}
+        title="保存为新预设"
+        placeholder="预设名称（最长 40 字）"
+        maxLength={40}
+        onOpenChange={(o) => {
+          setSavePromptOpen(o);
+          if (!o) setPendingSaveColumns(null);
+        }}
+        onConfirm={(name) => {
+          void doSaveAsNewPreset(name);
+        }}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        title={deleteConfirm ? `删除预设「${deleteConfirm.name}」？` : ""}
+        description="删除后无法恢复"
+        confirmText="删除"
+        variant="danger"
+        onOpenChange={(o) => {
+          if (!o) setDeleteConfirm(null);
+        }}
+        onConfirm={() => {
+          void doDeleteUserPreset();
+        }}
       />
     </div>
   );
@@ -591,34 +802,6 @@ function getValue(r: AnchorListRow, key: ColKey): string | number | null {
 }
 
 /** 数字缩写：>= 1万 显示 X.XX万，>= 1亿 显示 X.XX亿；否则千分位 */
-function formatChineseNumber(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 100_000_000) return `${(n / 100_000_000).toFixed(2).replace(/\.?0+$/, "")}亿`;
-  if (abs >= 10_000) return `${(n / 10_000).toFixed(2).replace(/\.?0+$/, "")}万`;
-  return n.toLocaleString("zh-CN");
-}
-
-/** 同比对比：对比当前值 vs 前一周期同长度的值，返回带箭头的小字 */
-function formatCompare(
-  cur: number,
-  prev: number | null,
-  periodDays: number,
-): { text: string; kind: "up" | "down" | "flat" | "none" } | null {
-  const label = `较前${periodDays}日`;
-  if (prev === null || prev === 0) {
-    if (cur === 0) return { text: `${label} 持平`, kind: "flat" };
-    return { text: `${label} —`, kind: "none" };
-  }
-  if (cur === prev) return { text: `${label} 持平`, kind: "flat" };
-  const pct = ((cur - prev) / Math.abs(prev)) * 100;
-  if (Math.abs(pct) < 0.01) return { text: `${label} 持平`, kind: "flat" };
-  const arrow = pct > 0 ? "↑" : "↓";
-  return {
-    text: `${label} ${arrow}${Math.abs(pct).toFixed(2)}%`,
-    kind: pct > 0 ? "up" : "down",
-  };
-}
-
 function formatCell(v: string | number | null, fmt: ColumnDef["fmt"]): string {
   if (fmt === "duration") {
     if (typeof v !== "number") return "0h";

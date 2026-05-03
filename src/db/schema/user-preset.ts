@@ -16,6 +16,7 @@ export const user_column_preset = pgTable(
     dingtalk_user_id: text("dingtalk_user_id").notNull(),
     name: text("name").notNull(),
     columns: jsonb("columns").notNull().$type<string[]>(),
+    project: text("project").notNull().default("all"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow(),
   },

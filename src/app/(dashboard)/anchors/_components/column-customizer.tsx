@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { GripVertical, X } from "lucide-react";
 import {
   Dialog,
@@ -28,6 +28,12 @@ interface ColumnCustomizerProps {
   /** 当前已选列的 key 列表（保持顺序） */
   selectedKeys: ColKey[];
   onConfirm: (keys: ColKey[]) => void;
+  /** 当前激活的用户预设名（非 null 时显示「更新预设」按钮）*/
+  activeUserPresetName?: string | null;
+  /** 用工作副本更新当前用户预设 */
+  onUpdatePreset?: (keys: ColKey[]) => Promise<void> | void;
+  /** 用工作副本另存为新预设 */
+  onSaveAsNewPreset?: (keys: ColKey[]) => Promise<void> | void;
 }
 
 /**
@@ -42,19 +48,26 @@ export function ColumnCustomizer({
   onOpenChange,
   selectedKeys,
   onConfirm,
+  activeUserPresetName,
+  onUpdatePreset,
+  onSaveAsNewPreset,
 }: ColumnCustomizerProps): React.JSX.Element {
   // 工作副本，确认时才回传
   const [working, setWorking] = useState<ColKey[]>(() => [...selectedKeys]);
   const [activeGroup, setActiveGroup] = useState<string>(ALL_GROUPS[0]);
   const [search, setSearch] = useState("");
 
-  // 每次打开重置工作副本
-  function handleOpenChange(v: boolean): void {
-    if (v) {
+  // 每次打开重置工作副本（含父组件主动 open 的场景，handleOpenChange 不会触发）
+  useEffect(() => {
+    if (open) {
       setWorking([...selectedKeys]);
       setSearch("");
       setActiveGroup(ALL_GROUPS[0]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  function handleOpenChange(v: boolean): void {
     onOpenChange(v);
   }
 
@@ -314,10 +327,35 @@ export function ColumnCustomizer({
           </div>
         </div>
 
-        <DialogFooter className="px-5 py-3 border-t">
-          <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)}>
+        <DialogFooter className="px-5 py-3 border-t gap-2">
+          <Button variant="ghost" size="sm" onClick={() => handleOpenChange(false)}>
             取消
           </Button>
+          {onSaveAsNewPreset && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
+              onClick={async () => {
+                await onSaveAsNewPreset(working);
+                onOpenChange(false);
+              }}
+            >
+              {activeUserPresetName ? "另存为新预设" : "保存为预设"}
+            </Button>
+          )}
+          {activeUserPresetName && onUpdatePreset && (
+            <Button
+              size="sm"
+              className="bg-change-down text-white hover:bg-change-down/90"
+              onClick={async () => {
+                await onUpdatePreset(working);
+                onOpenChange(false);
+              }}
+            >
+              更新「{activeUserPresetName}」
+            </Button>
+          )}
           <Button size="sm" onClick={handleConfirm}>
             确定
           </Button>

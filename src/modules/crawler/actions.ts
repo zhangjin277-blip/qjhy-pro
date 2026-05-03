@@ -5,7 +5,11 @@ import { field_alias } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-guard";
 import { writeAuditLog } from "@/lib/audit";
 import { z } from "zod";
-import { enqueue, JOB_NAMES, saveCookies, type Basecamp } from "./server";
+// 直接从子模块导入，避免走 ./server barrel —— barrel 会 re-export 所有 adapter，
+// 进而 transitive 拉到 puppeteer-extra-plugin-stealth，里面有 lazy-cache，Turbopack 会报
+// "utils.typeOf is not a function"。server actions 只需要 queue + cookie，不需要 puppeteer。
+import { enqueue, JOB_NAMES } from "./queue";
+import { saveCookies, type Basecamp } from "./cookie";
 
 const RerunInput = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

@@ -69,6 +69,7 @@ export interface AnchorDailyRow {
   profit_share_ratio: number | null;
 
   broker_snapshot: string | null;
+  recruit_broker_snapshot: string | null;
   signing_type_snapshot: string | null;
   last_live_time_snapshot: string | null;
   is_new: number | null;
@@ -154,6 +155,7 @@ function mapOne(r: Record<string, string>, date: string): AnchorDailyRow {
     profit_share_ratio: parsePercent(get("会员收益比例")),
 
     broker_snapshot: get("运营经纪人", "经纪人"),
+    recruit_broker_snapshot: get("招募经纪人"),
     signing_type_snapshot: get("签约类型"),
     last_live_time_snapshot: get("上次开播时间"),
     is_new: null,

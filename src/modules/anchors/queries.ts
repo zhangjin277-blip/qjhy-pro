@@ -108,10 +108,27 @@ export async function listAnchors(
     sql`${anchor_portrait_daily.date} <= ${filters.date_to}`,
   );
 
-  // ── 主查询: anchor_profile + anchor_daily + anchor_portrait_daily ──────
-  const rows = await db
+  // archived 主播只在所选日期范围内有数据时才显示（PRO3 历史迁来的离场主播）
+  // active 主播永远显示（即使当天没数据，也会列出 0 值）
+  where.push(
+    sql`(
+      ${anchor_profile.is_archived} = FALSE
+      OR ${anchor_profile.anchor_id} IN (
+        SELECT anchor_id FROM ${anchor_daily}
+          WHERE date >= ${filters.date_from} AND date <= ${filters.date_to}
+        UNION
+        SELECT anchor_id FROM ${anchor_game_promo_daily}
+          WHERE date >= ${filters.date_from} AND date <= ${filters.date_to}
+        UNION
+        SELECT anchor_id FROM ${anchor_minigame_daily}
+          WHERE date >= ${filters.date_from} AND date <= ${filters.date_to}
+      )
+    )`,
+  );
+
+  // ── 主查询: 仅 anchor_profile（去掉 daily/portrait inline join 防笛卡尔积） ──
+  const profileRows = await db
     .select({
-      // 档案字段（直接从 profile 取）
       anchor_id: anchor_profile.anchor_id,
       nick_name: anchor_profile.nick_name,
       is_threekingdoms: anchor_profile.is_threekingdoms,
@@ -121,8 +138,6 @@ export async function listAnchors(
       hotsoon_display_id: anchor_profile.hotsoon_display_id,
       anchor_health_score: anchor_profile.anchor_health_score,
       last_live_time: anchor_profile.last_live_time,
-
-      // 签约/经纪人
       broker_name: anchor_profile.broker_name,
       recruit_broker_name: anchor_profile.recruit_broker_name,
       signing_time: anchor_profile.signing_time,
@@ -134,8 +149,17 @@ export async function listAnchors(
       first_live_time_in_faction: anchor_profile.first_live_time_in_faction,
       wait_for_leave: anchor_profile.wait_for_leave,
       income_percent: anchor_profile.income_percent,
+    })
+    .from(anchor_profile)
+    .where(where.length > 0 ? and(...where) : undefined);
 
-      // 音浪 (SUM)
+  const anchorIds = profileRows.map((r) => r.anchor_id);
+  if (anchorIds.length === 0) return [];
+
+  // ── 子查询: anchor_daily 聚合（先 GROUP BY anchor_id, 避免与 portrait join 笛卡尔积） ──
+  const dailyAgg = await db
+    .select({
+      anchor_id: anchor_daily.anchor_id,
       total_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.total_fan_ticket}), 0)`,
       live_fan_ticket_no_guest: sql<string>`COALESCE(SUM(${anchor_daily.live_fan_ticket_no_guest}), 0)`,
       property_fan_ticket_no_guest: sql<string>`COALESCE(SUM(${anchor_daily.property_fan_ticket_no_guest}), 0)`,
@@ -144,28 +168,29 @@ export async function listAnchors(
       pk_fan_ticket: sql<string>`COALESCE(SUM(${anchor_daily.pk_fan_ticket}), 0)`,
       star_guard_earn_score: sql<string>`COALESCE(SUM(${anchor_daily.star_guard_earn_score}), 0)`,
       stat_guard_enter_account_earn_score: sql<string>`COALESCE(SUM(${anchor_daily.stat_guard_enter_account_earn_score}), 0)`,
-
-      // 时长/天数
       live_duration: sql<string>`COALESCE(SUM(${anchor_daily.live_duration_1d}), 0)`,
       valid_live_duration: sql<string>`COALESCE(SUM(${anchor_daily.valid_live_duration_1d}), 0)`,
       feed_watch_duration: sql<string>`COALESCE(SUM(${anchor_daily.feed_watch_duration_1d}), 0)`,
       live_days: sql<number>`COUNT(*) FILTER (WHERE ${anchor_daily.live_duration_1d} > 0)`,
       solo_valid_days: sql<number>`COALESCE(SUM(${anchor_daily.is_solo_valid_day}), 0)`,
-
-      // 互动/粉丝
       total_fans: sql<number>`COALESCE(MAX(${anchor_daily.total_fans}), 0)`,
       new_follow_fans: sql<number>`COALESCE(SUM(${anchor_daily.new_follow_fans_1d}), 0)`,
       peak_per_minute_ucnt: sql<number>`COALESCE(MAX(${anchor_daily.peak_per_minute_ucnt}), 0)`,
       feed_acu: sql<number>`COALESCE(MAX(${anchor_daily.feed_acu}), 0)`,
       current_percent: sql<string>`COALESCE(MAX(${anchor_daily.current_percent}), 0)`,
       profit_share_ratio: sql<string>`COALESCE(MAX(${anchor_daily.profit_share_ratio}), 0)`,
-
-      // 视频统计
       video_view_count: sql<number>`COALESCE(SUM(${anchor_daily.video_view_count}), 0)`,
       video_like_count: sql<number>`COALESCE(SUM(${anchor_daily.video_like_count}), 0)`,
       video_comment_count: sql<number>`COALESCE(SUM(${anchor_daily.video_comment_count}), 0)`,
+    })
+    .from(anchor_daily)
+    .where(and(inArray(anchor_daily.anchor_id, anchorIds), dailyRange))
+    .groupBy(anchor_daily.anchor_id);
 
-      // portrait (SUM)
+  // ── 子查询: anchor_portrait_daily 聚合 ──
+  const portraitAgg = await db
+    .select({
+      anchor_id: anchor_portrait_daily.anchor_id,
       show_uv: sql<number>`COALESCE(SUM(${anchor_portrait_daily.show_uv}), 0)`,
       show_cnt: sql<number>`COALESCE(SUM(${anchor_portrait_daily.show_cnt}), 0)`,
       watch_uv: sql<number>`COALESCE(SUM(${anchor_portrait_daily.watch_uv}), 0)`,
@@ -176,40 +201,54 @@ export async function listAnchors(
       consume_cnt: sql<number>`COALESCE(SUM(${anchor_portrait_daily.consume_cnt}), 0)`,
       consume_rate: sql<string>`COALESCE(AVG(${anchor_portrait_daily.consume_rate}), 0)`,
     })
-    .from(anchor_profile)
-    .leftJoin(anchor_daily, and(eq(anchor_profile.anchor_id, anchor_daily.anchor_id), dailyRange))
-    .leftJoin(
-      anchor_portrait_daily,
-      and(eq(anchor_profile.anchor_id, anchor_portrait_daily.anchor_id), portraitRange),
-    )
-    .where(where.length > 0 ? and(...where) : undefined)
-    .groupBy(
-      anchor_profile.anchor_id,
-      anchor_profile.nick_name,
-      anchor_profile.is_threekingdoms,
-      anchor_profile.avatar,
-      anchor_profile.aweme_display_id,
-      anchor_profile.aweme_short_id,
-      anchor_profile.hotsoon_display_id,
-      anchor_profile.anchor_health_score,
-      anchor_profile.last_live_time,
-      anchor_profile.broker_name,
-      anchor_profile.recruit_broker_name,
-      anchor_profile.signing_time,
-      anchor_profile.sign_start_time,
-      anchor_profile.sign_end_time,
-      anchor_profile.union_member_end_date,
-      anchor_profile.auto_renewal,
-      anchor_profile.join_time,
-      anchor_profile.first_live_time_in_faction,
-      anchor_profile.wait_for_leave,
-      anchor_profile.income_percent,
-    )
-    .orderBy(sql`COALESCE(SUM(${anchor_daily.total_fan_ticket}), 0) DESC`)
-    .limit(5000);
+    .from(anchor_portrait_daily)
+    .where(and(inArray(anchor_portrait_daily.anchor_id, anchorIds), portraitRange))
+    .groupBy(anchor_portrait_daily.anchor_id);
 
-  const anchorIds = rows.map((r) => r.anchor_id);
-  if (anchorIds.length === 0) return [];
+  // 合成 rows = profile + dailyAgg + portraitAgg
+  const dailyAggMap = new Map(dailyAgg.map((r) => [r.anchor_id, r]));
+  const portraitAggMap = new Map(portraitAgg.map((r) => [r.anchor_id, r]));
+  const rows = profileRows.map((p) => {
+    const d = dailyAggMap.get(p.anchor_id);
+    const pt = portraitAggMap.get(p.anchor_id);
+    return {
+      ...p,
+      total_fan_ticket: d?.total_fan_ticket ?? "0",
+      live_fan_ticket_no_guest: d?.live_fan_ticket_no_guest ?? "0",
+      property_fan_ticket_no_guest: d?.property_fan_ticket_no_guest ?? "0",
+      guest_fan_ticket: d?.guest_fan_ticket ?? "0",
+      subscribe_fan_ticket: d?.subscribe_fan_ticket ?? "0",
+      pk_fan_ticket: d?.pk_fan_ticket ?? "0",
+      star_guard_earn_score: d?.star_guard_earn_score ?? "0",
+      stat_guard_enter_account_earn_score: d?.stat_guard_enter_account_earn_score ?? "0",
+      live_duration: d?.live_duration ?? "0",
+      valid_live_duration: d?.valid_live_duration ?? "0",
+      feed_watch_duration: d?.feed_watch_duration ?? "0",
+      live_days: d?.live_days ?? 0,
+      solo_valid_days: d?.solo_valid_days ?? 0,
+      total_fans: d?.total_fans ?? 0,
+      new_follow_fans: d?.new_follow_fans ?? 0,
+      peak_per_minute_ucnt: d?.peak_per_minute_ucnt ?? 0,
+      feed_acu: d?.feed_acu ?? 0,
+      current_percent: d?.current_percent ?? "0",
+      profit_share_ratio: d?.profit_share_ratio ?? "0",
+      video_view_count: d?.video_view_count ?? 0,
+      video_like_count: d?.video_like_count ?? 0,
+      video_comment_count: d?.video_comment_count ?? 0,
+      show_uv: pt?.show_uv ?? 0,
+      show_cnt: pt?.show_cnt ?? 0,
+      watch_uv: pt?.watch_uv ?? 0,
+      watch_cnt: pt?.watch_cnt ?? 0,
+      enter_room_rate: pt?.enter_room_rate ?? "0",
+      avg_watch_duration: pt?.avg_watch_duration ?? "0",
+      consume_uv: pt?.consume_uv ?? 0,
+      consume_cnt: pt?.consume_cnt ?? 0,
+      consume_rate: pt?.consume_rate ?? "0",
+    };
+  });
+  // 按总音浪降序排（profile-only 主查询无法 SQL 端排序）
+  rows.sort((a, b) => Number(b.total_fan_ticket) - Number(a.total_fan_ticket));
+  if (rows.length > 5000) rows.length = 5000;
 
   // ── 子查询: game_promo live + cps（直播流水分成） ─────────────────────
   const gameCps = await db
@@ -602,6 +641,9 @@ export async function listAnchors(
       mg_anchor_income: mg ? num(mg.mg_anchor_income) : null,
       mg_union_income: mg ? num(mg.mg_union_income) : null,
       mg_cps_bind: mg ? num(mg.mg_cps_bind) : null,
+
+      // 小游戏流水（计算字段）：当前 = 直播-小游戏分成前；后续接入短视频-小游戏后求和
+      minigame_total_amount: mg ? num(mg.mg_before_income) : null,
 
       // 旧兼容字段
       minigame_income: mg ? numOrNull(mg.mg_anchor_income) : null,

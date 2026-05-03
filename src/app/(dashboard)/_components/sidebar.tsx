@@ -57,7 +57,7 @@ export function Sidebar({ defaultCollapsed, mobileOpen, onMobileClose }: Sidebar
       {/* 桌面 sidebar */}
       <aside
         className={cn(
-          "bg-card hidden shrink-0 flex-col transition-[width] duration-200 lg:flex",
+          "bg-card sticky top-0 hidden h-screen shrink-0 flex-col transition-[width] duration-200 lg:flex",
           collapsed ? "w-16" : "w-[232px]",
         )}
       >
@@ -76,7 +76,7 @@ export function Sidebar({ defaultCollapsed, mobileOpen, onMobileClose }: Sidebar
         <div className="fixed inset-0 z-40 lg:hidden" onClick={onMobileClose}>
           <div className="bg-foreground/40 absolute inset-0" />
           <aside
-            className="bg-card absolute inset-y-0 left-0 flex w-[232px] flex-col border-r"
+            className="bg-card absolute inset-y-0 left-0 flex h-dvh w-[232px] flex-col border-r"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -140,7 +140,7 @@ function SidebarInner({
       </div>
 
       {/* 导航 */}
-      <nav className="flex-1 overflow-y-auto px-2 py-2">
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {NAV.map((sec) => {
           const Icon = sec.icon;
 

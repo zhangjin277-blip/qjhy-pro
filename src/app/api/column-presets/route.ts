@@ -39,7 +39,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
   try {
-    const preset = await createUserPreset(userId, parsed.data.name, parsed.data.columns);
+    const preset = await createUserPreset(
+      userId,
+      parsed.data.name,
+      parsed.data.columns,
+      parsed.data.project,
+    );
     return NextResponse.json({ preset });
   } catch (e) {
     const msg = (e as Error).message;

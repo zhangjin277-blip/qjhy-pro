@@ -55,6 +55,14 @@ export const ALL_COLUMNS: ColumnDef[] = [
     fmt: "number",
     bold: true,
   },
+  {
+    key: "minigame_total_amount",
+    label: "小游戏流水",
+    group: "基础",
+    align: "left",
+    fmt: "number",
+    bold: true,
+  },
   { key: "anchor_health_score", label: "健康分", group: "基础", align: "left", fmt: "number" },
   { key: "last_live_time", label: "最近开播", group: "基础", align: "left", fmt: "timestamp" },
   { key: "aweme_display_id", label: "抖音号", group: "基础", align: "left", fmt: "text" },
@@ -977,7 +985,7 @@ export const ALL_COLUMNS: ColumnDef[] = [
   },
   {
     key: "mg_active_ucnt",
-    label: "激活人数",
+    label: "小游戏活跃用户数",
     group: "小游戏",
     subGroup: "转化指标",
     align: "left",
@@ -985,7 +993,7 @@ export const ALL_COLUMNS: ColumnDef[] = [
   },
   {
     key: "mg_pay_ucnt",
-    label: "付费人数",
+    label: "小游戏付费用户数",
     group: "小游戏",
     subGroup: "转化指标",
     align: "left",
@@ -1056,28 +1064,6 @@ const DURATION_KEYS: ColKey[] = [
   "new_follow_fans",
 ];
 
-const PORTRAIT_KEYS: ColKey[] = [
-  "show_uv",
-  "watch_uv",
-  "enter_room_rate",
-  "consume_uv",
-  "consume_rate",
-];
-
-const MINIGAME_KEYS: ColKey[] = [
-  "mg_room_cnt",
-  "mg_duration",
-  "mg_watch_ucnt",
-  "mg_acu",
-  "mg_click_ucnt",
-  "mg_active_ucnt",
-  "mg_pay_ucnt",
-  "mg_before_income",
-  "mg_anchor_income",
-  "mg_union_income",
-  "mg_cps_bind",
-];
-
 const SIGN_KEYS: ColKey[] = [
   "broker_name",
   "recruit_broker_name",
@@ -1086,7 +1072,7 @@ const SIGN_KEYS: ColKey[] = [
   "income_percent",
 ];
 
-export type PresetId = "ddz" | "three" | "guild" | "all" | "custom";
+export type PresetId = "ddz" | "three" | "guild" | "custom";
 
 export interface Preset {
   id: PresetId;
@@ -1116,17 +1102,27 @@ export const PRESETS: Preset[] = [
   {
     id: "three",
     label: "三国默认",
-    keys: [...BASE_KEYS, ...AUDIO_KEYS, ...DURATION_KEYS, ...PORTRAIT_KEYS, ...MINIGAME_KEYS],
+    keys: [
+      "broker_name",
+      "recruit_broker_name",
+      "total_fan_ticket",
+      "minigame_total_amount",
+      "show_uv",
+      "watch_uv",
+      "mg_watch_ucnt",
+      "mg_click_ucnt",
+      "mg_active_ucnt",
+      "mg_acu",
+      "feed_acu",
+      "mg_pcu",
+      "mg_room_cnt",
+      "mg_duration",
+    ],
   },
   {
     id: "guild",
     label: "公会管理",
     keys: [...BASE_KEYS, ...SIGN_KEYS, ...AUDIO_KEYS, "g_anchor_income", "mg_anchor_income"],
-  },
-  {
-    id: "all",
-    label: "全部",
-    keys: ALL_COLUMNS.map((c) => c.key),
   },
   {
     id: "custom",

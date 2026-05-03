@@ -63,6 +63,9 @@ export const anchor_profile = pgTable(
     // derive 规则：采集 anchor_profile 时 — recruit_broker_name === '三国项目' 即标记为 true
     is_threekingdoms: boolean("is_threekingdoms").notNull().default(false),
 
+    // 历史归档标记（迁移自 PRO3 老中台，新爬虫已不返回 → stub 行）
+    is_archived: boolean("is_archived").notNull().default(false),
+
     // 系统
     raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
@@ -74,6 +77,7 @@ export const anchor_profile = pgTable(
     idx_recruit_broker: index("idx_anchor_profile_recruit_broker").on(t.recruit_broker_id),
     idx_is_three: index("idx_anchor_profile_is_three").on(t.is_threekingdoms),
     idx_health: index("idx_anchor_profile_health").on(t.anchor_health_score),
+    idx_archived: index("idx_anchor_profile_archived").on(t.is_archived),
   }),
 );
 
@@ -126,6 +130,7 @@ export const anchor_daily = pgTable(
 
     // 状态/档案（4，当日快照）
     broker_snapshot: text("broker_snapshot"),
+    recruit_broker_snapshot: text("recruit_broker_snapshot"),
     signing_type_snapshot: text("signing_type_snapshot"),
     last_live_time_snapshot: text("last_live_time_snapshot"), // 字符串快照如 "17小时前"
     is_new: integer("is_new"), // 主播身份编码 — 0=老主播, 1=新主播（保留 integer 不转 boolean，遵循"字段原始性"原则）

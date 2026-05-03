@@ -1,2 +1,8 @@
-export type { ProjectFilter, AnchorListFilters, AnchorListRow } from "./types";
+export type {
+  ProjectFilter,
+  AnchorListFilters,
+  AnchorListRow,
+  AnchorDailyRow,
+  AnchorDailyResponse,
+} from "./types";
 export { AnchorListFiltersSchema } from "./schema";

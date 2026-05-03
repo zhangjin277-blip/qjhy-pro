@@ -15,10 +15,17 @@ async function main(): Promise<void> {
   const date = process.env.DATE ?? "2026-05-01";
 
   // ── game-promo ───────────────────────────────────────────────────────
+  // 只处理新爬虫写入的行（raw 是 camelCase 英文 key）
+  // 老库 PRO3 迁来的数据 raw 是中文 key（如 "游戏名称"），用英文 parser 会全部清成 NULL
   const gameRows = await db
     .select()
     .from(anchor_game_promo_daily)
-    .where(eq(anchor_game_promo_daily.date, date));
+    .where(
+      and(
+        eq(anchor_game_promo_daily.date, date),
+        sql`(${anchor_game_promo_daily.raw} ? 'gameName' OR ${anchor_game_promo_daily.raw} ? 'anchorName')`,
+      ),
+    );
   console.log(`[reparse] game rows=${gameRows.length}`);
 
   const i = (n: number | null): number | null => (n != null ? Math.round(n) : null);
@@ -91,10 +98,16 @@ async function main(): Promise<void> {
   console.log(`[reparse] game updated=${gameUpdated}`);
 
   // ── minigame ─────────────────────────────────────────────────────────
+  // 同 game-promo：跳过老库迁的中文 key 数据
   const mgRows = await db
     .select()
     .from(anchor_minigame_daily)
-    .where(eq(anchor_minigame_daily.date, date));
+    .where(
+      and(
+        eq(anchor_minigame_daily.date, date),
+        sql`(${anchor_minigame_daily.raw} ? 'mpName' OR ${anchor_minigame_daily.raw} ? 'anchorName')`,
+      ),
+    );
   console.log(`[reparse] minigame rows=${mgRows.length}`);
 
   let mgUpdated = 0;

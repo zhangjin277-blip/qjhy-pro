@@ -24,6 +24,8 @@ export interface AnchorListRow {
   last_live_time: number | null;
   /** 小手柄流水（计算字段）= g_total_amount + v_total_amount */
   controller_total_amount: number | null;
+  /** 小游戏流水（计算字段）= 直播-小游戏分成前 + (后续) 短视频-小游戏分成前 */
+  minigame_total_amount: number | null;
 
   // ── 2. 签约 & 经纪人 ──────────────────────────────────────
   broker_name: string | null;
@@ -243,4 +245,55 @@ export interface AnchorListRow {
   minigame_income: number | null;
   /** @deprecated 用 g_anchor_income */
   game_income: number | null;
+}
+
+/**
+ * 主播日明细行（drill-down drawer 用）
+ *
+ * 一个主播在一天的所有指标。字段集和 AnchorListRow 一致（只去掉档案/签约/旧兼容），
+ * 让 drawer 能完全跟随列表用户自定义的列动态渲染。
+ */
+export type AnchorDailyRow = {
+  /** YYYY-MM-DD */
+  date: string;
+} & Omit<
+  AnchorListRow,
+  // 档案
+  | "anchor_id"
+  | "nick_name"
+  | "is_threekingdoms"
+  | "avatar"
+  | "aweme_display_id"
+  | "aweme_short_id"
+  | "hotsoon_display_id"
+  | "anchor_health_score"
+  | "last_live_time"
+  // 签约
+  | "broker_name"
+  | "recruit_broker_name"
+  | "signing_time"
+  | "sign_start_time"
+  | "sign_end_time"
+  | "union_member_end_date"
+  | "auto_renewal"
+  | "join_time"
+  | "first_live_time_in_faction"
+  | "wait_for_leave"
+  | "income_percent"
+  // 旧兼容
+  | "minigame_income"
+  | "game_income"
+>;
+
+/**
+ * getAnchorDaily 返回结构：当前周期 + 同期对比
+ */
+export interface AnchorDailyResponse {
+  anchor_id: string;
+  date_from: string;
+  date_to: string;
+  /** 当前周期每日 */
+  current: AnchorDailyRow[];
+  /** 同期周期每日（已对齐到 current 长度的前 N 天） */
+  compare: AnchorDailyRow[];
 }
