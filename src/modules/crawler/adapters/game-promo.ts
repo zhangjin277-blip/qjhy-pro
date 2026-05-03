@@ -89,44 +89,43 @@ const TASKS: TaskSpec[] = [
     bizMode: "cps",
     cid: "cie2gobc77u3qq5m43gg",
     taskScene: "tinker_cijsa9rc77u482q9pu40",
+    // 5/03 DevTools 实测平台真实导出 query (21 数据 + 2 metadata)
+    // 关键：互动是 promoteVideo* 命名（不是 promoteLive*），完播是 promoteVideoFinishUV/UAvg，
+    // 人均VV 是 promoteItemVVUAvg（注意大小写 + 无 1d 后缀）
     fields: [
       "anchorName",
       "gameName",
-      // 投稿
-      "promoteVideoPublishCnt1d",
-      // 流量（VV / UV / 人均VV）
-      "promoteItemVV1d",
-      "promoteItemUV1d",
-      "promoteItemUAvg1d", // FIXME 推测：人均游戏视频播放数
-      // 互动（人数 + 率 — 平台共用 live 命名一套，按 cid+scene 区分）
-      "promoteFinishPlayUcnt1d", // FIXME 推测：完播人数
-      "promoteLiveLikeUcnt1d",
-      "promoteLiveFollowUcnt1d",
-      "promoteLiveCommentUcnt1d",
-      "promoteFinishPlayRatio1d", // FIXME 推测：完播率
-      "promoteLiveLikeUAvg1d",
-      "promoteLiveFollowUAvg1d",
-      "promoteLiveCommentUAvg1d",
-      // 转化漏斗
-      "promoteClickDownloadUcnt1d",
-      "promoteStartDownloadUcnt1d",
-      "promoteDownloadFinishUcnt1d",
-      "promoteInstallFinishUcnt1d",
-      // 收益
-      "promoteActiveUcnt1d",
-      "promoteChargePayUcnt1d",
       "promotePayAmount1d",
       "promoteAnchorIncome1d",
       "promoteFactionIncome1d",
+      "promoteVideoPublishCnt1d",
+      "promoteItemVV1d",
+      "promoteItemUV1d",
+      "promoteClickDownloadUcnt1d",
+      "promoteActiveUcnt1d",
+      "promoteChargePayUcnt1d",
+      "promoteItemVVUAvg",
+      "promoteVideoFinishUV1d",
+      "promoteVideoLikeUcnt1d",
+      "promoteVideoFollowUcnt1d",
+      "promoteVideoCommentUcnt1d",
+      "promoteVideoFinishUAvg1d",
+      "promoteVideoLikeUAvg1d",
+      "promoteVideoFollowUAvg1d",
+      "promoteVideoCommentUAvg1d",
+      "promoteStartDownloadUcnt1d",
+      "promoteDownloadFinishUcnt1d",
+      "promoteInstallFinishUcnt1d",
     ],
     filename: "游戏数据-创作者详情数据-流水分成",
   },
   {
     scene: "video",
     bizMode: "cps_all",
-    // FIXME 平台 status=20001 reject — 实测 5/01 cid 已失效，需要重新从 DevTools 抓真实 cid
     cid: "cm58etbc77udnv3lummg",
     taskScene: "tinker_cijsa9rc77u482q9pu40",
+    // fields 顺序敏感：promoteDownloadPayAmount1d 必须紧跟 promoteDownloadPayUcnt1d
+    // (5/03 DevTools 实测真实导出 query；之前顺序错导致 status=20001)
     fields: [
       "anchorName",
       "gameName",
@@ -134,9 +133,9 @@ const TASKS: TaskSpec[] = [
       "promoteAnchorDownloadPayAmount1d",
       "promoteFactionActivePayAmount1d",
       "promoteAnchorActivePayAmount1d",
+      "promoteDownloadPayUcnt1d",
       "promoteDownloadPayAmount1d",
       "promoteActivePayUcnt1d",
-      "promoteDownloadPayUcnt1d",
     ],
     filename: "游戏数据-创作者详情数据-流水分成（下载+活跃激励）",
   },

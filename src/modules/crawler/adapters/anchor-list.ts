@@ -52,31 +52,62 @@ export interface RawListResponse {
 }
 
 /**
- * 从平台 API 抓取分页主播列表，自动翻页直到拉完。
+ * 从平台 API 抓取主播列表（"全部主播" + "注销主播"两个 sub-tab 合并 + 去重）。
  *
- * FIXME 当前 query 漏拉"注销主播"，DB 1217~1289 vs 平台后台 1590（差额≈"注销主播 355"）。
- * 平台 UI 上"全部主播 1590"对应一个 sub-tab 切换，需额外 query 参数（猜测 status / sub_tab / include_inactive）
- * 才能拿到含注销的全集。从浏览器 DevTools 抓"全部主播"和"注销主播"两次请求对比 query string 即可补齐。
+ * 实测 5/03 sub-tab 枚举（anchor_list_filter.list_default_enum）：
+ *   0 = 全部主播 (total=1590, 去重后≈1184，不含注销主播)
+ *   1 = 新入驻&新主播 (222)
+ *   2 = 今日开播 (49)
+ *   3 = 断播主播 (47)
+ *   5 = 注销主播 (355)
+ * 必须分别拉 0 和 5 才能补齐 1539+ 个主播。
  */
-export async function fetchAnchorList(page: Page): Promise<Record<string, unknown>[]> {
+async function fetchListByEnum(
+  page: Page,
+  listDefaultEnum: number,
+): Promise<Record<string, unknown>[]> {
   const all: Record<string, unknown>[] = [];
+  const filter = encodeURIComponent(
+    JSON.stringify({
+      support_render_new_anchor: true,
+      support_render_growth: true,
+      support_render_recruit_broker: true,
+      list_default_enum: listDefaultEnum,
+    }),
+  );
   let pageNum = 1;
   const size = 50;
   while (true) {
-    const url = `${ENDPOINT}?vertical_type=0&sort_tag=5&is_increasing=false&page=${pageNum}&size=${size}`;
+    const url =
+      `${ENDPOINT}?vertical_type=0&sort_tag=5&is_increasing=false` +
+      `&anchor_list_filter=${filter}&page=${pageNum}&size=${size}`;
     const res = await pageFetch<RawListResponse>(page, url, {
       headers: { "X-Appid": "3000" },
     });
     if (res.status_code !== 0) {
-      throw new Error(`anchor_list/list failed: code=${res.status_code}`);
+      throw new Error(`anchor_list/list (enum=${listDefaultEnum}) failed: code=${res.status_code}`);
     }
     all.push(...res.data.list);
-    if (all.length >= res.data.total_amount) break;
+    if (all.length >= Number(res.data.total_amount)) break;
+    if (res.data.list.length === 0) break;
     pageNum++;
-    if (pageNum > 100) break; // safety
+    if (pageNum > 100) break;
     await new Promise((r) => setTimeout(r, 300));
   }
   return all;
+}
+
+export async function fetchAnchorList(page: Page): Promise<Record<string, unknown>[]> {
+  const all = await fetchListByEnum(page, 0);
+  const cancelled = await fetchListByEnum(page, 5);
+  // 按 anchor_id 去重（"全部主播"分页有 dup，且与"注销主播"理论不重叠但保险起见统一去重）
+  const map = new Map<string, Record<string, unknown>>();
+  for (const r of [...all, ...cancelled]) {
+    const baseInfo = (r.anchor_base_info ?? {}) as Record<string, unknown>;
+    const id = String(baseInfo.anchor_id ?? r.anchor_id ?? "");
+    if (id && !map.has(id)) map.set(id, r);
+  }
+  return Array.from(map.values());
 }
 
 /**
