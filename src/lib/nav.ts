@@ -56,11 +56,10 @@ export const NAV: NavItem[] = [
     label: "直播数据",
     icon: BarChart3,
     children: [
-      { key: "data-brokers", label: "经纪人聚合", href: "/brokers" },
+      { key: "data-board", label: "业务看板", href: "/dashboard" },
       { key: "data-realtime", label: "实时数据", href: "/live/realtime", disabled: true },
       { key: "data-daily", label: "主播日报", href: "/live/daily", disabled: true },
       { key: "data-rank", label: "排行榜", href: "/live/rank", disabled: true },
-      { key: "data-board", label: "看板", href: "/live/board", disabled: true },
     ],
   },
   {
