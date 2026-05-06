@@ -10,15 +10,20 @@
 |---|---|---|
 | Phase 0（基础设施）| `v0.1.0-phase0` | ✅ 完成 |
 | Phase 1（钉钉同步 + 三层权限）| `v0.2.0-phase1` | ✅ 完成 |
-| Phase 2（主播 + 抖音/快手爬虫 + 直播数据看板）| - | 📋 待 brainstorm |
+| Phase 2（主播 + 抖音爬虫 + dashboard 看板）| `v0.3.0-phase2` | ✅ 完成 |
+| **Phase 2.1（跨平台直播账号 + 主播档案 + 默认排班）** | **`v0.3.0-phase2.1`** | **✅ 完成（2026-05-06）** |
+| Phase 2.2（投放迁移 + 排班 override + 投放主播效能）| - | 🚧 待开始（用户最早诉求 — PRO3 捕鱼投放迁移）|
+| Phase 2.3（快手 API 爬虫 + 直播数据 + 主播综合效能）| - | 📋 远期 |
 
 ## 必读文档（按顺序）
 
 1. **设计 Spec**：`docs/superpowers/specs/2026-04-30-qjhy-pro-design.md` — 整体架构、三层权限模型、字段原始性原则
 2. **Phase 0 plan**：`docs/superpowers/plans/2026-04-30-phase-0-foundation.md` — 已完成
 3. **Phase 1 plan**：`docs/superpowers/plans/2026-04-30-phase-1-org-permissions.md` — 已完成
-4. **Design tokens**：`docs/design/tokens.md` — 字节蓝主色、涨红跌绿、PingFang SC
-5. **CONTRIBUTING.md** — 项目宪法（命名规范 / 模块边界 / Zod 强制 / Git 规则）
+4. **Phase 2 plan**：`docs/superpowers/plans/2026-05-02-phase-2-broadcast-data.md` — 已完成
+5. **Phase 2.1 spec/plan**：`docs/superpowers/specs/2026-05-06-phase-2-1-live-account-anchor-design.md` + `docs/superpowers/plans/2026-05-06-phase-2-1-live-account-anchor.md`
+6. **Design tokens**：`docs/design/tokens.md` — 字节蓝主色、涨红跌绿、PingFang SC
+7. **CONTRIBUTING.md** — 项目宪法（命名规范 / 模块边界 / Zod 强制 / Git 规则）
 
 ## 技术栈
 
