@@ -6,4 +6,4 @@ export {
   UpsertAnchorInput,
   ListAnchorsInput,
 } from "./schema";
-// actions exported after Task 10: upsertAnchor, deleteAnchor
+export { upsertAnchor, deleteAnchor } from "./actions";
