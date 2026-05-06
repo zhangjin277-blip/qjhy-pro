@@ -34,8 +34,8 @@ export function DashboardShell({ defaultCollapsed, userName, userTitle, children
           onOpenMobile={() => setMobileOpen(true)}
         />
         {/* Main card 圆角浮卡 — 滚动条在浮卡外侧 */}
-        <main className="workspace-scroll relative z-10 mx-2 mb-2 flex min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-3 md:mr-2 md:mb-4 md:ml-0 md:pr-3">
-          <div className="workspace-shell flex min-h-full min-w-0 flex-1 flex-col rounded-2xl md:rounded-[28px]">
+        <main className="workspace-scroll relative z-10 mx-2 mb-2 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-3 md:mr-2 md:mb-4 md:ml-0 md:pr-3">
+          <div className="workspace-shell min-h-full min-w-0 rounded-2xl md:rounded-[28px]">
             <div className="min-w-0 p-3 md:px-4 md:py-4">{children}</div>
           </div>
         </main>
