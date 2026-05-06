@@ -756,5 +756,7 @@ function moduleEmoji(m: ModuleKey): string {
       return "🎤";
     case "live_room":
       return "📍";
+    case "placement":
+      return "💸";
   }
 }

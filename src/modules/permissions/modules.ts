@@ -13,6 +13,7 @@ export const MODULE_KEYS = [
   "live_account",
   "live_anchor",
   "live_room",
+  "placement",
 ] as const;
 
 export type ModuleKey = (typeof MODULE_KEYS)[number];
@@ -25,6 +26,7 @@ export const MODULE_LABEL: Record<ModuleKey, string> = {
   live_account: "直播账号",
   live_anchor: "主播档案",
   live_room: "直播间",
+  placement: "投放数据",
 };
 
 export const MODULE_DESC: Record<ModuleKey, string> = {
@@ -35,6 +37,7 @@ export const MODULE_DESC: Record<ModuleKey, string> = {
   live_account: "直播账号档案 / 主播绑定 / 默认排班",
   live_anchor: "主播业务档案（钉钉用户的主播扩展）",
   live_room: "线下物理直播间管理",
+  placement: "投放消耗 / 激活 / 主播归因看板",
 };
 
 export function isModuleKey(value: string): value is ModuleKey {
