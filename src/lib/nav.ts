@@ -58,6 +58,7 @@ export const NAV: NavItem[] = [
     icon: BarChart3,
     children: [
       { key: "data-board", label: "业务看板", href: "/dashboard" },
+      { key: "data-placement", label: "💸 投放数据", href: "/placements" },
       { key: "data-realtime", label: "实时数据", href: "/live/realtime", disabled: true },
       { key: "data-daily", label: "主播日报", href: "/live/daily", disabled: true },
       { key: "data-rank", label: "排行榜", href: "/live/rank", disabled: true },
