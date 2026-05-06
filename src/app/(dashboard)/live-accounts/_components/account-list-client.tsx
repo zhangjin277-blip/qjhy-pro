@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { AccountWithRelations } from "@/modules/live-account";
 import { AccountTable } from "./account-table";
 import { AccountBentoGrid } from "./account-bento-grid";
 import { AccountEditDrawer } from "./account-edit-drawer";
+
+const PAGE_SIZES = [25, 50, 100] as const;
+type PageSize = (typeof PAGE_SIZES)[number];
 
 const ROTATION_PRODUCTS = ["捕鱼大作战", "途游休闲捕鱼", "电玩捕鱼"];
 const ALL_PRODUCTS = [
@@ -70,6 +74,19 @@ export function AccountListClient({
 
   const [editingAccount, setEditingAccount] = useState<AccountWithRelations | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(25);
+
+  // 切换 product / pageSize 时回到第 1 页
+  useEffect(() => {
+    setPage(1);
+  }, [selectedProduct, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(initialAccounts.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedAccounts = initialAccounts.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const rangeStart = initialAccounts.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, initialAccounts.length);
 
   const onProductChange = (p: string) => {
     router.push(`/live-accounts?product=${encodeURIComponent(p)}`);
@@ -139,18 +156,60 @@ export function AccountListClient({
       {/* Layout */}
       {isRotation ? (
         <AccountBentoGrid
-          accounts={initialAccounts}
+          accounts={pagedAccounts}
           bindingsByAccount={bindingsByAccount}
           avatarByPlatformId={avatarByPlatformId}
           onEdit={openEdit}
         />
       ) : (
         <AccountTable
-          accounts={initialAccounts}
+          accounts={pagedAccounts}
           bindingsByAccount={bindingsByAccount}
           avatarByPlatformId={avatarByPlatformId}
           onEdit={openEdit}
         />
+      )}
+
+      {/* Pagination */}
+      {initialAccounts.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 text-[12.5px] text-slate-500 tabular-nums">
+          <span>
+            共 <strong className="text-slate-800">{initialAccounts.length}</strong> 个 · 当前{" "}
+            <strong className="text-slate-800">
+              {rangeStart}-{rangeEnd}
+            </strong>
+          </span>
+          <div className="flex items-center gap-2">
+            <select
+              className="h-7 rounded border border-slate-200 bg-white px-2 text-[12px]"
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value) as PageSize)}
+            >
+              {PAGE_SIZES.map((s) => (
+                <option key={s} value={s}>
+                  {s} 条/页
+                </option>
+              ))}
+            </select>
+            <button
+              className="flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              disabled={safePage <= 1}
+              onClick={() => setPage(safePage - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="font-medium text-slate-700">
+              {safePage} / {totalPages}
+            </span>
+            <button
+              className="flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage(safePage + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Edit drawer */}

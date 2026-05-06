@@ -4,12 +4,14 @@ import { cn } from "@/lib/utils/cn";
 import type { CoreKpiResponse, CoreKpiValue } from "@/modules/dashboard";
 import { formatChineseNumber, formatVsPrevShort, splitChineseNumber } from "./format";
 
-export type TimePreset = "yesterday" | "last7" | "last30";
+export type TimePreset = "yesterday" | "last7" | "last30" | "this_month" | "last_month";
 
 const TIME_PRESETS: { id: TimePreset; label: string }[] = [
   { id: "yesterday", label: "昨天" },
   { id: "last7", label: "近 7 日" },
   { id: "last30", label: "近 30 日" },
+  { id: "this_month", label: "本月" },
+  { id: "last_month", label: "上月" },
 ];
 
 const KPI_DEFS: {

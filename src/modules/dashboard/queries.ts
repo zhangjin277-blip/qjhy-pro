@@ -106,10 +106,18 @@ function anchorGroupCte(scope: DashboardScope): SQL {
   `;
 }
 
+/** 用本地时区格式化 YYYY-MM-DD（避开 toISOString 的 UTC 偏移坑：UTC+8 会整体退一天）*/
+function toLocalIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function shiftDate(date: string, days: number): string {
-  const d = new Date(date);
+  const d = new Date(date + "T00:00:00");
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toLocalIsoDate(d);
 }
 
 /* ──────────────────── Section 1（不动） ──────────────────── */
@@ -1160,7 +1168,7 @@ function buildDailyRows(
   ];
   for (let i = 0; i < days; i++) {
     const d = new Date(start.getTime() + i * 86400_000);
-    const ds = d.toISOString().slice(0, 10);
+    const ds = toLocalIsoDate(d);
     const values: Partial<Record<DrawerMetric, number | null>> = {};
     for (const m of metrics) {
       if (notApplicable.has(m)) {

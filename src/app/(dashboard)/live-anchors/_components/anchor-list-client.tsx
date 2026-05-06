@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { AnchorWithDingtalk } from "@/modules/live-anchor";
 import { AnchorTable } from "./anchor-table";
 import { AnchorEditDrawer } from "./anchor-edit-drawer";
@@ -12,6 +13,9 @@ const BUSINESS_LINE_TABS = [
   { key: "斗地主", label: "斗地主" },
   { key: "麻将", label: "麻将" },
 ] as const;
+
+const PAGE_SIZES = [25, 50, 100] as const;
+type PageSize = (typeof PAGE_SIZES)[number];
 
 type TabKey = (typeof BUSINESS_LINE_TABS)[number]["key"];
 
@@ -44,11 +48,24 @@ export function AnchorListClient({ initialAnchors, bindingsByAnchor, deptUsers }
   const [editingAnchor, setEditingAnchor] = useState<AnchorWithDingtalk | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(25);
 
   const filteredAnchors =
     activeTab === "all"
       ? initialAnchors
       : initialAnchors.filter((a) => a.business_line === activeTab);
+
+  // 切换 tab / pageSize 时回到第 1 页
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAnchors.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedAnchors = filteredAnchors.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const rangeStart = filteredAnchors.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, filteredAnchors.length);
 
   const counts: Record<TabKey, number> = {
     all: initialAnchors.length,
@@ -120,12 +137,54 @@ export function AnchorListClient({ initialAnchors, bindingsByAnchor, deptUsers }
 
       {/* Table */}
       <AnchorTable
-        anchors={filteredAnchors}
+        anchors={pagedAnchors}
         bindingsByAnchor={bindingsByAnchor}
         expandedId={expandedId}
         onToggleExpand={onToggleExpand}
         onEdit={openEdit}
       />
+
+      {/* Pagination */}
+      {filteredAnchors.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 text-[12.5px] text-slate-500 tabular-nums">
+          <span>
+            共 <strong className="text-slate-800">{filteredAnchors.length}</strong> 位 · 当前{" "}
+            <strong className="text-slate-800">
+              {rangeStart}-{rangeEnd}
+            </strong>
+          </span>
+          <div className="flex items-center gap-2">
+            <select
+              className="h-7 rounded border border-slate-200 bg-white px-2 text-[12px]"
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value) as PageSize)}
+            >
+              {PAGE_SIZES.map((s) => (
+                <option key={s} value={s}>
+                  {s} 条/页
+                </option>
+              ))}
+            </select>
+            <button
+              className="flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              disabled={safePage <= 1}
+              onClick={() => setPage(safePage - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="font-medium text-slate-700">
+              {safePage} / {totalPages}
+            </span>
+            <button
+              className="flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage(safePage + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Edit drawer */}
       <AnchorEditDrawer
