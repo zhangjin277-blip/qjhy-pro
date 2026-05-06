@@ -69,8 +69,8 @@ export const NAV: NavItem[] = [
     icon: MonitorPlay,
     children: [
       { key: "live-accounts", label: "直播账号", href: "/live-accounts" },
-      { key: "live-anchors", label: "主播档案", href: "/live-anchors", disabled: true },
-      { key: "live-schedule", label: "排班矩阵", href: "/live-schedule", disabled: true },
+      { key: "live-anchors", label: "主播档案", href: "/live-anchors" },
+      { key: "live-schedule", label: "排班总览", href: "/live-accounts/schedule-overview" },
     ],
   },
   {
