@@ -135,7 +135,7 @@ export function AnchorTable({
               ].map((col) => (
                 <th
                   key={col.label}
-                  className="sticky top-0 border-b border-slate-200 bg-white px-3 py-[10px] text-left text-[11px] font-medium uppercase tracking-[0.04em] text-slate-500"
+                  className="bg-secondary sticky top-0 border-b border-slate-200 px-3 py-[10px] text-left text-[11px] font-medium uppercase tracking-[0.04em] text-slate-500"
                   style={{ width: col.w }}
                 >
                   {col.label}
