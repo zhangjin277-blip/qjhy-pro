@@ -28,9 +28,20 @@ function presetToRange(preset: TimePreset): { from: string; to: string } {
     const from = toIsoDate(new Date(now.getTime() - 7 * 86400_000));
     return { from, to: yesterday };
   }
-  // last30
-  const from = toIsoDate(new Date(now.getTime() - 30 * 86400_000));
-  return { from, to: yesterday };
+  if (preset === "last30") {
+    const from = toIsoDate(new Date(now.getTime() - 30 * 86400_000));
+    return { from, to: yesterday };
+  }
+  if (preset === "this_month") {
+    const firstOfMonth = toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    // 边界：今天是 1 号时 yesterday 在上月，让 from = to 避免空区间
+    return { from: firstOfMonth, to: yesterday < firstOfMonth ? firstOfMonth : yesterday };
+  }
+  // last_month
+  const firstOfLastMonth = toIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  // new Date(year, month, 0) → 上月最后一天
+  const lastOfLastMonth = toIsoDate(new Date(now.getFullYear(), now.getMonth(), 0));
+  return { from: firstOfLastMonth, to: lastOfLastMonth };
 }
 
 function toIsoDate(d: Date): string {
@@ -106,7 +117,7 @@ export function DashboardBoard(): React.JSX.Element {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <CoreKpiSection
         core={core}
         loading={loading}

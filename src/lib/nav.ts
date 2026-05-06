@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Home,
+  MonitorPlay,
   Settings2,
   Shield,
   UserCircle2,
@@ -63,6 +64,16 @@ export const NAV: NavItem[] = [
     ],
   },
   {
+    key: "live",
+    label: "直播管理",
+    icon: MonitorPlay,
+    children: [
+      { key: "live-accounts", label: "直播账号", href: "/live-accounts" },
+      { key: "live-anchors", label: "主播档案", href: "/live-anchors" },
+      { key: "live-schedule", label: "排班总览", href: "/live-accounts/schedule-overview" },
+    ],
+  },
+  {
     key: "ops",
     label: "运营管理",
     icon: Settings2,
@@ -83,6 +94,7 @@ export const NAV: NavItem[] = [
       { key: "sys-dept", label: "部门架构", href: "/admin/depts", disabled: true },
       { key: "sys-alias", label: "字段别名", href: "/admin/aliases", disabled: true },
       { key: "sys-crawler", label: "采集监控", href: "/admin/crawler" },
+      { key: "sys-migration", label: "PRO3 迁移", href: "/live-account-migration" },
     ],
   },
   {

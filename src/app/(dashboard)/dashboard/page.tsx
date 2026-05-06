@@ -9,8 +9,8 @@ export default async function DashboardPage(): Promise<React.JSX.Element> {
   if (!session) redirect("/login");
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">业务看板</h1>
+    <div className="space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
+      <h1 className="text-xl font-semibold tracking-tight">业务看板</h1>
       <DashboardBoard />
     </div>
   );

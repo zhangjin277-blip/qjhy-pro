@@ -4,14 +4,14 @@
  * 简易 SVG sparkline，无依赖。
  *
  * - 数据全 0 或长度 < 2 → 画一条平直中线
- * - 默认尺寸 96 x 28，颜色 #1664FF
+ * - 默认尺寸 96 x 28，颜色走图表语义 token
  * - viewBox 自适应，外部用 className 控制大小
  */
 export function Sparkline({
   data,
   width = 96,
   height = 28,
-  stroke = "#1664FF",
+  stroke = "var(--chart-current)",
   className,
 }: {
   data: number[];
@@ -31,7 +31,7 @@ export function Sparkline({
         y1={h / 2}
         x2={w - pad}
         y2={h / 2}
-        stroke="#e5e6eb"
+        stroke="var(--chart-baseline)"
         strokeWidth="1"
         strokeDasharray="2,3"
       />

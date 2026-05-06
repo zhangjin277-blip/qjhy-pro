@@ -1,4 +1,5 @@
 export * from "./_meta";
+export * from "./account-anchor-default";
 export * from "./aliases";
 export * from "./anchors";
 export * from "./audit";
@@ -6,5 +7,8 @@ export * from "./auth";
 export * from "./brokers";
 export * from "./crawler";
 export * from "./dingtalk";
+export * from "./live-account";
+export * from "./live-anchor";
+export * from "./live-room";
 export * from "./permissions";
 export * from "./user-preset";

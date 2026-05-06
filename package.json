@@ -25,6 +25,7 @@
   "dependencies": {
     "@base-ui/react": "^1.4.1",
     "better-auth": "^1.6.9",
+    "better-sqlite3": "^12.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
@@ -32,6 +33,7 @@
     "next": "16.2.4",
     "node-cron": "^4.2.1",
     "pg-boss": "10",
+    "pinyin": "^4.0.0",
     "postgres": "^3.4.9",
     "puppeteer-core": "24",
     "puppeteer-extra": "^3.3.6",
@@ -52,6 +54,7 @@
     "@eslint/js": "^10.0.1",
     "@next/eslint-plugin-next": "^16.2.4",
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/node-cron": "^3.0.11",
     "@types/react": "^19",

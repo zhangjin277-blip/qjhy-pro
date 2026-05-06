@@ -750,5 +750,11 @@ function moduleEmoji(m: ModuleKey): string {
       return "🤖";
     case "permissions":
       return "🔐";
+    case "live_account":
+      return "🎬";
+    case "live_anchor":
+      return "🎤";
+    case "live_room":
+      return "📍";
   }
 }

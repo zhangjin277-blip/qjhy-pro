@@ -123,7 +123,7 @@ function KpiCard({
         "rounded-md border bg-card p-3 text-left transition-all",
         "hover:border-foreground/15",
         selected && !notApplicable
-          ? "border-primary bg-gradient-to-b from-primary/5 to-transparent ring-3 ring-primary/8"
+          ? "border-[var(--selection-border)] bg-[var(--selection-bg)] ring-2 ring-[var(--selection-ring)]"
           : "",
         notApplicable && "opacity-50 cursor-not-allowed",
       )}
@@ -132,10 +132,22 @@ function KpiCard({
       {notApplicable ? (
         <div className="text-foreground/40 mt-1 text-[20px] font-bold tabular-nums">—</div>
       ) : (
-        <div className="text-foreground mt-0.5 text-[20px] leading-tight font-bold tabular-nums tracking-tight">
+        <div
+          className={cn(
+            "mt-0.5 text-[20px] leading-tight font-bold tabular-nums tracking-tight",
+            selected ? "text-[var(--selection-primary)]" : "text-foreground",
+          )}
+        >
           {body}
           {suffix ? (
-            <span className="text-[12px] font-medium text-muted-foreground ml-0.5">{suffix}</span>
+            <span
+              className={cn(
+                "text-[12px] font-medium ml-0.5",
+                selected ? "text-[var(--selection-primary)]" : "text-muted-foreground",
+              )}
+            >
+              {suffix}
+            </span>
           ) : null}
         </div>
       )}
@@ -201,20 +213,20 @@ function TrendChart({
         <AreaChart data={data} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="dashboard-cur-area" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.18} />
-              <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+              <stop offset="0%" stopColor="var(--chart-current)" stopOpacity={0.18} />
+              <stop offset="100%" stopColor="var(--chart-current)" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" vertical={false} />
+          <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="2 4" vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+            tick={{ fontSize: 11, fill: "var(--chart-axis)" }}
             tickLine={false}
-            axisLine={{ stroke: "var(--border)" }}
+            axisLine={{ stroke: "var(--chart-grid)" }}
             minTickGap={20}
           />
           <YAxis
-            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+            tick={{ fontSize: 11, fill: "var(--chart-axis)" }}
             tickLine={false}
             axisLine={false}
             width={56}
@@ -236,11 +248,11 @@ function TrendChart({
           <Area
             type="monotone"
             dataKey="cur"
-            stroke="var(--primary)"
+            stroke="var(--chart-current)"
             strokeWidth={2}
             fill="url(#dashboard-cur-area)"
             dot={false}
-            activeDot={{ r: 4, fill: "var(--primary)" }}
+            activeDot={{ r: 4, fill: "var(--chart-current)" }}
             isAnimationActive={false}
             connectNulls
           />

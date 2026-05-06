@@ -66,6 +66,9 @@ export const anchor_profile = pgTable(
     // 历史归档标记（迁移自 PRO3 老中台，新爬虫已不返回 → stub 行）
     is_archived: boolean("is_archived").notNull().default(false),
 
+    // 跨平台真人绑定（Phase 2.1 加列，不做 UI；后续按需绑）
+    dingtalk_user_id: text("dingtalk_user_id"),
+
     // 系统
     raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
@@ -78,6 +81,7 @@ export const anchor_profile = pgTable(
     idx_is_three: index("idx_anchor_profile_is_three").on(t.is_threekingdoms),
     idx_health: index("idx_anchor_profile_health").on(t.anchor_health_score),
     idx_archived: index("idx_anchor_profile_archived").on(t.is_archived),
+    idx_dingtalk: index("idx_anchor_profile_dingtalk").on(t.dingtalk_user_id),
   }),
 );
 

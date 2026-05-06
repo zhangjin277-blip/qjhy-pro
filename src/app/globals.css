@@ -184,7 +184,15 @@
   --color-change-up: var(--change-up);
   --color-change-down: var(--change-down);
   --color-change-flat: var(--change-flat);
+  --color-selection-primary: var(--selection-primary);
+  --color-selection-bg: var(--selection-bg);
+  --color-selection-border: var(--selection-border);
+  --color-selection-ring: var(--selection-ring);
+  --color-chart-current: var(--chart-current);
   --color-chart-compare: var(--chart-compare);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
+  --color-chart-baseline: var(--chart-baseline);
 }
 
 /* ============================================================
@@ -192,19 +200,28 @@
    ============================================================ */
 :root {
   /* —— 业务语义（背景 / 文本 / 边框 / 状态）—— */
-  --bg-page: var(--color-slate-100);
+  --bg-page: #eef2ff;
+  --bg-page-start: #eaf0ff;
+  --bg-page-mid: #f1f2ff;
+  --bg-page-end: #eef1ff;
   --bg-elevated: #ffffff;
+  --bg-workspace: rgba(246, 247, 255, 0.88);
+  --bg-kpi-card: #f7f8fb;
   --text-primary: var(--color-slate-800);
   --text-secondary: var(--color-slate-500);
   --text-muted: var(--color-slate-400);
   --text-disabled: var(--color-slate-300);
   --border-default: var(--color-slate-200);
   --border-subtle: rgba(226, 232, 240, 0.5);
-  --focus-ring: rgba(22, 119, 255, 0.15);
+  --focus-ring: rgba(82, 112, 255, 0.18);
 
   /* —— 状态背景 —— */
-  --hover-bg: var(--color-blue-50); /* 卡片 / 行 / 树节点 hover */
-  --hover-ring: rgba(22, 100, 255, 0.4); /* 卡片 hover 时蓝色 ring */
+  --selection-primary: #5270ff;
+  --selection-bg: #eef3ff;
+  --selection-border: rgba(82, 112, 255, 0.34);
+  --selection-ring: rgba(82, 112, 255, 0.12);
+  --hover-bg: var(--selection-bg); /* 卡片 / 行 / 树节点 hover */
+  --hover-ring: rgba(82, 112, 255, 0.18); /* 卡片 hover 时蓝色 ring */
 
   /* —— shadcn 兼容层（shadcn 组件直接用这套命名）—— */
   --background: var(--bg-page);
@@ -219,8 +236,8 @@
   --secondary-foreground: var(--text-primary);
   --muted: var(--color-slate-100);
   --muted-foreground: var(--text-secondary);
-  --accent: var(--color-blue-50);
-  --accent-foreground: var(--color-blue-700);
+  --accent: var(--hover-bg);
+  --accent-foreground: var(--selection-primary);
   --destructive: var(--color-red-500);
   --destructive-foreground: #ffffff;
   --border: var(--border-subtle); /* 全局 border 默认软色 */
@@ -234,7 +251,11 @@
   --change-up: #f53f3f; /* 涨红 */
   --change-down: #00b42a; /* 跌绿 */
   --change-flat: var(--text-secondary);
+  --chart-current: var(--primary);
   --chart-compare: var(--text-muted);
+  --chart-grid: var(--border-subtle);
+  --chart-axis: var(--text-secondary);
+  --chart-baseline: var(--border-subtle);
 }
 
 /* ============================================================
@@ -296,6 +317,32 @@ body {
 }
 .change-flat {
   color: var(--change-flat);
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 0 rgba(255, 255, 255, 0.65),
+    0 18px 42px -34px rgba(40, 55, 120, 0.42);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.workspace-shell {
+  background: var(--bg-workspace);
+  border: 2px solid rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 0 0 1px rgba(210, 220, 245, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 24px 68px -40px rgba(40, 55, 120, 0.42);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.workspace-scroll {
+  scrollbar-gutter: stable;
 }
 
 /* ============================================================

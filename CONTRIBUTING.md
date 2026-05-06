@@ -83,6 +83,9 @@ src/app/(dashboard)/[feature]/page.tsx
 | brokers | `src/modules/brokers/` | 经纪人 ↔ 钉钉用户映射 + fuzzy matcher | Phase 2 (2026-05-02) |
 | crawler | `src/modules/crawler/` | 抖音爬虫 + 队列 + Cookie | Phase 2 (2026-05-02) |
 | dashboard | `src/modules/dashboard/` | 看板聚合查询 | Phase 2 (2026-05-02) |
+| live-room | `src/modules/live-room/` | 线下物理直播间（B17/A20）CRUD | Phase 2.1 (2026-05-06) |
+| live-account | `src/modules/live-account/` | 跨平台直播账号 + PRO3 迁移工具 + 姓名 fuzzy match + 时段命中算法 | Phase 2.1 (2026-05-06) |
+| live-anchor | `src/modules/live-anchor/` | 主播业务扩展（钉钉用户的主播身份）+ N:M 默认排班关联 | Phase 2.1 (2026-05-06) |
 
 > 每加一个业务模块，PR 里必须更新此表。
 
