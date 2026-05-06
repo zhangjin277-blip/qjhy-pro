@@ -70,6 +70,19 @@ export interface MigrationOptions {
 }
 
 /**
+ * 拆分含分隔符的姓名串（PRO3 脏数据：anchorName 字段经常被运营写成"张三/李四/王五"或"张三、李四"）。
+ * 返回去重 trim 后的姓名数组。
+ */
+export function splitNames(s: string | undefined): string[] {
+  if (!s) return [];
+  const parts = s
+    .split(/[/、，,]/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  return [...new Set(parts)];
+}
+
+/**
  * 解析"12:00-18:00" → ["12:00","18:00"]
  */
 export function parseScheduleString(s: string | undefined): [string, string] | null {
@@ -169,11 +182,14 @@ export async function runMigration(opts: MigrationOptions): Promise<MigrationRep
     }
 
     const anchorNamesInRow: string[] = [];
-    if (row.anchorName) anchorNamesInRow.push(row.anchorName);
+    // anchorName / agent 可能是 "张三/李四" 这种脏数据，先拆开
+    for (const n of splitNames(row.anchorName)) anchorNamesInRow.push(n);
     if (row.anchorList) {
-      for (const a of row.anchorList) if (a.name) anchorNamesInRow.push(a.name);
+      for (const a of row.anchorList) {
+        for (const n of splitNames(a.name)) anchorNamesInRow.push(n);
+      }
     }
-    if (row.agent) anchorNamesInRow.push(row.agent);
+    for (const n of splitNames(row.agent)) anchorNamesInRow.push(n);
 
     for (const name of anchorNamesInRow) {
       if (matchedAnchors.has(name)) continue;
@@ -215,7 +231,11 @@ export async function runMigration(opts: MigrationOptions): Promise<MigrationRep
       try {
         const accId = crypto.randomUUID();
         const room_id = row.room ? (roomMap.get(row.room) ?? null) : null;
-        const agent_dingtalk_user_id = row.agent ? (matchedAnchors.get(row.agent) ?? null) : null;
+        // agent 可能是 "陈泰/苏梓豪"，取拆分后第一个能匹配上的真人
+        const agent_dingtalk_user_id =
+          splitNames(row.agent)
+            .map((n) => matchedAnchors.get(n))
+            .find((id): id is string => Boolean(id)) ?? null;
         const placement_label = placementMap.get(row.accountName) ?? null;
 
         await tx
@@ -257,23 +277,28 @@ export async function runMigration(opts: MigrationOptions): Promise<MigrationRep
               .map(parseScheduleString)
               .filter((s): s is [string, string] => s !== null);
             const rd = parseRestDay(a.restDay);
-            bindings.push({
-              name: a.name,
-              slots,
-              restDays: rd ? [rd] : [],
-              remark: a.remark,
-            });
+            // a.name 也可能含分隔符 → 拆开每人各建一行 binding（共享 slots/restDays/remark）
+            for (const name of splitNames(a.name)) {
+              bindings.push({
+                name,
+                slots,
+                restDays: rd ? [rd] : [],
+                remark: a.remark,
+              });
+            }
           }
         } else if (row.anchorName) {
           const slots = [row.schedule1, row.schedule2, row.schedule3]
             .map(parseScheduleString)
             .filter((s): s is [string, string] => s !== null);
           const rd = parseRestDay(row.restDay);
-          bindings.push({
-            name: row.anchorName,
-            slots,
-            restDays: rd ? [rd] : [],
-          });
+          for (const name of splitNames(row.anchorName)) {
+            bindings.push({
+              name,
+              slots,
+              restDays: rd ? [rd] : [],
+            });
+          }
         }
 
         for (const b of bindings) {
