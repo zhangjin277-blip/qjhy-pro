@@ -7,3 +7,4 @@ export * from "./incremental";
 export * from "./xlsx-adapter";
 export { ingestRows, type IngestInput, type IngestRow } from "./ingest";
 export { listBatches, getBatchDetail } from "./batch-queries";
+export { queryByAccount, queryByAnchor, queryByHour, type BoardFilter } from "./queries";
