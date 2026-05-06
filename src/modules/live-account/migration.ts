@@ -74,7 +74,7 @@ export interface MigrationOptions {
  */
 export function parseScheduleString(s: string | undefined): [string, string] | null {
   if (!s) return null;
-  const m = s.match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/);
+  const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/);
   if (!m || !m[1] || !m[2] || !m[3] || !m[4]) return null;
   return [`${m[1].padStart(2, "0")}:${m[2]}`, `${m[3].padStart(2, "0")}:${m[4]}`];
 }
