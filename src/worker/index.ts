@@ -6,6 +6,7 @@ import { crawlOrchestrator } from "./jobs/crawl-orchestrator";
 import { registerCrawlerHandlers } from "./jobs/handlers/register";
 import { stopBoss } from "@/modules/crawler/server";
 import { closeBrowser } from "@/lib/puppeteer";
+import { runCronAttributionSweep } from "@/modules/placement-attribution/server";
 
 // Phase 1: 钉钉同步
 registerJob({
@@ -19,6 +20,13 @@ registerJob({
   name: "crawl-orchestrator",
   schedule: "0 10 * * *",
   task: crawlOrchestrator,
+});
+
+// Phase 2.2: 归因兜底（每天 04:00 扫 dirty 行）
+registerJob({
+  name: "attribution-sweep",
+  schedule: "0 4 * * *",
+  task: runCronAttributionSweep,
 });
 
 registerJob({
