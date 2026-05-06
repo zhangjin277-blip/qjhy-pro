@@ -5,6 +5,8 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/
 import { upsertAccount } from "@/modules/live-account";
 import type { AccountWithRelations } from "@/modules/live-account";
 import { AnchorBindingForm } from "./anchor-binding-form";
+import { ScheduleOverrideTab } from "./schedule-override-tab";
+import type { OverrideRowView } from "./schedule-override-tab";
 
 /**
  * 简易可搜索 select（避免引入 cmdk 依赖）。
@@ -171,9 +173,11 @@ interface AccountEditDrawerProps {
   anchors: AnchorLite[];
   defaultProduct?: string;
   bindingsByAccount: Record<string, BindingLite[]>;
+  overridesByAccount: Record<string, OverrideRowView[]>;
 }
 
 type TabKey = "basic" | "bindings";
+type ScheduleSubTab = "default" | "override";
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -200,9 +204,11 @@ export function AccountEditDrawer({
   anchors,
   defaultProduct = "捕鱼大作战",
   bindingsByAccount,
+  overridesByAccount,
 }: AccountEditDrawerProps) {
   const isEdit = account !== null;
   const [tab, setTab] = useState<TabKey>("basic");
+  const [scheduleSubTab, setScheduleSubTab] = useState<ScheduleSubTab>("default");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -267,6 +273,7 @@ export function AccountEditDrawer({
       setLiveStatus("unknown");
     }
     setTab("basic");
+    setScheduleSubTab("default");
     setError(null);
   }, [open, account, defaultProduct]);
 
@@ -361,6 +368,28 @@ export function AccountEditDrawer({
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto px-6 py-5">
+            {tab === "bindings" && (
+              <div className="mb-4 flex gap-0 border-b border-slate-200 -mx-6 px-6">
+                {(
+                  [
+                    { key: "default", label: "默认排班" },
+                    { key: "override", label: "临时调整" },
+                  ] as { key: ScheduleSubTab; label: string }[]
+                ).map((st) => (
+                  <button
+                    key={st.key}
+                    onClick={() => setScheduleSubTab(st.key)}
+                    className={`border-b-2 px-3 pb-2 text-[12px] font-medium transition-colors ${
+                      scheduleSubTab === st.key
+                        ? "border-blue-500 text-blue-600"
+                        : "border-transparent text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {tab === "basic" ? (
               <div className="flex flex-col gap-4">
                 {error && (
@@ -540,11 +569,25 @@ export function AccountEditDrawer({
                   </select>
                 </FormField>
               </div>
-            ) : (
+            ) : scheduleSubTab === "default" ? (
               <AnchorBindingForm
                 accountId={account?.id ?? null}
                 bindings={currentBindings}
                 anchors={anchors}
+              />
+            ) : (
+              <ScheduleOverrideTab
+                account_id={account?.id ?? ""}
+                defaultSchedules={currentBindings.map((b) => ({
+                  user: b.dingtalk_user_id,
+                  slots: b.time_slots,
+                  rest_days: b.rest_days,
+                }))}
+                candidates={anchors.map((a) => ({
+                  id: a.dingtalk_user_id,
+                  name: a.name,
+                }))}
+                initialOverrides={account ? (overridesByAccount[account.id] ?? []) : []}
               />
             )}
           </div>

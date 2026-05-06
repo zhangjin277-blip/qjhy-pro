@@ -7,6 +7,7 @@ import type { AccountWithRelations } from "@/modules/live-account";
 import { AccountTable } from "./account-table";
 import { AccountBentoGrid } from "./account-bento-grid";
 import { AccountEditDrawer } from "./account-edit-drawer";
+import type { OverrideRowView } from "./schedule-override-tab";
 
 const PAGE_SIZES = [25, 50, 100] as const;
 type PageSize = (typeof PAGE_SIZES)[number];
@@ -57,6 +58,7 @@ interface Props {
   dingtalkUsers: DingtalkUserLite[];
   anchors: AnchorLite[];
   avatarByPlatformId: Record<string, string | null>;
+  overridesByAccount: Record<string, OverrideRowView[]>;
 }
 
 export function AccountListClient({
@@ -68,6 +70,7 @@ export function AccountListClient({
   dingtalkUsers,
   anchors,
   avatarByPlatformId,
+  overridesByAccount,
 }: Props) {
   const router = useRouter();
   const isRotation = ROTATION_PRODUCTS.includes(selectedProduct);
@@ -222,6 +225,7 @@ export function AccountListClient({
         anchors={anchors}
         defaultProduct={selectedProduct}
         bindingsByAccount={bindingsByAccount}
+        overridesByAccount={overridesByAccount}
       />
     </div>
   );
