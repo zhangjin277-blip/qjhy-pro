@@ -628,11 +628,20 @@ export function AnchorTable(): React.JSX.Element {
       </div>
 
       {/* 表格 — 使用原生 <table> 避开 shadcn Table 的内层 overflow wrapper（否则 sticky 表头失效） */}
-      <div className="bg-card overflow-hidden rounded-lg border shadow-sm">
+      <div
+        className="overflow-hidden rounded-lg shadow-sm"
+        style={{
+          background: "rgba(255, 255, 255, 0.92)",
+          border: "1px solid var(--border-subtle)",
+        }}
+      >
         <div className="max-h-[calc(100vh-320px)] overflow-auto">
           <table className="w-full caption-bottom text-sm min-w-max">
             <TableHeader className="sticky top-0 z-20 bg-secondary [&_th]:bg-secondary">
-              <TableRow className="border-b-2 hover:bg-secondary">
+              <TableRow
+                className="hover:bg-secondary"
+                style={{ borderBottom: "1px solid var(--border-subtle)" }}
+              >
                 {visibleColumns.map((c) => {
                   const active = sortKey === c.key;
                   return (
@@ -682,7 +691,7 @@ export function AnchorTable(): React.JSX.Element {
                 </TableRow>
               ) : (
                 pagedRows.map((r) => (
-                  <TableRow key={r.anchor_id} className="hover:bg-accent/30">
+                  <TableRow key={r.anchor_id} className="group hover:bg-[var(--hover-bg)]">
                     {visibleColumns.map((c) => {
                       const v = getValue(r, c.key);
                       // 主播信息合并列：头像 + 昵称 + 抖音号 + UID 三行
@@ -692,7 +701,8 @@ export function AnchorTable(): React.JSX.Element {
                             key={c.key}
                             className={cn(
                               "px-3 py-2 w-[220px] max-w-[220px]",
-                              c.sticky && "sticky left-0 bg-card",
+                              c.sticky &&
+                                "sticky left-0 bg-card transition-colors group-hover:bg-[var(--hover-bg)]",
                             )}
                           >
                             <div className="flex items-center gap-2">
@@ -773,7 +783,8 @@ export function AnchorTable(): React.JSX.Element {
                           className={cn(
                             "px-3 py-3 text-sm whitespace-nowrap",
                             c.align === "right" && "text-right tabular-nums",
-                            c.sticky && "sticky left-0 bg-card",
+                            c.sticky &&
+                              "sticky left-0 bg-card transition-colors group-hover:bg-[var(--hover-bg)]",
                             c.bold && "font-semibold",
                             muted && "text-muted-foreground",
                           )}

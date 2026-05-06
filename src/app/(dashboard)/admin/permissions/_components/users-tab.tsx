@@ -188,7 +188,7 @@ function DeptTreeNode({
   return (
     <div>
       <div
-        className={`group hover:bg-muted/50 flex items-center gap-1 px-2 py-1.5 text-sm transition-colors ${
+        className={`group hover:bg-[var(--hover-bg)] flex items-center gap-1 px-2 py-1.5 text-sm transition-colors ${
           isSelected ? "bg-accent" : ""
         }`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -240,7 +240,7 @@ function DeptTreeNode({
               key={u.user_id}
               type="button"
               onClick={() => onSelectUser(u.user_id)}
-              className="hover:bg-muted/50 flex w-full items-center gap-2 px-2 py-1 text-left transition-colors"
+              className="hover:bg-[var(--hover-bg)] flex w-full items-center gap-2 px-2 py-1 text-left transition-colors"
               style={{ paddingLeft: `${(depth + 1) * 12 + 16}px` }}
             >
               <span className="text-muted-foreground/60 text-[11px]">·</span>
@@ -393,7 +393,7 @@ export function UsersTab() {
                     key={u.user_id}
                     type="button"
                     onClick={() => setEditingUserId(u.user_id)}
-                    className="hover:bg-muted/50 w-full p-3 text-left transition-colors"
+                    className="hover:bg-[var(--hover-bg)] w-full p-3 text-left transition-colors"
                   >
                     <div className="font-medium">{u.name}</div>
                     <div className="text-muted-foreground text-xs">
