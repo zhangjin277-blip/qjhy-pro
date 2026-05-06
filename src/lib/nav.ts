@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Home,
+  MonitorPlay,
   Settings2,
   Shield,
   UserCircle2,
@@ -60,6 +61,16 @@ export const NAV: NavItem[] = [
       { key: "data-realtime", label: "实时数据", href: "/live/realtime", disabled: true },
       { key: "data-daily", label: "主播日报", href: "/live/daily", disabled: true },
       { key: "data-rank", label: "排行榜", href: "/live/rank", disabled: true },
+    ],
+  },
+  {
+    key: "live",
+    label: "直播管理",
+    icon: MonitorPlay,
+    children: [
+      { key: "live-accounts", label: "直播账号", href: "/live-accounts" },
+      { key: "live-anchors", label: "主播档案", href: "/live-anchors", disabled: true },
+      { key: "live-schedule", label: "排班矩阵", href: "/live-schedule", disabled: true },
     ],
   },
   {
