@@ -17,8 +17,11 @@ function datasetClause(ds?: string[]) {
   )})`;
 }
 
-export async function queryByAccount(filter: BoardFilter) {
-  const { rows } = (await db.execute(sql`
+// postgres-js 适配器 db.execute 直接返回数组（不是 {rows} 包装），统一用 result + cast
+type Row = Record<string, unknown>;
+
+export async function queryByAccount(filter: BoardFilter): Promise<Row[]> {
+  const result = await db.execute(sql`
     SELECT
       a.id              AS account_id,
       a.account_name,
@@ -37,12 +40,12 @@ export async function queryByAccount(filter: BoardFilter) {
     GROUP BY a.id, a.account_name, a.placement_label, a.platform
     ORDER BY cost DESC NULLS LAST
     LIMIT 200
-  `)) as unknown as { rows: Record<string, unknown>[] };
-  return rows;
+  `);
+  return result as unknown as Row[];
 }
 
-export async function queryByAnchor(filter: BoardFilter) {
-  const { rows } = (await db.execute(sql`
+export async function queryByAnchor(filter: BoardFilter): Promise<Row[]> {
+  const result = await db.execute(sql`
     SELECT
       p.attributed_dingtalk_user_id  AS user_id,
       du.name                         AS anchor_name,
@@ -60,12 +63,12 @@ export async function queryByAnchor(filter: BoardFilter) {
     GROUP BY p.attributed_dingtalk_user_id, du.name, la.business_line, p.attribution_source
     ORDER BY cost DESC NULLS LAST
     LIMIT 200
-  `)) as unknown as { rows: Record<string, unknown>[] };
-  return rows;
+  `);
+  return result as unknown as Row[];
 }
 
-export async function queryByHour(filter: BoardFilter) {
-  const { rows } = (await db.execute(sql`
+export async function queryByHour(filter: BoardFilter): Promise<Row[]> {
+  const result = await db.execute(sql`
     SELECT
       p.live_account_id  AS account_id,
       a.account_name,
@@ -80,6 +83,6 @@ export async function queryByHour(filter: BoardFilter) {
     GROUP BY p.live_account_id, a.account_name, p.hour
     ORDER BY a.account_name, p.hour
     LIMIT 5000
-  `)) as unknown as { rows: Record<string, unknown>[] };
-  return rows;
+  `);
+  return result as unknown as Row[];
 }
