@@ -6,7 +6,9 @@ import {
   dept_leader,
   dingtalk_user,
   role_default_permission,
+  user_position_override,
 } from "@/db/schema";
+import type { ModuleKey } from "./modules";
 import type { Permission, PermissionSource, ResolvedPermission, Scope } from "./types";
 
 const SCOPE_RANK: Record<Scope, number> = {
@@ -60,30 +62,41 @@ export function mergePermissions(
 }
 
 /**
- * 查询给定用户的最终权限（含来源说明）。
+ * 查询给定用户在某个 module 的最终权限（含来源说明）。
  *
  * 步骤：
  * 1. 从 dingtalk_user 拿 title（钉钉岗位）
- * 2. 从 role_default_permission 按 title 拿默认权限（找不到 fallback 到 "其他"）
+ * 2. 从 role_default_permission 按 (title, module) 拿默认权限（找不到 fallback 到 ("其他", module)）
  * 3. 从 dept_leader 看是否管部门
- * 4. 从 auth_permission_override 拿覆盖（且未过期）
+ * 4. 从 auth_permission_override 按 (user_id, module) 拿覆盖（且未过期）
  * 5. mergePermissions 合并
  */
-export async function resolvePermission(userId: string): Promise<ResolvedPermission> {
+export async function resolvePermission(
+  userId: string,
+  module: ModuleKey,
+): Promise<ResolvedPermission> {
   const [user] = await db.select().from(dingtalk_user).where(eq(dingtalk_user.user_id, userId));
 
   if (!user) {
     return { ...NULL_PERMISSION, sources: [] };
   }
 
-  // 1. 岗位默认
-  const position = user.title ?? "其他";
+  // 1. 解析项目岗位：override > 钉钉 title > "其他"
+  const [posOverride] = await db
+    .select({ position: user_position_override.position })
+    .from(user_position_override)
+    .where(eq(user_position_override.user_id, userId));
+  const position = posOverride?.position ?? user.title ?? "其他";
   const [roleRow] = await db
     .select()
     .from(role_default_permission)
-    .where(eq(role_default_permission.position, position));
+    .where(
+      and(
+        eq(role_default_permission.position, position),
+        eq(role_default_permission.module, module),
+      ),
+    );
 
-  // fallback: 用 "其他" 行
   let role: Permission = NULL_PERMISSION;
   if (roleRow) {
     role = {
@@ -96,7 +109,12 @@ export async function resolvePermission(userId: string): Promise<ResolvedPermiss
     const [fallbackRow] = await db
       .select()
       .from(role_default_permission)
-      .where(eq(role_default_permission.position, "其他"));
+      .where(
+        and(
+          eq(role_default_permission.position, "其他"),
+          eq(role_default_permission.module, module),
+        ),
+      );
     if (fallbackRow) {
       role = {
         scope: fallbackRow.scope,
@@ -111,13 +129,14 @@ export async function resolvePermission(userId: string): Promise<ResolvedPermiss
   const leaderRows = await db.select().from(dept_leader).where(eq(dept_leader.user_id, userId));
   const isDeptLeader = leaderRows.length > 0;
 
-  // 3. override（且未过期）
+  // 3. override（按 module，且未过期）
   const [overrideRow] = await db
     .select()
     .from(auth_permission_override)
     .where(
       and(
         eq(auth_permission_override.user_id, userId),
+        eq(auth_permission_override.module, module),
         or(
           isNull(auth_permission_override.expires_at),
           gt(auth_permission_override.expires_at, new Date()),

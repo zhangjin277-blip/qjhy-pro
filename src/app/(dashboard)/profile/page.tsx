@@ -6,7 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import type { Scope } from "@/modules/permissions";
+import {
+  MODULE_KEYS,
+  MODULE_LABEL,
+  type ModuleKey,
+  type ResolvedPermission,
+  type Scope,
+} from "@/modules/permissions";
 
 const SCOPE_LABEL: Record<Scope, string> = {
   none: "无权限",
@@ -69,7 +75,14 @@ export default async function ProfilePage() {
     );
   }
 
-  const perm = await resolvePermission(dingUser.user_id);
+  const perms: Record<ModuleKey, ResolvedPermission> = {} as Record<ModuleKey, ResolvedPermission>;
+  for (const m of MODULE_KEYS) {
+    perms[m] = await resolvePermission(dingUser.user_id, m);
+  }
+  const sourceSet = new Set<string>();
+  for (const m of MODULE_KEYS) {
+    for (const s of perms[m].sources) sourceSet.add(s.kind);
+  }
 
   return (
     <div className="space-y-4 max-w-2xl">
@@ -100,55 +113,45 @@ export default async function ProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>当前权限</CardTitle>
-          <CardDescription>三层叠加计算结果</CardDescription>
+          <CardTitle>各板块权限</CardTitle>
+          <CardDescription>
+            每个业务板块独立计算（岗位默认 + 部门负责人 + 个体覆盖）
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div className="rounded-lg bg-primary/10 border border-primary/20 p-3">
-            <div>
-              数据范围：
-              <strong className="text-primary text-base">{SCOPE_LABEL[perm.scope]}</strong>
-            </div>
-            <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
-              <div>可编辑：{perm.can_edit ? "✓" : "✗"}</div>
-              <div>可导出：{perm.can_export ? "✓" : "✗"}</div>
-              <div>可管理：{perm.can_admin ? "✓" : "✗"}</div>
-            </div>
-          </div>
-
-          <div className="text-muted-foreground">
-            <div className="font-medium text-foreground mb-1">权限来源</div>
-            {perm.sources.length === 0 ? (
-              <p>无</p>
-            ) : (
-              <ul className="list-disc pl-5 space-y-1">
-                {perm.sources.map((s, i) => {
-                  if (s.kind === "default") {
-                    return <li key={i}>岗位默认（{s.position}）</li>;
-                  }
-                  if (s.kind === "dept_leader") {
-                    return (
-                      <li key={i}>
-                        部门负责人（管理 {s.deptIds.length} 个部门：
-                        {s.deptIds.join(", ")}）
-                      </li>
-                    );
-                  }
-                  if (s.kind === "override") {
-                    return (
-                      <li key={i}>
-                        个体覆盖（理由：{s.reason}
-                        {s.expires_at
-                          ? `，过期：${new Date(s.expires_at).toLocaleString("zh-CN")}`
-                          : ""}
-                        ）
-                      </li>
-                    );
-                  }
-                  return null;
-                })}
-              </ul>
-            )}
+        <CardContent className="space-y-2 text-sm">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-xs text-muted-foreground">
+                <th className="text-left py-2 pr-4">板块</th>
+                <th className="text-left py-2 pr-4">数据范围</th>
+                <th className="text-left py-2 pr-4">编辑</th>
+                <th className="text-left py-2 pr-4">导出</th>
+                <th className="text-left py-2">管理</th>
+              </tr>
+            </thead>
+            <tbody>
+              {MODULE_KEYS.map((m) => {
+                const p = perms[m];
+                return (
+                  <tr key={m} className="border-b last:border-b-0">
+                    <td className="py-2 pr-4 font-medium">{MODULE_LABEL[m]}</td>
+                    <td className="py-2 pr-4">
+                      <span
+                        className={p.scope === "none" ? "text-muted-foreground" : "text-primary"}
+                      >
+                        {SCOPE_LABEL[p.scope]}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4">{p.can_edit ? "✓" : "✗"}</td>
+                    <td className="py-2 pr-4">{p.can_export ? "✓" : "✗"}</td>
+                    <td className="py-2">{p.can_admin ? "✓" : "✗"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="text-xs text-muted-foreground pt-3">
+            权限来源：{sourceSet.size === 0 ? "无" : Array.from(sourceSet).join(" + ")}
           </div>
         </CardContent>
       </Card>

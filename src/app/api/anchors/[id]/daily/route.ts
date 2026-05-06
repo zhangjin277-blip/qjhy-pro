@@ -56,7 +56,7 @@ export async function GET(
     dingtalkUserId = du.user_id;
   }
 
-  const perm = await resolvePermission(dingtalkUserId);
+  const perm = await resolvePermission(dingtalkUserId, "anchors");
   if (perm.scope === "none") {
     return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   }

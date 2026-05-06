@@ -1,11 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import { getDrawerDetail } from "@/modules/dashboard/server";
-import type { DrawerDetailFilters, GroupKey, ProjectKey } from "@/modules/dashboard";
+import { db } from "@/db/client";
+import { dingtalk_user } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import {
+  getDrawerDetail,
+  resolveDashboardScope,
+  type DashboardScope,
+} from "@/modules/dashboard/server";
+import type { DrawerDetailFilters, DrawerMetric, GroupKey, ProjectKey } from "@/modules/dashboard";
 
 const PROJECT_SET: ReadonlySet<ProjectKey> = new Set(["ddz", "three"]);
 const GROUP_SET: ReadonlySet<GroupKey> = new Set(["all", "online", "offline", "other"]);
+const METRIC_SET: ReadonlySet<DrawerMetric> = new Set([
+  "total_fan_ticket",
+  "flow",
+  "active_anchor_count",
+  "new_anchor_count",
+  "first_live_anchor_count",
+  "live_flow",
+  "video_flow",
+  "install_or_activate",
+  "show_uv",
+  "watch_uv",
+]);
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -18,6 +37,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const dateTo = sp.get("date_to") ?? today;
   const projectRaw = sp.get("project");
   const groupRaw = sp.get("group");
+  const metricRaw = sp.get("metric");
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
     return NextResponse.json({ error: "INVALID_DATE" }, { status: 400 });
@@ -31,16 +51,32 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (groupRaw && !GROUP_SET.has(groupRaw as GroupKey)) {
     return NextResponse.json({ error: "INVALID_GROUP" }, { status: 400 });
   }
+  if (metricRaw && !METRIC_SET.has(metricRaw as DrawerMetric)) {
+    return NextResponse.json({ error: "INVALID_METRIC" }, { status: 400 });
+  }
 
   const filters: DrawerDetailFilters = {
     project: (projectRaw as ProjectKey | null) ?? undefined,
     group: (groupRaw as GroupKey | null) ?? undefined,
     date_from: dateFrom,
     date_to: dateTo,
+    metric: (metricRaw as DrawerMetric | null) ?? undefined,
   };
 
+  let scope: DashboardScope;
+  if (session.user.email === "emergency@qjhy.local") {
+    scope = { kind: "all" };
+  } else {
+    const [du] = await db
+      .select({ user_id: dingtalk_user.user_id })
+      .from(dingtalk_user)
+      .where(eq(dingtalk_user.unionid, session.user.id));
+    if (!du) return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
+    scope = await resolveDashboardScope(du.user_id);
+  }
+
   try {
-    const data = await getDrawerDetail(filters);
+    const data = await getDrawerDetail(filters, scope);
     return NextResponse.json(data);
   } catch (e) {
     console.error("[/api/dashboard/detail]", e);

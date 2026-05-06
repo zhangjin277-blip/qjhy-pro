@@ -1,4 +1,13 @@
-import { boolean, index, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  pgTable,
+  primaryKey,
+  serial,
+  text,
+  timestamp,
+  unique,
+} from "drizzle-orm/pg-core";
 import { dingtalk_dept, dingtalk_user } from "./dingtalk";
 
 /**
@@ -24,34 +33,66 @@ export const dept_leader = pgTable(
 );
 
 /**
- * 岗位默认权限（可在 UI 修改，新岗位通过插入新行添加）。
+ * 岗位默认权限（按板块拆分：每岗位 × module 一行）。
+ * module 取值：dashboard / anchors / crawler / permissions（见 modules.ts）。
  */
-export const role_default_permission = pgTable("role_default_permission", {
-  position: text("position").primaryKey(),
-  scope: text("scope", { enum: ["none", "self", "team", "all"] }).notNull(),
-  can_edit: boolean("can_edit").notNull().default(false),
-  can_export: boolean("can_export").notNull().default(false),
-  can_admin: boolean("can_admin").notNull().default(false),
-  description: text("description"),
-  updated_at: timestamp("updated_at").notNull().defaultNow(),
+export const role_default_permission = pgTable(
+  "role_default_permission",
+  {
+    position: text("position").notNull(),
+    module: text("module").notNull(),
+    scope: text("scope", { enum: ["none", "self", "team", "all"] }).notNull(),
+    can_edit: boolean("can_edit").notNull().default(false),
+    can_export: boolean("can_export").notNull().default(false),
+    can_admin: boolean("can_admin").notNull().default(false),
+    description: text("description"),
+    updated_at: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.position, t.module] }),
+    idx_module: index("idx_role_default_module").on(t.module),
+  }),
+);
+
+/**
+ * 项目岗位分配（业务岗位）。
+ * 钉钉同步会覆盖 dingtalk_user 整行，所以项目内自定义的岗位指派放独立表。
+ * 优先级：user_position_override > dingtalk_user.title > "其他"
+ */
+export const user_position_override = pgTable("user_position_override", {
+  user_id: text("user_id")
+    .primaryKey()
+    .references(() => dingtalk_user.user_id, { onDelete: "cascade" }),
+  position: text("position").notNull(),
+  reason: text("reason"),
+  assigned_by: text("assigned_by"),
+  assigned_at: timestamp("assigned_at").notNull().defaultNow(),
 });
 
 /**
- * 个体权限覆盖（最高优先级，需理由）。
+ * 个体权限覆盖（最高优先级，需理由）。按板块拆分：每用户 × module 一行。
  * - scope/can_*: null 表示该字段不覆盖（用 role_default 的值）
  * - reason: 必填，强制说明变更原因
  * - expires_at: 可选过期时间（临时权限）
  */
-export const auth_permission_override = pgTable("auth_permission_override", {
-  user_id: text("user_id")
-    .primaryKey()
-    .references(() => dingtalk_user.user_id, { onDelete: "cascade" }),
-  scope: text("scope", { enum: ["none", "self", "team", "all"] }),
-  can_edit: boolean("can_edit"),
-  can_export: boolean("can_export"),
-  can_admin: boolean("can_admin"),
-  reason: text("reason").notNull(),
-  expires_at: timestamp("expires_at"),
-  created_by: text("created_by"),
-  created_at: timestamp("created_at").notNull().defaultNow(),
-});
+export const auth_permission_override = pgTable(
+  "auth_permission_override",
+  {
+    user_id: text("user_id")
+      .notNull()
+      .references(() => dingtalk_user.user_id, { onDelete: "cascade" }),
+    module: text("module").notNull(),
+    scope: text("scope", { enum: ["none", "self", "team", "all"] }),
+    can_edit: boolean("can_edit"),
+    can_export: boolean("can_export"),
+    can_admin: boolean("can_admin"),
+    reason: text("reason").notNull(),
+    expires_at: timestamp("expires_at"),
+    created_by: text("created_by"),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.user_id, t.module] }),
+    idx_module: index("idx_override_module").on(t.module),
+  }),
+);

@@ -20,6 +20,11 @@ import { Sparkline } from "./sparkline";
 type BreakdownItem = DashboardOverviewResponse["breakdown"][number];
 
 const METRIC_TABS: { id: Section2Metric; label: string }[] = [
+  { id: "total_fan_ticket", label: "音浪" },
+  { id: "flow", label: "流水" },
+  { id: "active_anchor_count", label: "开播主播数" },
+  { id: "new_anchor_count", label: "新入驻主播数" },
+  { id: "first_live_anchor_count", label: "首次开播主播数" },
   { id: "live_flow", label: "直播流水" },
   { id: "video_flow", label: "短视频流水" },
   { id: "install_or_activate", label: "安装/激活" },
@@ -39,15 +44,31 @@ export interface BreakdownClick {
   group: GroupKey;
 }
 
-/** 哪些 metric 是「人数」类（单位 = 人） */
-function isPersonMetric(metric: Section2Metric): boolean {
+/** 主播数类（数量级小，不需缩写）*/
+function isAnchorCountMetric(metric: Section2Metric): boolean {
+  return (
+    metric === "active_anchor_count" ||
+    metric === "new_anchor_count" ||
+    metric === "first_live_anchor_count"
+  );
+}
+
+/** 大数量「人」类（曝光/UV/安装·激活，需要缩写到万）*/
+function isLargePersonMetric(metric: Section2Metric): boolean {
   return metric === "install_or_activate" || metric === "show_uv" || metric === "watch_uv";
 }
 
 function splitForMetric(metric: Section2Metric, value: number): { body: string; unit: string } {
-  if (isPersonMetric(metric)) {
+  if (isAnchorCountMetric(metric)) {
+    // 「开播主播数 / 新入驻主播数」数小，直接显示
     return { body: value.toLocaleString("zh-CN"), unit: "人" };
   }
+  if (isLargePersonMetric(metric)) {
+    // 「曝光 / 进直播间UV / 安装·激活」大数字缩写 + 「人」
+    const split = splitChineseNumber(value);
+    return { body: split.body, unit: split.unit ? `${split.unit} 人` : "人" };
+  }
+  // 音浪 / 各类流水：缩写到万/亿，无「人」单位
   return splitChineseNumber(value);
 }
 
@@ -112,9 +133,11 @@ function GroupCell({
       onClick={() => onClick({ metric, project, group })}
       disabled={notApplicable}
       className={cn(
-        "px-3 py-1 text-left transition-colors hover:bg-[#fafbfc] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-md",
+        "px-3 py-1 text-left transition-colors rounded-md",
+        "hover:bg-[#E8F0FF] hover:ring-1 hover:ring-inset hover:ring-[#1664FF]/40 hover:shadow-sm",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
         withDivider && "border-l border-[#f2f3f5]",
-        notApplicable && "opacity-60 cursor-not-allowed hover:bg-transparent",
+        notApplicable && "opacity-60 cursor-not-allowed hover:bg-transparent hover:ring-0",
       )}
       aria-label={`${PROJECT_LABEL[project]} ${pillLabel[group]} ${cellLabel} 详情`}
     >
@@ -278,7 +301,7 @@ function ProjectBlock({
 
   // 段下小字：N 主播 · X/人 — 人均口径在 person metric 下不太合适，回退为「N 人」
   const subline = (cell: GroupCellValue): string => {
-    if (isPersonMetric(metric)) {
+    if (isAnchorCountMetric(metric)) {
       return `${cell.anchor_count} 主播`;
     }
     if (cell.anchor_count <= 0) return "0 主播";
@@ -419,7 +442,7 @@ export function BreakdownSection({
 
       <div className="rounded-xl bg-white px-6 pt-2 pb-5 shadow-[0_1px_0_0_rgba(0,0,0,0.02),0_4px_12px_-8px_rgba(0,0,0,0.04)]">
         <div
-          className="flex items-center gap-6 text-[14px] border-b border-[#e5e6eb]"
+          className="flex items-center gap-6 text-[14px] border-b border-[#e5e6eb] overflow-x-auto"
           role="tablist"
           aria-label="指标"
         >
@@ -433,10 +456,10 @@ export function BreakdownSection({
                 aria-selected={active}
                 onClick={() => onMetricChange(t.id)}
                 className={cn(
-                  "py-3 transition-colors",
+                  "py-3 px-1 transition-colors whitespace-nowrap rounded",
                   active
                     ? "text-primary font-semibold shadow-[inset_0_-2px_0_var(--color-primary)]"
-                    : "text-[#4e5969] font-medium hover:text-[#1d2129]",
+                    : "text-[#1d2129] font-medium hover:text-primary",
                 )}
               >
                 {t.label}

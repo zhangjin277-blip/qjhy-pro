@@ -21,11 +21,14 @@ const KPI_DEFS: {
   { key: "flow", label: "流水", unitFor: () => "" },
   { key: "active_anchor_count", label: "开播主播数", unitFor: () => "人" },
   { key: "new_anchor_count", label: "新入驻主播数", unitFor: () => "人" },
+  { key: "first_live_anchor_count", label: "首次开播主播数", unitFor: () => "人" },
 ];
 
 /** 「人」类指标：直接显示整数 + 「人」单位 */
 function isPersonMetric(key: keyof CoreKpiResponse): boolean {
-  return key === "active_anchor_count" || key === "new_anchor_count";
+  return (
+    key === "active_anchor_count" || key === "new_anchor_count" || key === "first_live_anchor_count"
+  );
 }
 
 function formatPersonOrChinese(
@@ -168,7 +171,7 @@ export function CoreKpiSection({
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         {KPI_DEFS.map((def) => {
           const v: CoreKpiValue = core?.[def.key] ?? {
             current: 0,

@@ -18,7 +18,7 @@ export async function GET() {
       .from(dingtalk_user)
       .where(eq(dingtalk_user.unionid, session.user.id));
     if (!du) return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
-    const perm = await resolvePermission(du.user_id);
+    const perm = await resolvePermission(du.user_id, "permissions");
     if (!perm.can_admin) return NextResponse.json({ error: "AUTH_FORBIDDEN" }, { status: 403 });
   }
 

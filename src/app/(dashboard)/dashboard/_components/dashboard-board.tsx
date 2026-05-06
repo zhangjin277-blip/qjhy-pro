@@ -43,7 +43,7 @@ function toIsoDate(d: Date): string {
 export function DashboardBoard(): React.JSX.Element {
   // 默认 = 近 7 日（spec 要求；昨天数据可能未结算）
   const [preset, setPreset] = useState<TimePreset>("last7");
-  const [metric, setMetric] = useState<Section2Metric>("live_flow");
+  const [metric, setMetric] = useState<Section2Metric>("total_fan_ticket");
   const [data, setData] = useState<DashboardOverviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

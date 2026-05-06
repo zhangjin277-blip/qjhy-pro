@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowDown,
@@ -84,6 +85,46 @@ export function AnchorTable(): React.JSX.Element {
 
   // drill-down 抽屉
   const [selectedAnchor, setSelectedAnchor] = useState<AnchorListRow | null>(null);
+
+  // 从 dashboard 跳转过来时携带 ?anchor_id=xxx → 数据加载后自动打开该主播抽屉（仅一次）
+  // 同时支持 ?date_from / ?date_to / ?project 自动应用到 filters（仅在挂载时一次）
+  const searchParams = useSearchParams();
+  const autoOpenAnchorId = searchParams.get("anchor_id");
+  const autoOpenedRef = useRef(false);
+  const urlFiltersAppliedRef = useRef(false);
+  useEffect(() => {
+    if (urlFiltersAppliedRef.current) return;
+    const dateFromParam = searchParams.get("date_from");
+    const dateToParam = searchParams.get("date_to");
+    const projectParam = searchParams.get("project");
+    if (!dateFromParam && !dateToParam && !projectParam) {
+      urlFiltersAppliedRef.current = true;
+      return;
+    }
+    setFilters((f) => ({
+      ...f,
+      date_from: dateFromParam ?? f.date_from,
+      date_to: dateToParam ?? f.date_to,
+      project:
+        projectParam === "ddz" || projectParam === "three" || projectParam === "all"
+          ? projectParam
+          : f.project,
+    }));
+    // 项目联动预设：?project=three → 三国默认预设 / ?project=ddz → 斗地主默认预设
+    // 否则字段会停在 ddz 默认，看三国主播全是 0
+    if (projectParam === "three" || projectParam === "ddz") {
+      setActivePreset(projectParam);
+      const saved = loadSavedColumns(projectParam);
+      if (saved) {
+        setVisibleKeys(saved);
+      } else {
+        const preset = PRESETS.find((p) => p.id === projectParam);
+        if (preset) setVisibleKeys(preset.keys as ColKey[]);
+      }
+    }
+    urlFiltersAppliedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 用户自定义预设（持久化到 DB，跨设备同步）
   const [userPresets, setUserPresets] = useState<UserColumnPreset[]>([]);
@@ -195,23 +236,76 @@ export function AnchorTable(): React.JSX.Element {
     if (filters.project) sp.set("project", filters.project);
     if (filters.search) sp.set("search", filters.search);
     setLoading(true);
-    fetch(`/api/anchors?${sp.toString()}`)
-      .then(
-        (r) =>
-          r.json() as Promise<{
-            rows: AnchorListRow[];
-            previousRows: AnchorListRow[];
-            days: number;
-          }>,
-      )
-      .then((d) => {
-        setRows(d.rows);
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/anchors?${sp.toString()}`);
+        if (!r.ok) {
+          const errBody: { error?: string } = await r.json().catch(() => ({}));
+          if (cancelled) return;
+          if (r.status === 401) {
+            toast.error("登录已失效，请刷新重新登录");
+          } else if (r.status === 403) {
+            toast.error("无权访问主播明细");
+          } else {
+            toast.error(
+              `加载主播明细失败（${r.status}${errBody.error ? `·${errBody.error}` : ""}）`,
+            );
+          }
+          setRows([]);
+          setPreviousRows([]);
+          setPeriodDays(1);
+          return;
+        }
+        const d = (await r.json()) as {
+          rows?: AnchorListRow[];
+          previousRows?: AnchorListRow[];
+          days?: number;
+        };
+        if (cancelled) return;
+        setRows(d.rows ?? []);
         setPreviousRows(d.previousRows ?? []);
         setPeriodDays(d.days ?? 1);
         setPage(1);
-      })
-      .finally(() => setLoading(false));
+      } catch (e) {
+        if (cancelled) return;
+        toast.error("网络错误：" + (e instanceof Error ? e.message : "未知"));
+        setRows([]);
+        setPreviousRows([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [filters]);
+
+  // 数据加载后，如果 URL 携带 ?anchor_id=xxx → 自动打开该主播抽屉（只触发一次）
+  // 同时根据 target.is_threekingdoms 切到对应项目预设，避免三国主播显示斗地主字段
+  useEffect(() => {
+    if (autoOpenedRef.current) return;
+    if (!autoOpenAnchorId) return;
+    if (loading) return;
+    if (rows.length === 0) return;
+    const target = rows.find((r) => r.anchor_id === autoOpenAnchorId);
+    if (target) {
+      setSelectedAnchor(target);
+      autoOpenedRef.current = true;
+      // 跳转主播是三国但当前预设还是斗地主 → 切到三国预设；反之亦然
+      const wantPreset: PresetId = target.is_threekingdoms ? "three" : "ddz";
+      if (activePreset !== wantPreset && activePreset !== "custom") {
+        setActivePreset(wantPreset);
+        const saved = loadSavedColumns(wantPreset);
+        if (saved) {
+          setVisibleKeys(saved);
+        } else {
+          const preset = PRESETS.find((p) => p.id === wantPreset);
+          if (preset) setVisibleKeys(preset.keys as ColKey[]);
+        }
+      }
+    }
+  }, [autoOpenAnchorId, loading, rows, activePreset]);
 
   // 前一周期数据按 anchor_id 索引
   const prevByAnchorId = useMemo(() => {

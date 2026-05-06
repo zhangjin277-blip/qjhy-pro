@@ -1,7 +1,10 @@
 import { z } from "zod";
+import { MODULE_KEYS } from "./modules";
 
 export const ScopeSchema = z.enum(["none", "self", "team", "all"]);
 export type Scope = z.infer<typeof ScopeSchema>;
+
+export const ModuleKeySchema = z.enum(MODULE_KEYS);
 
 export const PermissionSchema = z.object({
   scope: ScopeSchema,
@@ -25,6 +28,7 @@ export type RemoveDeptLeaderInput = z.infer<typeof RemoveDeptLeaderInput>;
 
 export const UpsertOverrideInput = z.object({
   user_id: z.string().min(1),
+  module: ModuleKeySchema,
   scope: ScopeSchema.optional(),
   can_edit: z.boolean().optional(),
   can_export: z.boolean().optional(),
@@ -34,8 +38,36 @@ export const UpsertOverrideInput = z.object({
 });
 export type UpsertOverrideInput = z.infer<typeof UpsertOverrideInput>;
 
+/**
+ * 批量写一个用户在多个 module 上的 override（UI 抽屉一次保存多个板块用）。
+ */
+export const UpsertOverrideBatchInput = z.object({
+  user_id: z.string().min(1),
+  reason: z.string().min(1, "必须填变更理由"),
+  entries: z
+    .array(
+      z.object({
+        module: ModuleKeySchema,
+        scope: ScopeSchema.nullable(),
+        can_edit: z.boolean().nullable().optional(),
+        can_export: z.boolean().nullable().optional(),
+        can_admin: z.boolean().nullable().optional(),
+      }),
+    )
+    .min(1),
+});
+export type UpsertOverrideBatchInput = z.infer<typeof UpsertOverrideBatchInput>;
+
+export const AssignUserPositionInput = z.object({
+  user_id: z.string().min(1),
+  position: z.string().min(1).nullable(), // null 表示清除分配（回落到钉钉 title）
+  reason: z.string().min(1, "必须填变更理由"),
+});
+export type AssignUserPositionInput = z.infer<typeof AssignUserPositionInput>;
+
 export const UpsertRoleDefaultInput = z.object({
   position: z.string().min(1),
+  module: ModuleKeySchema,
   scope: ScopeSchema,
   can_edit: z.boolean(),
   can_export: z.boolean(),

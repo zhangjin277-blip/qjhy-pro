@@ -74,6 +74,7 @@
   --color-change-up: var(--change-up);
   --color-change-down: var(--change-down);
   --color-change-flat: var(--change-flat);
+  --color-chart-compare: var(--chart-compare);
 }
 
 /* ========== Semantic (light) ========== */
@@ -105,6 +106,7 @@
   --change-up: #f53f3f; /* 涨红 */
   --change-down: #00b42a; /* 跌绿 */
   --change-flat: var(--color-gray-600);
+  --chart-compare: var(--color-gray-500);
 }
 
 /* ========== Semantic (dark) - Phase 3 完善 ========== */

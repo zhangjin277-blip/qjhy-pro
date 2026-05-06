@@ -34,7 +34,7 @@ export default async function PermissionsAdminPage() {
     );
   }
 
-  const perm = await resolvePermission(du.user_id);
+  const perm = await resolvePermission(du.user_id, "permissions");
   if (!perm.can_admin) {
     return (
       <div className="max-w-2xl p-8">

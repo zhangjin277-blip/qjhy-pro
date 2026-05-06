@@ -1,11 +1,18 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db/client";
-import { dingtalk_dept, dingtalk_user, dept_leader } from "@/db/schema";
+import {
+  auth_permission_override,
+  dingtalk_dept,
+  dingtalk_user,
+  dept_leader,
+  user_position_override,
+} from "@/db/schema";
 import { resolvePermission } from "@/modules/permissions/server";
+import { MODULE_KEYS, type ModuleKey, type ResolvedPermission } from "@/modules/permissions";
 import { getDeptAliasMap } from "@/modules/aliases/server";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ userId: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -18,7 +25,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
       .from(dingtalk_user)
       .where(eq(dingtalk_user.unionid, session.user.id));
     if (!du) return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
-    const perm = await resolvePermission(du.user_id);
+    const perm = await resolvePermission(du.user_id, "permissions");
     if (!perm.can_admin) return NextResponse.json({ error: "AUTH_FORBIDDEN" }, { status: 403 });
   }
 
@@ -27,7 +34,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
   const [user] = await db.select().from(dingtalk_user).where(eq(dingtalk_user.user_id, userId));
   if (!user) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
-  const targetPerm = await resolvePermission(userId);
+  const targetPermEntries = await Promise.all(
+    MODULE_KEYS.map(async (m) => [m, await resolvePermission(userId, m)] as const),
+  );
+  const targetPermissions: Record<ModuleKey, ResolvedPermission> = Object.fromEntries(
+    targetPermEntries,
+  ) as Record<ModuleKey, ResolvedPermission>;
+
+  const overrideRows = await db
+    .select()
+    .from(auth_permission_override)
+    .where(eq(auth_permission_override.user_id, userId));
+
+  const [posOverrideRow] = await db
+    .select()
+    .from(user_position_override)
+    .where(eq(user_position_override.user_id, userId));
 
   const [leaderDepts, aliasMap] = await Promise.all([
     db
@@ -50,12 +72,33 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
     };
   });
 
+  // 把 user.dept_ids 也 join 部门名/别名（用户摘要卡显示用）
+  const userDeptRows = user.dept_ids.length
+    ? await db
+        .select({ dept_id: dingtalk_dept.dept_id, name: dingtalk_dept.name })
+        .from(dingtalk_dept)
+        .where(inArray(dingtalk_dept.dept_id, user.dept_ids))
+    : [];
+  const userDepts = user.dept_ids.map((id) => {
+    const row = userDeptRows.find((r) => r.dept_id === id);
+    const a = aliasMap.get(id);
+    return {
+      dept_id: id,
+      name: row?.name ?? id,
+      alias: a?.alias ?? null,
+    };
+  });
+
   return NextResponse.json({
     user_id: user.user_id,
     name: user.name,
     title: user.title,
     dept_ids: user.dept_ids,
-    permission: targetPerm,
+    dept_full: userDepts,
+    assigned_position: posOverrideRow?.position ?? null, // 项目岗位（手动分配）
+    effective_position: posOverrideRow?.position ?? user.title ?? "其他",
+    permissions: targetPermissions,
+    overrides: overrideRows,
     managedDepts: enrichedManagedDepts,
   });
 }

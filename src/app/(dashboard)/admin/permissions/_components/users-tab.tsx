@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Crown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
   Table,
   TableBody,
@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { UserDetailPanel } from "./user-detail";
-import type { Scope } from "@/modules/permissions";
+import { MODULE_KEYS, MODULE_LABEL, type ModuleKey, type Scope } from "@/modules/permissions";
 
 interface UserRow {
   user_id: string;
@@ -22,11 +22,17 @@ interface UserRow {
   title: string | null;
   dept_ids: string[];
   dept_id: string | null;
-  scope: Scope;
-  can_edit: boolean;
-  can_export: boolean;
-  can_admin: boolean;
-  source_kinds: string[];
+  is_dept_leader: boolean;
+  assigned_position: string | null;
+  effective_position: string;
+  module_scopes: Record<ModuleKey, Scope>;
+  opened_count: number;
+  total_count: number;
+}
+
+/** 显示用：手动分配的岗位 > 钉钉 title > "未填岗位" */
+function displayPosition(u: UserRow): string {
+  return u.assigned_position ?? u.title ?? "未填岗位";
 }
 
 interface DeptRow {
@@ -48,12 +54,10 @@ interface DeptNode {
   totalUsers: number;
 }
 
-/** 显示名：别名优先，原名兜底 */
 function deptDisplayName(node: { name: string; alias: string | null }): string {
   return node.alias ?? node.name;
 }
 
-/** Hover tooltip：有别名时显示原名+备注；无别名时显示备注 */
 function deptTooltip(node: { name: string; alias: string | null; note: string | null }): string {
   const parts: string[] = [];
   if (node.alias) parts.push(`原名：${node.name}`);
@@ -61,86 +65,29 @@ function deptTooltip(node: { name: string; alias: string | null; note: string | 
   return parts.join(" · ");
 }
 
-const ROOT_PARENT_ID = "1"; // 钉钉根部门
+const ROOT_PARENT_ID = "1";
 
 const SCOPE_LABEL: Record<Scope, string> = {
-  none: "无权限",
-  self: "仅本人",
-  team: "本部门",
-  all: "全部",
+  none: "无",
+  self: "仅自己",
+  team: "仅团队",
+  all: "所有人",
 };
 
 const SCOPE_TAG_CLASS: Record<Scope, string> = {
-  none: "bg-muted text-muted-foreground",
-  self: "bg-sky-100 text-sky-700",
-  team: "bg-violet-100 text-violet-700",
-  all: "bg-amber-100 text-amber-700",
+  none: "bg-muted/50 text-muted-foreground border-muted-foreground/20",
+  self: "bg-sky-50 text-sky-700 border-sky-200",
+  team: "bg-violet-50 text-violet-700 border-violet-200",
+  all: "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
-const SOURCE_LABEL: Record<string, string> = {
-  default: "岗位默认",
-  dept_leader: "部门负责人",
-  override: "个体覆盖",
-};
-
-const SOURCE_TAG_CLASS: Record<string, string> = {
-  default: "bg-muted text-muted-foreground",
-  dept_leader: "bg-emerald-100 text-emerald-700",
-  override: "bg-rose-100 text-rose-700",
-};
-
-function ScopeTag({ scope }: { scope: Scope }) {
+function ScopeCell({ scope }: { scope: Scope }) {
   return (
     <span
-      className={`inline-flex h-6 items-center rounded-full px-2 text-xs font-medium ${SCOPE_TAG_CLASS[scope]}`}
+      className={`inline-flex h-5 items-center rounded border px-1.5 text-[11px] font-medium ${SCOPE_TAG_CLASS[scope]}`}
     >
       {SCOPE_LABEL[scope]}
     </span>
-  );
-}
-
-function SourceTags({ kinds }: { kinds: string[] }) {
-  if (kinds.length === 0) return <span className="text-muted-foreground text-xs">无</span>;
-  return (
-    <div className="flex flex-wrap gap-1">
-      {kinds.map((k) => (
-        <span
-          key={k}
-          className={`inline-flex h-5 items-center rounded px-1.5 text-[11px] font-medium ${
-            SOURCE_TAG_CLASS[k] ?? "bg-muted text-muted-foreground"
-          }`}
-        >
-          {SOURCE_LABEL[k] ?? k}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function PermDots({ user }: { user: UserRow }) {
-  const items: { key: string; on: boolean; label: string }[] = [
-    { key: "edit", on: user.can_edit, label: "编辑" },
-    { key: "export", on: user.can_export, label: "导出" },
-    { key: "admin", on: user.can_admin, label: "管理" },
-  ];
-  return (
-    <div className="flex gap-2 text-xs">
-      {items.map((it) => (
-        <span
-          key={it.key}
-          className={
-            it.on
-              ? "inline-flex items-center gap-1 text-foreground"
-              : "inline-flex items-center gap-1 text-muted-foreground/60"
-          }
-        >
-          <span
-            className={`inline-block h-1.5 w-1.5 rounded-full ${it.on ? "bg-emerald-500" : "bg-muted-foreground/30"}`}
-          />
-          {it.label}
-        </span>
-      ))}
-    </div>
   );
 }
 
@@ -157,7 +104,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="bg-card rounded-lg border p-3">
       <div className="text-muted-foreground text-xs">{label}</div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
     </div>
   );
 }
@@ -177,7 +124,6 @@ function buildDeptTree(depts: DeptRow[], users: UserRow[]): DeptNode[] {
     });
   }
 
-  // 用户挂在 dept_ids 数组中"第一个能匹配到部门表"的节点下
   for (const u of users) {
     const matchedDeptId = u.dept_ids.find((id) => nodeMap.has(id));
     if (matchedDeptId) {
@@ -186,7 +132,6 @@ function buildDeptTree(depts: DeptRow[], users: UserRow[]): DeptNode[] {
     }
   }
 
-  // 装配 children 关系
   const roots: DeptNode[] = [];
   for (const node of nodeMap.values()) {
     const parent = node.parent_id ? nodeMap.get(node.parent_id) : undefined;
@@ -195,12 +140,10 @@ function buildDeptTree(depts: DeptRow[], users: UserRow[]): DeptNode[] {
     } else if (node.parent_id === ROOT_PARENT_ID || node.parent_id === null) {
       roots.push(node);
     } else {
-      // 父部门不在表里（脏数据），当 root 处理
       roots.push(node);
     }
   }
 
-  // 计算每个节点的递归用户数
   function computeTotal(node: DeptNode): number {
     const childTotal = node.children.reduce((sum, c) => sum + computeTotal(c), 0);
     node.totalUsers = node.users.length + childTotal;
@@ -208,7 +151,6 @@ function buildDeptTree(depts: DeptRow[], users: UserRow[]): DeptNode[] {
   }
   roots.forEach(computeTotal);
 
-  // 部门按显示名（别名优先）排序
   function sortNode(n: DeptNode) {
     n.children.sort((a, b) => deptDisplayName(a).localeCompare(deptDisplayName(b), "zh-CN"));
     n.users.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
@@ -303,7 +245,10 @@ function DeptTreeNode({
             >
               <span className="text-muted-foreground/60 text-[11px]">·</span>
               <span className="text-sm">{u.name}</span>
-              <span className="text-muted-foreground text-xs">{u.title ?? "未填岗位"}</span>
+              {u.is_dept_leader && (
+                <Crown className="h-3 w-3 text-amber-500 shrink-0" aria-label="部门负责人" />
+              )}
+              <span className="text-muted-foreground text-xs">{displayPosition(u)}</span>
             </button>
           ))}
         </div>
@@ -334,22 +279,28 @@ export function UsersTab() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    Promise.all([
+  function loadAll() {
+    return Promise.all([
       fetch("/api/admin/users").then((r) => r.json() as Promise<{ users: UserRow[] }>),
       fetch("/api/admin/depts").then((r) => r.json() as Promise<{ depts: DeptRow[] }>),
-    ])
-      .then(([u, d]) => {
-        setUsers(u.users);
-        setDepts(d.depts);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    ]).then(([u, d]) => {
+      setUsers(u.users);
+      setDepts(d.depts);
+      setLoading(false);
+    });
+  }
+
+  useEffect(() => {
+    loadAll().catch(() => setLoading(false));
+    const handler = () => {
+      loadAll().catch((err) => console.error("[permissions:refresh]", err));
+    };
+    window.addEventListener("permissions:refresh", handler);
+    return () => window.removeEventListener("permissions:refresh", handler);
   }, []);
 
   const tree = useMemo(() => buildDeptTree(depts, users), [depts, users]);
 
-  // 默认选中第一个 root 部门 + 展开第一层
   useEffect(() => {
     const firstRoot = tree[0];
     if (firstRoot) {
@@ -390,7 +341,6 @@ export function UsersTab() {
     return u.name.toLowerCase().includes(q) || (u.title?.toLowerCase().includes(q) ?? false);
   });
 
-  // 表格里要展示的用户
   let visibleUsers: UserRow[];
   let headerLabel: string;
   if (isSearching) {
@@ -405,16 +355,16 @@ export function UsersTab() {
     headerLabel = "全部用户";
   }
 
-  // Stats（基于全量用户）
+  // Stats（基于全量用户，按 module 视角）
   const stats = {
     total: users.length,
-    admin: users.filter((u) => u.can_admin).length,
-    leader: users.filter((u) => u.source_kinds.includes("dept_leader")).length,
-    override: users.filter((u) => u.source_kinds.includes("override")).length,
+    fullyOpened: users.filter((u) => u.opened_count === u.total_count).length,
+    partial: users.filter((u) => u.opened_count > 0 && u.opened_count < u.total_count).length,
+    closed: users.filter((u) => u.opened_count === 0).length,
   };
 
   return (
-    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
+    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
       {/* 左侧：部门树 */}
       <div className="space-y-2">
         <Input
@@ -447,7 +397,7 @@ export function UsersTab() {
                   >
                     <div className="font-medium">{u.name}</div>
                     <div className="text-muted-foreground text-xs">
-                      {u.title ?? "未填岗位"} · 数据范围：{SCOPE_LABEL[u.scope]}
+                      {displayPosition(u)} · 已开通 {u.opened_count}/{u.total_count} 板块
                     </div>
                   </button>
                 ))}
@@ -475,12 +425,12 @@ export function UsersTab() {
       </div>
 
       {/* 右侧：stats + 表格 */}
-      <div className="space-y-4">
+      <div className="space-y-4 min-w-0">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="总用户" value={stats.total} />
-          <StatCard label="可管理（admin）" value={stats.admin} />
-          <StatCard label="部门负责人" value={stats.leader} />
-          <StatCard label="个体覆盖" value={stats.override} />
+          <StatCard label="全板块开通" value={stats.fullyOpened} />
+          <StatCard label="部分开通" value={stats.partial} />
+          <StatCard label="无任何权限" value={stats.closed} />
         </div>
 
         <div className="bg-card rounded-lg border">
@@ -499,9 +449,11 @@ export function UsersTab() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>成员</TableHead>
-                    <TableHead>数据范围</TableHead>
-                    <TableHead>权限标志</TableHead>
-                    <TableHead>权限来源</TableHead>
+                    {MODULE_KEYS.map((m) => (
+                      <TableHead key={m} className="text-center">
+                        {MODULE_LABEL[m]}
+                      </TableHead>
+                    ))}
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -512,29 +464,36 @@ export function UsersTab() {
                         <div className="flex items-center gap-2">
                           <Avatar name={u.name} />
                           <div>
-                            <div className="text-sm font-medium">{u.name}</div>
+                            <div className="text-sm font-medium inline-flex items-center gap-1">
+                              {u.name}
+                              {u.is_dept_leader && (
+                                <Crown
+                                  className="h-3.5 w-3.5 text-amber-500"
+                                  aria-label="部门负责人"
+                                />
+                              )}
+                            </div>
                             <div className="text-muted-foreground text-xs">
-                              {u.title ?? "未填岗位"}
+                              {displayPosition(u)}
+                              {u.assigned_position && (
+                                <span className="ml-1 text-rose-600">·已分配</span>
+                              )}
                             </div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <ScopeTag scope={u.scope} />
-                      </TableCell>
-                      <TableCell>
-                        <PermDots user={u} />
-                      </TableCell>
-                      <TableCell>
-                        <SourceTags kinds={u.source_kinds} />
-                      </TableCell>
+                      {MODULE_KEYS.map((m) => (
+                        <TableCell key={m} className="text-center">
+                          <ScopeCell scope={u.module_scopes?.[m] ?? "none"} />
+                        </TableCell>
+                      ))}
                       <TableCell className="text-right">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => setEditingUserId(u.user_id)}
                         >
-                          权限设置
+                          配置权限
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -546,15 +505,18 @@ export function UsersTab() {
         </div>
       </div>
 
-      {/* 编辑弹窗 */}
-      <Dialog open={editingUserId !== null} onOpenChange={(o) => !o && setEditingUserId(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>权限设置</DialogTitle>
-          </DialogHeader>
-          {editingUserId && <UserDetailPanel userId={editingUserId} />}
-        </DialogContent>
-      </Dialog>
+      {/* 编辑抽屉 */}
+      <Sheet open={editingUserId !== null} onOpenChange={(o) => !o && setEditingUserId(null)}>
+        <SheetContent
+          side="right"
+          className="!w-[760px] !max-w-[760px] sm:!max-w-[760px] p-0"
+          showCloseButton={false}
+        >
+          {editingUserId && (
+            <UserDetailPanel userId={editingUserId} onClose={() => setEditingUserId(null)} />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

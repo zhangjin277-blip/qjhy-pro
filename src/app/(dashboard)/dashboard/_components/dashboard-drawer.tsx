@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ChevronRight, Music2 } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -19,6 +21,7 @@ import type {
   DrawerDetailResponse,
   DrawerKpiBlock,
   DrawerMetric,
+  DrawerTopAnchor,
   GroupKey,
   ProjectKey,
 } from "@/modules/dashboard";
@@ -244,9 +247,9 @@ function TrendChart({
           <Line
             type="monotone"
             dataKey="cmp"
-            stroke="var(--color-gray-300, #c9cdd4)"
-            strokeWidth={1.5}
-            strokeDasharray="4 3"
+            stroke="var(--chart-compare)"
+            strokeWidth={2}
+            strokeDasharray="6 4"
             dot={false}
             isAnimationActive={false}
             connectNulls
@@ -361,6 +364,153 @@ function downloadCsv(payload: DrawerOpenPayload, data: DrawerDetailResponse): vo
   URL.revokeObjectURL(url);
 }
 
+/* ──────────────────── 达成主播列表 ──────────────────── */
+
+/**
+ * 把 metric_value 按 selectedKpi 的口径格式化为显示文本。
+ *
+ * - first_live_anchor_count / new_anchor_count → 用 display_date（"YYYY-MM-DD"）
+ * - active_anchor_count → "X 天"
+ * - 其他（音浪 / 各类流水 / 安装·激活 / 曝光·UV）→ formatMetricValue + unit
+ */
+function formatTopAnchorValue(
+  anchor: DrawerTopAnchor,
+  selectedKpi: DrawerKpiBlock,
+): { primary: string; suffix: string } {
+  if (selectedKpi.key === "first_live_anchor_count" || selectedKpi.key === "new_anchor_count") {
+    return { primary: anchor.display_date ?? "—", suffix: "" };
+  }
+  if (selectedKpi.key === "active_anchor_count") {
+    return { primary: anchor.metric_value.toString(), suffix: "天" };
+  }
+  if (selectedKpi.unit === "人") {
+    return { primary: anchor.metric_value.toLocaleString("zh-CN"), suffix: "人" };
+  }
+  // 音浪 / 流水：中文缩写
+  return { primary: formatChineseNumber(anchor.metric_value), suffix: "" };
+}
+
+function valueColumnLabel(selectedKpi: DrawerKpiBlock): string {
+  if (selectedKpi.key === "first_live_anchor_count") return "首播日期";
+  if (selectedKpi.key === "new_anchor_count") return "入会日期";
+  if (selectedKpi.key === "active_anchor_count") return "开播天数";
+  return selectedKpi.label;
+}
+
+function TopAnchorsList({
+  selectedKpi,
+  rows,
+  total,
+  loading,
+  onClickRow,
+  onClickViewAll,
+}: {
+  selectedKpi: DrawerKpiBlock;
+  rows: DrawerTopAnchor[];
+  total: number;
+  loading: boolean;
+  onClickRow: (anchor: DrawerTopAnchor) => void;
+  onClickViewAll: () => void;
+}): React.JSX.Element {
+  if (loading && rows.length === 0) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-11 w-full rounded" />
+        ))}
+      </div>
+    );
+  }
+  if (selectedKpi.not_applicable) {
+    return <div className="text-muted-foreground py-6 text-center text-sm">当前指标不适用</div>;
+  }
+  if (rows.length === 0) {
+    return <div className="text-muted-foreground py-6 text-center text-sm">无达成主播</div>;
+  }
+
+  const valueLabel = valueColumnLabel(selectedKpi);
+
+  return (
+    <>
+      <div className="overflow-hidden rounded-md border">
+        {/* 表头 */}
+        <div className="bg-muted/50 text-muted-foreground grid grid-cols-[40px_minmax(0,1fr)_120px_140px] items-center px-3 py-2 text-[11px] font-medium">
+          <span>#</span>
+          <span>主播</span>
+          <span>经纪人</span>
+          <span className="text-right">{valueLabel}</span>
+        </div>
+        {/* 表体 */}
+        <div className="divide-y">
+          {rows.map((anchor, idx) => {
+            const { primary, suffix } = formatTopAnchorValue(anchor, selectedKpi);
+            const initial = (anchor.nick_name || "?").slice(0, 1);
+            return (
+              <button
+                key={anchor.anchor_id}
+                type="button"
+                onClick={() => onClickRow(anchor)}
+                className="hover:bg-accent/40 grid w-full grid-cols-[40px_minmax(0,1fr)_120px_140px] items-center px-3 py-2 text-left transition-colors"
+              >
+                <span className="text-muted-foreground text-[11px] tabular-nums">{idx + 1}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  {anchor.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={anchor.avatar}
+                      alt={anchor.nick_name}
+                      className="size-7 shrink-0 rounded-full bg-muted object-cover"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium">
+                      {initial}
+                    </div>
+                  )}
+                  <div className="flex min-w-0 flex-col leading-tight">
+                    <span className="truncate text-xs font-medium" title={anchor.nick_name}>
+                      {anchor.nick_name || "—"}
+                    </span>
+                    {anchor.aweme_display_id && (
+                      <span className="text-muted-foreground mt-0.5 flex min-w-0 items-center gap-1 text-[10px]">
+                        <Music2 className="h-2.5 w-2.5 shrink-0" />
+                        <span className="truncate">{anchor.aweme_display_id}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="text-muted-foreground truncate text-xs">
+                  {anchor.broker_name ?? "—"}
+                </span>
+                <span className="text-foreground text-right text-xs font-medium tabular-nums">
+                  {primary}
+                  {suffix && (
+                    <span className="text-muted-foreground ml-0.5 text-[10px] font-normal">
+                      {suffix}
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {/* 底部「查看全部」 */}
+      {total > rows.length && (
+        <button
+          type="button"
+          onClick={onClickViewAll}
+          className="text-primary hover:bg-primary/5 mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md border border-dashed py-2 text-xs font-medium transition-colors"
+        >
+          查看全部 {total} 个
+          <ChevronRight className="h-3 w-3" />
+        </button>
+      )}
+    </>
+  );
+}
+
 /* ──────────────────── SectionBlock helper ──────────────────── */
 
 function SectionBlock({
@@ -390,6 +540,7 @@ function SectionBlock({
 /* ──────────────────── 主组件 ──────────────────── */
 
 export function DashboardDrawer({ payload, onClose }: DashboardDrawerProps): React.JSX.Element {
+  const router = useRouter();
   const [data, setData] = useState<DrawerDetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -398,12 +549,17 @@ export function DashboardDrawer({ payload, onClose }: DashboardDrawerProps): Rea
   const open = payload !== null;
   const breadcrumb = useMemo(() => (payload ? buildBreadcrumb(payload) : ""), [payload]);
 
-  // 重置 selectedKey 跟随 payload.metric
+  // 重置 selectedKey 跟随 payload.metric；payload 切换时清空旧数据
   useEffect(() => {
-    if (payload) setSelectedKey(payload.metric);
+    if (payload) {
+      setSelectedKey(payload.metric);
+      setData(null);
+    }
   }, [payload]);
 
-  // 拉数据
+  // 拉数据：依赖 selectedKey 以便切换 KPI 时重新拉「达成主播列表」
+  // 注意：保留之前已加载的 data 不立即清空，避免 KPI/曲线/日明细表闪白屏；
+  // 仅 top_anchors 和 total_anchors 会随 metric 变化（其他字段重 fetch 后是同样的值）。
   useEffect(() => {
     if (!payload) {
       setData(null);
@@ -413,7 +569,7 @@ export function DashboardDrawer({ payload, onClose }: DashboardDrawerProps): Rea
     const ctl = new AbortController();
     setLoading(true);
     setError(null);
-    setData(null);
+    // 不 setData(null) — 切换 metric 时让旧数据继续展示，等新数据来了再换
 
     const params = new URLSearchParams({
       date_from: payload.date_from,
@@ -421,6 +577,8 @@ export function DashboardDrawer({ payload, onClose }: DashboardDrawerProps): Rea
     });
     if (payload.project) params.set("project", payload.project);
     if (payload.group && payload.group !== "all") params.set("group", payload.group);
+    const metric = selectedKey ?? payload.metric;
+    if (metric) params.set("metric", metric);
 
     fetch(`/api/dashboard/detail?${params.toString()}`, { signal: ctl.signal })
       .then(async (res) => {
@@ -447,7 +605,14 @@ export function DashboardDrawer({ payload, onClose }: DashboardDrawerProps): Rea
       cancelled = true;
       ctl.abort();
     };
-  }, [payload?.project, payload?.group, payload?.date_from, payload?.date_to, payload]);
+  }, [
+    payload?.project,
+    payload?.group,
+    payload?.date_from,
+    payload?.date_to,
+    payload,
+    selectedKey,
+  ]);
 
   // 选中的 KPI（用于驱动主曲线）
   const selectedKpi: DrawerKpiBlock | null = useMemo(() => {
@@ -520,10 +685,10 @@ export function DashboardDrawer({ payload, onClose }: DashboardDrawerProps): Rea
                   </div>
                 ) : (
                   <>
-                    {/* Section 1：4 核心 KPI */}
+                    {/* Section 1：5 核心 KPI */}
                     <div className="text-muted-foreground mb-2 text-[11px]">核心 KPI</div>
-                    <div className="mb-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                      {data.kpis.slice(0, 4).map((k) => (
+                    <div className="mb-3 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+                      {data.kpis.slice(0, 5).map((k) => (
                         <KpiCard
                           key={k.key}
                           kpi={k}
@@ -535,7 +700,7 @@ export function DashboardDrawer({ payload, onClose }: DashboardDrawerProps): Rea
                     {/* Section 2：5 业务细分 KPI */}
                     <div className="text-muted-foreground mb-2 text-[11px]">业务细分</div>
                     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-                      {data.kpis.slice(4).map((k) => (
+                      {data.kpis.slice(5).map((k) => (
                         <KpiCard
                           key={k.key}
                           kpi={k}
@@ -566,12 +731,53 @@ export function DashboardDrawer({ payload, onClose }: DashboardDrawerProps): Rea
                       <span
                         className="inline-block h-0 w-3.5"
                         style={{
-                          borderTop: "1.5px dashed var(--color-gray-300, #c9cdd4)",
+                          borderTop: "2px dashed var(--chart-compare)",
                         }}
                       />
                       前 {periodDays} 日同期
                     </span>
                   </div>
+                </SectionBlock>
+              )}
+
+              {/* 达成主播列表 */}
+              {selectedKpi && (
+                <SectionBlock
+                  label={`达成主播 · 按 ${selectedKpi.label} 排序`}
+                  hint={
+                    selectedKpi.key === "first_live_anchor_count" ||
+                    selectedKpi.key === "new_anchor_count"
+                      ? "全部展示"
+                      : "Top 20"
+                  }
+                >
+                  <TopAnchorsList
+                    selectedKpi={selectedKpi}
+                    rows={data?.top_anchors ?? []}
+                    total={data?.total_anchors ?? 0}
+                    loading={loading}
+                    onClickRow={(anchor) => {
+                      // 关闭抽屉后跳转，带上当前抽屉的日期范围 + 项目
+                      onClose();
+                      const sp = new URLSearchParams();
+                      sp.set("anchor_id", anchor.anchor_id);
+                      sp.set("date_from", payload.date_from);
+                      sp.set("date_to", payload.date_to);
+                      if (payload.project) sp.set("project", payload.project);
+                      router.push(`/anchors?${sp.toString()}`);
+                    }}
+                    onClickViewAll={() => {
+                      onClose();
+                      const sp = new URLSearchParams();
+                      sp.set("date_from", payload.date_from);
+                      sp.set("date_to", payload.date_to);
+                      if (payload.project) sp.set("project", payload.project);
+                      if (payload.group && payload.group !== "all") {
+                        sp.set("group", payload.group);
+                      }
+                      router.push(`/anchors?${sp.toString()}`);
+                    }}
+                  />
                 </SectionBlock>
               )}
 

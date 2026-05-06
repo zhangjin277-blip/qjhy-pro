@@ -36,7 +36,9 @@ export async function requireAdmin(): Promise<{ userId: string }> {
     );
   }
 
-  const perm = await resolvePermission(du.user_id);
+  // can_admin 用 'permissions' 板块的权限位作为判断依据：
+  // 该位为 true 才允许进入权限管理 / 审计等管理面板。
+  const perm = await resolvePermission(du.user_id, "permissions");
   if (!perm.can_admin) {
     throw new AppError("AUTH_FORBIDDEN", "需要管理员权限", 403);
   }

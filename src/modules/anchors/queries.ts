@@ -30,7 +30,7 @@ export async function listAnchors(
   userId: string,
   filters: AnchorListFilters,
 ): Promise<AnchorListRow[]> {
-  const perm = await resolvePermission(userId);
+  const perm = await resolvePermission(userId, "anchors");
   if (perm.scope === "none") return [];
 
   const where: ReturnType<typeof eq>[] = [];

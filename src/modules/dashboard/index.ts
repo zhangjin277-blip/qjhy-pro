@@ -12,5 +12,6 @@ export type {
   DrawerDetailFilters,
   DrawerKpiBlock,
   DrawerDailyRow,
+  DrawerTopAnchor,
   DrawerDetailResponse,
 } from "./types";

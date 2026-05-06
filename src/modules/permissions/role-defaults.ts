@@ -1,13 +1,15 @@
+import { MODULE_KEYS, type ModuleKey } from "./modules";
 import type { Permission } from "./types";
 
 /**
- * 岗位默认权限初始 seed。
- * Phase 1 实施时一次性插入到 role_default_permission 表，之后管理员可在 UI 修改。
+ * 岗位 × 板块默认权限初始 seed。
+ *
+ * 每个岗位在 4 个 module 下用同一个 base scope（保留 v1 行为）；
+ * 后续管理员可在 UI 单独调整某 module 的 scope。
+ *
+ * 新部署时通过 INSERT ... ON CONFLICT DO NOTHING 一次性写入 (position × module) 笛卡尔积。
  */
-export const ROLE_DEFAULTS_SEED: (Permission & {
-  position: string;
-  description: string;
-})[] = [
+const POSITION_BASE: (Permission & { position: string; description: string })[] = [
   {
     position: "总监",
     scope: "all",
@@ -73,3 +75,14 @@ export const ROLE_DEFAULTS_SEED: (Permission & {
     description: "兜底",
   },
 ];
+
+export const ROLE_DEFAULTS_SEED: (Permission & {
+  position: string;
+  module: ModuleKey;
+  description: string;
+})[] = POSITION_BASE.flatMap((row) =>
+  MODULE_KEYS.map((module) => ({
+    ...row,
+    module,
+  })),
+);

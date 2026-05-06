@@ -722,8 +722,8 @@ function TrendChart({
             <Line
               type="monotone"
               dataKey="cmp"
-              stroke="var(--color-gray-300, #c9cdd4)"
-              strokeWidth={1.5}
+              stroke="var(--chart-compare)"
+              strokeWidth={2}
               strokeDasharray="4 3"
               dot={false}
               isAnimationActive={false}
@@ -740,7 +740,7 @@ function TrendChart({
         <span className="inline-flex items-center gap-1.5">
           <span
             className="inline-block h-0 w-3.5"
-            style={{ borderTop: "1.5px dashed var(--color-gray-300, #c9cdd4)" }}
+            style={{ borderTop: "2px dashed var(--chart-compare)" }}
           />
           前 {periodDays} 日同期
         </span>
