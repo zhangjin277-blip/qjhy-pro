@@ -4,6 +4,7 @@ import { live_account } from "@/db/schema/live-account";
 import { placement_import_batch, placement_row } from "@/db/schema/placements";
 import { eq, isNotNull, sql } from "drizzle-orm";
 import { computeIncrements, type RawCumulativeRow } from "./incremental";
+import { notifyDingtalk } from "@/lib/notify";
 
 export interface IngestRow {
   account_name: string;
@@ -170,5 +171,16 @@ export async function ingestRows(input: IngestInput) {
   if (!final) {
     throw new Error("ingestRows: failed to update import batch");
   }
+
+  if (status === "failed") {
+    await notifyDingtalk({
+      title: "投放上传 batch 报错",
+      detail: `batch=${final.id} file=${input.file_name ?? "(无)"} dataset=${input.dataset_id}`,
+      context: { error_count: errorLog.length, first_error: errorLog.at(0)?.reason },
+    }).catch((notifyErr: unknown) => {
+      console.error("[ingest] notify failed:", notifyErr);
+    });
+  }
+
   return final;
 }

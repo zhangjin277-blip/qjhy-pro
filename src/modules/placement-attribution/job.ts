@@ -5,8 +5,24 @@ import { account_anchor_default } from "@/db/schema/account-anchor-default";
 import { schedule_override } from "@/db/schema/schedule-override";
 import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { attributeRow } from "./attribute";
+import { notifyDingtalk } from "@/lib/notify";
 
 export async function runAttributionJob(opts?: { batch_id?: string; max_rows?: number }) {
+  try {
+    return await _runAttributionJobInner(opts);
+  } catch (e) {
+    await notifyDingtalk({
+      title: "归因 job 报错",
+      detail: `runAttributionJob failed\n${e instanceof Error ? (e.stack ?? e.message) : String(e)}`,
+      context: { opts: JSON.stringify(opts) },
+    }).catch((notifyErr: unknown) => {
+      console.error("[attribution] notify failed:", notifyErr);
+    });
+    throw e;
+  }
+}
+
+async function _runAttributionJobInner(opts?: { batch_id?: string; max_rows?: number }) {
   const maxRows = opts?.max_rows ?? 1000;
 
   const dirtyRows = await db
