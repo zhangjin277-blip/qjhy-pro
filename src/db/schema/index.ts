@@ -12,4 +12,5 @@ export * from "./live-anchor";
 export * from "./live-room";
 export * from "./permissions";
 export * from "./placements";
+export * from "./schedule-override";
 export * from "./user-preset";
