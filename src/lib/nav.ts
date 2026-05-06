@@ -94,6 +94,7 @@ export const NAV: NavItem[] = [
       { key: "sys-dept", label: "部门架构", href: "/admin/depts", disabled: true },
       { key: "sys-alias", label: "字段别名", href: "/admin/aliases", disabled: true },
       { key: "sys-crawler", label: "采集监控", href: "/admin/crawler" },
+      { key: "sys-migration", label: "PRO3 迁移", href: "/live-account-migration" },
     ],
   },
   {
