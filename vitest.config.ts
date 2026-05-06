@@ -6,6 +6,9 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
     include: ["tests/**/*.test.ts"],
+    // DB integration tests share a single PostgreSQL instance — run files sequentially
+    // to avoid concurrent DELETE/INSERT races between test files.
+    fileParallelism: false,
   },
   resolve: {
     alias: {
