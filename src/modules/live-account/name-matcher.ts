@@ -17,6 +17,13 @@ function getInitials(name: string): string {
     .join("");
 }
 
+/** 全拼（不带声调），如"刘昊宇" → "liuhaoyu" */
+function getFullPinyin(name: string): string {
+  return pinyin(name, { style: pinyin.STYLE_NORMAL, heteronym: false })
+    .map((arr) => (arr[0] ?? "").toLowerCase())
+    .join("");
+}
+
 export function matchName(input: string, candidates: DingtalkCandidate[]): MatchResult {
   const trimmed = input.trim();
   if (!trimmed) return { kind: "none" };
@@ -37,9 +44,15 @@ export function matchName(input: string, candidates: DingtalkCandidate[]): Match
     return initials === upperInput;
   });
 
+  // 4. 全拼相同（同音字错别字，如"刘浩宇" ↔ "刘昊宇"）
+  const inputFullPinyin = getFullPinyin(trimmed);
+  const homophoneMatches = inputFullPinyin
+    ? candidates.filter((c) => getFullPinyin(c.name) === inputFullPinyin && c.name !== trimmed)
+    : [];
+
   // 合并 ambiguous 候选去重
   const candMap = new Map<string, DingtalkCandidate>();
-  for (const c of [...containsMatches, ...pinyinMatches]) {
+  for (const c of [...containsMatches, ...pinyinMatches, ...homophoneMatches]) {
     candMap.set(c.user_id, c);
   }
   const merged = [...candMap.values()];

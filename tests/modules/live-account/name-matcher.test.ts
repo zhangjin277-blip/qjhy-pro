@@ -54,4 +54,16 @@ describe("matchName", () => {
     const r = matchName("", candidates);
     expect(r.kind).toBe("none");
   });
+
+  it("同音字错别字 → ambiguous（如刘浩宇 ↔ 刘昊宇）", () => {
+    const cands: DingtalkCandidate[] = [
+      { user_id: "u_haoyu", name: "刘昊宇", mobile: null },
+      { user_id: "u_other", name: "李四", mobile: null },
+    ];
+    const r = matchName("刘浩宇", cands);
+    expect(r.kind).toBe("ambiguous");
+    if (r.kind === "ambiguous") {
+      expect(r.candidates.map((c) => c.user_id)).toContain("u_haoyu");
+    }
+  });
 });
