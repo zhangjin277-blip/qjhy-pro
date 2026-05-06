@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { MigrationReport } from "@/modules/live-account/migration";
+import type { MigrationReport } from "@/modules/live-account";
 
 interface Props {
   report: MigrationReport;

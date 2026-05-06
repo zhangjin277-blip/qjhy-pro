@@ -1,4 +1,4 @@
-import { runMigration } from "@/modules/live-account/migration";
+import { runMigration } from "@/modules/live-account/server";
 import { MigrationClient } from "./_components/migration-client";
 
 export const dynamic = "force-dynamic";

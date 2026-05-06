@@ -3,7 +3,7 @@ import { dingtalk_user, anchor_profile, live_account } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { listAccounts } from "@/modules/live-account/server";
 import { listAnchors } from "@/modules/live-anchor/server";
-import { listBindings } from "@/modules/live-anchor/account-bindings";
+import { listBindings } from "@/modules/live-anchor";
 import { listRooms } from "@/modules/live-room/server";
 import { Product } from "@/modules/live-account";
 import { AccountListClient } from "./_components/account-list-client";
