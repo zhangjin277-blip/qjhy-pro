@@ -25,3 +25,30 @@ export const ListAnchorsInput = z.object({
   business_line: BusinessLine.optional(),
   work_status: WorkStatus.optional(),
 });
+
+// 默认排班 binding
+export const TimeSlot = z.tuple([
+  z.string().regex(/^\d{2}:\d{2}$/, "时段格式必须为 HH:MM"),
+  z.string().regex(/^\d{2}:\d{2}$/),
+]);
+
+export const UpsertBindingInput = z.object({
+  id: z.string().optional(),
+  account_id: z.string().min(1),
+  dingtalk_user_id: z.string().min(1),
+  time_slots: z.array(TimeSlot).min(1, "至少一个时段"),
+  rest_days: z.array(z.number().int().min(1).max(7)).default([]),
+  remark: z.string().optional().nullable(),
+  effective_from: z.string().date().optional(),
+  effective_to: z.string().date().optional().nullable(),
+});
+export type UpsertBindingInput = z.infer<typeof UpsertBindingInput>;
+
+export const DeleteBindingInput = z.object({
+  id: z.string().min(1),
+});
+
+export const ListBindingsInput = z.object({
+  account_id: z.string().optional(),
+  dingtalk_user_id: z.string().optional(),
+});
