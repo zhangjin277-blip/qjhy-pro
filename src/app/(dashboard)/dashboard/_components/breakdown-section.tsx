@@ -440,7 +440,7 @@ export function BreakdownSection({
         </div>
       </div>
 
-      <div className="rounded-xl bg-white px-6 pt-2 pb-5 shadow-[0_1px_0_0_rgba(0,0,0,0.02),0_4px_12px_-8px_rgba(0,0,0,0.04)]">
+      <div className="rounded-xl bg-white px-4 pt-2 pb-5 shadow-[0_1px_0_0_rgba(0,0,0,0.02),0_4px_12px_-8px_rgba(0,0,0,0.04)]">
         <div
           className="flex items-center gap-6 text-[14px] border-b border-[#e5e6eb] overflow-x-auto"
           role="tablist"

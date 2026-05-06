@@ -1,10 +1,113 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { upsertAccount } from "@/modules/live-account";
 import type { AccountWithRelations } from "@/modules/live-account";
 import { AnchorBindingForm } from "./anchor-binding-form";
+
+/**
+ * 简易可搜索 select（避免引入 cmdk 依赖）。
+ * 显示「name · title」，支持中文/拼音/职位模糊过滤（前缀 + 包含）。
+ */
+function SearchableUserSelect({
+  value,
+  onChange,
+  options,
+  placeholder = "搜索运营姓名…",
+  emptyHint = "无匹配运营",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { user_id: string; name: string; title: string | null }[];
+  placeholder?: string;
+  emptyHint?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selected = options.find((o) => o.user_id === value);
+  const display = selected ? selected.name : "";
+
+  const filtered = query.trim()
+    ? options.filter((o) => {
+        const q = query.toLowerCase();
+        return o.name.toLowerCase().includes(q) || (o.title?.toLowerCase().includes(q) ?? false);
+      })
+    : options;
+
+  // 点击外部关闭
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between rounded border border-slate-200 bg-white px-3 py-2 text-left text-[13px] text-slate-800 hover:border-slate-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+      >
+        <span className={display ? "" : "text-slate-300"}>{display || "— 不指定 —"}</span>
+        <span className="text-slate-400">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={placeholder}
+            className="w-full rounded-t-md border-b border-slate-200 px-3 py-2 text-[13px] outline-none"
+          />
+          <div className="max-h-60 overflow-y-auto py-1">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+                setQuery("");
+              }}
+              className="w-full px-3 py-1.5 text-left text-[12px] text-slate-400 hover:bg-slate-50"
+            >
+              — 不指定 —
+            </button>
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-[12px] text-slate-400">{emptyHint}</div>
+            ) : (
+              filtered.map((u) => (
+                <button
+                  type="button"
+                  key={u.user_id}
+                  onClick={() => {
+                    onChange(u.user_id);
+                    setOpen(false);
+                    setQuery("");
+                  }}
+                  className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] hover:bg-slate-50 ${
+                    u.user_id === value ? "bg-blue-50 text-blue-700" : "text-slate-700"
+                  }`}
+                >
+                  <span className="font-medium">{u.name}</span>
+                  {u.title && <span className="text-[11px] text-slate-400">{u.title}</span>}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const PRODUCT_PLATFORMS: Record<string, string[]> = {
   途游斗地主: ["抖音"],
@@ -40,6 +143,7 @@ interface RoomLite {
 interface DingtalkUserLite {
   user_id: string;
   name: string;
+  title: string | null;
   active: boolean;
 }
 
@@ -232,7 +336,7 @@ export function AccountEditDrawer({
               {(
                 [
                   { key: "basic", label: "基本信息" },
-                  { key: "bindings", label: "轮播主播" },
+                  { key: "bindings", label: "主播 / 排班" },
                 ] as { key: TabKey; label: string }[]
               ).map((t) => (
                 <button
@@ -323,13 +427,16 @@ export function AccountEditDrawer({
                   </FormField>
                 </div>
 
-                <FormField label="平台实名">
+                <FormField label="平台账号实名">
                   <input
                     className={inputCls}
-                    placeholder="实名"
+                    placeholder="平台账号开户人姓名"
                     value={platformRealName}
                     onChange={(e) => setPlatformRealName(e.target.value)}
                   />
+                  <span className="text-[10.5px] text-slate-400">
+                    抖音/快手账号本身的开户实名，不一定是当前播主
+                  </span>
                 </FormField>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -402,19 +509,12 @@ export function AccountEditDrawer({
                   </FormField>
                 </div>
 
-                <FormField label="运营（钉钉用户）">
-                  <select
-                    className={selectCls}
+                <FormField label="运营（直播一部 · 在职）">
+                  <SearchableUserSelect
                     value={agentDingtalkUserId}
-                    onChange={(e) => setAgentDingtalkUserId(e.target.value)}
-                  >
-                    <option value="">— 不指定 —</option>
-                    {activeUsers.map((u) => (
-                      <option key={u.user_id} value={u.user_id}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setAgentDingtalkUserId}
+                    options={activeUsers}
+                  />
                 </FormField>
 
                 <FormField label="投放标签">

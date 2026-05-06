@@ -474,7 +474,7 @@ export function AnchorTable(): React.JSX.Element {
     }));
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 max-w-full space-y-3">
       {/* 顶部：筛选 + 导出 + 自定义列 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Filters filters={filters} onChange={setFilters} />
@@ -557,7 +557,7 @@ export function AnchorTable(): React.JSX.Element {
       </div>
 
       {/* KPI 卡片 */}
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         {kpiData.map((m) => {
           const compare = formatCompare(m.cur, m.prev, periodDays);
           const display =
@@ -569,7 +569,7 @@ export function AnchorTable(): React.JSX.Element {
           return (
             <div
               key={m.key}
-              className="group bg-card rounded-lg border border-border px-4 py-3 relative"
+              className="group relative min-w-0 rounded-lg border border-border bg-card px-4 py-3"
             >
               <button
                 onClick={() => removeKpi(m.key)}
@@ -629,14 +629,14 @@ export function AnchorTable(): React.JSX.Element {
 
       {/* 表格 — 使用原生 <table> 避开 shadcn Table 的内层 overflow wrapper（否则 sticky 表头失效） */}
       <div
-        className="overflow-hidden rounded-lg shadow-sm"
+        className="min-w-0 max-w-full overflow-hidden rounded-lg shadow-sm"
         style={{
           background: "rgba(255, 255, 255, 0.92)",
           border: "1px solid var(--border-subtle)",
         }}
       >
-        <div className="max-h-[calc(100vh-320px)] overflow-auto">
-          <table className="w-full caption-bottom text-sm min-w-max">
+        <div className="max-h-[calc(100vh-320px)] max-w-full overflow-auto">
+          <table className="w-max min-w-full caption-bottom text-sm">
             <TableHeader className="sticky top-0 z-20 bg-secondary [&_th]:bg-secondary">
               <TableRow
                 className="hover:bg-secondary"

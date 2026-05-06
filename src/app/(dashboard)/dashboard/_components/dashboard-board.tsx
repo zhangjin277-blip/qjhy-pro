@@ -106,7 +106,7 @@ export function DashboardBoard(): React.JSX.Element {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <CoreKpiSection
         core={core}
         loading={loading}

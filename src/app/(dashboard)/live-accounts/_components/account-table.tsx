@@ -5,8 +5,27 @@ import { PlatformBadge } from "./platform-badge";
 
 const DAY_LABELS = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
-// 抖音粉 / 快手橙渐变背景作头像，从 account_name 提取首字（emoji 优先）
-function AccountAvatar({ name, platform }: { name: string; platform: string }) {
+// 优先用真实头像 URL（抖音 anchor_profile.avatar），否则用 emoji/首字 fallback
+function AccountAvatar({
+  name,
+  platform,
+  avatarUrl,
+}: {
+  name: string;
+  platform: string;
+  avatarUrl?: string | null;
+}) {
+  if (avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={avatarUrl}
+        alt={name}
+        className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+        referrerPolicy="no-referrer"
+      />
+    );
+  }
   // emoji 提取：用 Array.from 处理多字节 unicode
   const chars = Array.from(name);
   const emoji = chars.find((c) => /\p{Extended_Pictographic}/u.test(c));
@@ -15,14 +34,14 @@ function AccountAvatar({ name, platform }: { name: string; platform: string }) {
   const initial = Array.from(trimmed)[0] ?? "?";
   const display = emoji ?? initial;
 
-  const isDouyin = platform === "抖音";
-  const gradient = isDouyin
-    ? "from-pink-400 to-pink-600"
-    : platform === "快手"
-      ? "from-orange-400 to-orange-600"
-      : platform === "B站"
-        ? "from-cyan-400 to-cyan-600"
-        : "from-slate-400 to-slate-600";
+  const gradient =
+    platform === "抖音"
+      ? "from-pink-400 to-pink-600"
+      : platform === "快手"
+        ? "from-orange-400 to-orange-600"
+        : platform === "B站"
+          ? "from-cyan-400 to-cyan-600"
+          : "from-slate-400 to-slate-600";
 
   return (
     <div
@@ -47,6 +66,7 @@ interface BindingLite {
 interface AccountTableProps {
   accounts: AccountWithRelations[];
   bindingsByAccount: Record<string, BindingLite[]>;
+  avatarByPlatformId: Record<string, string | null>;
   onEdit?: (account: AccountWithRelations) => void;
 }
 
@@ -100,7 +120,12 @@ function AnchorStack({ bindings }: { bindings: BindingLite[] }) {
   );
 }
 
-export function AccountTable({ accounts, bindingsByAccount, onEdit }: AccountTableProps) {
+export function AccountTable({
+  accounts,
+  bindingsByAccount,
+  avatarByPlatformId,
+  onEdit,
+}: AccountTableProps) {
   if (accounts.length === 0) {
     return (
       <div className="flex items-center justify-center py-20 text-sm text-slate-400">
@@ -150,7 +175,15 @@ export function AccountTable({ accounts, bindingsByAccount, onEdit }: AccountTab
                 {/* 账号 */}
                 <td className="px-3 py-[11px] align-top">
                   <div className="flex items-center gap-2.5">
-                    <AccountAvatar name={account.account_name} platform={account.platform} />
+                    <AccountAvatar
+                      name={account.account_name}
+                      platform={account.platform}
+                      avatarUrl={
+                        account.platform_account_id
+                          ? avatarByPlatformId[account.platform_account_id]
+                          : null
+                      }
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium text-slate-900">
                         {account.account_name}

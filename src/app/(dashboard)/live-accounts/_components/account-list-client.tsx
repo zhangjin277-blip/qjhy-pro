@@ -35,6 +35,7 @@ interface RoomLite {
 interface DingtalkUserLite {
   user_id: string;
   name: string;
+  title: string | null;
   active: boolean;
 }
 
@@ -51,6 +52,7 @@ interface Props {
   rooms: RoomLite[];
   dingtalkUsers: DingtalkUserLite[];
   anchors: AnchorLite[];
+  avatarByPlatformId: Record<string, string | null>;
 }
 
 export function AccountListClient({
@@ -61,6 +63,7 @@ export function AccountListClient({
   rooms,
   dingtalkUsers,
   anchors,
+  avatarByPlatformId,
 }: Props) {
   const router = useRouter();
   const isRotation = ROTATION_PRODUCTS.includes(selectedProduct);
@@ -138,12 +141,14 @@ export function AccountListClient({
         <AccountBentoGrid
           accounts={initialAccounts}
           bindingsByAccount={bindingsByAccount}
+          avatarByPlatformId={avatarByPlatformId}
           onEdit={openEdit}
         />
       ) : (
         <AccountTable
           accounts={initialAccounts}
           bindingsByAccount={bindingsByAccount}
+          avatarByPlatformId={avatarByPlatformId}
           onEdit={openEdit}
         />
       )}

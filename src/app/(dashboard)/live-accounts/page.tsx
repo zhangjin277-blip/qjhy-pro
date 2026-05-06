@@ -1,6 +1,6 @@
 import { db } from "@/db/client";
-import { dingtalk_user } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { dingtalk_user, anchor_profile, live_account } from "@/db/schema";
+import { and, eq, sql } from "drizzle-orm";
 import { listAccounts } from "@/modules/live-account/server";
 import { listAnchors } from "@/modules/live-anchor/server";
 import { listBindings } from "@/modules/live-anchor/account-bindings";
@@ -10,6 +10,9 @@ import { AccountListClient } from "./_components/account-list-client";
 
 const PRODUCTS = Product.options;
 const DEFAULT_PRODUCT = PRODUCTS[0] ?? "捕鱼大作战";
+
+// 直播一部部门 ID — 钉钉权威源
+const LIVE_DEPT_ID = "724640467";
 
 export default async function LiveAccountsPage({
   searchParams,
@@ -22,21 +25,46 @@ export default async function LiveAccountsPage({
     : DEFAULT_PRODUCT;
 
   // Parallel fetch
-  const [accounts, allBindings, rooms, allAnchors, activeUsers] = await Promise.all([
+  const [accounts, allBindings, rooms, allAnchors, activeUsers, douyinAvatars] = await Promise.all([
     listAccounts({ product: selectedProduct }),
     listBindings({}),
     listRooms(),
     listAnchors({}),
+    // 仅直播一部下、在职的钉钉用户（运营 select 候选）
     db
       .select({
         user_id: dingtalk_user.user_id,
         name: dingtalk_user.name,
+        title: dingtalk_user.title,
         active: dingtalk_user.active,
       })
       .from(dingtalk_user)
-      .where(eq(dingtalk_user.active, true))
+      .where(
+        and(
+          eq(dingtalk_user.active, true),
+          sql`${dingtalk_user.dept_ids} @> ${JSON.stringify([LIVE_DEPT_ID])}::jsonb`,
+        ),
+      )
       .orderBy(dingtalk_user.name),
+    // 抖音账号 → anchor_profile.avatar 反向 join（仅当前 product 的）
+    db
+      .select({
+        platform_account_id: live_account.platform_account_id,
+        avatar: anchor_profile.avatar,
+      })
+      .from(live_account)
+      .leftJoin(
+        anchor_profile,
+        eq(live_account.platform_account_id, anchor_profile.aweme_display_id),
+      )
+      .where(and(eq(live_account.platform, "抖音"), eq(live_account.product, selectedProduct))),
   ]);
+
+  // 抖音账号 platform_account_id → avatar URL
+  const avatarByPlatformId: Record<string, string | null> = {};
+  for (const r of douyinAvatars) {
+    if (r.platform_account_id) avatarByPlatformId[r.platform_account_id] = r.avatar;
+  }
 
   // Group bindings by account_id
   const bindingsByAccount: Record<
@@ -96,9 +124,11 @@ export default async function LiveAccountsPage({
         dingtalkUsers={activeUsers.map((u) => ({
           user_id: u.user_id,
           name: u.name,
+          title: u.title,
           active: u.active,
         }))}
         anchors={anchors}
+        avatarByPlatformId={avatarByPlatformId}
       />
     </div>
   );

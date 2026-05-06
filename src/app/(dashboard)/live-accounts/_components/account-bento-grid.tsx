@@ -16,10 +16,16 @@ interface BindingLite {
 interface AccountBentoGridProps {
   accounts: AccountWithRelations[];
   bindingsByAccount: Record<string, BindingLite[]>;
+  avatarByPlatformId: Record<string, string | null>;
   onEdit?: (account: AccountWithRelations) => void;
 }
 
-export function AccountBentoGrid({ accounts, bindingsByAccount, onEdit }: AccountBentoGridProps) {
+export function AccountBentoGrid({
+  accounts,
+  bindingsByAccount,
+  avatarByPlatformId,
+  onEdit,
+}: AccountBentoGridProps) {
   if (accounts.length === 0) {
     return (
       <div className="flex items-center justify-center py-20 text-sm text-slate-400">
@@ -35,6 +41,7 @@ export function AccountBentoGrid({ accounts, bindingsByAccount, onEdit }: Accoun
           key={a.id}
           account={a}
           bindings={bindingsByAccount[a.id] ?? []}
+          avatarUrl={a.platform_account_id ? avatarByPlatformId[a.platform_account_id] : null}
           onEdit={onEdit}
         />
       ))}

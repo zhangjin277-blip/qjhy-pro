@@ -18,10 +18,11 @@ interface BindingLite {
 interface AccountBentoCardProps {
   account: AccountWithRelations;
   bindings: BindingLite[];
+  avatarUrl?: string | null;
   onEdit?: (account: AccountWithRelations) => void;
 }
 
-export function AccountBentoCard({ account, bindings, onEdit }: AccountBentoCardProps) {
+export function AccountBentoCard({ account, bindings, avatarUrl, onEdit }: AccountBentoCardProps) {
   const isLiving = account.live_status === "living";
 
   const scheduleBindings: ScheduleBinding[] = bindings.map((b) => ({
@@ -39,10 +40,40 @@ export function AccountBentoCard({ account, bindings, onEdit }: AccountBentoCard
       {/* Left */}
       <div className="flex flex-col gap-3">
         {/* Card head */}
-        <div className="flex items-center justify-between">
-          <span className="text-[15px] font-semibold text-slate-900 leading-tight">
-            {account.account_name}
-          </span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt={account.account_name}
+                className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-base font-semibold text-white shadow-sm ${
+                  account.platform === "抖音"
+                    ? "from-pink-400 to-pink-600"
+                    : account.platform === "快手"
+                      ? "from-orange-400 to-orange-600"
+                      : "from-slate-400 to-slate-600"
+                }`}
+                style={{ textShadow: "0 1px 0 rgba(0,0,0,0.15)" }}
+              >
+                {Array.from(account.account_name).find((c) =>
+                  /\p{Extended_Pictographic}/u.test(c),
+                ) ??
+                  Array.from(
+                    account.account_name.replace(/^.+?[-－]/, "").trim() || account.account_name,
+                  )[0] ??
+                  "?"}
+              </div>
+            )}
+            <span className="truncate text-[15px] font-semibold leading-tight text-slate-900">
+              {account.account_name}
+            </span>
+          </div>
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[11px] font-medium ${
               isLiving ? "bg-green-50 text-green-600" : "bg-slate-100 text-slate-500"

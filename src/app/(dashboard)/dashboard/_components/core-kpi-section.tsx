@@ -97,8 +97,8 @@ function KpiCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "card-surface block w-full text-left p-5 rounded-xl bg-white",
-        "shadow-[0_1px_0_0_rgba(0,0,0,0.02),0_4px_12px_-8px_rgba(0,0,0,0.04)]",
+        "card-surface block w-full text-left p-5 rounded-xl bg-[var(--bg-kpi-card)]",
+        "shadow-[inset_0_0_0_1px_rgba(226,232,240,0.34),0_4px_12px_-10px_rgba(40,55,120,0.16)]",
         "transition-colors hover:bg-[var(--hover-bg)] hover:ring-1 hover:ring-inset hover:ring-[var(--hover-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
       )}
       aria-label={`${label} 详情`}
@@ -140,11 +140,11 @@ export function CoreKpiSection({
   onCardClick: (metricKey: keyof CoreKpiResponse) => void;
 }): React.JSX.Element {
   return (
-    <section>
+    <section className="glass-panel rounded-2xl px-4 py-5 md:px-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-[15px] font-semibold tracking-tight">核心数据</h2>
         <div
-          className="flex gap-1 text-[13px] bg-[#f2f3f5] rounded-lg p-1"
+          className="flex gap-1 text-[13px] bg-[#f3f5fb] rounded-lg p-1"
           role="tablist"
           aria-label="时间范围"
         >
