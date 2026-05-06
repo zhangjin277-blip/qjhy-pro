@@ -226,10 +226,27 @@ export async function runMigration(opts: MigrationOptions): Promise<MigrationRep
       report.rooms.ids.push(id);
     }
 
-    // accounts
+    // accounts — 按 (platform, platform_uid) 或 account_name 去重，重复行的 binding 合并到同一 accId
+    const accIdMap = new Map<string, string>(); // dedupe key → accId
+    const dedupeKey = (row: Pro3AccountRow): string => {
+      const platform = row.platform ?? "抖音";
+      // 有 platform_uid 用 (platform, uid) 唯一识别；没有则按 account_name 兜底
+      return row.uid ? `${platform}|uid:${row.uid}` : `${platform}|name:${row.accountName}`;
+    };
+
     for (const row of rows) {
       try {
+        const key = dedupeKey(row);
+        const existingAccId = accIdMap.get(key);
+        if (existingAccId) {
+          // 重复行：复用 existing accId，跳过 insert（仅处理后面的 bindings 合并）
+          await processBindings(row, existingAccId);
+          continue;
+        }
+
         const accId = crypto.randomUUID();
+        accIdMap.set(key, accId);
+
         const room_id = row.room ? (roomMap.get(row.room) ?? null) : null;
         // agent 可能是 "陈泰/苏梓豪"，取拆分后第一个能匹配上的真人
         const agent_dingtalk_user_id =
@@ -238,99 +255,100 @@ export async function runMigration(opts: MigrationOptions): Promise<MigrationRep
             .find((id): id is string => Boolean(id)) ?? null;
         const placement_label = placementMap.get(row.accountName) ?? null;
 
-        await tx
-          .insert(live_account)
-          .values({
-            id: accId,
-            account_name: row.accountName,
-            platform: row.platform ?? "抖音",
-            platform_account_id: row.platformAccountId ?? null,
-            platform_uid: row.uid ?? null,
-            platform_real_name: row.platformRealName ?? null,
-            phone: row.phone ?? null,
-            phone_index: row.phoneIndex ?? null,
-            phone_real_name: row.phoneRealName ?? null,
-            room_id,
-            game_account_1: row.gameAccount1 ?? null,
-            game_account_2: row.gameAccount2 ?? null,
-            game_account_3: row.gameAccount3 ?? null,
-            product: row.product ?? "途游斗地主",
-            agent_dingtalk_user_id,
-            placement_label,
-            live_status: row.status === "live" ? "living" : "unknown",
-            raw: row as unknown as Record<string, unknown>,
-          })
-          .onConflictDoNothing();
+        await tx.insert(live_account).values({
+          id: accId,
+          account_name: row.accountName,
+          platform: row.platform ?? "抖音",
+          platform_account_id: row.platformAccountId ?? null,
+          platform_uid: row.uid ?? null,
+          platform_real_name: row.platformRealName ?? null,
+          phone: row.phone ?? null,
+          phone_index: row.phoneIndex ?? null,
+          phone_real_name: row.phoneRealName ?? null,
+          room_id,
+          game_account_1: row.gameAccount1 ?? null,
+          game_account_2: row.gameAccount2 ?? null,
+          game_account_3: row.gameAccount3 ?? null,
+          product: row.product ?? "途游斗地主",
+          agent_dingtalk_user_id,
+          placement_label,
+          live_status: row.status === "live" ? "living" : "unknown",
+          raw: row as unknown as Record<string, unknown>,
+        });
         report.accounts.created++;
         report.accounts.ids.push(accId);
 
-        // bindings — 个播 + 轮播
-        const bindings: {
-          name: string;
-          slots: [string, string][];
-          restDays: number[];
-          remark?: string;
-        }[] = [];
-        if (row.anchorList && row.anchorList.length > 0) {
-          for (const a of row.anchorList) {
-            const slots = (a.schedules ?? (a.schedule ? [a.schedule] : []))
-              .map(parseScheduleString)
-              .filter((s): s is [string, string] => s !== null);
-            const rd = parseRestDay(a.restDay);
-            // a.name 也可能含分隔符 → 拆开每人各建一行 binding（共享 slots/restDays/remark）
-            for (const name of splitNames(a.name)) {
-              bindings.push({
-                name,
-                slots,
-                restDays: rd ? [rd] : [],
-                remark: a.remark,
-              });
-            }
-          }
-        } else if (row.anchorName) {
-          const slots = [row.schedule1, row.schedule2, row.schedule3]
+        await processBindings(row, accId);
+      } catch (e) {
+        report.errors.push({ row, reason: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
+    /** 抽出 binding 处理逻辑，便于重复行复用 existing accId */
+    async function processBindings(row: Pro3AccountRow, accId: string) {
+      const bindings: {
+        name: string;
+        slots: [string, string][];
+        restDays: number[];
+        remark?: string;
+      }[] = [];
+      if (row.anchorList && row.anchorList.length > 0) {
+        for (const a of row.anchorList) {
+          const slots = (a.schedules ?? (a.schedule ? [a.schedule] : []))
             .map(parseScheduleString)
             .filter((s): s is [string, string] => s !== null);
-          const rd = parseRestDay(row.restDay);
-          for (const name of splitNames(row.anchorName)) {
+          const rd = parseRestDay(a.restDay);
+          // a.name 也可能含分隔符 → 拆开每人各建一行 binding（共享 slots/restDays/remark）
+          for (const name of splitNames(a.name)) {
             bindings.push({
               name,
               slots,
               restDays: rd ? [rd] : [],
+              remark: a.remark,
             });
           }
         }
-
-        for (const b of bindings) {
-          if (b.slots.length === 0) continue; // 没有时段就不建 binding
-          const dingId = matchedAnchors.get(b.name);
-          if (!dingId) continue; // 没匹配上的主播跳过（在 report.anchors.unmatched 里）
-          // 确保 live_anchor 存在（迁移时需要"自动建档"）
-          await tx
-            .insert(live_anchor)
-            .values({
-              dingtalk_user_id: dingId,
-              business_line: inferBusinessLine(row.product),
-              employment_type: "正式",
-              work_status: "active",
-            })
-            .onConflictDoNothing();
-
-          await tx
-            .insert(account_anchor_default)
-            .values({
-              id: crypto.randomUUID(),
-              account_id: accId,
-              dingtalk_user_id: dingId,
-              time_slots: b.slots,
-              rest_days: b.restDays,
-              remark: b.remark ?? null,
-            })
-            .onConflictDoNothing();
-          report.bindings.created++;
+      } else if (row.anchorName) {
+        const slots = [row.schedule1, row.schedule2, row.schedule3]
+          .map(parseScheduleString)
+          .filter((s): s is [string, string] => s !== null);
+        const rd = parseRestDay(row.restDay);
+        for (const name of splitNames(row.anchorName)) {
+          bindings.push({
+            name,
+            slots,
+            restDays: rd ? [rd] : [],
+          });
         }
-      } catch (e) {
-        report.errors.push({ row, reason: e instanceof Error ? e.message : String(e) });
+      }
+
+      for (const b of bindings) {
+        if (b.slots.length === 0) continue; // 没有时段就不建 binding
+        const dingId = matchedAnchors.get(b.name);
+        if (!dingId) continue; // 没匹配上的主播跳过（在 report.anchors.unmatched 里）
+        // 确保 live_anchor 存在（迁移时需要"自动建档"）
+        await tx
+          .insert(live_anchor)
+          .values({
+            dingtalk_user_id: dingId,
+            business_line: inferBusinessLine(row.product),
+            employment_type: "正式",
+            work_status: "active",
+          })
+          .onConflictDoNothing();
+
+        await tx
+          .insert(account_anchor_default)
+          .values({
+            id: crypto.randomUUID(),
+            account_id: accId,
+            dingtalk_user_id: dingId,
+            time_slots: b.slots,
+            rest_days: b.restDays,
+            remark: b.remark ?? null,
+          })
+          .onConflictDoNothing();
+        report.bindings.created++;
       }
     }
   });
