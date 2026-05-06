@@ -31,6 +31,17 @@ export function resolveFilter(
   const dsParam = searchParams.ds as string | undefined;
   const dataset_ids = dsParam ? dsParam.split(",").filter(Boolean) : undefined;
   const search = (searchParams.q as string) || undefined;
+  const anchor_label = (searchParams.anchor as string) || undefined;
+  const rawView = searchParams.view as string | undefined;
+  const view =
+    rawView === "summary" || rawView === "schedule" || rawView === "detail" ? rawView : "detail";
 
-  return { date_from: isoDate(from), date_to: isoDate(to), dataset_ids, search };
+  return {
+    date_from: isoDate(from),
+    date_to: isoDate(to),
+    dataset_ids,
+    search,
+    anchor_label,
+    view,
+  };
 }

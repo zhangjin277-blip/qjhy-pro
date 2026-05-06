@@ -7,6 +7,8 @@ export interface BoardFilter {
   date_to: string; // ISO
   dataset_ids?: string[]; // 默认全部
   search?: string; // 账号名 / 主播名 模糊
+  anchor_label?: string; // placement_label 精确筛选（detail 视图）
+  view?: "detail" | "summary" | "schedule"; // 当前视图模式
 }
 
 function datasetClause(ds?: string[]) {
@@ -85,4 +87,326 @@ export async function queryByHour(filter: BoardFilter): Promise<Row[]> {
     LIMIT 5000
   `);
   return result as unknown as Row[];
+}
+
+// ─── NEW V2 QUERIES ──────────────────────────────────────────────────────────
+
+export interface DatasetCount {
+  dataset_id: string;
+  count: number;
+}
+
+export async function queryDatasetCounts(filter: BoardFilter): Promise<DatasetCount[]> {
+  const result = await db.execute(sql`
+    SELECT dataset_id, COUNT(*)::int AS count
+    FROM placement_row
+    WHERE date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    GROUP BY dataset_id
+    ORDER BY dataset_id
+  `);
+  return (result as unknown as { dataset_id: string; count: number }[]).map((r) => ({
+    dataset_id: r.dataset_id,
+    count: Number(r.count),
+  }));
+}
+
+export interface DetailRow {
+  date: string;
+  hour: number;
+  dataset_id: string;
+  account_name: string;
+  anchor_label: string | null;
+  cost: number;
+  activations: number;
+  payment: number;
+  attributed_dingtalk_user_id: string | null;
+  attribution_source: string | null;
+}
+
+export async function queryDetail(filter: BoardFilter): Promise<DetailRow[]> {
+  const anchorClause = filter.anchor_label
+    ? sql`AND a.placement_label = ${filter.anchor_label}`
+    : sql``;
+  const result = await db.execute(sql`
+    SELECT
+      p.date,
+      p.hour,
+      p.dataset_id,
+      a.account_name,
+      a.placement_label AS anchor_label,
+      p.cost_yuan::float        AS cost,
+      p.activations,
+      p.payment_yuan::float     AS payment,
+      p.attributed_dingtalk_user_id,
+      p.attribution_source
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    ${datasetClause(filter.dataset_ids)}
+    ${anchorClause}
+    ORDER BY p.date DESC, p.hour DESC, a.placement_label
+    LIMIT 500
+  `);
+  return (result as unknown as DetailRow[]).map((r) => ({
+    ...r,
+    cost: Number(r.cost),
+    activations: Number(r.activations),
+    payment: Number(r.payment),
+  }));
+}
+
+export interface SummaryRow {
+  anchor_label: string | null;
+  row_count: number;
+  cost: number;
+  activations: number;
+  payment: number;
+  start_download: number;
+  finish_download: number;
+}
+
+export async function querySummary(filter: BoardFilter): Promise<SummaryRow[]> {
+  const result = await db.execute(sql`
+    SELECT
+      a.placement_label,
+      COUNT(*)::int                         AS row_count,
+      SUM(p.cost_yuan)::float               AS cost,
+      SUM(p.activations)::int               AS activations,
+      SUM(p.payment_yuan)::float            AS payment,
+      SUM(p.start_download)::int            AS start_download,
+      SUM(p.finish_download)::int           AS finish_download
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    ${datasetClause(filter.dataset_ids)}
+    GROUP BY a.placement_label
+    ORDER BY cost DESC NULLS LAST
+    LIMIT 100
+  `);
+  return (
+    result as unknown as {
+      placement_label: string | null;
+      row_count: number;
+      cost: number;
+      activations: number;
+      payment: number;
+      start_download: number;
+      finish_download: number;
+    }[]
+  ).map((r) => ({
+    anchor_label: r.placement_label,
+    row_count: Number(r.row_count),
+    cost: Number(r.cost),
+    activations: Number(r.activations),
+    payment: Number(r.payment),
+    start_download: Number(r.start_download),
+    finish_download: Number(r.finish_download),
+  }));
+}
+
+export interface ScheduleRow {
+  date: string;
+  time_slot: [string, string];
+  account_id: string;
+  account_name: string;
+  placement_label: string | null;
+  anchor_user_id: string;
+  anchor_name: string | null;
+  total_cost: number;
+  personal_cost: number;
+  total_acts: number;
+  personal_acts: number;
+  total_unit_price: number | null;
+  personal_unit_price: number | null;
+  total_payment: number;
+  personal_payment: number;
+}
+
+export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]> {
+  // Fetch all effective schedules in date range
+  const schedules = await db.execute(sql`
+    SELECT
+      d.id,
+      d.account_id,
+      d.dingtalk_user_id,
+      d.time_slots,
+      d.rest_days,
+      a.account_name,
+      a.placement_label,
+      du.name AS anchor_name
+    FROM account_anchor_default d
+    JOIN live_account a ON a.id = d.account_id
+    LEFT JOIN dingtalk_user du ON du.user_id = d.dingtalk_user_id
+    WHERE (d.effective_from IS NULL OR d.effective_from <= ${filter.date_to})
+      AND (d.effective_to IS NULL OR d.effective_to >= ${filter.date_from})
+    -- TODO: merge schedule_override (Phase 2.2 later)
+  `);
+
+  interface RawSchedule {
+    id: string;
+    account_id: string;
+    dingtalk_user_id: string;
+    time_slots: [string, string][];
+    rest_days: number[];
+    account_name: string;
+    placement_label: string | null;
+    anchor_name: string | null;
+  }
+  const scheduleList = schedules as unknown as RawSchedule[];
+  if (scheduleList.length === 0) return [];
+
+  // Fetch all placement rows in date range
+  const placements = await db.execute(sql`
+    SELECT
+      p.date, p.hour,
+      p.live_account_id AS account_id,
+      p.cost_yuan::float        AS cost,
+      p.activations::int        AS activations,
+      p.payment_yuan::float     AS payment,
+      p.attributed_dingtalk_user_id
+    FROM placement_row p
+    WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    ${datasetClause(filter.dataset_ids)}
+  `);
+
+  interface RawPlacement {
+    date: string;
+    hour: number;
+    account_id: string;
+    cost: number;
+    activations: number;
+    payment: number;
+    attributed_dingtalk_user_id: string | null;
+  }
+  const placementList = (placements as unknown as RawPlacement[]).map((p) => ({
+    ...p,
+    cost: Number(p.cost),
+    activations: Number(p.activations),
+    payment: Number(p.payment),
+    hour: Number(p.hour),
+  }));
+
+  // Generate all dates in range
+  const dates: string[] = [];
+  const fromD = new Date(filter.date_from);
+  const toD = new Date(filter.date_to);
+  for (let d = new Date(fromD); d <= toD; d.setDate(d.getDate() + 1)) {
+    dates.push(d.toISOString().slice(0, 10));
+  }
+
+  // Build result rows: for each (schedule, date, time_slot) combo
+  const rows: ScheduleRow[] = [];
+  for (const sched of scheduleList) {
+    const slots = sched.time_slots ?? [];
+    for (const slot of slots) {
+      const [slotStart, slotEnd] = slot;
+      const startHour = parseInt((slotStart ?? "0:00").split(":")[0] ?? "0");
+      const endHour = parseInt((slotEnd ?? "24:00").split(":")[0] ?? "24");
+
+      for (const date of dates) {
+        // Check rest_days (ISO weekday 1=Mon..7=Sun)
+        const dow = new Date(date + "T12:00:00Z").getUTCDay(); // 0=Sun..6=Sat
+        const isoWeekday = dow === 0 ? 7 : dow;
+        if (sched.rest_days?.includes(isoWeekday)) continue;
+
+        // Sum placements for this account+date+hours in slot range
+        let totalCost = 0,
+          personalCost = 0;
+        let totalActs = 0,
+          personalActs = 0;
+        let totalPayment = 0,
+          personalPayment = 0;
+
+        for (const p of placementList) {
+          if (p.account_id !== sched.account_id) continue;
+          if (p.date !== date) continue;
+          const h = p.hour;
+          if (h < startHour || h >= endHour) continue;
+          totalCost += p.cost;
+          totalActs += p.activations;
+          totalPayment += p.payment;
+          if (p.attributed_dingtalk_user_id === sched.dingtalk_user_id) {
+            personalCost += p.cost;
+            personalActs += p.activations;
+            personalPayment += p.payment;
+          }
+        }
+
+        if (totalCost === 0 && totalActs === 0) continue;
+
+        rows.push({
+          date,
+          time_slot: [slotStart, slotEnd],
+          account_id: sched.account_id,
+          account_name: sched.account_name,
+          placement_label: sched.placement_label,
+          anchor_user_id: sched.dingtalk_user_id,
+          anchor_name: sched.anchor_name,
+          total_cost: totalCost,
+          personal_cost: personalCost,
+          total_acts: totalActs,
+          personal_acts: personalActs,
+          total_unit_price: totalActs > 0 ? totalCost / totalActs : null,
+          personal_unit_price: personalActs > 0 ? personalCost / personalActs : null,
+          total_payment: totalPayment,
+          personal_payment: personalPayment,
+        });
+      }
+    }
+  }
+
+  // Sort: date DESC, then time_slot start
+  rows.sort((a, b) => {
+    if (a.date > b.date) return -1;
+    if (a.date < b.date) return 1;
+    return a.time_slot[0].localeCompare(b.time_slot[0]);
+  });
+  return rows;
+}
+
+export interface TrendPoint {
+  anchor: string;
+  date: string;
+  hour: number;
+  cost: number;
+  acts: number;
+  payment: number;
+}
+
+export async function queryTrend(filter: BoardFilter): Promise<TrendPoint[]> {
+  const result = await db.execute(sql`
+    SELECT
+      COALESCE(a.placement_label, a.account_name) AS anchor,
+      p.date,
+      p.hour,
+      SUM(p.cost_yuan)::float     AS cost,
+      SUM(p.activations)::int     AS acts,
+      SUM(p.payment_yuan)::float  AS payment
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    ${datasetClause(filter.dataset_ids)}
+    GROUP BY 1, 2, 3
+    ORDER BY 2, 3
+  `);
+  return (result as unknown as TrendPoint[]).map((r) => ({
+    ...r,
+    cost: Number(r.cost),
+    acts: Number(r.acts),
+    payment: Number(r.payment),
+    hour: Number(r.hour),
+  }));
+}
+
+export async function queryAnchorLabels(filter: BoardFilter): Promise<string[]> {
+  const result = await db.execute(sql`
+    SELECT DISTINCT a.placement_label
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    ${datasetClause(filter.dataset_ids)}
+      AND a.placement_label IS NOT NULL
+    ORDER BY 1
+  `);
+  return (result as unknown as { placement_label: string }[]).map((r) => r.placement_label);
 }

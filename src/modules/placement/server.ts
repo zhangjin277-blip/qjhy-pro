@@ -7,5 +7,21 @@ export * from "./incremental";
 export * from "./xlsx-adapter";
 export { ingestRows, type IngestInput, type IngestRow } from "./ingest";
 export { listBatches, getBatchDetail } from "./batch-queries";
-export { queryByAccount, queryByAnchor, queryByHour, type BoardFilter } from "./queries";
+export {
+  queryByAccount,
+  queryByAnchor,
+  queryByHour,
+  queryDatasetCounts,
+  queryDetail,
+  querySummary,
+  querySchedule,
+  queryTrend,
+  queryAnchorLabels,
+  type BoardFilter,
+  type DatasetCount,
+  type DetailRow,
+  type SummaryRow,
+  type ScheduleRow,
+  type TrendPoint,
+} from "./queries";
 export { readPro3Placements, type Pro3Dataset } from "./pro3-adapter";
