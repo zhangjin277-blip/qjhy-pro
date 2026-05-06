@@ -108,161 +108,169 @@ export function AnchorTable({
   }
 
   return (
-    <div className="overflow-auto">
-      <table
-        className="w-full border-collapse"
-        style={{ fontSize: "12.5px", fontVariantNumeric: "tabular-nums" }}
-      >
-        <thead>
-          <tr>
-            {[
-              { label: "姓名", w: "18%" },
-              { label: "业务线", w: "8%" },
-              { label: "雇佣类型", w: "8%" },
-              { label: "试播日", w: "9%" },
-              { label: "签约日", w: "9%" },
-              { label: "状态", w: "7%" },
-              { label: "绑定账号", w: "12%" },
-              { label: "修改时间", w: "11%" },
-              { label: "", w: "5%" },
-            ].map((col) => (
-              <th
-                key={col.label}
-                className="sticky top-0 border-b border-slate-200 bg-white px-3 py-[10px] text-left text-[11px] font-medium uppercase tracking-[0.04em] text-slate-500"
-                style={{ width: col.w }}
-              >
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {anchors.map((anchor) => {
-            const bindings = bindingsByAnchor[anchor.dingtalk_user_id] ?? [];
-            const isExpanded = expandedId === anchor.dingtalk_user_id;
-
-            return (
-              <>
-                <tr
-                  key={anchor.dingtalk_user_id}
-                  className="cursor-pointer border-b border-slate-100 hover:bg-[#fafbfc]"
-                  onClick={() => onEdit(anchor)}
+    <div
+      className="min-w-0 max-w-full overflow-hidden rounded-lg shadow-sm"
+      style={{
+        background: "rgba(255, 255, 255, 0.92)",
+        border: "1px solid var(--border-subtle)",
+      }}
+    >
+      <div className="max-w-full overflow-auto">
+        <table
+          className="w-full border-collapse"
+          style={{ fontSize: "12.5px", fontVariantNumeric: "tabular-nums" }}
+        >
+          <thead>
+            <tr>
+              {[
+                { label: "姓名", w: "18%" },
+                { label: "业务线", w: "8%" },
+                { label: "雇佣类型", w: "8%" },
+                { label: "试播日", w: "9%" },
+                { label: "签约日", w: "9%" },
+                { label: "状态", w: "7%" },
+                { label: "绑定账号", w: "12%" },
+                { label: "修改时间", w: "11%" },
+                { label: "", w: "5%" },
+              ].map((col) => (
+                <th
+                  key={col.label}
+                  className="sticky top-0 border-b border-slate-200 bg-white px-3 py-[10px] text-left text-[11px] font-medium uppercase tracking-[0.04em] text-slate-500"
+                  style={{ width: col.w }}
                 >
-                  {/* 姓名 */}
-                  <td className="px-3 py-[11px] align-top">
-                    <div className="flex items-center gap-2.5">
-                      <AnchorAvatar name={anchor.name} business_line={anchor.business_line} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium text-slate-900">{anchor.name}</div>
-                        {anchor.title && (
-                          <div className="mt-0.5 text-[11px] text-slate-400">{anchor.title}</div>
-                        )}
-                        {anchor.external_name && (
-                          <div className="mt-0.5 text-[10.5px] text-slate-400">
-                            艺名：{anchor.external_name}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {anchors.map((anchor) => {
+              const bindings = bindingsByAnchor[anchor.dingtalk_user_id] ?? [];
+              const isExpanded = expandedId === anchor.dingtalk_user_id;
 
-                  {/* 业务线 */}
-                  <td className="px-3 py-[11px] align-top">
-                    <BusinessLineChip value={anchor.business_line} />
-                  </td>
-
-                  {/* 雇佣类型 */}
-                  <td className="px-3 py-[11px] align-top">
-                    <EmploymentChip value={anchor.employment_type} />
-                  </td>
-
-                  {/* 试播日 */}
-                  <td className="px-3 py-[11px] align-top text-slate-600">
-                    {anchor.trial_start_date ?? <span className="text-slate-300">—</span>}
-                  </td>
-
-                  {/* 签约日 */}
-                  <td className="px-3 py-[11px] align-top text-slate-600">
-                    {anchor.contract_date ?? <span className="text-slate-300">—</span>}
-                  </td>
-
-                  {/* 状态 */}
-                  <td className="px-3 py-[11px] align-top">
-                    <WorkStatusDot status={anchor.work_status} />
-                  </td>
-
-                  {/* 绑定账号 */}
-                  <td className="px-3 py-[11px] align-top">
-                    {bindings.length === 0 ? (
-                      <span className="text-[11px] text-slate-300">无绑定</span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleExpand(anchor.dingtalk_user_id);
-                        }}
-                        className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-[2px] text-[11px] font-medium text-blue-600 hover:bg-blue-100"
-                      >
-                        {bindings.length} 个账号
-                        <span className="text-[10px]">{isExpanded ? "▲" : "▼"}</span>
-                      </button>
-                    )}
-                  </td>
-
-                  {/* 修改时间 */}
-                  <td className="px-3 py-[11px] align-top text-[11px] text-slate-400">
-                    {anchor.updated_at
-                      ? new Date(anchor.updated_at).toLocaleDateString("zh-CN")
-                      : "—"}
-                  </td>
-
-                  {/* 操作 */}
-                  <td className="px-3 py-[11px] align-top">
-                    <button
-                      className="rounded px-1.5 py-[3px] text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEdit(anchor);
-                      }}
-                    >
-                      ⋯
-                    </button>
-                  </td>
-                </tr>
-
-                {/* 展开行：绑定账号列表 */}
-                {isExpanded && (
-                  <tr key={`${anchor.dingtalk_user_id}-bindings`} className="bg-blue-50/30">
-                    <td colSpan={9} className="px-12 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        {bindings.map((b) => (
-                          <div
-                            key={b.id}
-                            className="flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-1.5 text-[12px]"
-                          >
-                            {b.platform && <PlatformBadge platform={b.platform} size="xs" />}
-                            <span className="font-medium text-slate-800">
-                              {b.account_name ?? "—"}
-                            </span>
-                            {b.time_slots.length > 0 && (
-                              <span className="font-mono text-[10.5px] text-slate-400">
-                                {b.time_slots
-                                  .map(([s, e]) => `${s.slice(0, 2)}–${e.slice(0, 2)}`)
-                                  .join(" / ")}
-                              </span>
-                            )}
-                          </div>
-                        ))}
+              return (
+                <>
+                  <tr
+                    key={anchor.dingtalk_user_id}
+                    className="cursor-pointer border-b border-slate-100 hover:bg-[#fafbfc]"
+                    onClick={() => onEdit(anchor)}
+                  >
+                    {/* 姓名 */}
+                    <td className="px-3 py-[11px] align-top">
+                      <div className="flex items-center gap-2.5">
+                        <AnchorAvatar name={anchor.name} business_line={anchor.business_line} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium text-slate-900">{anchor.name}</div>
+                          {anchor.title && (
+                            <div className="mt-0.5 text-[11px] text-slate-400">{anchor.title}</div>
+                          )}
+                          {anchor.external_name && (
+                            <div className="mt-0.5 text-[10.5px] text-slate-400">
+                              艺名：{anchor.external_name}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
+
+                    {/* 业务线 */}
+                    <td className="px-3 py-[11px] align-top">
+                      <BusinessLineChip value={anchor.business_line} />
+                    </td>
+
+                    {/* 雇佣类型 */}
+                    <td className="px-3 py-[11px] align-top">
+                      <EmploymentChip value={anchor.employment_type} />
+                    </td>
+
+                    {/* 试播日 */}
+                    <td className="px-3 py-[11px] align-top text-slate-600">
+                      {anchor.trial_start_date ?? <span className="text-slate-300">—</span>}
+                    </td>
+
+                    {/* 签约日 */}
+                    <td className="px-3 py-[11px] align-top text-slate-600">
+                      {anchor.contract_date ?? <span className="text-slate-300">—</span>}
+                    </td>
+
+                    {/* 状态 */}
+                    <td className="px-3 py-[11px] align-top">
+                      <WorkStatusDot status={anchor.work_status} />
+                    </td>
+
+                    {/* 绑定账号 */}
+                    <td className="px-3 py-[11px] align-top">
+                      {bindings.length === 0 ? (
+                        <span className="text-[11px] text-slate-300">无绑定</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleExpand(anchor.dingtalk_user_id);
+                          }}
+                          className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-[2px] text-[11px] font-medium text-blue-600 hover:bg-blue-100"
+                        >
+                          {bindings.length} 个账号
+                          <span className="text-[10px]">{isExpanded ? "▲" : "▼"}</span>
+                        </button>
+                      )}
+                    </td>
+
+                    {/* 修改时间 */}
+                    <td className="px-3 py-[11px] align-top text-[11px] text-slate-400">
+                      {anchor.updated_at
+                        ? new Date(anchor.updated_at).toLocaleDateString("zh-CN")
+                        : "—"}
+                    </td>
+
+                    {/* 操作 */}
+                    <td className="px-3 py-[11px] align-top">
+                      <button
+                        className="rounded px-1.5 py-[3px] text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(anchor);
+                        }}
+                      >
+                        ⋯
+                      </button>
+                    </td>
                   </tr>
-                )}
-              </>
-            );
-          })}
-        </tbody>
-      </table>
+
+                  {/* 展开行：绑定账号列表 */}
+                  {isExpanded && (
+                    <tr key={`${anchor.dingtalk_user_id}-bindings`} className="bg-blue-50/30">
+                      <td colSpan={9} className="px-12 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          {bindings.map((b) => (
+                            <div
+                              key={b.id}
+                              className="flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-1.5 text-[12px]"
+                            >
+                              {b.platform && <PlatformBadge platform={b.platform} size="xs" />}
+                              <span className="font-medium text-slate-800">
+                                {b.account_name ?? "—"}
+                              </span>
+                              {b.time_slots.length > 0 && (
+                                <span className="font-mono text-[10.5px] text-slate-400">
+                                  {b.time_slots
+                                    .map(([s, e]) => `${s.slice(0, 2)}–${e.slice(0, 2)}`)
+                                    .join(" / ")}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

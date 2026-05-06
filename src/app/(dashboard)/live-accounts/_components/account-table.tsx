@@ -135,142 +135,150 @@ export function AccountTable({
   }
 
   return (
-    <div className="overflow-auto">
-      <table
-        className="w-full border-collapse"
-        style={{ fontSize: "12.5px", fontVariantNumeric: "tabular-nums" }}
-      >
-        <thead>
-          <tr>
-            {[
-              { label: "账号", w: "22%" },
-              { label: "平台", w: "7%" },
-              { label: "产品", w: "10%" },
-              { label: "轮播主播 / 排班", w: "24%" },
-              { label: "直播间", w: "7%" },
-              { label: "运营", w: "8%" },
-              { label: "投放标签", w: "9%" },
-              { label: "状态", w: "8%" },
-              { label: "", w: "5%" },
-            ].map((col) => (
-              <th
-                key={col.label}
-                className="sticky top-0 border-b border-slate-200 bg-white px-3 py-[10px] text-left text-[11px] font-medium uppercase tracking-[0.04em] text-slate-500"
-                style={{ width: col.w }}
-              >
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {accounts.map((account) => {
-            const bindings = bindingsByAccount[account.id] ?? [];
-            return (
-              <tr
-                key={account.id}
-                className="cursor-pointer border-b border-slate-100 hover:bg-[#fafbfc]"
-                onClick={() => onEdit?.(account)}
-              >
-                {/* 账号 */}
-                <td className="px-3 py-[11px] align-top">
-                  <div className="flex items-center gap-2.5">
-                    <AccountAvatar
-                      name={account.account_name}
-                      platform={account.platform}
-                      avatarUrl={
-                        account.platform_account_id
-                          ? avatarByPlatformId[account.platform_account_id]
-                          : null
-                      }
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium text-slate-900">
-                        {account.account_name}
-                      </div>
-                      {account.platform_account_id && (
-                        <div
-                          className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500"
-                          style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
-                        >
-                          <span className="text-slate-400">♪</span>
-                          {account.platform_account_id}
-                        </div>
-                      )}
-                      {account.platform_uid && (
-                        <div
-                          className="mt-px text-[10.5px] text-slate-400"
-                          style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
-                        >
-                          UID {account.platform_uid}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </td>
-
-                {/* 平台 */}
-                <td className="px-3 py-[11px] align-top">
-                  <PlatformBadge platform={account.platform} />
-                </td>
-
-                {/* 产品 */}
-                <td className="px-3 py-[11px] align-top text-slate-700">{account.product}</td>
-
-                {/* 主播排班 */}
-                <td className="px-3 py-[11px] align-top">
-                  <AnchorStack bindings={bindings} />
-                </td>
-
-                {/* 直播间 */}
-                <td
-                  className="px-3 py-[11px] align-top text-[11.5px] text-slate-600"
-                  style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
+    <div
+      className="min-w-0 max-w-full overflow-hidden rounded-lg shadow-sm"
+      style={{
+        background: "rgba(255, 255, 255, 0.92)",
+        border: "1px solid var(--border-subtle)",
+      }}
+    >
+      <div className="max-w-full overflow-auto">
+        <table
+          className="w-full border-collapse"
+          style={{ fontSize: "12.5px", fontVariantNumeric: "tabular-nums" }}
+        >
+          <thead>
+            <tr>
+              {[
+                { label: "账号", w: "22%" },
+                { label: "平台", w: "7%" },
+                { label: "产品", w: "10%" },
+                { label: "轮播主播 / 排班", w: "24%" },
+                { label: "直播间", w: "7%" },
+                { label: "运营", w: "8%" },
+                { label: "投放标签", w: "9%" },
+                { label: "状态", w: "8%" },
+                { label: "", w: "5%" },
+              ].map((col) => (
+                <th
+                  key={col.label}
+                  className="sticky top-0 border-b border-slate-200 bg-white px-3 py-[10px] text-left text-[11px] font-medium uppercase tracking-[0.04em] text-slate-500"
+                  style={{ width: col.w }}
                 >
-                  {account.room_no ?? <span className="text-slate-300">—</span>}
-                </td>
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {accounts.map((account) => {
+              const bindings = bindingsByAccount[account.id] ?? [];
+              return (
+                <tr
+                  key={account.id}
+                  className="cursor-pointer border-b border-slate-100 hover:bg-[#fafbfc]"
+                  onClick={() => onEdit?.(account)}
+                >
+                  {/* 账号 */}
+                  <td className="px-3 py-[11px] align-top">
+                    <div className="flex items-center gap-2.5">
+                      <AccountAvatar
+                        name={account.account_name}
+                        platform={account.platform}
+                        avatarUrl={
+                          account.platform_account_id
+                            ? avatarByPlatformId[account.platform_account_id]
+                            : null
+                        }
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium text-slate-900">
+                          {account.account_name}
+                        </div>
+                        {account.platform_account_id && (
+                          <div
+                            className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500"
+                            style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
+                          >
+                            <span className="text-slate-400">♪</span>
+                            {account.platform_account_id}
+                          </div>
+                        )}
+                        {account.platform_uid && (
+                          <div
+                            className="mt-px text-[10.5px] text-slate-400"
+                            style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
+                          >
+                            UID {account.platform_uid}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
 
-                {/* 运营 */}
-                <td className="px-3 py-[11px] align-top text-slate-700">
-                  {account.agent_name ?? <span className="text-slate-300">—</span>}
-                </td>
+                  {/* 平台 */}
+                  <td className="px-3 py-[11px] align-top">
+                    <PlatformBadge platform={account.platform} />
+                  </td>
 
-                {/* 投放标签 */}
-                <td className="px-3 py-[11px] align-top">
-                  {account.placement_label ? (
-                    <span
-                      className="text-[11.5px] text-purple-700"
-                      style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
-                    >
-                      {account.placement_label}
-                    </span>
-                  ) : (
-                    <span className="text-slate-300">—</span>
-                  )}
-                </td>
+                  {/* 产品 */}
+                  <td className="px-3 py-[11px] align-top text-slate-700">{account.product}</td>
 
-                {/* 状态 */}
-                <td className="px-3 py-[11px] align-top">
-                  <StatusDot status={account.live_status} />
-                </td>
+                  {/* 主播排班 */}
+                  <td className="px-3 py-[11px] align-top">
+                    <AnchorStack bindings={bindings} />
+                  </td>
 
-                {/* 操作 */}
-                <td className="px-3 py-[11px] align-top">
-                  <button
-                    className="rounded px-1.5 py-[3px] text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEdit?.(account);
-                    }}
+                  {/* 直播间 */}
+                  <td
+                    className="px-3 py-[11px] align-top text-[11.5px] text-slate-600"
+                    style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
                   >
-                    ⋯
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    {account.room_no ?? <span className="text-slate-300">—</span>}
+                  </td>
+
+                  {/* 运营 */}
+                  <td className="px-3 py-[11px] align-top text-slate-700">
+                    {account.agent_name ?? <span className="text-slate-300">—</span>}
+                  </td>
+
+                  {/* 投放标签 */}
+                  <td className="px-3 py-[11px] align-top">
+                    {account.placement_label ? (
+                      <span
+                        className="text-[11.5px] text-purple-700"
+                        style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
+                      >
+                        {account.placement_label}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+
+                  {/* 状态 */}
+                  <td className="px-3 py-[11px] align-top">
+                    <StatusDot status={account.live_status} />
+                  </td>
+
+                  {/* 操作 */}
+                  <td className="px-3 py-[11px] align-top">
+                    <button
+                      className="rounded px-1.5 py-[3px] text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEdit?.(account);
+                      }}
+                    >
+                      ⋯
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
