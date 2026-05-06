@@ -5,6 +5,35 @@ import { PlatformBadge } from "./platform-badge";
 
 const DAY_LABELS = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
+// 抖音粉 / 快手橙渐变背景作头像，从 account_name 提取首字（emoji 优先）
+function AccountAvatar({ name, platform }: { name: string; platform: string }) {
+  // emoji 提取：用 Array.from 处理多字节 unicode
+  const chars = Array.from(name);
+  const emoji = chars.find((c) => /\p{Extended_Pictographic}/u.test(c));
+  // 否则用首字（去掉常见前缀的"产品名-"以提取真名）
+  const trimmed = name.replace(/^.+?[-－]/, "").trim() || name;
+  const initial = Array.from(trimmed)[0] ?? "?";
+  const display = emoji ?? initial;
+
+  const isDouyin = platform === "抖音";
+  const gradient = isDouyin
+    ? "from-pink-400 to-pink-600"
+    : platform === "快手"
+      ? "from-orange-400 to-orange-600"
+      : platform === "B站"
+        ? "from-cyan-400 to-cyan-600"
+        : "from-slate-400 to-slate-600";
+
+  return (
+    <div
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${gradient} text-base font-semibold text-white shadow-sm`}
+      style={{ textShadow: "0 1px 0 rgba(0,0,0,0.15)" }}
+    >
+      {display}
+    </div>
+  );
+}
+
 interface BindingLite {
   id: string;
   account_id: string | null;
@@ -120,15 +149,31 @@ export function AccountTable({ accounts, bindingsByAccount, onEdit }: AccountTab
               >
                 {/* 账号 */}
                 <td className="px-3 py-[11px] align-top">
-                  <div className="font-medium text-slate-900">{account.account_name}</div>
-                  {account.platform_uid && (
-                    <div
-                      className="mt-0.5 text-[11px] text-slate-400"
-                      style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
-                    >
-                      {account.platform_uid}
+                  <div className="flex items-center gap-2.5">
+                    <AccountAvatar name={account.account_name} platform={account.platform} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium text-slate-900">
+                        {account.account_name}
+                      </div>
+                      {account.platform_account_id && (
+                        <div
+                          className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500"
+                          style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
+                        >
+                          <span className="text-slate-400">♪</span>
+                          {account.platform_account_id}
+                        </div>
+                      )}
+                      {account.platform_uid && (
+                        <div
+                          className="mt-px text-[10.5px] text-slate-400"
+                          style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
+                        >
+                          UID {account.platform_uid}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </td>
 
                 {/* 平台 */}
