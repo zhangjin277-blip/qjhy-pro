@@ -99,7 +99,7 @@ function KpiCard({
       className={cn(
         "card-surface block w-full text-left p-5 rounded-xl bg-white",
         "shadow-[0_1px_0_0_rgba(0,0,0,0.02),0_4px_12px_-8px_rgba(0,0,0,0.04)]",
-        "transition-colors hover:bg-[#fafbfc] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        "transition-colors hover:bg-[var(--hover-bg)] hover:ring-1 hover:ring-inset hover:ring-[var(--hover-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
       )}
       aria-label={`${label} 详情`}
     >

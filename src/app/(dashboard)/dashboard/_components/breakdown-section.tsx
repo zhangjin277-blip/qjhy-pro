@@ -134,7 +134,7 @@ function GroupCell({
       disabled={notApplicable}
       className={cn(
         "px-3 py-1 text-left transition-colors rounded-md",
-        "hover:bg-[#E8F0FF] hover:ring-1 hover:ring-inset hover:ring-[#1664FF]/40 hover:shadow-sm",
+        "hover:bg-[var(--hover-bg)] hover:ring-1 hover:ring-inset hover:ring-[var(--hover-ring)] hover:shadow-sm",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
         withDivider && "border-l border-[#f2f3f5]",
         notApplicable && "opacity-60 cursor-not-allowed hover:bg-transparent hover:ring-0",
@@ -458,7 +458,7 @@ export function BreakdownSection({
                 className={cn(
                   "py-3 px-1 transition-colors whitespace-nowrap rounded",
                   active
-                    ? "text-primary font-semibold shadow-[inset_0_-2px_0_var(--color-primary)]"
+                    ? "text-primary font-semibold shadow-[inset_0_-2px_0_var(--primary)]"
                     : "text-[#1d2129] font-medium hover:text-primary",
                 )}
               >

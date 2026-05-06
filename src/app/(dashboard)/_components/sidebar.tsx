@@ -54,10 +54,10 @@ export function Sidebar({ defaultCollapsed, mobileOpen, onMobileClose }: Sidebar
 
   return (
     <>
-      {/* 桌面 sidebar */}
+      {/* 桌面 sidebar — bg-transparent 透出外层 slate-50（PRO3 风格） */}
       <aside
         className={cn(
-          "bg-card sticky top-0 hidden h-screen shrink-0 flex-col transition-[width] duration-200 lg:flex",
+          "sticky top-0 hidden h-screen shrink-0 flex-col bg-transparent transition-[width] duration-200 lg:flex",
           collapsed ? "w-16" : "w-[232px]",
         )}
       >
@@ -125,7 +125,7 @@ function SidebarInner({
   return (
     <>
       {/* 品牌 */}
-      <div className="flex h-14 items-center gap-2.5 border-b px-3">
+      <div className="flex h-14 items-center gap-2.5 px-3">
         <div className="from-primary to-primary/70 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br shadow-sm ring-1 ring-white/30 ring-inset">
           <Radio className="h-[18px] w-[18px] text-white" strokeWidth={2.4} />
         </div>
@@ -218,7 +218,7 @@ function SidebarInner({
       </nav>
 
       {/* 折叠按钮 */}
-      <div className="border-t p-2">
+      <div className="p-2">
         <button
           type="button"
           onClick={toggleCollapsed}
