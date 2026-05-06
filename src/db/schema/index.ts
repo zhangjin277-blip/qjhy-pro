@@ -7,6 +7,7 @@ export * from "./brokers";
 export * from "./crawler";
 export * from "./dingtalk";
 export * from "./live-account";
+export * from "./live-anchor";
 export * from "./live-room";
 export * from "./permissions";
 export * from "./user-preset";
