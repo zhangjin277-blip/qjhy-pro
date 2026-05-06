@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/db/client";
 import { sql } from "drizzle-orm";
+import { mergeWithOverride } from "@/modules/schedule-override";
 
 export interface BoardFilter {
   date_from: string; // ISO
@@ -223,7 +224,7 @@ export interface ScheduleRow {
 }
 
 export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]> {
-  // Fetch all effective schedules in date range
+  // 1. Fetch default schedules active in date range
   const schedules = await db.execute(sql`
     SELECT
       d.id,
@@ -239,7 +240,6 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
     LEFT JOIN dingtalk_user du ON du.user_id = d.dingtalk_user_id
     WHERE (d.effective_from IS NULL OR d.effective_from <= ${filter.date_to})
       AND (d.effective_to IS NULL OR d.effective_to >= ${filter.date_from})
-    -- TODO: merge schedule_override (Phase 2.2 later)
   `);
 
   interface RawSchedule {
@@ -255,7 +255,71 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
   const scheduleList = schedules as unknown as RawSchedule[];
   if (scheduleList.length === 0) return [];
 
-  // Fetch all placement rows in date range
+  // 2. Collect all account_ids involved in default schedules
+  const involvedAccountIds = [...new Set(scheduleList.map((s) => s.account_id))];
+
+  // 3. Fetch schedule_override rows for the date range + involved accounts
+  const overrideRows = await db.execute(sql`
+    SELECT
+      o.account_id,
+      o.date::text AS date,
+      o.dingtalk_user_id,
+      o.time_slots,
+      du.name AS anchor_name
+    FROM schedule_override o
+    LEFT JOIN dingtalk_user du ON du.user_id = o.dingtalk_user_id
+    WHERE o.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+      AND o.account_id IN (${sql.join(
+        involvedAccountIds.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+  `);
+
+  interface RawOverride {
+    account_id: string;
+    date: string;
+    dingtalk_user_id: string;
+    time_slots: [string, string][];
+    anchor_name: string | null;
+  }
+  const overrideList = overrideRows as unknown as RawOverride[];
+
+  // 4. Index overrides by (account_id, date) for fast lookup
+  //    Map key: `${account_id}::${date}`
+  const overrideMap = new Map<string, RawOverride[]>();
+  for (const ov of overrideList) {
+    const key = `${ov.account_id}::${ov.date}`;
+    const existing = overrideMap.get(key);
+    if (existing) {
+      existing.push(ov);
+    } else {
+      overrideMap.set(key, [ov]);
+    }
+  }
+
+  // 5. Build per-(account_id) lookup: account metadata from default schedules
+  const accountMeta = new Map<string, { account_name: string; placement_label: string | null }>();
+  for (const s of scheduleList) {
+    if (!accountMeta.has(s.account_id)) {
+      accountMeta.set(s.account_id, {
+        account_name: s.account_name,
+        placement_label: s.placement_label,
+      });
+    }
+  }
+
+  // 6. Build a lookup for anchor_name by dingtalk_user_id (from defaults + overrides)
+  const anchorNames = new Map<string, string | null>();
+  for (const s of scheduleList) {
+    anchorNames.set(s.dingtalk_user_id, s.anchor_name);
+  }
+  for (const ov of overrideList) {
+    if (!anchorNames.has(ov.dingtalk_user_id)) {
+      anchorNames.set(ov.dingtalk_user_id, ov.anchor_name);
+    }
+  }
+
+  // 7. Fetch all placement rows in date range
   const placements = await db.execute(sql`
     SELECT
       p.date, p.hour,
@@ -286,7 +350,7 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
     hour: Number(p.hour),
   }));
 
-  // Generate all dates in range
+  // 8. Generate all dates in range
   const dates: string[] = [];
   const fromD = new Date(filter.date_from);
   const toD = new Date(filter.date_to);
@@ -294,68 +358,105 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
     dates.push(d.toISOString().slice(0, 10));
   }
 
-  // Build result rows: for each (schedule, date, time_slot) combo
-  const rows: ScheduleRow[] = [];
-  for (const sched of scheduleList) {
-    const slots = sched.time_slots ?? [];
-    for (const slot of slots) {
-      const [slotStart, slotEnd] = slot;
-      const startHour = parseInt((slotStart ?? "0:00").split(":")[0] ?? "0");
-      const endHour = parseInt((slotEnd ?? "24:00").split(":")[0] ?? "24");
+  // 9. Group default schedules by account_id for mergeWithOverride
+  //    defaultsByAccount[account_id] = DefaultSchedule[]
+  const defaultsByAccount = new Map<
+    string,
+    { user: string; slots: [string, string][]; rest_days: number[] }[]
+  >();
+  for (const s of scheduleList) {
+    const arr = defaultsByAccount.get(s.account_id) ?? [];
+    arr.push({
+      user: s.dingtalk_user_id,
+      slots: s.time_slots ?? [],
+      rest_days: s.rest_days ?? [],
+    });
+    defaultsByAccount.set(s.account_id, arr);
+  }
 
-      for (const date of dates) {
-        // Check rest_days (ISO weekday 1=Mon..7=Sun)
+  // 10. Build result rows using effective (merged) schedules per (account_id, date)
+  const rows: ScheduleRow[] = [];
+
+  for (const accountId of involvedAccountIds) {
+    const meta = accountMeta.get(accountId);
+    if (!meta) continue;
+    const defaults = defaultsByAccount.get(accountId) ?? [];
+
+    for (const date of dates) {
+      const key = `${accountId}::${date}`;
+      const dayOverrides = overrideMap.get(key) ?? [];
+
+      // Convert override rows to OverrideSchedule[]
+      const overrideSchedules = dayOverrides.map((ov) => ({
+        user: ov.dingtalk_user_id,
+        slots: ov.time_slots ?? [],
+      }));
+
+      // Merge: override wins per user; slots=[] means day-off (休假)
+      const effective = mergeWithOverride(defaults, overrideSchedules);
+
+      for (const eff of effective) {
+        // slots=[] means this user is on leave for this date — skip entirely
+        if (eff.slots.length === 0) continue;
+
+        // Check rest_days from effective schedule (always from default)
         const dow = new Date(date + "T12:00:00Z").getUTCDay(); // 0=Sun..6=Sat
         const isoWeekday = dow === 0 ? 7 : dow;
-        if (sched.rest_days?.includes(isoWeekday)) continue;
+        // For override-sourced entries that have no default rest_days, rest_days=[]
+        if (eff.rest_days.includes(isoWeekday)) continue;
 
-        // Sum placements for this account+date+hours in slot range
-        let totalCost = 0,
-          personalCost = 0;
-        let totalActs = 0,
-          personalActs = 0;
-        let totalPayment = 0,
-          personalPayment = 0;
+        for (const slot of eff.slots) {
+          const [slotStart, slotEnd] = slot;
+          const startHour = parseInt((slotStart ?? "0:00").split(":")[0] ?? "0");
+          const endHour = parseInt((slotEnd ?? "24:00").split(":")[0] ?? "24");
 
-        for (const p of placementList) {
-          if (p.account_id !== sched.account_id) continue;
-          if (p.date !== date) continue;
-          const h = p.hour;
-          if (h < startHour || h >= endHour) continue;
-          totalCost += p.cost;
-          totalActs += p.activations;
-          totalPayment += p.payment;
-          if (p.attributed_dingtalk_user_id === sched.dingtalk_user_id) {
-            personalCost += p.cost;
-            personalActs += p.activations;
-            personalPayment += p.payment;
+          let totalCost = 0,
+            personalCost = 0;
+          let totalActs = 0,
+            personalActs = 0;
+          let totalPayment = 0,
+            personalPayment = 0;
+
+          for (const p of placementList) {
+            if (p.account_id !== accountId) continue;
+            if (p.date !== date) continue;
+            const h = p.hour;
+            if (h < startHour || h >= endHour) continue;
+            totalCost += p.cost;
+            totalActs += p.activations;
+            totalPayment += p.payment;
+            if (p.attributed_dingtalk_user_id === eff.user) {
+              personalCost += p.cost;
+              personalActs += p.activations;
+              personalPayment += p.payment;
+            }
           }
+
+          if (totalCost === 0 && totalActs === 0) continue;
+
+          rows.push({
+            date,
+            time_slot: [slotStart, slotEnd],
+            account_id: accountId,
+            account_name: meta.account_name,
+            placement_label: meta.placement_label,
+            anchor_user_id: eff.user,
+            anchor_name: anchorNames.get(eff.user) ?? null,
+            total_cost: totalCost,
+            personal_cost: personalCost,
+            total_acts: totalActs,
+            personal_acts: personalActs,
+            total_unit_price: totalActs > 0 ? totalCost / totalActs : null,
+            personal_unit_price: personalActs > 0 ? personalCost / personalActs : null,
+            total_payment: totalPayment,
+            personal_payment: personalPayment,
+          });
         }
-
-        if (totalCost === 0 && totalActs === 0) continue;
-
-        rows.push({
-          date,
-          time_slot: [slotStart, slotEnd],
-          account_id: sched.account_id,
-          account_name: sched.account_name,
-          placement_label: sched.placement_label,
-          anchor_user_id: sched.dingtalk_user_id,
-          anchor_name: sched.anchor_name,
-          total_cost: totalCost,
-          personal_cost: personalCost,
-          total_acts: totalActs,
-          personal_acts: personalActs,
-          total_unit_price: totalActs > 0 ? totalCost / totalActs : null,
-          personal_unit_price: personalActs > 0 ? personalCost / personalActs : null,
-          total_payment: totalPayment,
-          personal_payment: personalPayment,
-        });
       }
     }
   }
 
-  // Sort: date DESC, then time_slot start
+  // 11. Sort: date DESC, then time_slot start
   rows.sort((a, b) => {
     if (a.date > b.date) return -1;
     if (a.date < b.date) return 1;
