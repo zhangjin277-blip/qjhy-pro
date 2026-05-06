@@ -1,0 +1,102 @@
+import "server-only";
+import { db } from "@/db/client";
+import { placement_row } from "@/db/schema/placements";
+import { account_anchor_default } from "@/db/schema/account-anchor-default";
+import { schedule_override } from "@/db/schema/schedule-override";
+import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
+import { attributeRow } from "./attribute";
+
+export async function runAttributionJob(opts?: { batch_id?: string; max_rows?: number }) {
+  const maxRows = opts?.max_rows ?? 1000;
+
+  const dirtyRows = await db
+    .select({
+      id: placement_row.id,
+      date: placement_row.date,
+      hour: placement_row.hour,
+      live_account_id: placement_row.live_account_id,
+    })
+    .from(placement_row)
+    .where(
+      opts?.batch_id
+        ? and(
+            eq(placement_row.attribution_dirty, true),
+            eq(placement_row.import_batch_id, opts.batch_id),
+          )
+        : eq(placement_row.attribution_dirty, true),
+    )
+    .limit(maxRows);
+
+  if (dirtyRows.length === 0) return { processed: 0 };
+
+  // 按 (account_id, date) 分组
+  const groups = new Map<string, { account_id: string; date: string; rows: typeof dirtyRows }>();
+  for (const r of dirtyRows) {
+    const k = `${r.live_account_id}|${r.date}`;
+    if (!groups.has(k)) groups.set(k, { account_id: r.live_account_id, date: r.date, rows: [] });
+    const grp = groups.get(k);
+    if (grp) grp.rows.push(r);
+  }
+
+  let processed = 0;
+  for (const g of groups.values()) {
+    // 查 default — 必须按 effective_from / effective_to 过滤
+    const defaults = (
+      await db
+        .select({
+          user: account_anchor_default.dingtalk_user_id,
+          slots: account_anchor_default.time_slots,
+          rest_days: account_anchor_default.rest_days,
+        })
+        .from(account_anchor_default)
+        .where(
+          and(
+            eq(account_anchor_default.account_id, g.account_id),
+            lte(account_anchor_default.effective_from, g.date),
+            or(
+              isNull(account_anchor_default.effective_to),
+              gte(account_anchor_default.effective_to, g.date),
+            ),
+          ),
+        )
+    ).map((d) => ({
+      user: d.user,
+      slots: (d.slots ?? []) as [string, string][],
+      rest_days: (d.rest_days ?? []) as number[],
+    }));
+
+    const overrides = (
+      await db
+        .select({
+          user: schedule_override.dingtalk_user_id,
+          slots: schedule_override.time_slots,
+        })
+        .from(schedule_override)
+        .where(
+          and(eq(schedule_override.account_id, g.account_id), eq(schedule_override.date, g.date)),
+        )
+    ).map((o) => ({ user: o.user, slots: (o.slots ?? []) as [string, string][] }));
+
+    for (const row of g.rows) {
+      const result = attributeRow({
+        date: g.date,
+        hour: row.hour,
+        defaults,
+        overrides,
+      });
+
+      await db
+        .update(placement_row)
+        .set({
+          attributed_dingtalk_user_id: result.user,
+          attribution_source: result.source,
+          attribution_dirty: false,
+          attribution_computed_at: sql`now()`,
+        })
+        .where(eq(placement_row.id, row.id));
+      processed++;
+    }
+  }
+
+  return { processed };
+}
