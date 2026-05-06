@@ -1,12 +1,14 @@
 import { db } from "@/db/client";
 import { dingtalk_user, anchor_profile, live_account } from "@/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { schedule_override } from "@/db/schema/schedule-override";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { listAccounts } from "@/modules/live-account/server";
 import { listAnchors } from "@/modules/live-anchor/server";
 import { listBindings } from "@/modules/live-anchor";
 import { listRooms } from "@/modules/live-room/server";
 import { Product } from "@/modules/live-account";
 import { AccountListClient } from "./_components/account-list-client";
+import type { OverrideRowView } from "./_components/schedule-override-tab";
 
 const PRODUCTS = Product.options;
 const DEFAULT_PRODUCT = PRODUCTS[0] ?? "捕鱼大作战";
@@ -94,6 +96,43 @@ export default async function LiveAccountsPage({
     });
   }
 
+  // Bulk fetch all schedule_override rows for all accounts (single IN query)
+  const allOverrides: OverrideRowView[] =
+    accounts.length > 0
+      ? (
+          await db
+            .select({
+              id: schedule_override.id,
+              account_id: schedule_override.account_id,
+              date: schedule_override.date,
+              dingtalk_user_id: schedule_override.dingtalk_user_id,
+              anchor_name: dingtalk_user.name,
+              time_slots: schedule_override.time_slots,
+              reason: schedule_override.reason,
+            })
+            .from(schedule_override)
+            .leftJoin(dingtalk_user, eq(schedule_override.dingtalk_user_id, dingtalk_user.user_id))
+            .where(
+              inArray(
+                schedule_override.account_id,
+                accounts.map((a) => a.id),
+              ),
+            )
+            .orderBy(schedule_override.date)
+        ).map((r) => ({
+          ...r,
+          time_slots: r.time_slots as [string, string][],
+        }))
+      : [];
+
+  // Group by account_id → plain Record so it can cross the server→client boundary
+  const overridesByAccount: Record<string, OverrideRowView[]> = {};
+  for (const o of allOverrides) {
+    if (!overridesByAccount[o.account_id]) overridesByAccount[o.account_id] = [];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    overridesByAccount[o.account_id]!.push(o);
+  }
+
   // Compute per-product counts
   const productCounts: Record<string, number> = {};
   for (const p of PRODUCTS) {
@@ -129,6 +168,7 @@ export default async function LiveAccountsPage({
         }))}
         anchors={anchors}
         avatarByPlatformId={avatarByPlatformId}
+        overridesByAccount={overridesByAccount}
       />
     </div>
   );
