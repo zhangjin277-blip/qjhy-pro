@@ -1,4 +1,8 @@
 import "server-only";
 
-// 后续 task 会在这里加导出
 export * from "./schema";
+export * from "./parse-utils";
+export * from "./time-slot-utils";
+export * from "./incremental";
+export * from "./xlsx-adapter";
+export { ingestRows, type IngestInput, type IngestRow } from "./ingest";
