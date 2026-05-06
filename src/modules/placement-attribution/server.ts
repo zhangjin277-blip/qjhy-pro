@@ -1,2 +1,4 @@
 import "server-only";
-// 后续 task 会在这里加导出
+export { attributeRow, type AttributionInput, type AttributionResult } from "./attribute";
+export { runAttributionJob } from "./job";
+export { markDirtyByAccountDate, markDirtyByBatch, markDirtyUnattributed } from "./triggers";
