@@ -18,6 +18,9 @@ import { ColumnCustomizer } from "./column-customizer";
 import { KpiPicker } from "./kpi-picker";
 import { formatChineseNumber, formatCompare } from "./format";
 import { AnchorDetailDrawer } from "./anchor-detail-drawer";
+import { KpiGrid } from "@/components/patterns/kpi-grid";
+import { PresetChip, PresetToolbar } from "@/components/patterns/preset-toolbar";
+import { DataToolbar } from "@/components/patterns/data-toolbar";
 import { Button } from "@/components/ui/button";
 import { PromptDialog } from "@/components/ui/prompt-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -476,63 +479,60 @@ export function AnchorTable(): React.JSX.Element {
   return (
     <div className="min-w-0 max-w-full space-y-3">
       {/* 顶部：筛选 + 导出 + 自定义列 */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Filters filters={filters} onChange={setFilters} />
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showCompare}
-              onChange={(e) => setShowCompare(e.target.checked)}
-              className="size-3.5 accent-primary cursor-pointer"
-            />
-            显示同比
-          </label>
-          <CsvExportButton rows={sortedRows} visibleColumns={visibleColumns} />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setCustomizerOpen(true)}
-            className="gap-1"
-          >
-            <Settings2 className="h-3.5 w-3.5" />
-            自定义列
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setKpiPickerOpen(true)}>
-            KPI
-          </Button>
-        </div>
-      </div>
+      <DataToolbar
+        filters={<Filters filters={filters} onChange={setFilters} />}
+        actions={
+          <>
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground select-none">
+              <input
+                type="checkbox"
+                checked={showCompare}
+                onChange={(e) => setShowCompare(e.target.checked)}
+                className="size-3.5 cursor-pointer accent-primary"
+              />
+              显示同比
+            </label>
+            <CsvExportButton rows={sortedRows} visibleColumns={visibleColumns} />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCustomizerOpen(true)}
+              className="gap-1"
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              自定义列
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setKpiPickerOpen(true)}>
+              KPI
+            </Button>
+          </>
+        }
+      />
 
       {/* 产品预设 chips */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-muted-foreground text-xs mr-1">预设:</span>
+      <PresetToolbar label="预设:">
         {PRESETS.filter((p) => p.id !== "custom").map((p) => (
-          <button
+          <PresetChip
             key={p.id}
+            active={activePreset === p.id && activeUserPresetId === null}
             onClick={() => {
               setActiveUserPresetId(null);
               applyPreset(p.id);
             }}
-            className={cn(
-              "px-2.5 py-0.5 rounded-full text-xs border transition-colors",
-              activePreset === p.id && activeUserPresetId === null
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
-            )}
           >
             {p.label}
-          </button>
+          </PresetChip>
         ))}
 
-        {/* 用户自定义预设 */}
-        {userPresets.length > 0 && <span className="text-muted-foreground text-xs mx-1">|</span>}
+        {/* 用户自定义预设（保留 split-chip 实现：label + 删除按钮） */}
+        {userPresets.length > 0 && <PresetToolbar.Divider />}
         {userPresets.map((p) => (
-          <span key={p.id} className="inline-flex items-center group">
+          <span key={p.id} className="group inline-flex items-center">
             <button
+              type="button"
               onClick={() => applyUserPreset(p)}
               className={cn(
-                "pl-2.5 pr-1.5 py-0.5 rounded-l-full text-xs border border-r-0 transition-colors",
+                "rounded-l-full border border-r-0 py-0.5 pr-1.5 pl-2.5 text-xs transition-colors",
                 activeUserPresetId === p.id
                   ? "bg-primary text-primary-foreground border-primary"
                   : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
@@ -541,9 +541,10 @@ export function AnchorTable(): React.JSX.Element {
               {p.name}
             </button>
             <button
+              type="button"
               onClick={() => deleteUserPreset(p.id, p.name)}
               className={cn(
-                "px-1.5 py-0.5 rounded-r-full text-xs border transition-colors",
+                "rounded-r-full border px-1.5 py-0.5 text-xs transition-colors",
                 activeUserPresetId === p.id
                   ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
                   : "border-border text-muted-foreground hover:border-change-up/60 hover:text-change-up",
@@ -554,11 +555,11 @@ export function AnchorTable(): React.JSX.Element {
             </button>
           </span>
         ))}
-      </div>
+      </PresetToolbar>
 
       {/* KPI 卡片 */}
-      <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        {kpiData.map((m) => {
+      <KpiGrid
+        items={kpiData.map((m) => {
           const compare = formatCompare(m.cur, m.prev, periodDays);
           const display =
             m.fmt === "percent"
@@ -566,38 +567,28 @@ export function AnchorTable(): React.JSX.Element {
               : m.fmt === "duration"
                 ? `${m.cur.toFixed(1)}h`
                 : formatChineseNumber(m.cur);
-          return (
-            <div
-              key={m.key}
-              className="group relative min-w-0 rounded-lg border border-border bg-card px-4 py-3"
-            >
-              <button
-                onClick={() => removeKpi(m.key)}
-                className="absolute top-1 right-1 size-5 rounded-full text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-change-up transition"
-                title="移除"
-              >
-                ×
-              </button>
-              <div className="text-muted-foreground text-xs">{m.label}</div>
-              <div className="kpi-value mt-1">{display}</div>
-              {compare && (
-                <div className="text-muted-foreground mt-1 text-xs">
-                  <span className="text-muted-foreground/70">{compare.text.split(" ")[0]}</span>
-                  <span
-                    className={cn(
-                      "ml-1",
-                      compare.kind === "up" && "text-change-up",
-                      compare.kind === "down" && "text-change-down",
-                    )}
-                  >
-                    {compare.text.split(" ").slice(1).join(" ")}
-                  </span>
-                </div>
-              )}
-            </div>
-          );
+          return {
+            key: m.key,
+            label: m.label,
+            value: display,
+            onRemove: () => removeKpi(m.key),
+            footer: compare ? (
+              <>
+                <span className="text-muted-foreground/70">{compare.text.split(" ")[0]}</span>
+                <span
+                  className={cn(
+                    "ml-1",
+                    compare.kind === "up" && "text-change-up",
+                    compare.kind === "down" && "text-change-down",
+                  )}
+                >
+                  {compare.text.split(" ").slice(1).join(" ")}
+                </span>
+              </>
+            ) : null,
+          };
         })}
-      </div>
+      />
 
       {/* KPI 选择器 */}
       <KpiPicker

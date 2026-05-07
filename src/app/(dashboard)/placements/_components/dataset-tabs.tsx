@@ -1,7 +1,7 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DATASET_LABEL, type DatasetId } from "@/modules/placement";
-import { cn } from "@/lib/utils/cn";
+import { PresetChip, PresetChipCount } from "@/components/patterns/preset-toolbar";
 
 interface DatasetTabsProps {
   counts: { dataset_id: string; count: number }[];
@@ -20,7 +20,6 @@ export function DatasetTabs({ counts }: DatasetTabsProps) {
   function setActive(id: string) {
     const usp = new URLSearchParams(sp.toString());
     if (id === "product_buyu") {
-      // 默认值不写 url
       usp.delete("ds");
     } else {
       usp.set("ds", id);
@@ -41,33 +40,16 @@ export function DatasetTabs({ counts }: DatasetTabsProps) {
   ];
 
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-muted-foreground mr-1 text-xs">预设:</span>
+    <>
       {items.map((it) => {
         const isActive = active === it.id;
         return (
-          <button
-            key={it.id}
-            onClick={() => setActive(it.id)}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors",
-              isActive
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
-            )}
-          >
+          <PresetChip key={it.id} active={isActive} onClick={() => setActive(it.id)}>
             {it.label}
-            <span
-              className={cn(
-                "rounded px-1 text-[10px]",
-                isActive ? "bg-white/20 text-primary-foreground" : "bg-muted text-muted-foreground",
-              )}
-            >
-              {it.count.toLocaleString()}
-            </span>
-          </button>
+            <PresetChipCount active={isActive}>{it.count.toLocaleString()}</PresetChipCount>
+          </PresetChip>
         );
       })}
-    </div>
+    </>
   );
 }

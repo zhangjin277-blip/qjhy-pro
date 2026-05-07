@@ -1,6 +1,6 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { cn } from "@/lib/utils/cn";
+import { PresetChip } from "@/components/patterns/preset-toolbar";
 
 const MODES = [
   { id: "summary", label: "主播汇总" },
@@ -24,24 +24,12 @@ export function ViewModeToggle({ current }: ViewModeToggleProps) {
   }
 
   return (
-    <div className="flex items-center gap-1.5">
-      {MODES.map((m) => {
-        const isActive = current === m.id;
-        return (
-          <button
-            key={m.id}
-            onClick={() => setMode(m.id)}
-            className={cn(
-              "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
-              isActive
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
-            )}
-          >
-            {m.label}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      {MODES.map((m) => (
+        <PresetChip key={m.id} active={current === m.id} onClick={() => setMode(m.id)}>
+          {m.label}
+        </PresetChip>
+      ))}
+    </>
   );
 }

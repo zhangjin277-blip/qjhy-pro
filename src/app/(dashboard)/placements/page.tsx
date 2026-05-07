@@ -19,6 +19,8 @@ import { TrendChartWrapper } from "./_components/trend-chart-wrapper";
 import { FilterBar } from "./_components/filter-bar";
 import { CsvExportButton } from "./_components/csv-export-button";
 import { KpiBar } from "./_components/kpi-bar";
+import { PresetToolbar } from "@/components/patterns/preset-toolbar";
+import { DataToolbar } from "@/components/patterns/data-toolbar";
 
 export default async function PlacementsPage({
   searchParams,
@@ -88,28 +90,30 @@ export default async function PlacementsPage({
   return (
     <div className="space-y-3">
       {/* 全局筛选：日期 + 搜索 + 操作（最上面） */}
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <Suspense fallback={null}>
-          <FilterBar anchorLabels={anchorLabels} />
-        </Suspense>
-        <div className="flex shrink-0 items-center gap-2">
-          <ChartToggleLink showChart={showChart} sp={sp as Record<string, string>} />
-          <CsvExportButton rows={csvRows} filename={csvFilename} columns={csvColumns} />
-        </div>
-      </div>
+      <DataToolbar
+        filters={
+          <Suspense fallback={null}>
+            <FilterBar anchorLabels={anchorLabels} />
+          </Suspense>
+        }
+        actions={
+          <>
+            <ChartToggleLink showChart={showChart} sp={sp as Record<string, string>} />
+            <CsvExportButton rows={csvRows} filename={csvFilename} columns={csvColumns} />
+          </>
+        }
+      />
 
-      {/* dataset tabs + view mode + actions（在 KPI 之前，跟主播明细的预设标签同位置） */}
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+      {/* dataset tabs + view mode（在 KPI 之前，跟主播明细的预设标签同位置） */}
+      <PresetToolbar label="预设:">
         <Suspense fallback={null}>
           <DatasetTabs counts={counts} />
         </Suspense>
-
-        <div className="h-5 w-px bg-slate-200" />
-
+        <PresetToolbar.Divider />
         <Suspense fallback={null}>
           <ViewModeToggle current={view} />
         </Suspense>
-      </div>
+      </PresetToolbar>
 
       {/* KPI bar */}
       <KpiBar data={kpi} />
