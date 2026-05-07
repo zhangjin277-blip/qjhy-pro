@@ -112,7 +112,7 @@ export function AnchorDetailDrawer({
           {label} 在 {filter.date_from} ~ {filter.date_to} 的投放数据明细
         </SheetDescription>
         {/* HEADER */}
-        <div className="border-b border-slate-200 bg-gradient-to-b from-blue-50/40 to-white px-6 py-4">
+        <div className="border-b border-border bg-gradient-to-b from-primary/[0.06] to-white px-6 py-4">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
               <div
@@ -125,8 +125,8 @@ export function AnchorDetailDrawer({
                 {avatarChar(label)}
               </div>
               <div>
-                <div className="text-[18px] font-semibold text-slate-900">{label}</div>
-                <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-slate-500">
+                <div className="text-[18px] font-semibold text-foreground">{label}</div>
+                <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted-foreground">
                   {anchor.platforms.map((p) => {
                     const douyin = p.includes("抖音");
                     const ks = p.includes("快手");
@@ -138,7 +138,7 @@ export function AnchorDetailDrawer({
                             ? "bg-[#fff1f0] text-[#cf1322]"
                             : ks
                               ? "bg-[#fffbe6] text-[#d48806]"
-                              : "bg-slate-100 text-slate-600"
+                              : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {p}
@@ -146,7 +146,7 @@ export function AnchorDetailDrawer({
                     );
                   })}
                   <span>{anchor.account_count} 个投放包</span>
-                  <span className="text-slate-300">·</span>
+                  <span className="text-muted-foreground/40">·</span>
                   <span>
                     {filter.date_from} ~ {filter.date_to}
                   </span>
@@ -157,10 +157,10 @@ export function AnchorDetailDrawer({
           </div>
 
           {/* KPI SUMMARY */}
-          <div className="mt-4 grid grid-cols-5 gap-3 rounded-lg border border-blue-100 bg-blue-50/50 p-3">
+          <div className="mt-4 grid grid-cols-5 gap-3 rounded-lg border border-primary/20 bg-primary/[0.08] p-3">
             <div>
-              <div className="text-[11px] text-slate-500">消耗</div>
-              <div className="mt-0.5 text-[16px] font-semibold tabular-nums text-slate-900">
+              <div className="text-[11px] text-muted-foreground">消耗</div>
+              <div className="mt-0.5 text-[16px] font-semibold tabular-nums text-foreground">
                 {fmtMoney(anchor.cost)}
               </div>
               {delta && (
@@ -172,46 +172,46 @@ export function AnchorDetailDrawer({
               )}
             </div>
             <div>
-              <div className="text-[11px] text-slate-500">激活</div>
-              <div className="mt-0.5 text-[16px] font-semibold tabular-nums text-slate-900">
+              <div className="text-[11px] text-muted-foreground">激活</div>
+              <div className="mt-0.5 text-[16px] font-semibold tabular-nums text-foreground">
                 {fmtChinese(anchor.activations)}
               </div>
-              <div className="mt-0.5 text-[10.5px] text-slate-400">
+              <div className="mt-0.5 text-[10.5px] text-muted-foreground/70">
                 {cpa == null ? "—" : `单价 ¥${cpa.toFixed(2)}`}
               </div>
             </div>
             <div>
-              <div className="text-[11px] text-slate-500">激活单价</div>
-              <div className="mt-0.5 text-[16px] font-semibold tabular-nums text-slate-900">
+              <div className="text-[11px] text-muted-foreground">激活单价</div>
+              <div className="mt-0.5 text-[16px] font-semibold tabular-nums text-foreground">
                 {cpa == null ? "—" : `¥${cpa.toFixed(2)}`}
               </div>
-              <div className="mt-0.5 text-[10.5px] text-slate-400">CPA</div>
+              <div className="mt-0.5 text-[10.5px] text-muted-foreground/70">CPA</div>
             </div>
             <div>
-              <div className="text-[11px] text-slate-500">付费金额</div>
-              <div className="mt-0.5 text-[16px] font-semibold tabular-nums text-slate-900">
+              <div className="text-[11px] text-muted-foreground">付费金额</div>
+              <div className="mt-0.5 text-[16px] font-semibold tabular-nums text-foreground">
                 {fmtMoney(anchor.payment)}
               </div>
-              <div className="mt-0.5 text-[10.5px] text-slate-400">激活当日</div>
+              <div className="mt-0.5 text-[10.5px] text-muted-foreground/70">激活当日</div>
             </div>
             <div>
-              <div className="text-[11px] text-slate-500">ARPU</div>
-              <div className="mt-0.5 text-[16px] font-semibold tabular-nums text-slate-900">
+              <div className="text-[11px] text-muted-foreground">ARPU</div>
+              <div className="mt-0.5 text-[16px] font-semibold tabular-nums text-foreground">
                 {arpu == null ? "—" : `¥${arpu.toFixed(2)}`}
               </div>
-              <div className="mt-0.5 text-[10.5px] text-slate-400">付费 / 激活</div>
+              <div className="mt-0.5 text-[10.5px] text-muted-foreground/70">付费 / 激活</div>
             </div>
           </div>
         </div>
 
         {/* CONTENT */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="mb-3 flex items-center justify-between text-[12px] text-slate-500">
+          <div className="mb-3 flex items-center justify-between text-[12px] text-muted-foreground">
             <span>
-              <span className="font-medium text-slate-700">
+              <span className="font-medium text-foreground/90">
                 {subAccounts.length === 1 ? "每日小时明细" : "投放包明细"}
               </span>
-              <span className="mx-2 text-slate-300">·</span>
+              <span className="mx-2 text-muted-foreground/40">·</span>
               <span>
                 {subAccounts.length === 1
                   ? "首日默认展开 · 点击日期切换"
@@ -236,8 +236,8 @@ export function AnchorDetailDrawer({
                       ? ""
                       : `overflow-hidden rounded-lg border transition-colors ${
                           isOpen
-                            ? "border-blue-300 bg-blue-50/20 shadow-sm"
-                            : "border-slate-200 bg-white"
+                            ? "border-primary/40 bg-primary/[0.04] shadow-sm"
+                            : "border-border bg-white"
                         }`
                   }
                 >
@@ -245,44 +245,46 @@ export function AnchorDetailDrawer({
                   {!onlyOnePkg && (
                     <button
                       onClick={() => setOpenPkg(isOpen ? null : s.account_id)}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
                     >
                       <span
-                        className={`text-[10px] text-slate-400 transition-transform ${
-                          isOpen ? "rotate-90 text-blue-500" : ""
+                        className={`text-[10px] text-muted-foreground/70 transition-transform ${
+                          isOpen ? "rotate-90 text-primary" : ""
                         }`}
                       >
                         ▶
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="font-mono text-[12.5px] font-medium text-slate-900">
+                        <div className="font-mono text-[12.5px] font-medium text-foreground">
                           {s.account_name}
                         </div>
                         {s.platform && (
-                          <div className="mt-0.5 text-[10.5px] text-slate-400">{s.platform}</div>
+                          <div className="mt-0.5 text-[10.5px] text-muted-foreground/70">
+                            {s.platform}
+                          </div>
                         )}
                       </div>
                       <div className="flex shrink-0 items-center gap-5 text-[12.5px] tabular-nums">
-                        <span className="text-slate-700">
-                          <span className="text-[10.5px] text-slate-400">消耗 </span>
+                        <span className="text-foreground/90">
+                          <span className="text-[10.5px] text-muted-foreground/70">消耗 </span>
                           <b className="font-semibold">{fmtMoney(s.cost)}</b>
                         </span>
-                        <span className="text-slate-700">
-                          <span className="text-[10.5px] text-slate-400">激活 </span>
+                        <span className="text-foreground/90">
+                          <span className="text-[10.5px] text-muted-foreground/70">激活 </span>
                           <b className="font-semibold">{fmtChinese(s.activations)}</b>
                         </span>
-                        <span className="text-slate-700">
-                          <span className="text-[10.5px] text-slate-400">单价 </span>
+                        <span className="text-foreground/90">
+                          <span className="text-[10.5px] text-muted-foreground/70">单价 </span>
                           <b className="font-semibold">
                             {sCpa == null ? "—" : `¥${sCpa.toFixed(2)}`}
                           </b>
                         </span>
-                        <span className="text-slate-700">
-                          <span className="text-[10.5px] text-slate-400">付费 </span>
+                        <span className="text-foreground/90">
+                          <span className="text-[10.5px] text-muted-foreground/70">付费 </span>
                           <b className="font-semibold">{fmtMoney(s.payment)}</b>
                         </span>
-                        <span className="text-slate-700">
-                          <span className="text-[10.5px] text-slate-400">ARPU </span>
+                        <span className="text-foreground/90">
+                          <span className="text-[10.5px] text-muted-foreground/70">ARPU </span>
                           <b className="font-semibold">
                             {sArpu == null ? "—" : `¥${sArpu.toFixed(2)}`}
                           </b>
@@ -293,10 +295,10 @@ export function AnchorDetailDrawer({
 
                   {(isOpen || onlyOnePkg) && (
                     <div
-                      className={onlyOnePkg ? "" : "border-t border-blue-100 bg-white px-4 py-3"}
+                      className={onlyOnePkg ? "" : "border-t border-primary/20 bg-white px-4 py-3"}
                     >
                       {state?.loading && (
-                        <div className="py-4 text-center text-[12px] text-slate-400">
+                        <div className="py-4 text-center text-[12px] text-muted-foreground/70">
                           加载小时数据...
                         </div>
                       )}
@@ -304,7 +306,7 @@ export function AnchorDetailDrawer({
                         <DayHourTables rows={state.data} />
                       )}
                       {!state?.loading && state?.data && state.data.length === 0 && (
-                        <div className="py-4 text-center text-[12px] text-slate-400">
+                        <div className="py-4 text-center text-[12px] text-muted-foreground/70">
                           该投放包在选定时间范围内暂无数据
                         </div>
                       )}
@@ -336,7 +338,7 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
 
   if (dates.length === 0) {
     return (
-      <div className="py-4 text-center text-[12px] text-slate-400">
+      <div className="py-4 text-center text-[12px] text-muted-foreground/70">
         该投放包在选定时间范围内暂无数据
       </div>
     );
@@ -362,41 +364,41 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
         const dArpu = dActs > 0 ? dPay / dActs : null;
         const isDayOpen = openDates.has(d);
         return (
-          <div key={d} className="overflow-hidden rounded-md border border-slate-200">
+          <div key={d} className="overflow-hidden rounded-md border border-border">
             <button
               type="button"
               onClick={() => toggleDate(d)}
-              className="flex w-full items-center justify-between bg-blue-50/40 px-3 py-2 text-left transition-colors hover:bg-blue-50/70"
+              className="flex w-full items-center justify-between bg-primary/[0.06] px-3 py-2 text-left transition-colors hover:bg-primary/[0.12]"
             >
               <span className="flex items-center gap-2">
                 <span
-                  className={`text-[9px] text-blue-500 transition-transform ${
+                  className={`text-[9px] text-primary transition-transform ${
                     isDayOpen ? "rotate-90" : ""
                   }`}
                 >
                   ▶
                 </span>
-                <span className="text-[12px] font-semibold text-blue-700">{d}</span>
+                <span className="text-[12px] font-semibold text-primary">{d}</span>
               </span>
-              <span className="flex gap-3 text-[11.5px] tabular-nums text-slate-600">
+              <span className="flex gap-3 text-[11.5px] tabular-nums text-muted-foreground">
                 <span>
-                  消耗 <b className="font-semibold text-slate-900">{fmtMoney(dCost)}</b>
+                  消耗 <b className="font-semibold text-foreground">{fmtMoney(dCost)}</b>
                 </span>
                 <span>
-                  激活 <b className="font-semibold text-slate-900">{fmtChinese(dActs)}</b>
+                  激活 <b className="font-semibold text-foreground">{fmtChinese(dActs)}</b>
                 </span>
                 <span>
                   单价{" "}
-                  <b className="font-semibold text-slate-900">
+                  <b className="font-semibold text-foreground">
                     {dCpa == null ? "—" : `¥${dCpa.toFixed(2)}`}
                   </b>
                 </span>
                 <span>
-                  付费 <b className="font-semibold text-slate-900">{fmtMoney(dPay)}</b>
+                  付费 <b className="font-semibold text-foreground">{fmtMoney(dPay)}</b>
                 </span>
                 <span>
                   ARPU{" "}
-                  <b className="font-semibold text-slate-900">
+                  <b className="font-semibold text-foreground">
                     {dArpu == null ? "—" : `¥${dArpu.toFixed(2)}`}
                   </b>
                 </span>
@@ -405,7 +407,7 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
             {isDayOpen && (
               <table className="w-full text-[11.5px] tabular-nums">
                 <thead>
-                  <tr className="bg-slate-50 text-[10.5px] text-slate-400">
+                  <tr className="bg-muted/40 text-[10.5px] text-muted-foreground/70">
                     <th
                       className="px-3 py-1.5 text-left font-medium whitespace-nowrap"
                       style={{ width: "18%" }}
@@ -436,25 +438,27 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
                     return (
                       <tr
                         key={`${r.date}-${r.hour}`}
-                        className="border-t border-slate-100 transition-colors hover:bg-slate-50"
+                        className="border-t border-border/50 transition-colors hover:bg-muted/40"
                       >
-                        <td className="px-3 py-1.5 font-mono whitespace-nowrap text-slate-600">
+                        <td className="px-3 py-1.5 font-mono whitespace-nowrap text-muted-foreground">
                           {r.hour.toString().padStart(2, "0")}:00 —{" "}
                           {((r.hour + 1) % 24).toString().padStart(2, "0")}:00
                         </td>
-                        <td className="px-3 py-1.5 text-slate-700">{fmtMoney(r.cost)}</td>
-                        <td className="px-3 py-1.5 text-slate-600">{fmtChinese(r.activations)}</td>
-                        <td className="px-3 py-1.5 text-slate-600">
+                        <td className="px-3 py-1.5 text-foreground/90">{fmtMoney(r.cost)}</td>
+                        <td className="px-3 py-1.5 text-muted-foreground">
+                          {fmtChinese(r.activations)}
+                        </td>
+                        <td className="px-3 py-1.5 text-muted-foreground">
                           {cpa == null ? (
-                            <span className="text-slate-300">—</span>
+                            <span className="text-muted-foreground/40">—</span>
                           ) : (
                             `¥${cpa.toFixed(2)}`
                           )}
                         </td>
-                        <td className="px-3 py-1.5 text-slate-600">{fmtMoney(r.payment)}</td>
-                        <td className="px-3 py-1.5 text-slate-600">
+                        <td className="px-3 py-1.5 text-muted-foreground">{fmtMoney(r.payment)}</td>
+                        <td className="px-3 py-1.5 text-muted-foreground">
                           {arpu == null ? (
-                            <span className="text-slate-300">—</span>
+                            <span className="text-muted-foreground/40">—</span>
                           ) : (
                             `¥${arpu.toFixed(2)}`
                           )}

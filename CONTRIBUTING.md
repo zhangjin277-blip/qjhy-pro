@@ -111,7 +111,60 @@ src/app/(dashboard)/[feature]/page.tsx
 | 把 token/密码写进代码            | 用 `.env`                  |
 | `as any` 偷懒                    | 加 Zod 校验                |
 
-## 11. 钉钉机器人 webhook
+## 11. UI patterns（业务页面配方 · 强制使用）
+
+为防止"切换一个板块好像全换了一样"的视觉漂移，所有数据看板页面必须用以下 3 个 pattern。
+**禁止自己写筛选行 / chip / KPI 卡的 className**。
+
+```
+src/components/ui/        ← 原子（shadcn Input/Button/Select 等）
+src/components/patterns/  ← 业务配方（DataToolbar/PresetToolbar/KpiGrid）
+```
+
+| Pattern              | 用途                                                       | 替代                                              |
+| -------------------- | ---------------------------------------------------------- | ------------------------------------------------- |
+| `<DataToolbar>`      | 顶部「筛选 + 操作」行（filters slot + actions slot）       | 禁止写 `flex justify-between` 自拼                |
+| `<PresetToolbar>`    | 「预设 / 筛选 chip」行（含 `<PresetToolbar.Divider/>`）    | 禁止写 `flex flex-wrap items-center gap-1.5` 自拼 |
+| `<PresetChip>`       | 单个预设 chip（active 实心蓝 / inactive 描边）             | 禁止写 `rounded-full + border + px-2.5` 自拼      |
+| `<PresetChipCount>`  | chip 内的小数字徽章                                        | 禁止写 `rounded px-1 text-[10px]` 自拼            |
+| `<KpiGrid>`          | KPI 卡片网格，items 配置式（label/value/footer/onRemove）  | 禁止写 `grid grid-cols-* gap-3` + `kpi-value` 自拼 |
+
+**新数据板块开工示例**：
+
+```tsx
+<DataToolbar
+  filters={<><DateRange /><PresetButtons /><Search /></>}
+  actions={<><CompareToggle /><ExportButton /><Button>自定义列</Button></>}
+/>
+
+<PresetToolbar label="预设:">
+  <PresetChip active>捕鱼<PresetChipCount active>84</PresetChipCount></PresetChip>
+  <PresetChip>UE4</PresetChip>
+  <PresetToolbar.Divider />
+  <PresetChip>主播汇总</PresetChip>
+</PresetToolbar>
+
+<KpiGrid items={[
+  { key: "cost", label: "消耗", value: "20.64万", footer: <Footer ... /> },
+  // ...
+]} />
+```
+
+**页面外壳同样统一**（每个 page 或 layout 顶层）：
+
+```tsx
+<div className="min-w-0 max-w-full space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
+  <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
+    <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">
+      板块名
+    </span>
+    {/* 可选 NavLink */}
+  </div>
+  {/* 内容 */}
+</div>
+```
+
+## 12. 钉钉机器人 webhook
 
 - 配置在 `.env` 文件：`DINGTALK_BOT_WEBHOOK=...`
 - 关键词："报错"

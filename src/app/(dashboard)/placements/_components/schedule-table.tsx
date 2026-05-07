@@ -61,7 +61,7 @@ function sharePct(personal: number, total: number): string | null {
 function shareClass(pct: number): string {
   if (pct >= 50) return "text-[var(--change-down)]";
   if (pct >= 30) return "text-[#ff7d00]";
-  return "text-slate-400";
+  return "text-muted-foreground/70";
 }
 
 interface Group {
@@ -116,9 +116,11 @@ function groupRows(rows: ScheduleRow[]): Group[] {
 export function ScheduleTable({ rows }: ScheduleTableProps) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
-        <div className="text-sm text-slate-400">暂无主播-投放排班数据</div>
-        <div className="mt-1 text-xs text-slate-300">需先在「主播管理」配置账号-主播默认排班</div>
+      <div className="rounded-xl border border-border bg-white p-12 text-center">
+        <div className="text-sm text-muted-foreground/70">暂无主播-投放排班数据</div>
+        <div className="mt-1 text-xs text-muted-foreground/40">
+          需先在「主播管理」配置账号-主播默认排班
+        </div>
       </div>
     );
   }
@@ -132,21 +134,21 @@ export function ScheduleTable({ rows }: ScheduleTableProps) {
   const allRowsCount = rows.length;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/60 px-4 py-3 text-xs text-slate-500">
+    <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-border bg-muted/40/60 px-4 py-3 text-xs text-muted-foreground">
         <div>
-          <span className="font-medium text-slate-700">{allRowsCount} 班次</span>
-          <span className="mx-2 text-slate-300">·</span>
+          <span className="font-medium text-foreground/90">{allRowsCount} 班次</span>
+          <span className="mx-2 text-muted-foreground/40">·</span>
           <span>{groups.length} (账号 × 日期) 组合</span>
-          <span className="mx-2 text-slate-300">·</span>
-          <span className="text-slate-400">同主播多包按账号汇总</span>
+          <span className="mx-2 text-muted-foreground/40">·</span>
+          <span className="text-muted-foreground/70">同主播多包按账号汇总</span>
         </div>
-        <div className="flex gap-4 text-[11px] text-slate-400">
+        <div className="flex gap-4 text-[11px] text-muted-foreground/70">
           <span>
-            <b className="font-medium text-blue-600">个人</b> = 该时段当班主播实际增量
+            <b className="font-medium text-primary">个人</b> = 该时段当班主播实际增量
           </span>
           <span>
-            <b className="font-medium text-slate-600">累计</b> = 该投放账号当日总数
+            <b className="font-medium text-muted-foreground">累计</b> = 该投放账号当日总数
           </span>
         </div>
       </div>
@@ -154,75 +156,75 @@ export function ScheduleTable({ rows }: ScheduleTableProps) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm" style={{ fontVariantNumeric: "tabular-nums" }}>
           <thead>
-            <tr className="bg-slate-50">
+            <tr className="bg-muted/40">
               <th
                 rowSpan={2}
-                className="border-b border-r border-slate-200 px-3 py-2 text-left text-[11.5px] font-medium text-slate-500"
+                className="border-b border-r border-border px-3 py-2 text-left text-[11.5px] font-medium text-muted-foreground"
                 style={{ minWidth: 110 }}
               >
                 排班时段
               </th>
               <th
                 rowSpan={2}
-                className="border-b border-r border-slate-200 px-3 py-2 text-left text-[11.5px] font-medium text-slate-500"
+                className="border-b border-r border-border px-3 py-2 text-left text-[11.5px] font-medium text-muted-foreground"
                 style={{ minWidth: 130 }}
               >
                 当班主播
               </th>
               <th
                 rowSpan={2}
-                className="border-b border-r border-slate-200 px-3 py-2 text-left text-[11.5px] font-medium text-slate-500"
+                className="border-b border-r border-border px-3 py-2 text-left text-[11.5px] font-medium text-muted-foreground"
               >
                 投放账号
               </th>
               <th
                 colSpan={2}
-                className="border-b border-r border-slate-200 px-3 py-1.5 text-center text-[11.5px] font-medium text-slate-500"
+                className="border-b border-r border-border px-3 py-1.5 text-center text-[11.5px] font-medium text-muted-foreground"
               >
                 消耗
               </th>
               <th
                 colSpan={2}
-                className="border-b border-r border-slate-200 px-3 py-1.5 text-center text-[11.5px] font-medium text-slate-500"
+                className="border-b border-r border-border px-3 py-1.5 text-center text-[11.5px] font-medium text-muted-foreground"
               >
                 激活
               </th>
               <th
                 colSpan={2}
-                className="border-b border-r border-slate-200 px-3 py-1.5 text-center text-[11.5px] font-medium text-slate-500"
+                className="border-b border-r border-border px-3 py-1.5 text-center text-[11.5px] font-medium text-muted-foreground"
               >
                 CPA
               </th>
               <th
                 colSpan={2}
-                className="border-b border-slate-200 px-3 py-1.5 text-center text-[11.5px] font-medium text-slate-500"
+                className="border-b border-border px-3 py-1.5 text-center text-[11.5px] font-medium text-muted-foreground"
               >
                 付费
               </th>
             </tr>
-            <tr className="bg-slate-50">
-              <th className="border-b border-slate-200 px-3 py-1.5 text-left text-[10.5px] font-medium text-blue-600">
+            <tr className="bg-muted/40">
+              <th className="border-b border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-primary">
                 个人
               </th>
-              <th className="border-b border-r border-slate-200 px-3 py-1.5 text-left text-[10.5px] font-medium text-slate-500">
+              <th className="border-b border-r border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-muted-foreground">
                 累计
               </th>
-              <th className="border-b border-slate-200 px-3 py-1.5 text-left text-[10.5px] font-medium text-blue-600">
+              <th className="border-b border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-primary">
                 个人
               </th>
-              <th className="border-b border-r border-slate-200 px-3 py-1.5 text-left text-[10.5px] font-medium text-slate-500">
+              <th className="border-b border-r border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-muted-foreground">
                 累计
               </th>
-              <th className="border-b border-slate-200 px-3 py-1.5 text-left text-[10.5px] font-medium text-blue-600">
+              <th className="border-b border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-primary">
                 个人
               </th>
-              <th className="border-b border-r border-slate-200 px-3 py-1.5 text-left text-[10.5px] font-medium text-slate-500">
+              <th className="border-b border-r border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-muted-foreground">
                 累计
               </th>
-              <th className="border-b border-slate-200 px-3 py-1.5 text-left text-[10.5px] font-medium text-blue-600">
+              <th className="border-b border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-primary">
                 个人
               </th>
-              <th className="border-b border-slate-200 px-3 py-1.5 text-left text-[10.5px] font-medium text-slate-500">
+              <th className="border-b border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-muted-foreground">
                 累计
               </th>
             </tr>
@@ -234,41 +236,41 @@ export function ScheduleTable({ rows }: ScheduleTableProps) {
               return (
                 <Fragment key={`${g.date}::${g.accountId}`}>
                   {/* 主播-账号 summary 行 */}
-                  <tr className="bg-blue-50/40">
+                  <tr className="bg-primary/[0.06]">
                     <td
                       colSpan={3}
-                      className="border-b border-blue-100 px-3 py-2 text-[13px] font-semibold text-blue-700"
+                      className="border-b border-primary/20 px-3 py-2 text-[13px] font-semibold text-primary"
                     >
                       ▼ {g.placementLabel ?? "（无标签）"}
-                      <span className="ml-2 text-[11.5px] font-normal text-slate-500">
+                      <span className="ml-2 text-[11.5px] font-normal text-muted-foreground">
                         {g.accountName}
                       </span>
-                      <span className="ml-2 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-600">
+                      <span className="ml-2 inline-flex items-center rounded-full bg-primary/20 px-2 py-0.5 text-[11px] font-medium text-primary">
                         {g.rows.length} 班次 · {g.date}
                       </span>
                     </td>
-                    <td className="border-b border-blue-100 px-3 py-2 text-[13px] font-semibold text-blue-600">
+                    <td className="border-b border-primary/20 px-3 py-2 text-[13px] font-semibold text-primary">
                       {fmtMoney(g.totalCost)}
                     </td>
-                    <td className="border-b border-r border-blue-100 px-3 py-2 text-[13px] text-slate-500">
+                    <td className="border-b border-r border-primary/20 px-3 py-2 text-[13px] text-muted-foreground">
                       {fmtMoney(g.totalCost)}
                     </td>
-                    <td className="border-b border-blue-100 px-3 py-2 text-[13px] font-semibold text-blue-600">
+                    <td className="border-b border-primary/20 px-3 py-2 text-[13px] font-semibold text-primary">
                       {fmtChinese(g.totalActs)}
                     </td>
-                    <td className="border-b border-r border-blue-100 px-3 py-2 text-[13px] text-slate-500">
+                    <td className="border-b border-r border-primary/20 px-3 py-2 text-[13px] text-muted-foreground">
                       {fmtChinese(g.totalActs)}
                     </td>
-                    <td className="border-b border-blue-100 px-3 py-2 text-[13px] font-semibold text-blue-600">
+                    <td className="border-b border-primary/20 px-3 py-2 text-[13px] font-semibold text-primary">
                       {fmtPrice(summaryUnit)}
                     </td>
-                    <td className="border-b border-r border-blue-100 px-3 py-2 text-[13px] text-slate-500">
+                    <td className="border-b border-r border-primary/20 px-3 py-2 text-[13px] text-muted-foreground">
                       {fmtPrice(summaryUnit)}
                     </td>
-                    <td className="border-b border-blue-100 px-3 py-2 text-[13px] font-semibold text-blue-600">
+                    <td className="border-b border-primary/20 px-3 py-2 text-[13px] font-semibold text-primary">
                       {fmtMoney(g.totalPayment)}
                     </td>
-                    <td className="border-b border-blue-100 px-3 py-2 text-[13px] text-slate-500">
+                    <td className="border-b border-primary/20 px-3 py-2 text-[13px] text-muted-foreground">
                       {fmtMoney(g.totalPayment)}
                     </td>
                   </tr>
@@ -282,39 +284,39 @@ export function ScheduleTable({ rows }: ScheduleTableProps) {
                     return (
                       <tr
                         key={`${g.date}-${g.accountId}-${i}`}
-                        className="border-b border-slate-100 transition-colors hover:bg-[var(--hover-bg)]"
+                        className="border-b border-border/50 transition-colors hover:bg-[var(--hover-bg)]"
                       >
-                        <td className="border-r border-slate-100 px-3 py-2.5">
+                        <td className="border-r border-border/50 px-3 py-2.5">
                           <span
                             className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[12.5px] font-semibold ${
-                              overnight ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-700"
+                              overnight ? "bg-accent text-primary" : "bg-muted text-foreground/90"
                             }`}
                           >
                             {fmtSlot(r.time_slot)}
                             {overnight && (
-                              <span className="rounded bg-blue-500 px-1 py-px text-[9px] font-medium text-white">
+                              <span className="rounded bg-primary px-1 py-px text-[9px] font-medium text-white">
                                 跨夜
                               </span>
                             )}
                           </span>
                         </td>
-                        <td className="border-r border-slate-100 px-3 py-2.5">
+                        <td className="border-r border-border/50 px-3 py-2.5">
                           <div className="flex items-center gap-2">
                             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-[#d1e9ff] to-[#1677ff] text-[10px] font-semibold text-white">
                               {avatarChar(r.anchor_name ?? r.anchor_user_id)}
                             </div>
                             <div className="leading-tight">
-                              <div className="text-[12.5px] font-semibold text-slate-900">
+                              <div className="text-[12.5px] font-semibold text-foreground">
                                 {r.anchor_name ?? r.anchor_user_id}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="border-r border-slate-100 px-3 py-2.5 text-[12.5px] text-slate-600">
+                        <td className="border-r border-border/50 px-3 py-2.5 text-[12.5px] text-muted-foreground">
                           <span className="font-mono">{r.account_name}</span>
                         </td>
                         {/* 消耗 */}
-                        <td className="px-3 py-2.5 text-[13px] font-semibold text-blue-600">
+                        <td className="px-3 py-2.5 text-[13px] font-semibold text-primary">
                           {fmtMoney(r.personal_cost)}
                           {costShare && (
                             <span className={`ml-1 text-[10px] ${shareClass(parseInt(costShare))}`}>
@@ -322,11 +324,11 @@ export function ScheduleTable({ rows }: ScheduleTableProps) {
                             </span>
                           )}
                         </td>
-                        <td className="border-r border-slate-100 px-3 py-2.5 text-[13px] text-slate-500">
+                        <td className="border-r border-border/50 px-3 py-2.5 text-[13px] text-muted-foreground">
                           {fmtMoney(r.total_cost)}
                         </td>
                         {/* 激活 */}
-                        <td className="px-3 py-2.5 text-[13px] font-semibold text-blue-600">
+                        <td className="px-3 py-2.5 text-[13px] font-semibold text-primary">
                           {fmtChinese(r.personal_acts)}
                           {actsShare && (
                             <span className={`ml-1 text-[10px] ${shareClass(parseInt(actsShare))}`}>
@@ -334,18 +336,18 @@ export function ScheduleTable({ rows }: ScheduleTableProps) {
                             </span>
                           )}
                         </td>
-                        <td className="border-r border-slate-100 px-3 py-2.5 text-[13px] text-slate-500">
+                        <td className="border-r border-border/50 px-3 py-2.5 text-[13px] text-muted-foreground">
                           {fmtChinese(r.total_acts)}
                         </td>
                         {/* CPA */}
-                        <td className="px-3 py-2.5 text-[13px] font-semibold text-blue-600">
+                        <td className="px-3 py-2.5 text-[13px] font-semibold text-primary">
                           {fmtPrice(r.personal_unit_price)}
                         </td>
-                        <td className="border-r border-slate-100 px-3 py-2.5 text-[13px] text-slate-500">
+                        <td className="border-r border-border/50 px-3 py-2.5 text-[13px] text-muted-foreground">
                           {fmtPrice(r.total_unit_price)}
                         </td>
                         {/* 付费 */}
-                        <td className="px-3 py-2.5 text-[13px] font-semibold text-blue-600">
+                        <td className="px-3 py-2.5 text-[13px] font-semibold text-primary">
                           {fmtMoney(r.personal_payment)}
                           {paymentShare && (
                             <span
@@ -355,7 +357,7 @@ export function ScheduleTable({ rows }: ScheduleTableProps) {
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 text-[13px] text-slate-500">
+                        <td className="px-3 py-2.5 text-[13px] text-muted-foreground">
                           {fmtMoney(r.total_payment)}
                         </td>
                       </tr>
@@ -367,32 +369,32 @@ export function ScheduleTable({ rows }: ScheduleTableProps) {
           </tbody>
 
           <tfoot>
-            <tr className="bg-slate-100">
-              <td colSpan={3} className="px-3 py-2.5 text-[12px] font-medium text-slate-500">
+            <tr className="bg-muted">
+              <td colSpan={3} className="px-3 py-2.5 text-[12px] font-medium text-muted-foreground">
                 合计 · {allRowsCount} 班次 · {groups.length} 组合
               </td>
-              <td className="px-3 py-2.5 text-[13px] font-semibold text-slate-700">
+              <td className="px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
                 {fmtMoney(grandTotalCost)}
               </td>
-              <td className="border-r border-slate-200 px-3 py-2.5 text-[13px] font-semibold text-slate-700">
+              <td className="border-r border-border px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
                 {fmtMoney(grandTotalCost)}
               </td>
-              <td className="px-3 py-2.5 text-[13px] font-semibold text-slate-700">
+              <td className="px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
                 {fmtChinese(grandTotalActs)}
               </td>
-              <td className="border-r border-slate-200 px-3 py-2.5 text-[13px] font-semibold text-slate-700">
+              <td className="border-r border-border px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
                 {fmtChinese(grandTotalActs)}
               </td>
-              <td className="px-3 py-2.5 text-[13px] font-semibold text-slate-700">
+              <td className="px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
                 {fmtPrice(grandTotalActs > 0 ? grandTotalCost / grandTotalActs : null)}
               </td>
-              <td className="border-r border-slate-200 px-3 py-2.5 text-[13px] font-semibold text-slate-700">
+              <td className="border-r border-border px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
                 {fmtPrice(grandTotalActs > 0 ? grandTotalCost / grandTotalActs : null)}
               </td>
-              <td className="px-3 py-2.5 text-[13px] font-semibold text-slate-700">
+              <td className="px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
                 {fmtMoney(grandTotalPay)}
               </td>
-              <td className="px-3 py-2.5 text-[13px] font-semibold text-slate-700">
+              <td className="px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
                 {fmtMoney(grandTotalPay)}
               </td>
             </tr>

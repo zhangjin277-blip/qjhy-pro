@@ -60,7 +60,7 @@ function PlatformBadge({ platforms }: { platforms: string[] }) {
                 ? "bg-[#fff1f0] text-[#cf1322]"
                 : isKuaishou
                   ? "bg-[#fffbe6] text-[#d48806]"
-                  : "bg-slate-100 text-slate-600"
+                  : "bg-muted text-muted-foreground"
             }`}
           >
             {p}
@@ -75,7 +75,7 @@ function DeltaPill({ cur, prev }: { cur: number; prev: number }) {
   if (prev === 0) return null;
   const delta = ((cur - prev) / prev) * 100;
   if (Math.abs(delta) < 0.5)
-    return <span className="ml-1.5 text-[11px] text-slate-400">— 持平</span>;
+    return <span className="ml-1.5 text-[11px] text-muted-foreground/70">— 持平</span>;
   const up = delta > 0;
   return (
     <span
@@ -103,7 +103,7 @@ export function SummaryTable({ rows, subAccounts, filter }: SummaryTableProps) {
 
   if (rows.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white py-16 text-center text-sm text-slate-400">
+      <div className="rounded-xl border border-border bg-white py-16 text-center text-sm text-muted-foreground/70">
         暂无投放数据
       </div>
     );
@@ -131,55 +131,55 @@ export function SummaryTable({ rows, subAccounts, filter }: SummaryTableProps) {
         <span>按消耗降序 · 点击行查看明细</span>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm" style={{ fontVariantNumeric: "tabular-nums" }}>
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
+              <tr className="border-b border-border bg-muted/40">
                 <th
-                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-slate-500"
+                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-muted-foreground"
                   style={{ width: "20%" }}
                 >
                   主播
                 </th>
                 <th
-                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-slate-500"
+                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-muted-foreground"
                   style={{ width: "9%" }}
                 >
                   投放包
                 </th>
                 <th
-                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-slate-500"
+                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-muted-foreground"
                   style={{ width: "13%" }}
                 >
                   消耗 ▼
                 </th>
                 <th
-                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-slate-500"
+                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-muted-foreground"
                   style={{ width: "9%" }}
                 >
                   激活
                 </th>
                 <th
-                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-slate-500"
+                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-muted-foreground"
                   style={{ width: "11%" }}
                 >
                   激活单价
                 </th>
                 <th
-                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-slate-500"
+                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-muted-foreground"
                   style={{ width: "13%" }}
                 >
                   付费金额
                 </th>
                 <th
-                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-slate-500"
+                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-muted-foreground"
                   style={{ width: "11%" }}
                 >
                   ARPU
                 </th>
                 <th
-                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-slate-500"
+                  className="px-3 py-2.5 text-left text-[11.5px] font-medium text-muted-foreground"
                   style={{ width: "14%" }}
                 >
                   趋势
@@ -198,8 +198,8 @@ export function SummaryTable({ rows, subAccounts, filter }: SummaryTableProps) {
                   <tr
                     key={label}
                     onClick={() => setSelected(label)}
-                    className={`cursor-pointer border-b border-slate-100 transition-colors hover:bg-[var(--hover-bg)] ${
-                      isSelected ? "bg-blue-50/60 shadow-[inset_3px_0_0_var(--primary)]" : ""
+                    className={`cursor-pointer border-b border-border/50 transition-colors hover:bg-[var(--hover-bg)] ${
+                      isSelected ? "bg-primary/10 shadow-[inset_3px_0_0_var(--primary)]" : ""
                     }`}
                   >
                     <td className="px-3 py-2.5">
@@ -214,7 +214,7 @@ export function SummaryTable({ rows, subAccounts, filter }: SummaryTableProps) {
                           {avatarChar(label)}
                         </div>
                         <div className="min-w-0">
-                          <div className="truncate text-[13px] font-semibold text-slate-900">
+                          <div className="truncate text-[13px] font-semibold text-foreground">
                             {label}
                           </div>
                           <div className="mt-0.5 flex items-center gap-1">
@@ -224,30 +224,30 @@ export function SummaryTable({ rows, subAccounts, filter }: SummaryTableProps) {
                       </div>
                     </td>
                     <td className="px-3 py-2.5">
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                         {r.account_count} 包
                       </span>
                     </td>
                     <td className="px-3 py-2.5">
-                      <span className="text-[12.5px] text-slate-900">{fmtMoney(r.cost)}</span>
+                      <span className="text-[12.5px] text-foreground">{fmtMoney(r.cost)}</span>
                       <DeltaPill cur={r.cost} prev={r.prev_cost} />
                     </td>
-                    <td className="px-3 py-2.5 text-[12.5px] text-slate-600">
+                    <td className="px-3 py-2.5 text-[12.5px] text-muted-foreground">
                       {fmtChinese(r.activations)}
                     </td>
-                    <td className="px-3 py-2.5 text-[12.5px] text-slate-600">
+                    <td className="px-3 py-2.5 text-[12.5px] text-muted-foreground">
                       {cpa == null ? (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-muted-foreground/40">—</span>
                       ) : (
                         `¥${cpa.toFixed(2)}`
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-[12.5px] text-slate-600">
+                    <td className="px-3 py-2.5 text-[12.5px] text-muted-foreground">
                       {fmtMoney(r.payment)}
                     </td>
-                    <td className="px-3 py-2.5 text-[12.5px] text-slate-600">
+                    <td className="px-3 py-2.5 text-[12.5px] text-muted-foreground">
                       {arpu == null ? (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-muted-foreground/40">—</span>
                       ) : (
                         `¥${arpu.toFixed(2)}`
                       )}
