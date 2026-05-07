@@ -20,9 +20,13 @@ import { DashboardDrawer, type DrawerOpenPayload } from "./dashboard-drawer";
  *
  * NOTE: 全部用本地时区的日期（YYYY-MM-DD），不引时区库。
  */
-function presetToRange(preset: TimePreset): { from: string; to: string } {
+function presetToRange(
+  preset: TimePreset,
+  customRange: { from: string; to: string },
+): { from: string; to: string } {
   const now = new Date();
   const yesterday = toIsoDate(new Date(now.getTime() - 86400_000));
+  if (preset === "custom") return customRange;
   if (preset === "yesterday") return { from: yesterday, to: yesterday };
   if (preset === "last7") {
     const from = toIsoDate(new Date(now.getTime() - 7 * 86400_000));
@@ -54,13 +58,21 @@ function toIsoDate(d: Date): string {
 export function DashboardBoard(): React.JSX.Element {
   // 默认 = 近 7 日（spec 要求；昨天数据可能未结算）
   const [preset, setPreset] = useState<TimePreset>("last7");
+  // 自定义日期范围：默认初始化为「近 7 日」
+  const [customRange, setCustomRange] = useState<{ from: string; to: string }>(() => {
+    const now = new Date();
+    return {
+      from: toIsoDate(new Date(now.getTime() - 7 * 86400_000)),
+      to: toIsoDate(new Date(now.getTime() - 86400_000)),
+    };
+  });
   const [metric, setMetric] = useState<Section2Metric>("total_fan_ticket");
   const [data, setData] = useState<DashboardOverviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<DrawerOpenPayload | null>(null);
 
-  const range = useMemo(() => presetToRange(preset), [preset]);
+  const range = useMemo(() => presetToRange(preset, customRange), [preset, customRange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +135,9 @@ export function DashboardBoard(): React.JSX.Element {
         loading={loading}
         preset={preset}
         onPresetChange={setPreset}
+        customFrom={customRange.from}
+        customTo={customRange.to}
+        onCustomChange={setCustomRange}
         onCardClick={handleCardClick}
       />
       <BreakdownSection

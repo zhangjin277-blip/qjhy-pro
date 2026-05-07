@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 interface CsvExportButtonProps {
   rows: Record<string, unknown>[];
   filename: string;
@@ -28,11 +30,8 @@ export function CsvExportButton({ rows, filename, columns }: CsvExportButtonProp
   };
 
   return (
-    <button
-      onClick={handleClick}
-      className="rounded border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
-    >
-      ⬇ 导出 CSV
-    </button>
+    <Button size="sm" variant="outline" onClick={handleClick} disabled={rows.length === 0}>
+      导出 CSV
+    </Button>
   );
 }

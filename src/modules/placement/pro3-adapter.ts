@@ -52,12 +52,22 @@ export function readPro3Placements(
         const hour = parseHour(hourRaw);
         if (hour === null) continue;
 
-        // 账户名称（product_urp 用 "直播间" 字段）
-        const accountName = c["账户名称"] ?? c["直播间"];
-        if (!accountName || typeof accountName !== "string") continue;
+        // 归因 key 用 anchorName（主播标签如"蓝V"），1:N 对应多个广告账户名
+        // 「账户名称」是广告账户名（"ldl-直播-蓝V" / "ldl-直播-蓝V-3"），同主播下多包必须按它做差分
+        const anchorName = c["anchorName"];
+        if (!anchorName || typeof anchorName !== "string" || anchorName.trim() === "") continue;
+        const accountName = anchorName.trim();
+        if (accountName === "多主播(逐行提取)") continue; // PRO3 兜底标签，跳过
+
+        const subAccountRaw = c["账户名称"] ?? c["直播间"] ?? "";
+        const subAccountName =
+          typeof subAccountRaw === "string" && subAccountRaw.trim() !== ""
+            ? subAccountRaw.trim()
+            : accountName; // 兜底用 anchorName 自己做 subaccount key
 
         result.push({
           account_name: accountName.trim(),
+          subaccount_name: subAccountName,
           date,
           hour,
           cost_yuan: parseUnitNumber(c["消耗"] ?? c["花费"]),

@@ -29,8 +29,12 @@ export default function PlacementMigrationPage() {
   };
 
   return (
-    <div className="space-y-4 p-6">
-      <h1 className="text-2xl font-semibold">PRO3 投放迁移 — Dry-Run 报告</h1>
+    <div className="min-w-0 max-w-full space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
+      <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
+        <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">
+          PRO3 投放迁移 — Dry-Run 报告
+        </span>
+      </div>
       <p className="text-sm text-slate-600">
         先在终端跑迁移 CLI 的 <code>--dry-run</code> 模式，stdout JSON
         重定向到文件后上传到此处查看。

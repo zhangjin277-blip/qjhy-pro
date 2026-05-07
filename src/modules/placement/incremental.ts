@@ -3,6 +3,12 @@ export interface RawCumulativeRow {
   hour: number;
   dataset_id: string;
   account_key: string;
+  /**
+   * 同一个 anchor 下的不同广告账户名（e.g. "ldl-直播-蓝V" vs "ldl-直播-蓝V-3"）。
+   * PRO3 每个广告账户各自一条累计序列，必须按 subaccount 维度做差分，不能合并。
+   * Excel 上传若不区分 subaccount，传相同字符串（或 account_key）即可。
+   */
+  subaccount_key: string;
   cost_yuan: number;
   activations: number;
   payment_yuan: number;
@@ -27,7 +33,7 @@ export function computeIncrements(rows: RawCumulativeRow[]): IncrementalRow[] {
 
   const groups = new Map<string, RawCumulativeRow[]>();
   for (const r of rows) {
-    const key = `${r.account_key}|${r.dataset_id}`;
+    const key = `${r.account_key}|${r.subaccount_key}|${r.dataset_id}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)?.push(r);
   }

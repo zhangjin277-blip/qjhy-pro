@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils/cn";
 import type { CoreKpiResponse, CoreKpiValue } from "@/modules/dashboard";
 import { formatChineseNumber, formatVsPrevShort, splitChineseNumber } from "./format";
 
-export type TimePreset = "yesterday" | "last7" | "last30" | "this_month" | "last_month";
+export type TimePreset = "yesterday" | "last7" | "last30" | "this_month" | "last_month" | "custom";
 
 const TIME_PRESETS: { id: TimePreset; label: string }[] = [
   { id: "yesterday", label: "昨天" },
@@ -12,6 +12,7 @@ const TIME_PRESETS: { id: TimePreset; label: string }[] = [
   { id: "last30", label: "近 30 日" },
   { id: "this_month", label: "本月" },
   { id: "last_month", label: "上月" },
+  { id: "custom", label: "自定义" },
 ];
 
 const KPI_DEFS: {
@@ -133,43 +134,68 @@ export function CoreKpiSection({
   loading,
   preset,
   onPresetChange,
+  customFrom,
+  customTo,
+  onCustomChange,
   onCardClick,
 }: {
   core: CoreKpiResponse | null;
   loading: boolean;
   preset: TimePreset;
   onPresetChange: (p: TimePreset) => void;
+  customFrom: string;
+  customTo: string;
+  onCustomChange: (range: { from: string; to: string }) => void;
   onCardClick: (metricKey: keyof CoreKpiResponse) => void;
 }): React.JSX.Element {
   return (
     <section className="glass-panel rounded-2xl px-4 py-5 md:px-4">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h2 className="text-[15px] font-semibold tracking-tight">核心数据</h2>
-        <div
-          className="flex gap-1 text-[13px] bg-[#f3f5fb] rounded-lg p-1"
-          role="tablist"
-          aria-label="时间范围"
-        >
-          {TIME_PRESETS.map((p) => {
-            const active = preset === p.id;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => onPresetChange(p.id)}
-                className={cn(
-                  "px-3 py-1 rounded-md transition-colors",
-                  active
-                    ? "bg-white shadow-sm text-[#1d2129] font-medium"
-                    : "text-[#86909c] hover:text-[#4e5969]",
-                )}
-              >
-                {p.label}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2">
+          {preset === "custom" ? (
+            <div className="flex items-center gap-1.5 text-[13px]">
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => onCustomChange({ from: e.target.value, to: customTo })}
+                className="h-7 rounded-md border border-input px-2 text-[13px] bg-white"
+              />
+              <span className="text-[#86909c]">~</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => onCustomChange({ from: customFrom, to: e.target.value })}
+                className="h-7 rounded-md border border-input px-2 text-[13px] bg-white"
+              />
+            </div>
+          ) : null}
+          <div
+            className="flex gap-1 text-[13px] bg-[#f3f5fb] rounded-lg p-1"
+            role="tablist"
+            aria-label="时间范围"
+          >
+            {TIME_PRESETS.map((p) => {
+              const active = preset === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => onPresetChange(p.id)}
+                  className={cn(
+                    "px-3 py-1 rounded-md transition-colors",
+                    active
+                      ? "bg-white shadow-sm text-[#1d2129] font-medium"
+                      : "text-[#86909c] hover:text-[#4e5969]",
+                  )}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

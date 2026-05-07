@@ -1,13 +1,13 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils/cn";
 
 const MODES = [
-  { id: "detail", label: "单包" },
-  { id: "summary", label: "汇总" },
-  { id: "schedule", label: "主播-投放" },
+  { id: "summary", label: "主播汇总" },
+  { id: "schedule", label: "主播 × 投放" },
 ] as const;
 
-type ViewMode = "detail" | "summary" | "schedule";
+type ViewMode = "summary" | "schedule";
 
 interface ViewModeToggleProps {
   current: ViewMode;
@@ -24,20 +24,24 @@ export function ViewModeToggle({ current }: ViewModeToggleProps) {
   }
 
   return (
-    <div className="flex gap-0 rounded-md border border-slate-200 p-0.5 bg-slate-50">
-      {MODES.map((m) => (
-        <button
-          key={m.id}
-          onClick={() => setMode(m.id)}
-          className={`rounded px-3 py-1 text-sm font-medium transition-colors ${
-            current === m.id
-              ? "bg-white text-slate-900 shadow-sm"
-              : "text-slate-500 hover:text-slate-700"
-          }`}
-        >
-          {m.label}
-        </button>
-      ))}
+    <div className="flex items-center gap-1.5">
+      {MODES.map((m) => {
+        const isActive = current === m.id;
+        return (
+          <button
+            key={m.id}
+            onClick={() => setMode(m.id)}
+            className={cn(
+              "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+              isActive
+                ? "bg-primary text-primary-foreground border-primary"
+                : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
+            )}
+          >
+            {m.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

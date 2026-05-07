@@ -33,6 +33,45 @@ export async function rerunCrawl(input: unknown): Promise<{ ok: true }> {
   return { ok: true };
 }
 
+const BackfillRangeInput = z.object({
+  job: z.enum(["minigame", "daily", "portrait", "profile"]),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  basecamp: z.enum(["cs", "nc1", "nc2"]),
+});
+
+const JOB_MAP = {
+  minigame: JOB_NAMES.FETCH_MINIGAME,
+  daily: JOB_NAMES.FETCH_DAILY,
+  portrait: JOB_NAMES.FETCH_PORTRAIT,
+  profile: JOB_NAMES.FETCH_PROFILE,
+};
+
+/** 按类型 × 日期范围批量入队（每天一个 job）。用于补漏数据，不触发其它采集任务。*/
+export async function backfillRange(input: unknown): Promise<{ ok: true; days: number }> {
+  const data = BackfillRangeInput.parse(input);
+  const { userId } = await requireAdmin();
+  const start = new Date(data.from + "T00:00:00");
+  const end = new Date(data.to + "T00:00:00");
+  if (start > end) throw new Error("from > to");
+  const jobName = JOB_MAP[data.job];
+  let days = 0;
+  for (let t = start.getTime(); t <= end.getTime(); t += 86400_000) {
+    const d = new Date(t);
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    await enqueue(jobName, { date, basecamp: data.basecamp, attempt: 1 });
+    days++;
+  }
+  await writeAuditLog({
+    user_id: userId,
+    action: "CRAWLER_BACKFILL_RANGE",
+    target_type: "crawler",
+    target_id: `${data.job}:${data.from}~${data.to}`,
+    after: { ...data, days } as unknown as Record<string, unknown>,
+  });
+  return { ok: true, days };
+}
+
 const SaveCookieInput = z.object({
   basecamp: z.enum(["cs", "nc1", "nc2"]),
   cookies: z.record(z.string(), z.string()),

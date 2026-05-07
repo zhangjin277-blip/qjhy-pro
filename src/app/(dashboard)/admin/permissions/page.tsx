@@ -51,8 +51,10 @@ export default async function PermissionsAdminPage() {
 
 function renderAdminPage() {
   return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold">权限管理</h2>
+    <div className="min-w-0 max-w-full space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
+      <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
+        <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">权限管理</span>
+      </div>
       <p className="text-muted-foreground text-sm">统一管理用户权限、岗位默认权限和审计日志。</p>
       <PermissionsTabs />
     </div>

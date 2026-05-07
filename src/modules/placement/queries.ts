@@ -499,6 +499,289 @@ export async function queryTrend(filter: BoardFilter): Promise<TrendPoint[]> {
   }));
 }
 
+export interface KpiSummary {
+  cost: number;
+  activations: number;
+  payment: number;
+  roi: number; // payment / cost
+  cpa: number; // cost / activations
+  prev: {
+    cost: number;
+    activations: number;
+    payment: number;
+    roi: number;
+    cpa: number;
+  };
+  daily: { date: string; cost: number; activations: number; payment: number }[];
+}
+
+export async function queryKpiSummary(filter: BoardFilter): Promise<KpiSummary> {
+  // 当期总计
+  const cur = (await db.execute(sql`
+    SELECT
+      COALESCE(SUM(p.cost_yuan), 0)::float    AS cost,
+      COALESCE(SUM(p.activations), 0)::int    AS activations,
+      COALESCE(SUM(p.payment_yuan), 0)::float AS payment
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    ${datasetClause(filter.dataset_ids)}
+  `)) as unknown as { cost: number; activations: number; payment: number }[];
+
+  // 前期同样长度对比
+  const fromD = new Date(filter.date_from + "T00:00:00Z");
+  const toD = new Date(filter.date_to + "T00:00:00Z");
+  const days = Math.max(1, Math.round((toD.getTime() - fromD.getTime()) / 86400000) + 1);
+  const prevTo = new Date(fromD);
+  prevTo.setUTCDate(prevTo.getUTCDate() - 1);
+  const prevFrom = new Date(prevTo);
+  prevFrom.setUTCDate(prevFrom.getUTCDate() - days + 1);
+  const prevFromStr = prevFrom.toISOString().slice(0, 10);
+  const prevToStr = prevTo.toISOString().slice(0, 10);
+
+  const prev = (await db.execute(sql`
+    SELECT
+      COALESCE(SUM(p.cost_yuan), 0)::float    AS cost,
+      COALESCE(SUM(p.activations), 0)::int    AS activations,
+      COALESCE(SUM(p.payment_yuan), 0)::float AS payment
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${prevFromStr} AND ${prevToStr}
+    ${datasetClause(filter.dataset_ids)}
+  `)) as unknown as { cost: number; activations: number; payment: number }[];
+
+  // 当期按日 sparkline
+  const daily = (await db.execute(sql`
+    SELECT
+      p.date::text                            AS date,
+      COALESCE(SUM(p.cost_yuan), 0)::float    AS cost,
+      COALESCE(SUM(p.activations), 0)::int    AS activations,
+      COALESCE(SUM(p.payment_yuan), 0)::float AS payment
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    ${datasetClause(filter.dataset_ids)}
+    GROUP BY p.date
+    ORDER BY p.date
+  `)) as unknown as { date: string; cost: number; activations: number; payment: number }[];
+
+  const c = cur.at(0) ?? { cost: 0, activations: 0, payment: 0 };
+  const p = prev.at(0) ?? { cost: 0, activations: 0, payment: 0 };
+  const cCost = Number(c.cost),
+    cAct = Number(c.activations),
+    cPay = Number(c.payment);
+  const pCost = Number(p.cost),
+    pAct = Number(p.activations),
+    pPay = Number(p.payment);
+
+  return {
+    cost: cCost,
+    activations: cAct,
+    payment: cPay,
+    roi: cCost > 0 ? cPay / cCost : 0,
+    cpa: cAct > 0 ? cCost / cAct : 0,
+    prev: {
+      cost: pCost,
+      activations: pAct,
+      payment: pPay,
+      roi: pCost > 0 ? pPay / pCost : 0,
+      cpa: pAct > 0 ? pCost / pAct : 0,
+    },
+    daily: daily.map((d) => ({
+      date: d.date,
+      cost: Number(d.cost),
+      activations: Number(d.activations),
+      payment: Number(d.payment),
+    })),
+  };
+}
+
+// SummaryRow + sparkline 数据（按日 cost）
+export interface SummaryRowExt extends SummaryRow {
+  sparkline: number[]; // 当期每日 cost
+  account_count: number;
+  platforms: string[]; // 该 anchor_label 下涉及的平台
+  prev_cost: number; // 前期同长度的 cost（用于同比）
+}
+
+export async function querySummaryExt(filter: BoardFilter): Promise<SummaryRowExt[]> {
+  // 1. 主表
+  const main = (await db.execute(sql`
+    SELECT
+      a.placement_label,
+      COUNT(*)::int                             AS row_count,
+      COUNT(DISTINCT a.id)::int                 AS account_count,
+      ARRAY_AGG(DISTINCT a.platform) FILTER (WHERE a.platform IS NOT NULL) AS platforms,
+      SUM(p.cost_yuan)::float                   AS cost,
+      SUM(p.activations)::int                   AS activations,
+      SUM(p.payment_yuan)::float                AS payment,
+      SUM(p.start_download)::int                AS start_download,
+      SUM(p.finish_download)::int               AS finish_download
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    ${datasetClause(filter.dataset_ids)}
+    GROUP BY a.placement_label
+    ORDER BY cost DESC NULLS LAST
+    LIMIT 100
+  `)) as unknown as {
+    placement_label: string | null;
+    row_count: number;
+    account_count: number;
+    platforms: string[] | null;
+    cost: number;
+    activations: number;
+    payment: number;
+    start_download: number;
+    finish_download: number;
+  }[];
+
+  if (main.length === 0) return [];
+
+  // 2. sparkline (按 placement_label + date 聚合)
+  const spark = (await db.execute(sql`
+    SELECT
+      a.placement_label,
+      p.date::text          AS date,
+      SUM(p.cost_yuan)::float AS cost
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    ${datasetClause(filter.dataset_ids)}
+    GROUP BY a.placement_label, p.date
+    ORDER BY p.date
+  `)) as unknown as { placement_label: string | null; date: string; cost: number }[];
+
+  // 3. 前期同长度 cost（同比）
+  const fromD = new Date(filter.date_from + "T00:00:00Z");
+  const toD = new Date(filter.date_to + "T00:00:00Z");
+  const days = Math.max(1, Math.round((toD.getTime() - fromD.getTime()) / 86400000) + 1);
+  const prevTo = new Date(fromD);
+  prevTo.setUTCDate(prevTo.getUTCDate() - 1);
+  const prevFrom = new Date(prevTo);
+  prevFrom.setUTCDate(prevFrom.getUTCDate() - days + 1);
+
+  const prev = (await db.execute(sql`
+    SELECT
+      a.placement_label,
+      SUM(p.cost_yuan)::float AS cost
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${prevFrom.toISOString().slice(0, 10)} AND ${prevTo.toISOString().slice(0, 10)}
+    ${datasetClause(filter.dataset_ids)}
+    GROUP BY a.placement_label
+  `)) as unknown as { placement_label: string | null; cost: number }[];
+
+  const prevByLabel = new Map<string | null, number>();
+  for (const r of prev) prevByLabel.set(r.placement_label, Number(r.cost));
+
+  // 拼出按 label 分组的日维 cost
+  const sparkByLabel = new Map<string | null, Map<string, number>>();
+  for (const s of spark) {
+    let m = sparkByLabel.get(s.placement_label);
+    if (!m) {
+      m = new Map();
+      sparkByLabel.set(s.placement_label, m);
+    }
+    m.set(s.date, Number(s.cost));
+  }
+
+  // 当期日期序列
+  const dates: string[] = [];
+  for (let d = new Date(fromD); d <= toD; d.setUTCDate(d.getUTCDate() + 1)) {
+    dates.push(d.toISOString().slice(0, 10));
+  }
+
+  return main.map((r) => {
+    const m = sparkByLabel.get(r.placement_label) ?? new Map<string, number>();
+    return {
+      anchor_label: r.placement_label,
+      row_count: Number(r.row_count),
+      cost: Number(r.cost),
+      activations: Number(r.activations),
+      payment: Number(r.payment),
+      start_download: Number(r.start_download),
+      finish_download: Number(r.finish_download),
+      sparkline: dates.map((d) => m.get(d) ?? 0),
+      account_count: Number(r.account_count),
+      platforms: (r.platforms ?? []).filter(Boolean),
+      prev_cost: prevByLabel.get(r.placement_label) ?? 0,
+    };
+  });
+}
+
+// 主播 → 投放包子列表（用于 summary 行展开）
+export interface SubAccountRow {
+  placement_label: string | null;
+  account_id: string;
+  account_name: string;
+  platform: string | null;
+  cost: number;
+  activations: number;
+  payment: number;
+}
+
+export async function querySubAccountsAll(filter: BoardFilter): Promise<SubAccountRow[]> {
+  const result = (await db.execute(sql`
+    SELECT
+      a.placement_label,
+      a.id                              AS account_id,
+      a.account_name,
+      a.platform,
+      SUM(p.cost_yuan)::float           AS cost,
+      SUM(p.activations)::int           AS activations,
+      SUM(p.payment_yuan)::float        AS payment
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    ${datasetClause(filter.dataset_ids)}
+    GROUP BY a.placement_label, a.id, a.account_name, a.platform
+    ORDER BY a.placement_label, cost DESC NULLS LAST
+  `)) as unknown as SubAccountRow[];
+  return result.map((r) => ({
+    ...r,
+    cost: Number(r.cost),
+    activations: Number(r.activations),
+    payment: Number(r.payment),
+  }));
+}
+
+// 单个投放账号在 filter 范围内的按 (日期 × 小时) 数据 — 用于二级展开热力图
+export interface AccountHourlyRow {
+  date: string;
+  hour: number;
+  cost: number;
+  activations: number;
+  payment: number;
+}
+
+export async function queryAccountHourly(
+  filter: BoardFilter,
+  accountId: string,
+): Promise<AccountHourlyRow[]> {
+  const result = (await db.execute(sql`
+    SELECT
+      p.date::text                    AS date,
+      p.hour                          AS hour,
+      SUM(p.cost_yuan)::float         AS cost,
+      SUM(p.activations)::int         AS activations,
+      SUM(p.payment_yuan)::float      AS payment
+    FROM placement_row p
+    WHERE p.live_account_id = ${accountId}
+      AND p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+    ${datasetClause(filter.dataset_ids)}
+    GROUP BY p.date, p.hour
+    ORDER BY p.date DESC, p.hour ASC
+  `)) as unknown as AccountHourlyRow[];
+  return result.map((r) => ({
+    date: r.date,
+    hour: Number(r.hour),
+    cost: Number(r.cost),
+    activations: Number(r.activations),
+    payment: Number(r.payment),
+  }));
+}
+
 export async function queryAnchorLabels(filter: BoardFilter): Promise<string[]> {
   const result = await db.execute(sql`
     SELECT DISTINCT a.placement_label

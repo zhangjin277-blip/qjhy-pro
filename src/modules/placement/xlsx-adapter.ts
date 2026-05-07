@@ -2,7 +2,10 @@ import * as XLSX from "xlsx";
 import { parseDateText, parseHour, parseUnitNumber } from "./parse-utils";
 
 const COLUMN_ALIAS = {
-  account_name: ["账户名称", "直播间", "广告账户"],
+  // 主播标签（= placement_label）："备注" 在百应导出里就是 anchorName，"主播" 兜底
+  anchor_name: ["备注", "主播", "anchorName"],
+  // 广告子账户（同主播下多包用此区分累计序列）
+  subaccount_name: ["账户名称", "直播间", "广告账户"],
   cost_yuan: ["消耗", "花费", "成本"],
   activations: ["激活数", "激活"],
   payment_yuan: ["激活当日付费金额", "当日付费金额"],
@@ -14,7 +17,8 @@ const COLUMN_ALIAS = {
 } as const;
 
 export interface ParsedRow {
-  account_name: string;
+  account_name: string; // 主播标签（= placement_label）
+  subaccount_name: string; // 广告子账户名（同主播下多包做差分时区分）
   date: string; // ISO YYYY-MM-DD
   hour: number;
   cost_yuan: number;
@@ -92,9 +96,11 @@ export function parseXlsx(buffer: Buffer | ArrayBuffer, filename: string): Parse
       continue;
     }
 
-    // 账户名称（必须）
-    const accountName = findValue(row, COLUMN_ALIAS.account_name);
-    if (!accountName) {
+    // 主播标签（必须）：优先「备注」字段，兜底「账户名称」
+    const anchorRaw = findValue(row, COLUMN_ALIAS.anchor_name);
+    const subAccountRaw = findValue(row, COLUMN_ALIAS.subaccount_name);
+    const anchorName = anchorRaw ?? subAccountRaw; // 备注缺失时退到账户名（旧格式兜底）
+    if (!anchorName) {
       // 若日期也缺失（nulls row），这是合计/汇总行，静默跳过
       const dateCheck = findValue(row, COLUMN_ALIAS.date_text);
       const timeCheck =
@@ -102,15 +108,16 @@ export function parseXlsx(buffer: Buffer | ArrayBuffer, filename: string): Parse
       if (!dateCheck && !timeCheck) {
         continue; // 静默跳过合计行
       }
-      errors.push({ row, reason: "缺少账户名称/直播间列" });
+      errors.push({ row, reason: "缺少主播标签（备注列）/账户名称列" });
       continue;
     }
 
-    // 跳过合计/汇总行（账户名称为 "--" 等占位符）
-    const accountStr = String(accountName).trim();
-    if (accountStr === "--" || accountStr === "-") {
+    // 跳过合计/汇总行（占位符）
+    const anchorStr = String(anchorName).trim();
+    if (anchorStr === "--" || anchorStr === "-" || anchorStr === "多主播(逐行提取)") {
       continue;
     }
+    const subAccountStr = subAccountRaw ? String(subAccountRaw).trim() : anchorStr;
 
     // 日期解析：行内列 → 文件名 fallback → 报错
     let date: string | null = null;
@@ -146,7 +153,8 @@ export function parseXlsx(buffer: Buffer | ArrayBuffer, filename: string): Parse
     }
 
     rows.push({
-      account_name: String(accountName).trim(),
+      account_name: anchorStr,
+      subaccount_name: subAccountStr,
       date,
       hour,
       cost_yuan: parseUnitNumber(findValue(row, COLUMN_ALIAS.cost_yuan)),

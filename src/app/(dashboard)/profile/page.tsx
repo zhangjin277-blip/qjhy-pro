@@ -28,21 +28,25 @@ export default async function ProfilePage() {
   // 应急用户走特殊分支
   if (session.user.email === "emergency@qjhy.local") {
     return (
-      <div className="space-y-4 max-w-2xl">
-        <h2 className="text-2xl font-bold">我的权限</h2>
-        <Card>
-          <CardHeader>
-            <CardTitle>应急后门用户</CardTitle>
-            <CardDescription>不在钉钉同步范围内</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div>姓名：{session.user.name}</div>
-            <div>Email：{session.user.email}</div>
-            <div>
-              权限：<strong className="text-primary">超级管理员</strong>（绕过常规权限）
-            </div>
-          </CardContent>
-        </Card>
+      <div className="min-w-0 max-w-full space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
+        <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
+          <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">我的权限</span>
+        </div>
+        <div className="max-w-2xl space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>应急后门用户</CardTitle>
+              <CardDescription>不在钉钉同步范围内</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div>姓名：{session.user.name}</div>
+              <div>Email：{session.user.email}</div>
+              <div>
+                权限：<strong className="text-primary">超级管理员</strong>（绕过常规权限）
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -55,22 +59,26 @@ export default async function ProfilePage() {
 
   if (!dingUser) {
     return (
-      <div className="space-y-4 max-w-2xl">
-        <h2 className="text-2xl font-bold">我的权限</h2>
-        <Card>
-          <CardHeader>
-            <CardTitle>等待同步</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm">
-            <p>当前用户尚未同步到组织架构表。</p>
-            <p className="mt-2 text-muted-foreground">
-              UnionID: <code>{session.user.id}</code>
-            </p>
-            <p className="mt-2 text-muted-foreground">
-              钉钉同步每天凌晨 02:00 自动跑。如需立即生效，请联系管理员手动触发。
-            </p>
-          </CardContent>
-        </Card>
+      <div className="min-w-0 max-w-full space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
+        <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
+          <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">我的权限</span>
+        </div>
+        <div className="max-w-2xl space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>等待同步</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm">
+              <p>当前用户尚未同步到组织架构表。</p>
+              <p className="mt-2 text-muted-foreground">
+                UnionID: <code>{session.user.id}</code>
+              </p>
+              <p className="mt-2 text-muted-foreground">
+                钉钉同步每天凌晨 02:00 自动跑。如需立即生效，请联系管理员手动触发。
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -85,76 +93,79 @@ export default async function ProfilePage() {
   }
 
   return (
-    <div className="space-y-4 max-w-2xl">
-      <h2 className="text-2xl font-bold">我的权限</h2>
+    <div className="min-w-0 max-w-full space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
+      <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
+        <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">我的权限</span>
+      </div>
+      <div className="max-w-2xl space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>基本信息</CardTitle>
+            <CardDescription>来自钉钉同步</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div>姓名：{dingUser.name}</div>
+            <div>
+              钉钉岗位：
+              {dingUser.title ?? <span className="text-muted-foreground">未填岗位</span>}
+            </div>
+            <div>
+              所属部门 ID：{dingUser.dept_ids.length > 0 ? dingUser.dept_ids.join(", ") : "-"}
+            </div>
+            <div className="text-xs text-muted-foreground pt-2">
+              UnionID: <code>{dingUser.unionid}</code>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              UserID: <code>{dingUser.user_id}</code>
+            </div>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>基本信息</CardTitle>
-          <CardDescription>来自钉钉同步</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <div>姓名：{dingUser.name}</div>
-          <div>
-            钉钉岗位：
-            {dingUser.title ?? <span className="text-muted-foreground">未填岗位</span>}
-          </div>
-          <div>
-            所属部门 ID：{dingUser.dept_ids.length > 0 ? dingUser.dept_ids.join(", ") : "-"}
-          </div>
-          <div className="text-xs text-muted-foreground pt-2">
-            UnionID: <code>{dingUser.unionid}</code>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            UserID: <code>{dingUser.user_id}</code>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>各板块权限</CardTitle>
-          <CardDescription>
-            每个业务板块独立计算（岗位默认 + 部门负责人 + 个体覆盖）
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-xs text-muted-foreground">
-                <th className="text-left py-2 pr-4">板块</th>
-                <th className="text-left py-2 pr-4">数据范围</th>
-                <th className="text-left py-2 pr-4">编辑</th>
-                <th className="text-left py-2 pr-4">导出</th>
-                <th className="text-left py-2">管理</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MODULE_KEYS.map((m) => {
-                const p = perms[m];
-                return (
-                  <tr key={m} className="border-b last:border-b-0">
-                    <td className="py-2 pr-4 font-medium">{MODULE_LABEL[m]}</td>
-                    <td className="py-2 pr-4">
-                      <span
-                        className={p.scope === "none" ? "text-muted-foreground" : "text-primary"}
-                      >
-                        {SCOPE_LABEL[p.scope]}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-4">{p.can_edit ? "✓" : "✗"}</td>
-                    <td className="py-2 pr-4">{p.can_export ? "✓" : "✗"}</td>
-                    <td className="py-2">{p.can_admin ? "✓" : "✗"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="text-xs text-muted-foreground pt-3">
-            权限来源：{sourceSet.size === 0 ? "无" : Array.from(sourceSet).join(" + ")}
-          </div>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>各板块权限</CardTitle>
+            <CardDescription>
+              每个业务板块独立计算（岗位默认 + 部门负责人 + 个体覆盖）
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs text-muted-foreground">
+                  <th className="text-left py-2 pr-4">板块</th>
+                  <th className="text-left py-2 pr-4">数据范围</th>
+                  <th className="text-left py-2 pr-4">编辑</th>
+                  <th className="text-left py-2 pr-4">导出</th>
+                  <th className="text-left py-2">管理</th>
+                </tr>
+              </thead>
+              <tbody>
+                {MODULE_KEYS.map((m) => {
+                  const p = perms[m];
+                  return (
+                    <tr key={m} className="border-b last:border-b-0">
+                      <td className="py-2 pr-4 font-medium">{MODULE_LABEL[m]}</td>
+                      <td className="py-2 pr-4">
+                        <span
+                          className={p.scope === "none" ? "text-muted-foreground" : "text-primary"}
+                        >
+                          {SCOPE_LABEL[p.scope]}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4">{p.can_edit ? "✓" : "✗"}</td>
+                      <td className="py-2 pr-4">{p.can_export ? "✓" : "✗"}</td>
+                      <td className="py-2">{p.can_admin ? "✓" : "✗"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="text-xs text-muted-foreground pt-3">
+              权限来源：{sourceSet.size === 0 ? "无" : Array.from(sourceSet).join(" + ")}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

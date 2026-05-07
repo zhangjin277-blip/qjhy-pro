@@ -15,11 +15,13 @@ export default async function MigrationPage() {
   }
 
   return (
-    <div className="p-6">
-      <h1 className="mb-1 text-xl font-bold text-slate-800">PRO3 数据迁移</h1>
-      <p className="mb-4 text-sm text-slate-500">
-        分析 PRO3 SQLite 中的账号数据，确认姓名匹配后实际写入新库
-      </p>
+    <div className="min-w-0 max-w-full space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
+      <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
+        <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">PRO3 数据迁移</span>
+        <span className="ml-auto px-3 text-xs text-slate-400">
+          分析 PRO3 SQLite 中的账号数据，确认姓名匹配后实际写入新库
+        </span>
+      </div>
       {error ? (
         <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           <div className="font-bold">迁移分析失败</div>

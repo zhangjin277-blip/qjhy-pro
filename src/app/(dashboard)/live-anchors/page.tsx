@@ -33,10 +33,10 @@ export default async function LiveAnchorsPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-800">主播档案</h1>
-        <div className="text-sm text-slate-500">共 {anchors.length} 位主播</div>
+    <div className="min-w-0 max-w-full space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
+      <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
+        <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">主播档案</span>
+        <div className="ml-auto px-3 text-sm text-slate-500">共 {anchors.length} 位主播</div>
       </div>
       <AnchorListClient
         initialAnchors={anchors}

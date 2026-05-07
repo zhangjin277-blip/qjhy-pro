@@ -1,13 +1,40 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-const PRESETS = [
-  { id: "today", label: "今天" },
-  { id: "yesterday", label: "昨天" },
-  { id: "last7", label: "最近 7 天" },
-  { id: "last30", label: "最近 30 天" },
-];
+const PRESET_DAYS: Record<string, number> = {
+  today: 0,
+  yesterday: 1,
+  last7: 7,
+  last30: 30,
+};
+
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function presetToRange(preset: string): { from: string; to: string } {
+  const days = PRESET_DAYS[preset] ?? 7;
+  const today = new Date();
+  const to = new Date(today);
+  const from = new Date(today);
+  if (preset === "yesterday") {
+    from.setDate(from.getDate() - 1);
+    to.setDate(to.getDate() - 1);
+  } else if (preset !== "today") {
+    from.setDate(from.getDate() - days);
+  }
+  return { from: isoDate(from), to: isoDate(to) };
+}
 
 interface FilterBarProps {
   anchorLabels?: string[];
@@ -16,66 +43,121 @@ interface FilterBarProps {
 export function FilterBar({ anchorLabels = [] }: FilterBarProps) {
   const router = useRouter();
   const sp = useSearchParams();
-  const [preset, setPreset] = useState(sp.get("preset") ?? "last7");
-  const [search, setSearch] = useState(sp.get("q") ?? "");
-  const [anchor, setAnchor] = useState(sp.get("anchor") ?? "");
+  const [pending, start] = useTransition();
 
-  const apply = () => {
+  const fromUrl = sp.get("from") ?? "";
+  const toUrl = sp.get("to") ?? "";
+  const presetUrl = sp.get("preset") ?? "";
+  const anchor = sp.get("anchor") ?? "";
+
+  const effective =
+    fromUrl && toUrl ? { from: fromUrl, to: toUrl } : presetToRange(presetUrl || "last7");
+  const activePreset = !fromUrl && !toUrl ? presetUrl || "last7" : "";
+
+  const [search, setSearch] = useState(sp.get("q") ?? "");
+
+  function pushWith(patch: Record<string, string | null>) {
     const usp = new URLSearchParams(sp.toString());
-    usp.set("preset", preset);
-    if (search) usp.set("q", search);
-    else usp.delete("q");
-    if (anchor) usp.set("anchor", anchor);
-    else usp.delete("anchor");
-    router.push(`/placements?${usp.toString()}`);
-  };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === null || v === "") usp.delete(k);
+      else usp.set(k, v);
+    }
+    start(() => {
+      router.push(`/placements?${usp.toString()}`);
+    });
+  }
+
+  function applyPreset(p: string) {
+    pushWith({ preset: p, from: null, to: null });
+  }
+
+  function applyDateChange(field: "from" | "to", value: string) {
+    if (!value) return;
+    const next =
+      field === "from" ? { from: value, to: effective.to } : { from: effective.from, to: value };
+    pushWith({ from: next.from, to: next.to, preset: null });
+  }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white p-3">
-      {/* Date preset */}
-      <select
-        value={preset}
-        onChange={(e) => setPreset(e.target.value)}
-        className="rounded border border-slate-200 px-2 py-1 text-sm"
-      >
-        {PRESETS.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.label}
-          </option>
-        ))}
-      </select>
+    <div className="flex min-w-0 items-center gap-2">
+      <Input
+        type="date"
+        value={effective.from}
+        onChange={(e) => applyDateChange("from", e.target.value)}
+        className="w-[140px] shrink-0"
+      />
+      <span className="text-muted-foreground shrink-0">~</span>
+      <Input
+        type="date"
+        value={effective.to}
+        onChange={(e) => applyDateChange("to", e.target.value)}
+        className="w-[140px] shrink-0"
+      />
 
-      {/* Anchor label filter */}
-      {anchorLabels.length > 0 && (
-        <select
-          value={anchor}
-          onChange={(e) => setAnchor(e.target.value)}
-          className="rounded border border-slate-200 px-2 py-1 text-sm"
+      <div className="flex shrink-0 gap-1">
+        <Button
+          size="sm"
+          variant={activePreset === "today" ? "secondary" : "ghost"}
+          onClick={() => applyPreset("today")}
         >
-          <option value="">全部主播</option>
-          {anchorLabels.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
+          今日
+        </Button>
+        <Button
+          size="sm"
+          variant={activePreset === "yesterday" ? "secondary" : "ghost"}
+          onClick={() => applyPreset("yesterday")}
+        >
+          昨日
+        </Button>
+        <Button
+          size="sm"
+          variant={activePreset === "last7" ? "secondary" : "ghost"}
+          onClick={() => applyPreset("last7")}
+        >
+          近 7 日
+        </Button>
+        <Button
+          size="sm"
+          variant={activePreset === "last30" ? "secondary" : "ghost"}
+          onClick={() => applyPreset("last30")}
+        >
+          近 30 日
+        </Button>
+      </div>
+
+      {anchorLabels.length > 0 && (
+        <Select
+          value={anchor || "all"}
+          onValueChange={(v) => pushWith({ anchor: v === "all" ? null : v })}
+        >
+          <SelectTrigger className="w-[140px] shrink-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部主播</SelectItem>
+            {anchorLabels.map((l) => (
+              <SelectItem key={l} value={l}>
+                {l}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
 
-      {/* Search */}
-      <input
-        type="text"
+      <Input
+        placeholder="搜索账号 / 主播（回车）"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && apply()}
-        placeholder="搜索账号 / 主播"
-        className="flex-1 rounded border border-slate-200 px-3 py-1 text-sm"
+        onKeyDown={(e) => {
+          if (e.key === "Enter") pushWith({ q: search || null });
+        }}
+        onBlur={() => {
+          if (search !== (sp.get("q") ?? "")) pushWith({ q: search || null });
+        }}
+        className="w-[240px] shrink-0"
       />
-      <button
-        onClick={apply}
-        className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white"
-      >
-        应用
-      </button>
+
+      {pending && <span className="text-xs text-slate-400">加载中...</span>}
     </div>
   );
 }

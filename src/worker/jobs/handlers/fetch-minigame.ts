@@ -1,6 +1,5 @@
 import { db } from "@/db/client";
 import { anchor_minigame_daily, anchor_profile } from "@/db/schema";
-import { eq } from "drizzle-orm";
 import { openDouyinPage, CookieExpiredError } from "@/lib/puppeteer";
 import { getActiveCookies, markCookieExpired, notifyCrawlerError } from "@/modules/crawler/server";
 import { fetchMinigameLive, parseMinigameRow } from "@/modules/crawler/adapters/minigame-live";
@@ -13,15 +12,16 @@ import type { FetchSimplePayload } from "@/modules/crawler/server";
 export async function fetchMinigameHandler(payload: FetchSimplePayload): Promise<void> {
   const { date, basecamp } = payload;
 
-  // 抖音号 → anchor_id 映射（仅三国主播）
+  // 抖音号 → anchor_id 映射（全量主播）
+  // 不再按 is_threekingdoms 过滤 —— 抖音小游戏后台已经只返回真正跑小游戏的主播，
+  // 由数据源自身筛选；项目分类有滞后/分错时也不会丢数据
   const profiles = await db
     .select({
       anchor_id: anchor_profile.anchor_id,
       aweme_short_id: anchor_profile.aweme_short_id,
       aweme_display_id: anchor_profile.aweme_display_id,
     })
-    .from(anchor_profile)
-    .where(eq(anchor_profile.is_threekingdoms, true));
+    .from(anchor_profile);
   const awemeToAnchor = new Map<string, string>();
   for (const p of profiles) {
     if (p.aweme_short_id) awemeToAnchor.set(p.aweme_short_id, p.anchor_id);

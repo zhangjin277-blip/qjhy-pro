@@ -27,22 +27,22 @@ export function Filters({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 items-center gap-2">
       <Input
         type="date"
         value={filters.date_from}
         onChange={(e) => onChange({ ...filters, date_from: e.target.value })}
-        className="max-w-[150px]"
+        className="w-[140px] shrink-0"
       />
-      <span className="text-muted-foreground">~</span>
+      <span className="text-muted-foreground shrink-0">~</span>
       <Input
         type="date"
         value={filters.date_to}
         onChange={(e) => onChange({ ...filters, date_to: e.target.value })}
-        className="max-w-[150px]"
+        className="w-[140px] shrink-0"
       />
 
-      <div className="flex gap-1">
+      <div className="flex shrink-0 gap-1">
         <Button size="sm" variant="ghost" onClick={() => setRange(yesterday(), yesterday())}>
           昨日
         </Button>
@@ -58,7 +58,7 @@ export function Filters({
         value={filters.project ?? "all"}
         onValueChange={(v) => onChange({ ...filters, project: v as ProjectFilter })}
       >
-        <SelectTrigger className="max-w-[120px]">
+        <SelectTrigger className="w-[110px] shrink-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -71,7 +71,7 @@ export function Filters({
         placeholder="搜索昵称/抖音号"
         value={filters.search ?? ""}
         onChange={(e) => onChange({ ...filters, search: e.target.value })}
-        className="max-w-[200px]"
+        className="ml-auto min-w-0 flex-1 max-w-[240px]"
       />
     </div>
   );
