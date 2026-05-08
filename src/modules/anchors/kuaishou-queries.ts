@@ -274,7 +274,10 @@ export async function listKuaishouAnchors(
       COALESCE(s.avg_report_rate, 0)::float             AS avg_report_rate,
       lt.fans_most_age, lt.fans_male_rate, lt.fans_most_province,
       lt.author_type, lt.author_ratio,
-      lt.has_promote, lt.has_punish, lt.settle_in_time, lt.settle_province
+      lt.has_promote, lt.has_punish, lt.settle_in_time, lt.settle_province,
+      COALESCE(pl.total_cost, 0)::float       AS total_cost,
+      COALESCE(pl.total_activations, 0)::int  AS total_activations,
+      COALESCE(pl.total_payment, 0)::float    AS total_payment
     FROM kuaishou_member m
     LEFT JOIN dingtalk_user du ON du.user_id = m.agent_dingtalk_user_id
     LEFT JOIN (
@@ -414,10 +417,9 @@ export async function listKuaishouAnchors(
     has_punish: r.has_punish,
     settle_in_time: r.settle_in_time == null ? null : Number(r.settle_in_time),
     settle_province: r.settle_province,
-    // 投放数据（待实现 placement_row join；暂填 0 兼容 type）
-    total_cost: 0,
-    total_activations: 0,
-    total_payment: 0,
+    total_cost: Number(r.total_cost),
+    total_activations: Number(r.total_activations),
+    total_payment: Number(r.total_payment),
   }));
 }
 
