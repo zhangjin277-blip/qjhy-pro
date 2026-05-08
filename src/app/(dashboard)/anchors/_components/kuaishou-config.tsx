@@ -317,7 +317,7 @@ function renderKuaishouCell(col: ColumnDef<KuaishouColKey>, r: KuaishouRow): Rea
         ? `¥${(r.total_payment / r.total_activations).toFixed(2)}`
         : muted();
     case "roi":
-      return r.total_cost > 0 ? (r.total_payment / r.total_cost).toFixed(3) : muted();
+      return r.total_cost > 0 ? `${((r.total_payment / r.total_cost) * 100).toFixed(2)}%` : muted();
     // 画像/分级/状态
     case "fans_most_age":
       return textNullable(r.fans_most_age);

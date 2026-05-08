@@ -156,7 +156,7 @@ export const KS_COLUMNS: ColumnDef<KuaishouColKey>[] = [
   { key: "cpa", label: "激活单价", group: "投放数据", align: "left", fmt: "number" },
   { key: "total_payment", label: "付费金额", group: "投放数据", align: "left", fmt: "number" },
   { key: "arpu", label: "ARPU", group: "投放数据", align: "left", fmt: "number" },
-  { key: "roi", label: "ROI", group: "投放数据", align: "left", fmt: "number" },
+  { key: "roi", label: "ROI", group: "投放数据", align: "left", fmt: "percent" },
 
   // 违规
   { key: "total_report_num", label: "举报次数", group: "违规", align: "left", fmt: "number" },
