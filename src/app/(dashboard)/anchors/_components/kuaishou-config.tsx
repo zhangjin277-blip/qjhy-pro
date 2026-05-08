@@ -516,8 +516,15 @@ export const kuaishouConfig: PlatformConfig<KuaishouColKey, KuaishouRow> = {
   renderCell: renderKuaishouCell,
   rowClickOpensDrawer: true,
 
-  DrawerComponent({ row, onOpenChange }) {
-    return <KuaishouAnchorDetailDrawer anchor={row} onOpenChange={onOpenChange} />;
+  DrawerComponent({ row, visibleColumns, kpiColumns, onOpenChange }) {
+    return (
+      <KuaishouAnchorDetailDrawer
+        anchor={row}
+        visibleColumns={visibleColumns}
+        kpiColumns={kpiColumns}
+        onOpenChange={onOpenChange}
+      />
+    );
   },
 
   exportCsv(rows, visibleColumns) {

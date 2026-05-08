@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/db/client";
 import { kuaishou_member, kuaishou_live_session } from "@/db/schema";
-import { and, eq, isNull, sql, desc, gte, type SQL } from "drizzle-orm";
+import { and, eq, isNull, sql, gte, type SQL } from "drizzle-orm";
 
 export interface KuaishouAnchorListFilters {
   product?: string;
@@ -458,29 +458,52 @@ export async function queryKuaishouAnchorKpi(
   };
 }
 
-/* ========== 主播单场直播明细（抽屉用） ========== */
+/* ========== 主播单场直播明细（抽屉用） ==========
+ * row 字段命名跟 KuaishouRow（主表聚合）对齐，方便抽屉直接用 visibleColumns 渲染。
+ * 单场聚合语义：max_peak/avg_acu 等"max/avg" 字段 = 该单场的值，并非聚合。
+ */
 
 export interface KuaishouLiveSessionRow {
+  // 元数据
   live_stream_id: string; // bigint → string 序列化
   title: string | null;
   cover_url: string | null;
-  start_datetime: Date;
-  end_datetime: Date | null;
-  live_duration_ms: number | null;
+  start_datetime: string; // ISO 字符串
+  end_datetime: string | null;
   live_duration_text: string | null;
-  play_uv: number | null;
-  play_user_cnt: number | null;
-  max_concurrent_user_num: number | null;
-  valid_acu: number | null;
-  play_rate: string | null;
-  per_play_time_avg_text: string | null;
-  add_fans_cnt: number | null;
-  transfer_fans_rate: string | null;
-  like_cnt: number | null;
-  comment_cnt: number | null;
-  send_gift_uv: number | null;
-  live_amt: number | null;
   data_source: string;
+  // 主表 ColKey 对应的值（单场粒度）
+  total_amt: number | null;
+  avg_acu: number | null;
+  max_peak: number | null;
+  total_add_fans: number | null;
+  total_duration_h: number | null;
+  total_play_uv: number | null;
+  total_play_user_cnt: number | null;
+  avg_play_rate: number | null;
+  avg_per_play_time_min: number | null;
+  avg_live_cover_ctr: number | null;
+  total_follow_author: number | null;
+  total_cancel_follow: number | null;
+  avg_transfer_fans_rate: number | null;
+  max_fans_club_cnt: number | null;
+  total_like_cnt: number | null;
+  total_like_uv: number | null;
+  avg_like_rate: number | null;
+  total_comment_cnt: number | null;
+  total_comment_uv: number | null;
+  avg_comment_rate: number | null;
+  total_share_cnt: number | null;
+  total_share_uv: number | null;
+  avg_share_rate: number | null;
+  total_interact_num: number | null;
+  avg_interact_rate: number | null;
+  total_send_gift_uv: number | null;
+  total_sent_gift_cnt: number | null;
+  total_live_video_amt: number | null;
+  total_live_chat_room_amt: number | null;
+  total_report_num: number | null;
+  avg_report_rate: number | null;
 }
 
 export interface KuaishouMemberSummary {
@@ -500,42 +523,100 @@ export async function listKuaishouLiveSessions(
   memberId: string,
   daysBack = 30,
 ): Promise<KuaishouLiveSessionRow[]> {
-  const cutoff = new Date(Date.now() - daysBack * 86400_000);
-  const rows = await db
-    .select({
-      live_stream_id: kuaishou_live_session.live_stream_id,
-      title: kuaishou_live_session.title,
-      cover_url: kuaishou_live_session.cover_url,
-      start_datetime: kuaishou_live_session.start_datetime,
-      end_datetime: kuaishou_live_session.end_datetime,
-      live_duration_ms: kuaishou_live_session.live_duration_ms,
-      live_duration_text: kuaishou_live_session.live_duration_text,
-      play_uv: kuaishou_live_session.play_uv,
-      play_user_cnt: kuaishou_live_session.play_user_cnt,
-      max_concurrent_user_num: kuaishou_live_session.max_concurrent_user_num,
-      valid_acu: kuaishou_live_session.valid_acu,
-      play_rate: kuaishou_live_session.play_rate,
-      per_play_time_avg_text: kuaishou_live_session.per_play_time_avg_text,
-      add_fans_cnt: kuaishou_live_session.add_fans_cnt,
-      transfer_fans_rate: kuaishou_live_session.transfer_fans_rate,
-      like_cnt: kuaishou_live_session.like_cnt,
-      comment_cnt: kuaishou_live_session.comment_cnt,
-      send_gift_uv: kuaishou_live_session.send_gift_uv,
-      live_amt: kuaishou_live_session.live_amt,
-      data_source: kuaishou_live_session.data_source,
-    })
-    .from(kuaishou_live_session)
-    .where(
-      and(
-        eq(kuaishou_live_session.member_id, memberId),
-        gte(kuaishou_live_session.start_datetime, cutoff),
-      ),
-    )
-    .orderBy(desc(kuaishou_live_session.start_datetime));
+  const cutoffMs = Date.now() - daysBack * 86400_000;
+  // 用 raw SQL 把 percent 字符串列（"31.45%"）转 numeric/100 ，
+  // 同时把 schema 字段名 alias 成主表 KuaishouColKey 风格。
+  const rows = await db.execute<{
+    live_stream_id: string;
+    title: string | null;
+    cover_url: string | null;
+    start_datetime: Date;
+    end_datetime: Date | null;
+    live_duration_text: string | null;
+    data_source: string;
+    total_amt: number | null;
+    avg_acu: number | null;
+    max_peak: number | null;
+    total_add_fans: number | null;
+    total_duration_h: number | null;
+    total_play_uv: number | null;
+    total_play_user_cnt: number | null;
+    avg_play_rate: number | null;
+    avg_per_play_time_min: number | null;
+    avg_live_cover_ctr: number | null;
+    total_follow_author: number | null;
+    total_cancel_follow: number | null;
+    avg_transfer_fans_rate: number | null;
+    max_fans_club_cnt: number | null;
+    total_like_cnt: number | null;
+    total_like_uv: number | null;
+    avg_like_rate: number | null;
+    total_comment_cnt: number | null;
+    total_comment_uv: number | null;
+    avg_comment_rate: number | null;
+    total_share_cnt: number | null;
+    total_share_uv: number | null;
+    avg_share_rate: number | null;
+    total_interact_num: number | null;
+    avg_interact_rate: number | null;
+    total_send_gift_uv: number | null;
+    total_sent_gift_cnt: number | null;
+    total_live_video_amt: number | null;
+    total_live_chat_room_amt: number | null;
+    total_report_num: number | null;
+    avg_report_rate: number | null;
+  }>(sql`
+    SELECT
+      live_stream_id::text                        AS live_stream_id,
+      title, cover_url, start_datetime, end_datetime,
+      live_duration_text, data_source,
+      live_amt::float                             AS total_amt,
+      valid_acu::float                            AS avg_acu,
+      max_concurrent_user_num                     AS max_peak,
+      add_fans_cnt                                AS total_add_fans,
+      (live_duration_ms / 3600000.0)::float       AS total_duration_h,
+      play_uv                                     AS total_play_uv,
+      play_user_cnt                               AS total_play_user_cnt,
+      (NULLIF(regexp_replace(play_rate, '%$', ''), '')::numeric / 100)::float AS avg_play_rate,
+      (per_play_time_avg_ms / 60000.0)::float     AS avg_per_play_time_min,
+      (NULLIF(regexp_replace(live_cover_ctr, '%$', ''), '')::numeric / 100)::float AS avg_live_cover_ctr,
+      follow_author_num                           AS total_follow_author,
+      cancel_follow_author_num                    AS total_cancel_follow,
+      (NULLIF(regexp_replace(transfer_fans_rate, '%$', ''), '')::numeric / 100)::float AS avg_transfer_fans_rate,
+      fans_club_cnt                               AS max_fans_club_cnt,
+      like_cnt                                    AS total_like_cnt,
+      like_uv                                     AS total_like_uv,
+      (NULLIF(regexp_replace(like_rate, '%$', ''), '')::numeric / 100)::float AS avg_like_rate,
+      comment_cnt                                 AS total_comment_cnt,
+      comment_uv                                  AS total_comment_uv,
+      (NULLIF(regexp_replace(comment_rate, '%$', ''), '')::numeric / 100)::float AS avg_comment_rate,
+      share_cnt                                   AS total_share_cnt,
+      share_uv                                    AS total_share_uv,
+      (NULLIF(regexp_replace(share_rate, '%$', ''), '')::numeric / 100)::float AS avg_share_rate,
+      interact_num                                AS total_interact_num,
+      (NULLIF(regexp_replace(interact_rate, '%$', ''), '')::numeric / 100)::float AS avg_interact_rate,
+      send_gift_uv                                AS total_send_gift_uv,
+      sent_gift_cnt                               AS total_sent_gift_cnt,
+      live_video_amt::float                       AS total_live_video_amt,
+      live_chat_room_amt::float                   AS total_live_chat_room_amt,
+      report_num                                  AS total_report_num,
+      (NULLIF(regexp_replace(report_rate, '%$', ''), '')::numeric / 100)::float AS avg_report_rate
+    FROM kuaishou_live_session
+    WHERE member_id = ${memberId}
+      AND start_datetime >= to_timestamp(${cutoffMs / 1000})
+    ORDER BY start_datetime DESC
+  `);
 
   return rows.map((r) => ({
     ...r,
-    live_stream_id: String(r.live_stream_id),
+    start_datetime:
+      r.start_datetime instanceof Date ? r.start_datetime.toISOString() : String(r.start_datetime),
+    end_datetime:
+      r.end_datetime instanceof Date
+        ? r.end_datetime.toISOString()
+        : r.end_datetime == null
+          ? null
+          : String(r.end_datetime),
   }));
 }
 
