@@ -122,6 +122,28 @@ export interface KuaishouAnchorKpi {
 }
 
 /**
+ * 列同期前段（等长时间窗）的主播聚合数据 — 用于行级同比 chip。
+ * 复用 listKuaishouAnchors 的实现，把 dateFrom/dateTo 平移到前段。
+ */
+export async function listKuaishouAnchorsPrev(
+  userId: string,
+  filters: KuaishouAnchorListFilters = {},
+): Promise<KuaishouAnchorRow[]> {
+  const { startMs, endMs } = dateRangeToMs(filters);
+  const lengthMs = endMs - startMs;
+  const prevEndMs = startMs - 1;
+  const prevStartMs = prevEndMs - lengthMs;
+  const prevDateFrom = new Date(prevStartMs + 8 * 3600_000).toISOString().slice(0, 10);
+  const prevDateTo = new Date(prevEndMs + 8 * 3600_000).toISOString().slice(0, 10);
+  return listKuaishouAnchors(userId, {
+    ...filters,
+    dateFrom: prevDateFrom,
+    dateTo: prevDateTo,
+    daysBack: undefined,
+  });
+}
+
+/**
  * 主播明细列表（公会全量数据，独立于 live_account）。
  * 主播明细 = kuaishou_member 全表，按 product/search 筛选。
  *

@@ -3,6 +3,7 @@ export { listAnchors } from "./queries";
 export { getAnchorDaily } from "./daily-queries";
 export {
   listKuaishouAnchors,
+  listKuaishouAnchorsPrev,
   queryKuaishouAnchorKpi,
   listKuaishouLiveSessions,
   queryKuaishouMemberSummary,

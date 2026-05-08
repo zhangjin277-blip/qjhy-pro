@@ -6,6 +6,7 @@ import { dingtalk_user } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import {
   listKuaishouAnchors,
+  listKuaishouAnchorsPrev,
   queryKuaishouAnchorKpi,
   type KuaishouAnchorListFilters,
 } from "@/modules/anchors/server";
@@ -41,9 +42,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     dataSource: dsParam === "today" || dsParam === "history" || dsParam === "all" ? dsParam : "all",
   };
 
-  const [rows, kpi] = await Promise.all([
+  const [rows, previousRows, kpi] = await Promise.all([
     listKuaishouAnchors(dingtalkUserId, filters, isEmergency),
+    listKuaishouAnchorsPrev(dingtalkUserId, filters),
     queryKuaishouAnchorKpi(dingtalkUserId, filters, isEmergency),
   ]);
-  return NextResponse.json({ rows, kpi });
+  return NextResponse.json({ rows, previousRows, kpi });
 }
