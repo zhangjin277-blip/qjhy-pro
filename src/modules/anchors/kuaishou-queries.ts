@@ -85,15 +85,6 @@ export interface KuaishouAnchorRow {
   total_share_uv: number;
   total_interact_num: number;
   avg_interact_rate: number;
-  // today_extra - 推广（仅 today data_source 时聚合，history 全 NULL → 0）
-  total_promote_amt: number;
-  total_promote_cost: number;
-  total_promote_refund: number;
-  total_promote_watch: number;
-  total_promote_gmv: number;
-  avg_promote_roi: number;
-  total_promote_orders: number;
-  total_promote_fans_add: number;
   // today_extra - 画像 / 分级 / 状态（取最新一场 today_extra）
   fans_most_age: string | null;
   fans_male_rate: number | null;
@@ -223,14 +214,6 @@ export async function listKuaishouAnchors(
     total_live_video_amt: number;
     total_live_chat_room_amt: number;
     avg_report_rate: number;
-    total_promote_amt: number;
-    total_promote_cost: number;
-    total_promote_refund: number;
-    total_promote_watch: number;
-    total_promote_gmv: number;
-    avg_promote_roi: number;
-    total_promote_orders: number;
-    total_promote_fans_add: number;
     fans_most_age: string | null;
     fans_male_rate: number | null;
     fans_most_province: string | null;
@@ -278,14 +261,6 @@ export async function listKuaishouAnchors(
       COALESCE(s.total_live_video_amt, 0)::float        AS total_live_video_amt,
       COALESCE(s.total_live_chat_room_amt, 0)::float    AS total_live_chat_room_amt,
       COALESCE(s.avg_report_rate, 0)::float             AS avg_report_rate,
-      COALESCE(s.total_promote_amt, 0)::float           AS total_promote_amt,
-      COALESCE(s.total_promote_cost, 0)::float          AS total_promote_cost,
-      COALESCE(s.total_promote_refund, 0)::float        AS total_promote_refund,
-      COALESCE(s.total_promote_watch, 0)::int           AS total_promote_watch,
-      COALESCE(s.total_promote_gmv, 0)::float           AS total_promote_gmv,
-      COALESCE(s.avg_promote_roi, 0)::float             AS avg_promote_roi,
-      COALESCE(s.total_promote_orders, 0)::int          AS total_promote_orders,
-      COALESCE(s.total_promote_fans_add, 0)::int        AS total_promote_fans_add,
       lt.fans_most_age, lt.fans_male_rate, lt.fans_most_province,
       lt.author_type, lt.author_ratio,
       lt.has_promote, lt.has_punish, lt.settle_in_time, lt.settle_province
@@ -341,15 +316,7 @@ export async function listKuaishouAnchors(
         AVG(NULLIF(regexp_replace(interact_rate, '%$', ''), '')::numeric) / 100 AS avg_interact_rate,
         SUM(live_video_amt) AS total_live_video_amt,
         SUM(live_chat_room_amt) AS total_live_chat_room_amt,
-        AVG(NULLIF(regexp_replace(report_rate, '%$', ''), '')::numeric) / 100 AS avg_report_rate,
-        SUM(NULLIF(today_extra->>'promoteAmt','')::numeric) AS total_promote_amt,
-        SUM(NULLIF(today_extra->>'promoteCost','')::numeric) AS total_promote_cost,
-        SUM(NULLIF(today_extra->>'promoteRefund','')::numeric) AS total_promote_refund,
-        SUM(NULLIF(today_extra->>'promoteWatchCnt','')::numeric) AS total_promote_watch,
-        SUM(NULLIF(today_extra->>'promoteGmv','')::numeric) AS total_promote_gmv,
-        AVG(NULLIF(today_extra->>'promoteRoi','')::numeric) AS avg_promote_roi,
-        SUM(NULLIF(today_extra->>'promoteOrderCnt','')::numeric) AS total_promote_orders,
-        SUM(NULLIF(today_extra->>'promoteFansAdd','')::numeric) AS total_promote_fans_add
+        AVG(NULLIF(regexp_replace(report_rate, '%$', ''), '')::numeric) / 100 AS avg_report_rate
       FROM kuaishou_live_session
       WHERE start_datetime >= to_timestamp(${startMs / 1000})
         AND start_datetime <= to_timestamp(${endMs / 1000})
@@ -413,14 +380,6 @@ export async function listKuaishouAnchors(
     total_live_video_amt: Number(r.total_live_video_amt),
     total_live_chat_room_amt: Number(r.total_live_chat_room_amt),
     avg_report_rate: Number(r.avg_report_rate),
-    total_promote_amt: Number(r.total_promote_amt),
-    total_promote_cost: Number(r.total_promote_cost),
-    total_promote_refund: Number(r.total_promote_refund),
-    total_promote_watch: Number(r.total_promote_watch),
-    total_promote_gmv: Number(r.total_promote_gmv),
-    avg_promote_roi: Number(r.avg_promote_roi),
-    total_promote_orders: Number(r.total_promote_orders),
-    total_promote_fans_add: Number(r.total_promote_fans_add),
     fans_most_age: r.fans_most_age,
     fans_male_rate: r.fans_male_rate == null ? null : Number(r.fans_male_rate),
     fans_most_province: r.fans_most_province,

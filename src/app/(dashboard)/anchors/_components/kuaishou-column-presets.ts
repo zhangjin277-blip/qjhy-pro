@@ -57,15 +57,6 @@ export type KuaishouColKey =
   // 违规
   | "total_report_num"
   | "avg_report_rate"
-  // 推广
-  | "total_promote_amt"
-  | "total_promote_cost"
-  | "total_promote_refund"
-  | "total_promote_watch"
-  | "total_promote_gmv"
-  | "avg_promote_roi"
-  | "total_promote_orders"
-  | "total_promote_fans_add"
   // 画像与状态
   | "fans_most_age"
   | "fans_male_rate"
@@ -85,7 +76,6 @@ export const KS_GROUPS = [
   "互动",
   "送礼",
   "违规",
-  "推广",
   "画像与状态",
 ];
 
@@ -182,22 +172,6 @@ export const KS_COLUMNS: ColumnDef<KuaishouColKey>[] = [
   // 违规
   { key: "total_report_num", label: "举报次数", group: "违规", align: "left", fmt: "number" },
   { key: "avg_report_rate", label: "举报率", group: "违规", align: "left", fmt: "percent" },
-
-  // 推广（today_extra；history 数据源时全 0）
-  { key: "total_promote_amt", label: "推广金额", group: "推广", align: "left", fmt: "number" },
-  { key: "total_promote_cost", label: "推广消耗", group: "推广", align: "left", fmt: "number" },
-  { key: "total_promote_refund", label: "推广退款", group: "推广", align: "left", fmt: "number" },
-  { key: "total_promote_watch", label: "推广观看", group: "推广", align: "left", fmt: "number" },
-  { key: "total_promote_gmv", label: "推广 GMV", group: "推广", align: "left", fmt: "number" },
-  { key: "avg_promote_roi", label: "推广 ROI", group: "推广", align: "left", fmt: "number" },
-  { key: "total_promote_orders", label: "推广订单", group: "推广", align: "left", fmt: "number" },
-  {
-    key: "total_promote_fans_add",
-    label: "推广涨粉",
-    group: "推广",
-    align: "left",
-    fmt: "number",
-  },
 
   // 画像与状态（today_extra；取最新一场）
   {

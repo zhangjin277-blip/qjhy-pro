@@ -71,15 +71,6 @@ export interface KuaishouRow {
   total_share_uv: number;
   total_interact_num: number;
   avg_interact_rate: number;
-  // 推广（today_extra）
-  total_promote_amt: number;
-  total_promote_cost: number;
-  total_promote_refund: number;
-  total_promote_watch: number;
-  total_promote_gmv: number;
-  avg_promote_roi: number;
-  total_promote_orders: number;
-  total_promote_fans_add: number;
   // 画像/分级/状态（today_extra 最新一场）
   fans_most_age: string | null;
   fans_male_rate: number | null;
@@ -320,23 +311,6 @@ function renderKuaishouCell(col: ColumnDef<KuaishouColKey>, r: KuaishouRow): Rea
       return numCell(r.total_live_video_amt, fmtMoney);
     case "total_live_chat_room_amt":
       return numCell(r.total_live_chat_room_amt, fmtMoney);
-    // 推广
-    case "total_promote_amt":
-      return numCell(r.total_promote_amt, fmtMoney);
-    case "total_promote_cost":
-      return numCell(r.total_promote_cost, fmtMoney);
-    case "total_promote_refund":
-      return numCell(r.total_promote_refund, fmtMoney);
-    case "total_promote_watch":
-      return numCell(r.total_promote_watch);
-    case "total_promote_gmv":
-      return numCell(r.total_promote_gmv, fmtMoney);
-    case "avg_promote_roi":
-      return numCell(r.avg_promote_roi, (n) => n.toFixed(2));
-    case "total_promote_orders":
-      return numCell(r.total_promote_orders);
-    case "total_promote_fans_add":
-      return numCell(r.total_promote_fans_add);
     // 画像/分级/状态
     case "fans_most_age":
       return textNullable(r.fans_most_age);
@@ -446,15 +420,14 @@ export const kuaishouConfig: PlatformConfig<KuaishouColKey, KuaishouRow> = {
       "total_amt",
       "avg_acu",
       "max_peak",
-      "total_promote_amt",
-      "total_promote_cost",
-      "total_promote_gmv",
-      "avg_promote_roi",
-      "total_promote_fans_add",
+      "total_like_cnt",
+      "total_send_gift_uv",
+      "total_sent_gift_cnt",
       "fans_most_age",
       "fans_male_rate",
+      "fans_most_province",
       "author_type",
-      "has_promote",
+      "has_punish",
     ],
     history: [
       "agent_name",

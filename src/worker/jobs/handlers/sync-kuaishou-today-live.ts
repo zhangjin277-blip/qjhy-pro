@@ -164,14 +164,7 @@ function mapRowToValues(r: KuaishouTodayLiveRaw) {
     live_amt: r.liveAmt,
     report_num: r.punishCnt,
     today_extra: {
-      promoteAmt: r.promoteAmt,
-      promoteCost: r.promoteCost,
-      promoteRefund: r.promoteRefund,
-      promoteWatchCnt: r.promoteWatchCnt,
-      promoteGmv: r.promoteGmv,
-      promoteRoi: r.promoteRoi,
-      promoteOrderCnt: r.promoteOrderCnt,
-      promoteFansAdd: r.promoteFansAdd,
+      // 推广字段已删（业务不需要）。如需补回，从 today raw 字段抽取
       fansMostAge: r.fansMostAge,
       fansRate: r.fansRate,
       fansMaleRate: r.fansMaleRate,
