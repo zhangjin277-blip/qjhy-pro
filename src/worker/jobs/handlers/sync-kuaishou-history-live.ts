@@ -195,6 +195,19 @@ export async function syncKuaishouHistoryLiveSessionsHandler(
   }
 }
 
+/** 解析 "6分钟49秒" / "1小时23分钟45秒" → ms。无法解析返回 null。 */
+function parseDurationText(text: string | null | undefined): number | null {
+  if (!text) return null;
+  let ms = 0;
+  const h = /(\d+)小时/.exec(text);
+  const m = /(\d+)分钟?/.exec(text);
+  const s = /(\d+)秒/.exec(text);
+  if (h?.[1]) ms += Number(h[1]) * 3600_000;
+  if (m?.[1]) ms += Number(m[1]) * 60_000;
+  if (s?.[1]) ms += Number(s[1]) * 1000;
+  return ms > 0 ? ms : null;
+}
+
 /** 映射 history API 字段到 db schema 列 */
 function mapRowToValues(r: KuaishouHistoryLiveRaw) {
   const startTs = new Date(r.startDatetime.replace(" ", "T"));
@@ -222,7 +235,8 @@ function mapRowToValues(r: KuaishouHistoryLiveRaw) {
     valid_acu: r.validAcu,
     play_rate: r.playRate,
     per_play_time_avg_text: r.perPalyTimeAvg,
-    per_play_time_avg_ms: r.perPalyTimeAvgMillis || null,
+    // history API 的 perPalyTimeAvgMillis 总是 0，真实数据在 perPalyTimeAvg 字符串里 ("6分钟49秒")
+    per_play_time_avg_ms: r.perPalyTimeAvgMillis || parseDurationText(r.perPalyTimeAvg),
     valid_play_duration_avg_text: r.validPlayDurationAvg,
     live_cover_ctr: r.liveCoverCtr,
     add_fans_cnt: r.addFansCnt,
