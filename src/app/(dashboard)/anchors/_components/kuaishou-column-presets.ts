@@ -144,16 +144,16 @@ export const KS_COLUMNS: ColumnDef<KuaishouColKey>[] = [
   },
   { key: "max_fans_club_cnt", label: "粉丝团总数", group: "涨粉", align: "left", fmt: "number" },
 
-  // 互动
-  { key: "total_like_cnt", label: "点赞", group: "互动", align: "left", fmt: "number" },
+  // 互动（_cnt = 次数，是快手公会展示的字段；_uv = 人数，API 不返回，保留以防未来有）
+  { key: "total_like_cnt", label: "点赞次数", group: "互动", align: "left", fmt: "number" },
   { key: "total_like_uv", label: "点赞人数", group: "互动", align: "left", fmt: "number" },
-  { key: "avg_like_rate", label: "点赞率", group: "互动", align: "left", fmt: "percent" },
-  { key: "total_comment_cnt", label: "评论", group: "互动", align: "left", fmt: "number" },
+  { key: "avg_like_rate", label: "点赞播放比", group: "互动", align: "left", fmt: "percent" },
+  { key: "total_comment_cnt", label: "评论次数", group: "互动", align: "left", fmt: "number" },
   { key: "total_comment_uv", label: "评论人数", group: "互动", align: "left", fmt: "number" },
-  { key: "avg_comment_rate", label: "评论率", group: "互动", align: "left", fmt: "percent" },
-  { key: "total_share_cnt", label: "分享", group: "互动", align: "left", fmt: "number" },
+  { key: "avg_comment_rate", label: "评论播放比", group: "互动", align: "left", fmt: "percent" },
+  { key: "total_share_cnt", label: "分享次数", group: "互动", align: "left", fmt: "number" },
   { key: "total_share_uv", label: "分享人数", group: "互动", align: "left", fmt: "number" },
-  { key: "avg_share_rate", label: "分享率", group: "互动", align: "left", fmt: "percent" },
+  { key: "avg_share_rate", label: "分享播放比", group: "互动", align: "left", fmt: "percent" },
   { key: "total_interact_num", label: "互动总量", group: "互动", align: "left", fmt: "number" },
   { key: "avg_interact_rate", label: "互动率", group: "互动", align: "left", fmt: "percent" },
 
