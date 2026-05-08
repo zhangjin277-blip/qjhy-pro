@@ -1,10 +1,10 @@
 "use server";
 
 import { db } from "@/db/client";
-import { daily_schedule_segment } from "@/db/schema/daily-schedule";
+import { daily_schedule_day, daily_schedule_segment } from "@/db/schema/daily-schedule";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { markDirtyByAccountDate, runAttributionJob } from "@/modules/placement-attribution/server";
 import { revalidatePath } from "next/cache";
 
@@ -66,6 +66,26 @@ async function touchSchedule(account_id: string, date: string) {
   revalidatePath("/placements");
 }
 
+async function ensureDayInitialized(account_id: string, date: string, createdBy: string | null) {
+  await db
+    .insert(daily_schedule_day)
+    .values({ account_id, date, created_by: createdBy })
+    .onConflictDoNothing();
+}
+
+async function ensureManyDaysInitialized(
+  accountIds: string[],
+  date: string,
+  createdBy: string | null,
+) {
+  const uniqueAccountIds = [...new Set(accountIds)];
+  if (uniqueAccountIds.length === 0) return;
+  await db
+    .insert(daily_schedule_day)
+    .values(uniqueAccountIds.map((account_id) => ({ account_id, date, created_by: createdBy })))
+    .onConflictDoNothing();
+}
+
 async function insertSegments(input: SaveOverrideInput, createdBy: string, source = "manual") {
   if (input.time_slots.length === 0) return;
 
@@ -123,6 +143,7 @@ async function deleteSegmentBySlot(
 export async function saveTodayOverride(input: SaveOverrideInput) {
   const userId = await requireUserId();
 
+  await ensureDayInitialized(input.account_id, input.date, userId);
   await db
     .delete(daily_schedule_segment)
     .where(
@@ -146,6 +167,7 @@ export async function replaceTodaySegment(
   const nextSlot = input.time_slots[0];
   if (!nextSlot) throw new Error("MISSING_SLOT");
 
+  await ensureDayInitialized(input.account_id, input.date, userId);
   await deleteSegmentBySlot(
     input.account_id,
     input.date,
@@ -180,6 +202,7 @@ export async function resizeTodaySegment(
   const nextSlot = input.time_slots[0];
   if (!nextSlot) throw new Error("MISSING_SLOT");
 
+  await ensureDayInitialized(input.account_id, input.date, userId);
   await deleteSegmentBySlot(
     input.account_id,
     input.date,
@@ -205,6 +228,7 @@ export async function appendTodayOverrideSlot(input: SaveOverrideInput) {
   const slot = input.time_slots[0];
   if (!slot) throw new Error("MISSING_SLOT");
 
+  await ensureDayInitialized(input.account_id, input.date, userId);
   const existing = await listUserSegments(input.account_id, input.date, input.dingtalk_user_id);
   if (!existing.some((row) => sameSlot(rowSlot(row), slot))) {
     await insertSegments(input, userId);
@@ -238,6 +262,11 @@ export async function copyYesterdayOverrides(today: string) {
   if (yesterdayRows.length === 0) return { copied: 0 };
 
   await db.delete(daily_schedule_segment).where(eq(daily_schedule_segment.date, today));
+  await ensureManyDaysInitialized(
+    yesterdayRows.map((row) => row.account_id),
+    today,
+    userId,
+  );
   await db.insert(daily_schedule_segment).values(
     yesterdayRows.map((row) => ({
       account_id: row.account_id,
@@ -265,6 +294,7 @@ export async function copyYesterdayOverrides(today: string) {
 export async function replaceAccountDateSchedule(input: ScheduleSnapshotInput) {
   const userId = await requireUserId();
 
+  await ensureDayInitialized(input.account_id, input.date, userId);
   await db
     .delete(daily_schedule_segment)
     .where(
@@ -296,18 +326,33 @@ export async function replaceAccountDateSchedule(input: ScheduleSnapshotInput) {
   await touchSchedule(input.account_id, input.date);
 }
 
-export async function clearAllTodayOverrides(date: string) {
-  await requireUserId();
+export async function clearAllTodayOverrides(date: string, accountIds?: string[]) {
+  const userId = await requireUserId();
+
+  const visibleAccountIds = accountIds ? [...new Set(accountIds)] : [];
+  if (visibleAccountIds.length > 0)
+    await ensureManyDaysInitialized(visibleAccountIds, date, userId);
 
   const removed = await db
     .delete(daily_schedule_segment)
-    .where(eq(daily_schedule_segment.date, date))
+    .where(
+      visibleAccountIds.length > 0
+        ? and(
+            eq(daily_schedule_segment.date, date),
+            inArray(daily_schedule_segment.account_id, visibleAccountIds),
+          )
+        : eq(daily_schedule_segment.date, date),
+    )
     .returning();
 
-  for (const accountId of [...new Set(removed.map((row) => row.account_id))]) {
+  const affectedAccountIds =
+    visibleAccountIds.length > 0
+      ? visibleAccountIds
+      : [...new Set(removed.map((row) => row.account_id))];
+  for (const accountId of affectedAccountIds) {
     await markDirtyByAccountDate(accountId, date);
   }
-  if (removed.length > 0) await runAttributionJob({ max_rows: 500 });
+  if (affectedAccountIds.length > 0) await runAttributionJob({ max_rows: 500 });
 
   revalidatePath("/live-accounts/schedule-today");
   revalidatePath("/placements");

@@ -1,4 +1,14 @@
-import { boolean, date, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  date,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { auth_user } from "./auth";
 import { dingtalk_user } from "./dingtalk";
 import { live_account } from "./live-account";
@@ -26,5 +36,23 @@ export const daily_schedule_segment = pgTable(
   (t) => ({
     accountDateIdx: index("daily_schedule_segment_account_date_idx").on(t.account_id, t.date),
     userDateIdx: index("daily_schedule_segment_user_date_idx").on(t.dingtalk_user_id, t.date),
+  }),
+);
+
+export const daily_schedule_day = pgTable(
+  "daily_schedule_day",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    account_id: text("account_id")
+      .notNull()
+      .references(() => live_account.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    created_by: text("created_by").references(() => auth_user.id),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqAccountDate: unique("daily_schedule_day_account_date_unique").on(t.account_id, t.date),
+    accountDateIdx: index("daily_schedule_day_account_date_idx").on(t.account_id, t.date),
   }),
 );

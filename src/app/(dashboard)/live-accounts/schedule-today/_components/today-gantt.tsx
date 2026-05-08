@@ -427,9 +427,12 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
   }
 
   async function handleClearAll() {
-    if (!confirm(`清空 ${date} 所有调班记录？所有账号恢复成默认排班。`)) return;
+    if (!confirm(`清空 ${date} 当前列表所有排班？清空后会保持为空，不会自动恢复默认排班。`)) return;
     start(async () => {
-      const res = await clearAllTodayOverrides(date);
+      const res = await clearAllTodayOverrides(
+        date,
+        accounts.map((account) => account.account_id),
+      );
       router.refresh();
       alert(`已清空 ${res.cleared} 条`);
     });

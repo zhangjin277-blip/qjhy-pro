@@ -26,11 +26,12 @@ export function ManualRerun(): React.JSX.Element {
   const [bfBusy, setBfBusy] = useState(false);
   const [bfMsg, setBfMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
-  // 快手同步触发
+  // 快手同步触发（默认拉昨天）
+  const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
   const [ksBusy, setKsBusy] = useState<"members" | "history" | "today" | null>(null);
   const [ksMsg, setKsMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const [ksHistoryFrom, setKsHistoryFrom] = useState(ninetyDaysAgo);
-  const [ksHistoryTo, setKsHistoryTo] = useState(today);
+  const [ksHistoryFrom, setKsHistoryFrom] = useState(yesterday);
+  const [ksHistoryTo, setKsHistoryTo] = useState(yesterday);
 
   async function runKsSync(type: "members" | "history" | "today"): Promise<void> {
     setKsBusy(type);

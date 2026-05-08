@@ -1,6 +1,6 @@
 import { db } from "@/db/client";
 import { dingtalk_user, live_anchor } from "@/db/schema";
-import { daily_schedule_segment } from "@/db/schema/daily-schedule";
+import { daily_schedule_day, daily_schedule_segment } from "@/db/schema/daily-schedule";
 import { and, eq, inArray } from "drizzle-orm";
 import { listAccounts } from "@/modules/live-account/server";
 import { listBindings } from "@/modules/live-anchor";
@@ -25,6 +25,19 @@ function parseSlotHours(slot: [string, string]) {
   let endHour = parseHour(slot[1]);
   if (endHour <= startHour) endHour += 24;
   return { startHour, endHour };
+}
+
+interface DayRow {
+  id: string;
+  account_id: string;
+  date: string;
+  dingtalk_user_id: string;
+  anchor_name: string | null;
+  start_hour: number;
+  end_hour: number;
+  is_rest: boolean;
+  source: string;
+  reason: string | null;
 }
 
 export default async function ScheduleTodayPage({
@@ -53,38 +66,56 @@ export default async function ScheduleTodayPage({
   ]);
 
   const accountIds = accounts.map((account) => account.id);
-  let dayRows =
-    accountIds.length > 0
-      ? await db
-          .select({
-            id: daily_schedule_segment.id,
-            account_id: daily_schedule_segment.account_id,
-            date: daily_schedule_segment.date,
-            dingtalk_user_id: daily_schedule_segment.dingtalk_user_id,
-            anchor_name: dingtalk_user.name,
-            start_hour: daily_schedule_segment.start_hour,
-            end_hour: daily_schedule_segment.end_hour,
-            is_rest: daily_schedule_segment.is_rest,
-            source: daily_schedule_segment.source,
-            reason: daily_schedule_segment.reason,
-          })
-          .from(daily_schedule_segment)
-          .leftJoin(
-            dingtalk_user,
-            eq(daily_schedule_segment.dingtalk_user_id, dingtalk_user.user_id),
-          )
-          .where(
-            and(
-              eq(daily_schedule_segment.date, date),
-              inArray(daily_schedule_segment.account_id, accountIds),
-            ),
-          )
-      : [];
+  let dayRows: DayRow[] = [];
+  let initializedRows: { account_id: string }[] = [];
+  if (accountIds.length > 0) {
+    [dayRows, initializedRows] = await Promise.all([
+      db
+        .select({
+          id: daily_schedule_segment.id,
+          account_id: daily_schedule_segment.account_id,
+          date: daily_schedule_segment.date,
+          dingtalk_user_id: daily_schedule_segment.dingtalk_user_id,
+          anchor_name: dingtalk_user.name,
+          start_hour: daily_schedule_segment.start_hour,
+          end_hour: daily_schedule_segment.end_hour,
+          is_rest: daily_schedule_segment.is_rest,
+          source: daily_schedule_segment.source,
+          reason: daily_schedule_segment.reason,
+        })
+        .from(daily_schedule_segment)
+        .leftJoin(dingtalk_user, eq(daily_schedule_segment.dingtalk_user_id, dingtalk_user.user_id))
+        .where(
+          and(
+            eq(daily_schedule_segment.date, date),
+            inArray(daily_schedule_segment.account_id, accountIds),
+          ),
+        ),
+      db
+        .select({ account_id: daily_schedule_day.account_id })
+        .from(daily_schedule_day)
+        .where(
+          and(
+            eq(daily_schedule_day.date, date),
+            inArray(daily_schedule_day.account_id, accountIds),
+          ),
+        ),
+    ]);
+  }
 
-  const initializedAccountIds = new Set(dayRows.map((row) => row.account_id));
+  const stateAccountIds = new Set(initializedRows.map((row) => row.account_id));
+  const segmentAccountIds = new Set(dayRows.map((row) => row.account_id));
+  const stateRows = [];
   const seedRows = [];
   for (const acc of accounts) {
-    if (initializedAccountIds.has(acc.id)) continue;
+    if (!stateAccountIds.has(acc.id)) {
+      stateRows.push({
+        account_id: acc.id,
+        date,
+        created_by: null,
+      });
+    }
+    if (stateAccountIds.has(acc.id) || segmentAccountIds.has(acc.id)) continue;
     const accBindings = allBindings.filter((binding) => binding.account_id === acc.id);
     for (const binding of accBindings) {
       const restDays = (binding.rest_days as number[] | null) ?? [];
@@ -105,6 +136,10 @@ export default async function ScheduleTodayPage({
         });
       }
     }
+  }
+
+  if (stateRows.length > 0) {
+    await db.insert(daily_schedule_day).values(stateRows).onConflictDoNothing();
   }
 
   if (seedRows.length > 0) {
