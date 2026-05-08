@@ -28,9 +28,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const sp = req.nextUrl.searchParams;
+  const daysParam = sp.get("days");
+  const days = daysParam ? Math.min(Math.max(Number(daysParam), 1), 365) : 7;
   const filters: KuaishouAnchorListFilters = {
     product: sp.get("product") ?? "all",
     search: sp.get("search") ?? undefined,
+    daysBack: days,
   };
 
   const [rows, kpi] = await Promise.all([
