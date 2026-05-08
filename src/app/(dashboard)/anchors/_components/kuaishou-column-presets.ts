@@ -55,7 +55,14 @@ export type KuaishouColKey =
   | "has_promote"
   | "has_punish"
   | "settle_in_time"
-  | "settle_province";
+  | "settle_province"
+  // 投放数据（按 user_id → live_account.platform_account_id → placement_row 聚合，没合并 stub 的全 0）
+  | "total_cost"
+  | "total_activations"
+  | "cpa" // client 算: cost / activations
+  | "total_payment"
+  | "arpu" // client 算: payment / activations
+  | "roi"; // client 算: payment / cost
 
 export const KS_GROUPS = [
   "公会信息",
@@ -64,6 +71,7 @@ export const KS_GROUPS = [
   "涨粉",
   "互动",
   "送礼",
+  "投放数据",
   "违规",
   "画像与状态",
 ];
@@ -141,6 +149,14 @@ export const KS_COLUMNS: ColumnDef<KuaishouColKey>[] = [
 
   // 送礼（API 不返回 sent_gift_cnt / live_video_amt / live_chat_room_amt）
   { key: "total_send_gift_uv", label: "送礼人数", group: "送礼", align: "left", fmt: "number" },
+
+  // 投放数据（按 user_id → live_account → placement_row 聚合）
+  { key: "total_cost", label: "消耗", group: "投放数据", align: "left", fmt: "number" },
+  { key: "total_activations", label: "激活数", group: "投放数据", align: "left", fmt: "number" },
+  { key: "cpa", label: "激活单价", group: "投放数据", align: "left", fmt: "number" },
+  { key: "total_payment", label: "付费金额", group: "投放数据", align: "left", fmt: "number" },
+  { key: "arpu", label: "ARPU", group: "投放数据", align: "left", fmt: "number" },
+  { key: "roi", label: "ROI", group: "投放数据", align: "left", fmt: "number" },
 
   // 违规
   { key: "total_report_num", label: "举报次数", group: "违规", align: "left", fmt: "number" },

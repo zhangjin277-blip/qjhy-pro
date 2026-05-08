@@ -81,6 +81,10 @@ export interface KuaishouRow {
   has_punish: boolean | null;
   settle_in_time: number | null;
   settle_province: string | null;
+  // 投放数据（按 user_id → live_account → placement_row 聚合）
+  total_cost: number;
+  total_activations: number;
+  total_payment: number;
 }
 
 interface KuaishouServerKpi {
@@ -289,6 +293,23 @@ function renderKuaishouCell(col: ColumnDef<KuaishouColKey>, r: KuaishouRow): Rea
       return r.total_report_num > 0 ? r.total_report_num : muted();
     case "avg_share_rate":
       return numCell(r.avg_share_rate, (n) => `${(n * 100).toFixed(2)}%`);
+    // 投放数据
+    case "total_cost":
+      return r.total_cost > 0 ? fmtMoney(r.total_cost) : muted();
+    case "total_activations":
+      return r.total_activations > 0 ? fmtChinese(r.total_activations) : muted();
+    case "cpa":
+      return r.total_activations > 0
+        ? `¥${(r.total_cost / r.total_activations).toFixed(2)}`
+        : muted();
+    case "total_payment":
+      return r.total_payment > 0 ? fmtMoney(r.total_payment) : muted();
+    case "arpu":
+      return r.total_activations > 0
+        ? `¥${(r.total_payment / r.total_activations).toFixed(2)}`
+        : muted();
+    case "roi":
+      return r.total_cost > 0 ? (r.total_payment / r.total_cost).toFixed(3) : muted();
     // 画像/分级/状态
     case "fans_most_age":
       return textNullable(r.fans_most_age);
