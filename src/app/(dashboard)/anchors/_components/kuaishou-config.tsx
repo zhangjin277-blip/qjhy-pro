@@ -95,9 +95,17 @@ interface KuaishouServerKpi {
   totalSessions: number;
   totalAmt: number;
   totalAddFans: number;
+  totalCost: number;
+  totalActivations: number;
+  totalPlayUv: number;
+  totalDurationH: number;
   prevTotalSessions: number;
   prevTotalAmt: number;
   prevTotalAddFans: number;
+  prevTotalCost: number;
+  prevTotalActivations: number;
+  prevTotalPlayUv: number;
+  prevTotalDurationH: number;
 }
 
 const PRODUCT_OPTIONS = [
@@ -380,31 +388,44 @@ export const kuaishouConfig: PlatformConfig<KuaishouColKey, KuaishouRow> = {
   kpiMode: "server",
   buildKpiItems(raw): KpiItemSpec[] {
     const k = raw as unknown as KuaishouServerKpi;
+    const cpa = k.totalActivations > 0 ? k.totalCost / k.totalActivations : 0;
+    const prevCpa = k.prevTotalActivations > 0 ? k.prevTotalCost / k.prevTotalActivations : 0;
     return [
-      { key: "total", label: "账号总数", value: k.total.toLocaleString() },
-      { key: "withAgent", label: "已分配经纪人", value: k.withAgent.toLocaleString() },
-      {
-        key: "totalSessions",
-        label: "本期场次",
-        value: k.totalSessions.toLocaleString(),
-        footer: <DeltaPill cur={k.totalSessions} prev={k.prevTotalSessions} />,
-      },
       {
         key: "totalAmt",
-        label: "本期流水",
+        label: "流水",
         value: fmtMoney(k.totalAmt),
         footer: <DeltaPill cur={k.totalAmt} prev={k.prevTotalAmt} />,
       },
       {
-        key: "totalAddFans",
-        label: "本期涨粉",
-        value: fmtChinese(k.totalAddFans),
-        footer: <DeltaPill cur={k.totalAddFans} prev={k.prevTotalAddFans} />,
+        key: "totalCost",
+        label: "消耗",
+        value: fmtMoney(k.totalCost),
+        footer: <DeltaPill cur={k.totalCost} prev={k.prevTotalCost} />,
       },
       {
-        key: "expiring",
-        label: "合约 90 天内到期",
-        value: k.contractExpiringIn90Days.toLocaleString(),
+        key: "totalActivations",
+        label: "激活数",
+        value: fmtChinese(k.totalActivations),
+        footer: <DeltaPill cur={k.totalActivations} prev={k.prevTotalActivations} />,
+      },
+      {
+        key: "cpa",
+        label: "激活单价",
+        value: cpa > 0 ? `¥${cpa.toFixed(2)}` : "-",
+        footer: <DeltaPill cur={cpa} prev={prevCpa} />,
+      },
+      {
+        key: "totalPlayUv",
+        label: "有效观看人数",
+        value: fmtChinese(k.totalPlayUv),
+        footer: <DeltaPill cur={k.totalPlayUv} prev={k.prevTotalPlayUv} />,
+      },
+      {
+        key: "totalDurationH",
+        label: "总直播时长",
+        value: k.totalDurationH > 0 ? `${k.totalDurationH.toFixed(1)}h` : "-",
+        footer: <DeltaPill cur={k.totalDurationH} prev={k.prevTotalDurationH} />,
       },
     ];
   },

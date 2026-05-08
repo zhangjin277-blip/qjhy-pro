@@ -110,10 +110,18 @@ export interface KuaishouAnchorKpi {
   totalSessions: number;
   totalAmt: number;
   totalAddFans: number;
+  totalCost: number;
+  totalActivations: number;
+  totalPlayUv: number;
+  totalDurationH: number;
   // 同期对比（前同长度时间段）
   prevTotalSessions: number;
   prevTotalAmt: number;
   prevTotalAddFans: number;
+  prevTotalCost: number;
+  prevTotalActivations: number;
+  prevTotalPlayUv: number;
+  prevTotalDurationH: number;
 }
 
 /**
@@ -438,6 +446,10 @@ export async function queryKuaishouAnchorKpi(
   let totalSessions = 0;
   let totalAmt = 0;
   let totalAddFans = 0;
+  let totalCost = 0;
+  let totalActivations = 0;
+  let totalPlayUv = 0;
+  let totalDurationH = 0;
   for (const r of rows) {
     if (r.agent_dingtalk_user_id) withAgent++;
     if (r.contract_expire_at) {
@@ -453,6 +465,10 @@ export async function queryKuaishouAnchorKpi(
     totalSessions += r.session_count;
     totalAmt += r.total_amt;
     totalAddFans += r.total_add_fans;
+    totalCost += r.total_cost;
+    totalActivations += r.total_activations;
+    totalPlayUv += r.total_play_uv;
+    totalDurationH += r.total_duration_h;
   }
 
   // 前同期：再查一次按等长前段时间窗的聚合
@@ -464,16 +480,36 @@ export async function queryKuaishouAnchorKpi(
     sessions: number;
     amt: number;
     add_fans: number;
+    play_uv: number;
+    duration_ms: number;
   }>(sql`
     SELECT
       COALESCE(COUNT(*), 0)::int AS sessions,
       COALESCE(SUM(live_amt), 0)::float AS amt,
-      COALESCE(SUM(add_fans_cnt), 0)::int AS add_fans
+      COALESCE(SUM(add_fans_cnt), 0)::int AS add_fans,
+      COALESCE(SUM(play_uv), 0)::int AS play_uv,
+      COALESCE(SUM(live_duration_ms), 0)::float AS duration_ms
     FROM kuaishou_live_session
     WHERE start_datetime >= to_timestamp(${prevStartMs / 1000})
       AND start_datetime <= to_timestamp(${prevEndMs / 1000})
   `);
-  const prev = prevResult[0] ?? { sessions: 0, amt: 0, add_fans: 0 };
+  const prev = prevResult[0] ?? { sessions: 0, amt: 0, add_fans: 0, play_uv: 0, duration_ms: 0 };
+
+  // 前同期投放
+  const prevDateFrom = new Date(prevStartMs).toISOString().slice(0, 10);
+  const prevDateTo = new Date(prevEndMs).toISOString().slice(0, 10);
+  const prevPlacement = await db.execute<{ cost: number; activations: number }>(sql`
+    SELECT
+      COALESCE(SUM(pr.cost_yuan), 0)::float AS cost,
+      COALESCE(SUM(pr.activations), 0)::int AS activations
+    FROM live_account la
+    JOIN placement_row pr ON pr.live_account_id = la.id
+    WHERE la.platform = '快手'
+      AND la.platform_account_id IS NOT NULL
+      AND pr.date >= ${prevDateFrom}::date
+      AND pr.date <= ${prevDateTo}::date
+  `);
+  const prevPl = prevPlacement[0] ?? { cost: 0, activations: 0 };
 
   return {
     total: rows.length,
@@ -483,9 +519,17 @@ export async function queryKuaishouAnchorKpi(
     totalSessions,
     totalAmt,
     totalAddFans,
+    totalCost,
+    totalActivations,
+    totalPlayUv,
+    totalDurationH,
     prevTotalSessions: Number(prev.sessions),
     prevTotalAmt: Number(prev.amt),
     prevTotalAddFans: Number(prev.add_fans),
+    prevTotalCost: Number(prevPl.cost),
+    prevTotalActivations: Number(prevPl.activations),
+    prevTotalPlayUv: Number(prev.play_uv),
+    prevTotalDurationH: Number(prev.duration_ms) / 3600_000,
   };
 }
 
