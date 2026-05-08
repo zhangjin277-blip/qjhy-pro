@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Pencil, Check, X } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -16,6 +19,99 @@ import { PresetChip, PresetToolbar } from "@/components/patterns/preset-toolbar"
 import { cn } from "@/lib/utils/cn";
 import type { ColumnDef } from "./column-presets";
 import type { KuaishouColKey } from "./kuaishou-column-presets";
+
+const PRODUCT_OPTIONS = [
+  "捕鱼大作战",
+  "途游休闲捕鱼",
+  "电玩捕鱼",
+  "三国冰河时代",
+  "迷游斗地主",
+  "富豪麻将",
+];
+
+function ProductEditor({
+  memberId,
+  currentProduct,
+}: {
+  memberId: string;
+  currentProduct: string;
+}): React.JSX.Element {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(currentProduct);
+  const [saving, setSaving] = useState(false);
+
+  async function save(): Promise<void> {
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/anchors-kuaishou/${encodeURIComponent(memberId)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ manual_product: value === "未分类" ? null : value }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      toast.success("项目分类已更新");
+      setEditing(false);
+      router.refresh();
+    } catch (e) {
+      toast.error("更新失败：" + (e instanceof Error ? e.message : "未知"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span>{currentProduct}</span>
+        <button
+          type="button"
+          onClick={() => {
+            setValue(currentProduct);
+            setEditing(true);
+          }}
+          className="text-slate-400 hover:text-slate-700"
+          title="编辑项目分类"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <select
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="h-6 rounded border border-slate-300 bg-white px-1 text-[11px]"
+        disabled={saving}
+      >
+        <option value="未分类">未分类</option>
+        {PRODUCT_OPTIONS.map((p) => (
+          <option key={p} value={p}>
+            {p}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={save}
+        disabled={saving}
+        className="text-green-600 hover:text-green-700"
+      >
+        <Check className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setEditing(false)}
+        disabled={saving}
+        className="text-slate-400 hover:text-slate-700"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </span>
+  );
+}
 
 export interface KuaishouAnchorRow {
   id: string;
@@ -191,7 +287,10 @@ export function KuaishouAnchorDetailDrawer({
                     <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[11px] font-medium text-orange-700">
                       快手
                     </span>
-                    <span>{anchor.product}</span>
+                    <ProductEditor
+                      memberId={anchor.platform_account_id ?? anchor.id}
+                      currentProduct={anchor.product}
+                    />
                     {anchor.platform_account_id && (
                       <span className="tabular-nums">ID {anchor.platform_account_id}</span>
                     )}

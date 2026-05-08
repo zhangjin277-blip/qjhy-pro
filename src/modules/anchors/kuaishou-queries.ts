@@ -151,14 +151,18 @@ export async function listKuaishouAnchors(
 ): Promise<KuaishouAnchorRow[]> {
   const { startMs, endMs } = dateRangeToMs(filters);
   const dataSource = filters.dataSource ?? "all";
+  // 投放数据用 CST 日期窗口（placement_row.date 是 DATE 类型）
+  const placementDateFrom = filters.dateFrom ?? new Date(startMs).toISOString().slice(0, 10);
+  const placementDateTo = filters.dateTo ?? new Date(endMs).toISOString().slice(0, 10);
 
   // 用 m. 引用 alias，不能用 drizzle 表对象（会渲染成 "kuaishou_member"."xxx" 跟 alias 冲突）
   const conds: SQL[] = [];
   if (filters.product && filters.product !== "all") {
+    // effective product: manual_product 优先于 inferred_product
     if (filters.product === "未分类") {
-      conds.push(sql`m.inferred_product IS NULL`);
+      conds.push(sql`COALESCE(m.manual_product, m.inferred_product) IS NULL`);
     } else {
-      conds.push(sql`m.inferred_product = ${filters.product}`);
+      conds.push(sql`COALESCE(m.manual_product, m.inferred_product) = ${filters.product}`);
     }
   }
   if (filters.search) {
@@ -226,11 +230,15 @@ export async function listKuaishouAnchors(
     has_punish: boolean | null;
     settle_in_time: number | null;
     settle_province: string | null;
+    total_cost: number;
+    total_activations: number;
+    total_payment: number;
   }>(sql`
     SELECT
       m.user_id, m.member_name, m.avatar, m.fans_count, m.broker_name_raw,
       m.agent_dingtalk_user_id, du.name AS agent_name,
-      m.inferred_product, m.joined_at, m.contract_expire_at, m.renewal_status,
+      COALESCE(m.manual_product, m.inferred_product) AS inferred_product,
+      m.joined_at, m.contract_expire_at, m.renewal_status,
       m.living_url, m.updated_at,
       COALESCE(s.session_count, 0)::int                 AS session_count,
       COALESCE(s.total_amt, 0)::float                   AS total_amt,
@@ -332,6 +340,20 @@ export async function listKuaishouAnchors(
         }
       GROUP BY member_id
     ) s ON s.member_id = m.user_id
+    LEFT JOIN (
+      SELECT
+        la.platform_account_id AS member_id,
+        SUM(pr.cost_yuan)::float        AS total_cost,
+        SUM(pr.activations)::int        AS total_activations,
+        SUM(pr.payment_yuan)::float     AS total_payment
+      FROM live_account la
+      JOIN placement_row pr ON pr.live_account_id = la.id
+      WHERE la.platform = '快手'
+        AND la.platform_account_id IS NOT NULL
+        AND pr.date >= ${placementDateFrom}::date
+        AND pr.date <= ${placementDateTo}::date
+      GROUP BY la.platform_account_id
+    ) pl ON pl.member_id = m.user_id
     ${where ? sql`WHERE ${where}` : sql``}
     ORDER BY m.fans_count DESC NULLS LAST
   `);

@@ -23,6 +23,7 @@ export const kuaishou_member = pgTable(
     agent_dingtalk_user_id: text("agent_dingtalk_user_id").references(() => dingtalk_user.user_id), // 反查到的钉钉用户
 
     inferred_product: text("inferred_product"), // 按昵称正则推断的产品（捕鱼大作战 / 途游休闲捕鱼 / 电玩捕鱼 / null）
+    manual_product: text("manual_product"), // 用户手动覆盖项目分类（优先于 inferred_product），sync 不会覆盖
     content_category: text("content_category"), // 公会侧内容分类（游戏/财经/颜值…）
 
     joined_at: date("joined_at"),
