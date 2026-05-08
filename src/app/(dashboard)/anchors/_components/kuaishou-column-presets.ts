@@ -44,11 +44,8 @@ export type KuaishouColKey =
   | "avg_comment_rate"
   | "total_share_cnt"
   | "avg_share_rate"
-  // 送礼
+  // 送礼（API 不返回 sent_gift_cnt / live_video_amt / live_chat_room_amt，已移除）
   | "total_send_gift_uv"
-  | "total_sent_gift_cnt"
-  | "total_live_video_amt"
-  | "total_live_chat_room_amt"
   // 违规
   | "total_report_num"
   | "avg_report_rate"
@@ -147,17 +144,8 @@ export const KS_COLUMNS: ColumnDef<KuaishouColKey>[] = [
   { key: "total_share_cnt", label: "分享次数", group: "互动", align: "left", fmt: "number" },
   { key: "avg_share_rate", label: "分享播放比", group: "互动", align: "left", fmt: "percent" },
 
-  // 送礼
+  // 送礼（API 不返回 sent_gift_cnt / live_video_amt / live_chat_room_amt）
   { key: "total_send_gift_uv", label: "送礼人数", group: "送礼", align: "left", fmt: "number" },
-  { key: "total_sent_gift_cnt", label: "送礼次数", group: "送礼", align: "left", fmt: "number" },
-  { key: "total_live_video_amt", label: "竖屏流水", group: "送礼", align: "left", fmt: "number" },
-  {
-    key: "total_live_chat_room_amt",
-    label: "聊天室流水",
-    group: "送礼",
-    align: "left",
-    fmt: "number",
-  },
 
   // 违规
   { key: "total_report_num", label: "举报次数", group: "违规", align: "left", fmt: "number" },

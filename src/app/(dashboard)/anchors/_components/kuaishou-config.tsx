@@ -285,8 +285,6 @@ function renderKuaishouCell(col: ColumnDef<KuaishouColKey>, r: KuaishouRow): Rea
       return r.total_share_cnt > 0 ? fmtChinese(r.total_share_cnt) : muted();
     case "total_send_gift_uv":
       return r.total_send_gift_uv > 0 ? fmtChinese(r.total_send_gift_uv) : muted();
-    case "total_sent_gift_cnt":
-      return r.total_sent_gift_cnt > 0 ? fmtChinese(r.total_sent_gift_cnt) : muted();
     case "total_report_num":
       return r.total_report_num > 0 ? r.total_report_num : muted();
     case "avg_report_rate":
@@ -297,10 +295,6 @@ function renderKuaishouCell(col: ColumnDef<KuaishouColKey>, r: KuaishouRow): Rea
       return numCell(r.max_fans_club_cnt);
     case "avg_share_rate":
       return numCell(r.avg_share_rate, (n) => `${(n * 100).toFixed(2)}%`);
-    case "total_live_video_amt":
-      return numCell(r.total_live_video_amt, fmtMoney);
-    case "total_live_chat_room_amt":
-      return numCell(r.total_live_chat_room_amt, fmtMoney);
     // 画像/分级/状态
     case "fans_most_age":
       return textNullable(r.fans_most_age);
@@ -413,7 +407,6 @@ export const kuaishouConfig: PlatformConfig<KuaishouColKey, KuaishouRow> = {
       "max_peak",
       "total_like_cnt",
       "total_send_gift_uv",
-      "total_sent_gift_cnt",
       "fans_most_age",
       "fans_male_rate",
       "fans_most_province",
@@ -437,7 +430,6 @@ export const kuaishouConfig: PlatformConfig<KuaishouColKey, KuaishouRow> = {
       "total_like_cnt",
       "avg_like_rate",
       "total_send_gift_uv",
-      "total_sent_gift_cnt",
     ],
   },
 
