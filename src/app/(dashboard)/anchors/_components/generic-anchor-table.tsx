@@ -137,11 +137,11 @@ export function GenericAnchorTable<TKey extends string, TRow>({
   // ── 用户预设加载（仅 userPresetsEnabled） ─────────────────────────────────
   useEffect(() => {
     if (!config.userPresetsEnabled) return;
-    fetch("/api/column-presets")
+    fetch(`/api/column-presets?platform=${config.id}`)
       .then((r) => r.json() as Promise<{ presets: UserColumnPreset[] }>)
       .then((d) => setUserPresets(d.presets ?? []))
       .catch(() => setUserPresets([]));
-  }, [config.userPresetsEnabled]);
+  }, [config.userPresetsEnabled, config.id]);
 
   // ── 数据 fetch + URL 同步 ────────────────────────────────────────────────
   useEffect(() => {
@@ -359,7 +359,12 @@ export function GenericAnchorTable<TKey extends string, TRow>({
     setActiveUserPresetId(p.id);
     setActivePresetId("custom");
     setVisibleKeys(p.columns as TKey[]);
-    setFilters((f) => ({ ...f, project: p.project ?? "all" }));
+    // 抖音用 project 字段；快手用 product 字段（保存时混存于同 project 列）
+    setFilters((f) =>
+      config.id === "kuaishou"
+        ? { ...f, product: p.project ?? "all" }
+        : { ...f, project: p.project ?? "all" },
+    );
   }
 
   async function saveAsNewPreset(columns?: TKey[]): Promise<void> {
@@ -372,7 +377,12 @@ export function GenericAnchorTable<TKey extends string, TRow>({
     const res = await fetch("/api/column-presets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, columns: cols, project: filters.project ?? "all" }),
+      body: JSON.stringify({
+        platform: config.id,
+        name,
+        columns: cols,
+        project: filters.project ?? filters.product ?? "all",
+      }),
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { error?: string };
@@ -393,7 +403,10 @@ export function GenericAnchorTable<TKey extends string, TRow>({
     const res = await fetch(`/api/column-presets/${activeUserPresetId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ columns: cols, project: filters.project ?? "all" }),
+      body: JSON.stringify({
+        columns: cols,
+        project: filters.project ?? filters.product ?? "all",
+      }),
     });
     if (!res.ok) {
       toast.error("更新失败");

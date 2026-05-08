@@ -354,7 +354,7 @@ export const kuaishouConfig: PlatformConfig<KuaishouColKey, KuaishouRow> = {
   defaultSystemPresetId: "all",
   systemPresetLabel: "项目:",
 
-  userPresetsEnabled: false,
+  userPresetsEnabled: true,
 
   kpiMode: "server",
   buildKpiItems(raw): KpiItemSpec[] {

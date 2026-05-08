@@ -4,8 +4,12 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db/client";
 import { dingtalk_user } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { SavePresetSchema } from "@/modules/column-presets";
+import { SavePresetSchema, type PresetPlatform } from "@/modules/column-presets";
 import { listUserPresets, createUserPreset } from "@/modules/column-presets/server";
+
+function parsePlatform(v: string | null): PresetPlatform {
+  return v === "kuaishou" ? "kuaishou" : "douyin";
+}
 
 async function resolveUserId(): Promise<string | NextResponse> {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -20,10 +24,11 @@ async function resolveUserId(): Promise<string | NextResponse> {
   return du.user_id;
 }
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   const userId = await resolveUserId();
   if (typeof userId !== "string") return userId;
-  const presets = await listUserPresets(userId);
+  const platform = parsePlatform(req.nextUrl.searchParams.get("platform"));
+  const presets = await listUserPresets(userId, platform);
   return NextResponse.json({ presets });
 }
 
@@ -41,6 +46,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const preset = await createUserPreset(
       userId,
+      parsed.data.platform,
       parsed.data.name,
       parsed.data.columns,
       parsed.data.project,
@@ -48,7 +54,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ preset });
   } catch (e) {
     const msg = (e as Error).message;
-    if (msg.includes("uq_user_column_preset_user_name")) {
+    if (msg.includes("uq_user_column_preset_user_platform_name")) {
       return NextResponse.json({ error: "NAME_EXISTS" }, { status: 409 });
     }
     return NextResponse.json({ error: "DB_ERROR", detail: msg }, { status: 500 });
