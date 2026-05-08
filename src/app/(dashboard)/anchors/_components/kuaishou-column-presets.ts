@@ -37,18 +37,13 @@ export type KuaishouColKey =
   | "total_cancel_follow"
   | "avg_transfer_fans_rate"
   | "max_fans_club_cnt"
-  // 互动
+  // 互动（公会后台只有"次数"和"播放比"，无"人数"和"互动总量"，API 单场粒度也不返回 _uv/interact）
   | "total_like_cnt"
-  | "total_like_uv"
   | "avg_like_rate"
   | "total_comment_cnt"
-  | "total_comment_uv"
   | "avg_comment_rate"
   | "total_share_cnt"
-  | "total_share_uv"
   | "avg_share_rate"
-  | "total_interact_num"
-  | "avg_interact_rate"
   // 送礼
   | "total_send_gift_uv"
   | "total_sent_gift_cnt"
@@ -144,18 +139,13 @@ export const KS_COLUMNS: ColumnDef<KuaishouColKey>[] = [
   },
   { key: "max_fans_club_cnt", label: "粉丝团总数", group: "涨粉", align: "left", fmt: "number" },
 
-  // 互动（_cnt = 次数，是快手公会展示的字段；_uv = 人数，API 不返回，保留以防未来有）
+  // 互动（公会后台只有"次数"和"播放比"，无"人数"和"互动总量"）
   { key: "total_like_cnt", label: "点赞次数", group: "互动", align: "left", fmt: "number" },
-  { key: "total_like_uv", label: "点赞人数", group: "互动", align: "left", fmt: "number" },
   { key: "avg_like_rate", label: "点赞播放比", group: "互动", align: "left", fmt: "percent" },
   { key: "total_comment_cnt", label: "评论次数", group: "互动", align: "left", fmt: "number" },
-  { key: "total_comment_uv", label: "评论人数", group: "互动", align: "left", fmt: "number" },
   { key: "avg_comment_rate", label: "评论播放比", group: "互动", align: "left", fmt: "percent" },
   { key: "total_share_cnt", label: "分享次数", group: "互动", align: "left", fmt: "number" },
-  { key: "total_share_uv", label: "分享人数", group: "互动", align: "left", fmt: "number" },
   { key: "avg_share_rate", label: "分享播放比", group: "互动", align: "left", fmt: "percent" },
-  { key: "total_interact_num", label: "互动总量", group: "互动", align: "left", fmt: "number" },
-  { key: "avg_interact_rate", label: "互动率", group: "互动", align: "left", fmt: "percent" },
 
   // 送礼
   { key: "total_send_gift_uv", label: "送礼人数", group: "送礼", align: "left", fmt: "number" },

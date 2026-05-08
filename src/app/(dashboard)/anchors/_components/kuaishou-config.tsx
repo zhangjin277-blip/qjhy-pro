@@ -295,18 +295,8 @@ function renderKuaishouCell(col: ColumnDef<KuaishouColKey>, r: KuaishouRow): Rea
       return numCell(r.avg_live_cover_ctr, (n) => `${(n * 100).toFixed(2)}%`);
     case "max_fans_club_cnt":
       return numCell(r.max_fans_club_cnt);
-    case "total_like_uv":
-      return numCell(r.total_like_uv);
-    case "total_comment_uv":
-      return numCell(r.total_comment_uv);
     case "avg_share_rate":
       return numCell(r.avg_share_rate, (n) => `${(n * 100).toFixed(2)}%`);
-    case "total_share_uv":
-      return numCell(r.total_share_uv);
-    case "total_interact_num":
-      return numCell(r.total_interact_num);
-    case "avg_interact_rate":
-      return numCell(r.avg_interact_rate, (n) => `${(n * 100).toFixed(2)}%`);
     case "total_live_video_amt":
       return numCell(r.total_live_video_amt, fmtMoney);
     case "total_live_chat_room_amt":
