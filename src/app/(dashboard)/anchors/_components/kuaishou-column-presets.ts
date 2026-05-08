@@ -48,7 +48,6 @@ export type KuaishouColKey =
   | "avg_report_rate"
   // 流量 - 补
   | "avg_live_cover_ctr"
-  | "avg_valid_play_duration_min"
   // 涨粉 - 补
   | "max_fans_club_cnt"
   // 互动 - 补
@@ -137,13 +136,6 @@ export const KS_COLUMNS: ColumnDef<KuaishouColKey>[] = [
   {
     key: "avg_per_play_time_min",
     label: "平均观看时长",
-    group: "流量",
-    align: "right",
-    fmt: "duration",
-  },
-  {
-    key: "avg_valid_play_duration_min",
-    label: "有效观看时长",
     group: "流量",
     align: "right",
     fmt: "duration",

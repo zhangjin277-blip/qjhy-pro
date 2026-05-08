@@ -62,7 +62,6 @@ export interface KuaishouRow {
   avg_report_rate: number;
   // 流量补
   avg_live_cover_ctr: number;
-  avg_valid_play_duration_min: number;
   // 涨粉补
   max_fans_club_cnt: number;
   // 互动补
@@ -303,8 +302,6 @@ function renderKuaishouCell(col: ColumnDef<KuaishouColKey>, r: KuaishouRow): Rea
       return numCell(r.avg_report_rate, (n) => `${(n * 100).toFixed(2)}%`);
     case "avg_live_cover_ctr":
       return numCell(r.avg_live_cover_ctr, (n) => `${(n * 100).toFixed(2)}%`);
-    case "avg_valid_play_duration_min":
-      return numCell(r.avg_valid_play_duration_min, (n) => `${n.toFixed(1)}分`);
     case "max_fans_club_cnt":
       return numCell(r.max_fans_club_cnt);
     case "total_like_uv":

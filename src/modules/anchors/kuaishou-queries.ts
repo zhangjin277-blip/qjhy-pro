@@ -76,7 +76,6 @@ export interface KuaishouAnchorRow {
   avg_report_rate: number;
   // 流量 - 补
   avg_live_cover_ctr: number;
-  avg_valid_play_duration_min: number;
   // 涨粉 - 补
   max_fans_club_cnt: number;
   // 互动 - 补
@@ -192,7 +191,6 @@ export async function listKuaishouAnchors(
     total_sent_gift_cnt: number;
     total_report_num: number;
     avg_live_cover_ctr: number;
-    avg_valid_play_duration_ms: number;
     max_fans_club_cnt: number;
     total_like_uv: number;
     total_comment_uv: number;
@@ -248,7 +246,6 @@ export async function listKuaishouAnchors(
       COALESCE(s.total_sent_gift_cnt, 0)::int           AS total_sent_gift_cnt,
       COALESCE(s.total_report_num, 0)::int              AS total_report_num,
       COALESCE(s.avg_live_cover_ctr, 0)::float          AS avg_live_cover_ctr,
-      COALESCE(s.avg_valid_play_duration_ms, 0)::float  AS avg_valid_play_duration_ms,
       COALESCE(s.max_fans_club_cnt, 0)::int             AS max_fans_club_cnt,
       COALESCE(s.total_like_uv, 0)::int                 AS total_like_uv,
       COALESCE(s.total_comment_uv, 0)::int              AS total_comment_uv,
@@ -276,10 +273,10 @@ export async function listKuaishouAnchors(
       SELECT DISTINCT ON (member_id)
         member_id,
         today_extra->>'fansMostAge' AS fans_most_age,
-        NULLIF(today_extra->>'fansMaleRate','')::numeric AS fans_male_rate,
+        NULLIF(today_extra->>'fansMaleRate','')::numeric / 100 AS fans_male_rate,
         today_extra->>'fansMostProvince' AS fans_most_province,
         today_extra->>'authorType' AS author_type,
-        NULLIF(today_extra->>'ratio','')::numeric AS author_ratio,
+        NULLIF(today_extra->>'ratio','')::numeric / 100 AS author_ratio,
         NULLIF(today_extra->>'hasPromote','')::boolean AS has_promote,
         NULLIF(today_extra->>'hasPunish','')::boolean AS has_punish,
         NULLIF(today_extra->>'settleInTime','')::numeric AS settle_in_time,
@@ -313,7 +310,6 @@ export async function listKuaishouAnchors(
         SUM(sent_gift_cnt) AS total_sent_gift_cnt,
         SUM(report_num) AS total_report_num,
         AVG(NULLIF(regexp_replace(live_cover_ctr, '%$', ''), '')::numeric) / 100 AS avg_live_cover_ctr,
-        AVG(valid_play_duration_avg_ms) AS avg_valid_play_duration_ms,
         MAX(fans_club_cnt) AS max_fans_club_cnt,
         SUM(like_uv) AS total_like_uv,
         SUM(comment_uv) AS total_comment_uv,
@@ -385,7 +381,6 @@ export async function listKuaishouAnchors(
     total_sent_gift_cnt: Number(r.total_sent_gift_cnt),
     total_report_num: Number(r.total_report_num),
     avg_live_cover_ctr: Number(r.avg_live_cover_ctr),
-    avg_valid_play_duration_min: Number(r.avg_valid_play_duration_ms) / 60_000,
     max_fans_club_cnt: Number(r.max_fans_club_cnt),
     total_like_uv: Number(r.total_like_uv),
     total_comment_uv: Number(r.total_comment_uv),
