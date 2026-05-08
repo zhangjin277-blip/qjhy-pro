@@ -16,6 +16,8 @@ interface SaveOverrideInput {
   reason?: string | null;
 }
 
+const REPLACED_SEGMENT_REASON = "__qjhy_replaced_segment__";
+
 function sameSlot(a: [string, string], b: [string, string]) {
   return a[0] === b[0] && a[1] === b[1];
 }
@@ -33,14 +35,45 @@ function uniqueSlots(slots: [string, string][]) {
   return result;
 }
 
-/**
- * 保存某账号某日某主播的 override：先删该 (account, date, user) 已有 override，再插新的。
- * 这样 popover 改主播多次点击不会留垃圾。
- */
-export async function saveTodayOverride(input: SaveOverrideInput) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) throw new Error("UNAUTHORIZED");
+async function getDefaultSlotsForUser(account_id: string, date: string, user_id: string) {
+  const [defaultBinding] = await db
+    .select({
+      time_slots: account_anchor_default.time_slots,
+      rest_days: account_anchor_default.rest_days,
+    })
+    .from(account_anchor_default)
+    .where(
+      and(
+        eq(account_anchor_default.account_id, account_id),
+        eq(account_anchor_default.dingtalk_user_id, user_id),
+        sql`${account_anchor_default.effective_from} <= ${date}::date`,
+        or(
+          isNull(account_anchor_default.effective_to),
+          sql`${account_anchor_default.effective_to} >= ${date}::date`,
+        ),
+      ),
+    );
 
+  const restDays = defaultBinding?.rest_days ?? [];
+  if (restDays.includes(isoWeekday(date))) return [];
+  return defaultBinding?.time_slots ?? [];
+}
+
+async function getOverrideForUser(account_id: string, date: string, user_id: string) {
+  const [existing] = await db
+    .select()
+    .from(schedule_override)
+    .where(
+      and(
+        eq(schedule_override.account_id, account_id),
+        eq(schedule_override.date, date),
+        eq(schedule_override.dingtalk_user_id, user_id),
+      ),
+    );
+  return existing;
+}
+
+async function writeOverrideSlots(input: SaveOverrideInput, createdBy: string) {
   await db
     .delete(schedule_override)
     .where(
@@ -57,8 +90,103 @@ export async function saveTodayOverride(input: SaveOverrideInput) {
     dingtalk_user_id: input.dingtalk_user_id,
     time_slots: input.time_slots,
     reason: input.reason ?? null,
-    created_by: session.user.id,
+    created_by: createdBy,
   });
+}
+
+/**
+ * 保存某账号某日某主播的 override：先删该 (account, date, user) 已有 override，再插新的。
+ * 这样 popover 改主播多次点击不会留垃圾。
+ */
+export async function saveTodayOverride(input: SaveOverrideInput) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) throw new Error("UNAUTHORIZED");
+
+  await writeOverrideSlots(input, session.user.id);
+
+  await markDirtyByAccountDate(input.account_id, input.date);
+  await runAttributionJob({ max_rows: 200 });
+
+  revalidatePath("/live-accounts/schedule-today");
+  revalidatePath("/placements");
+}
+
+export async function replaceTodaySegment(
+  input: SaveOverrideInput & {
+    from_dingtalk_user_id: string;
+    from_time_slot: [string, string];
+  },
+) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) throw new Error("UNAUTHORIZED");
+
+  const nextSlot = input.time_slots[0];
+  if (!nextSlot) throw new Error("MISSING_SLOT");
+
+  const existingFrom = await getOverrideForUser(
+    input.account_id,
+    input.date,
+    input.from_dingtalk_user_id,
+  );
+  const fromDefaults = await getDefaultSlotsForUser(
+    input.account_id,
+    input.date,
+    input.from_dingtalk_user_id,
+  );
+  const fromBaseSlots = existingFrom?.time_slots ?? fromDefaults;
+  const fromNextSlots = fromBaseSlots.filter((slot) => !sameSlot(slot, input.from_time_slot));
+
+  if (input.from_dingtalk_user_id === input.dingtalk_user_id) {
+    await writeOverrideSlots(
+      {
+        ...input,
+        time_slots: uniqueSlots([...fromNextSlots, nextSlot]),
+        reason: input.reason,
+      },
+      session.user.id,
+    );
+  } else {
+    if (
+      fromNextSlots.length > 0 ||
+      fromDefaults.some((slot) => sameSlot(slot, input.from_time_slot))
+    ) {
+      await writeOverrideSlots(
+        {
+          account_id: input.account_id,
+          date: input.date,
+          dingtalk_user_id: input.from_dingtalk_user_id,
+          time_slots: fromNextSlots,
+          reason:
+            fromNextSlots.length > 0 ? (existingFrom?.reason ?? null) : REPLACED_SEGMENT_REASON,
+        },
+        session.user.id,
+      );
+    } else if (existingFrom) {
+      await db.delete(schedule_override).where(eq(schedule_override.id, existingFrom.id));
+    }
+
+    const existingTo = await getOverrideForUser(
+      input.account_id,
+      input.date,
+      input.dingtalk_user_id,
+    );
+    const toDefaults = await getDefaultSlotsForUser(
+      input.account_id,
+      input.date,
+      input.dingtalk_user_id,
+    );
+    const toBaseSlots = existingTo?.time_slots ?? toDefaults;
+    await writeOverrideSlots(
+      {
+        account_id: input.account_id,
+        date: input.date,
+        dingtalk_user_id: input.dingtalk_user_id,
+        time_slots: uniqueSlots([...toBaseSlots, nextSlot]),
+        reason: input.reason,
+      },
+      session.user.id,
+    );
+  }
 
   await markDirtyByAccountDate(input.account_id, input.date);
   await runAttributionJob({ max_rows: 200 });
@@ -106,28 +234,11 @@ export async function appendTodayOverrideSlot(input: SaveOverrideInput) {
       })
       .where(eq(schedule_override.id, existing.id));
   } else {
-    const [defaultBinding] = await db
-      .select({
-        time_slots: account_anchor_default.time_slots,
-        rest_days: account_anchor_default.rest_days,
-      })
-      .from(account_anchor_default)
-      .where(
-        and(
-          eq(account_anchor_default.account_id, input.account_id),
-          eq(account_anchor_default.dingtalk_user_id, input.dingtalk_user_id),
-          sql`${account_anchor_default.effective_from} <= ${input.date}::date`,
-          or(
-            isNull(account_anchor_default.effective_to),
-            sql`${account_anchor_default.effective_to} >= ${input.date}::date`,
-          ),
-        ),
-      );
-
-    const restDays = defaultBinding?.rest_days ?? [];
-    const defaultSlots = restDays.includes(isoWeekday(input.date))
-      ? []
-      : (defaultBinding?.time_slots ?? []);
+    const defaultSlots = await getDefaultSlotsForUser(
+      input.account_id,
+      input.date,
+      input.dingtalk_user_id,
+    );
 
     await db.insert(schedule_override).values({
       account_id: input.account_id,

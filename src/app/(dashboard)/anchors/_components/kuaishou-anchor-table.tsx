@@ -3,9 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Settings2,
+} from "lucide-react";
 import { KpiGrid, type KpiItem } from "@/components/patterns/kpi-grid";
-import { PresetChip, PresetToolbar } from "@/components/patterns/preset-toolbar";
 import { DataToolbar } from "@/components/patterns/data-toolbar";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +23,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PresetChip, PresetToolbar } from "@/components/patterns/preset-toolbar";
 import { cn } from "@/lib/utils/cn";
 import { KuaishouAnchorDetailDrawer } from "./kuaishou-anchor-detail-drawer";
+import { ColumnCustomizer } from "./column-customizer";
+import {
+  KS_COLUMNS,
+  KS_GROUPS,
+  getKsColumnsByGroup,
+  getKsColumnsBySubGroup,
+  KS_DEFAULT_VISIBLE,
+  type KuaishouColKey,
+} from "./kuaishou-column-presets";
 
 interface Row {
   id: string;
@@ -33,13 +50,33 @@ interface Row {
   renewal_status: string | null;
   broker_name_raw: string | null;
   live_status: string;
-  // 时间窗聚合
+  // 直播表现 - 基础聚合
   session_count: number;
   total_amt: number;
   avg_acu: number;
   max_peak: number;
   total_add_fans: number;
   total_duration_h: number;
+  // 流量
+  total_play_uv: number;
+  total_play_user_cnt: number;
+  avg_play_rate: number;
+  avg_per_play_time_min: number;
+  // 涨粉
+  total_follow_author: number;
+  total_cancel_follow: number;
+  avg_transfer_fans_rate: number;
+  // 互动
+  total_like_cnt: number;
+  total_comment_cnt: number;
+  total_share_cnt: number;
+  avg_like_rate: number;
+  avg_comment_rate: number;
+  // 送礼
+  total_send_gift_uv: number;
+  total_sent_gift_cnt: number;
+  // 违规
+  total_report_num: number;
 }
 
 interface KpiResp {
@@ -103,7 +140,22 @@ type SortKey =
   | "avg_acu"
   | "max_peak"
   | "total_add_fans"
-  | "total_duration_h";
+  | "total_duration_h"
+  | "total_play_uv"
+  | "total_play_user_cnt"
+  | "avg_play_rate"
+  | "avg_per_play_time_min"
+  | "total_follow_author"
+  | "total_cancel_follow"
+  | "avg_transfer_fans_rate"
+  | "total_like_cnt"
+  | "total_comment_cnt"
+  | "total_share_cnt"
+  | "avg_like_rate"
+  | "avg_comment_rate"
+  | "total_send_gift_uv"
+  | "total_sent_gift_cnt"
+  | "total_report_num";
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZES = [50, 100, 200] as const;
@@ -112,7 +164,7 @@ type PageSize = (typeof PAGE_SIZES)[number];
 interface ColDef {
   key: SortKey;
   label: string;
-  group: "基础" | "公会" | "直播表现" | "其他";
+  group: "基础" | "公会" | "直播表现" | "流量" | "涨粉" | "互动" | "送礼" | "违规";
   align?: "left" | "right";
   sticky?: boolean;
   width?: string;
@@ -139,18 +191,103 @@ const COLUMNS: ColDef[] = [
   { key: "session_count", label: "场次", group: "直播表现", align: "right", defaultVisible: true },
   { key: "total_amt", label: "流水", group: "直播表现", align: "right", defaultVisible: true },
   { key: "avg_acu", label: "平均ACU", group: "直播表现", align: "right", defaultVisible: true },
-  { key: "max_peak", label: "峰值在线", group: "直播表现", align: "right", defaultVisible: false },
   {
-    key: "total_add_fans",
-    label: "涨粉",
+    key: "total_duration_h",
+    label: "总直播时长",
     group: "直播表现",
     align: "right",
     defaultVisible: false,
   },
+
+  // 流量
   {
-    key: "total_duration_h",
-    label: "直播时长",
-    group: "直播表现",
+    key: "total_play_uv",
+    label: "有效观看人数",
+    group: "流量",
+    align: "right",
+    defaultVisible: false,
+  },
+  { key: "max_peak", label: "峰值在线", group: "流量", align: "right", defaultVisible: false },
+  {
+    key: "total_play_user_cnt",
+    label: "总观看次数",
+    group: "流量",
+    align: "right",
+    defaultVisible: false,
+  },
+  {
+    key: "avg_play_rate",
+    label: "平均观看率",
+    group: "流量",
+    align: "right",
+    defaultVisible: false,
+  },
+  {
+    key: "avg_per_play_time_min",
+    label: "平均观看时长",
+    group: "流量",
+    align: "right",
+    defaultVisible: false,
+  },
+
+  // 涨粉
+  { key: "total_add_fans", label: "净涨粉", group: "涨粉", align: "right", defaultVisible: false },
+  {
+    key: "total_follow_author",
+    label: "直播关注",
+    group: "涨粉",
+    align: "right",
+    defaultVisible: false,
+  },
+  {
+    key: "total_cancel_follow",
+    label: "直播取关",
+    group: "涨粉",
+    align: "right",
+    defaultVisible: false,
+  },
+  {
+    key: "avg_transfer_fans_rate",
+    label: "平均转粉率",
+    group: "涨粉",
+    align: "right",
+    defaultVisible: false,
+  },
+
+  // 互动
+  { key: "total_like_cnt", label: "点赞", group: "互动", align: "right", defaultVisible: false },
+  { key: "avg_like_rate", label: "点赞率", group: "互动", align: "right", defaultVisible: false },
+  { key: "total_comment_cnt", label: "评论", group: "互动", align: "right", defaultVisible: false },
+  {
+    key: "avg_comment_rate",
+    label: "评论率",
+    group: "互动",
+    align: "right",
+    defaultVisible: false,
+  },
+  { key: "total_share_cnt", label: "分享", group: "互动", align: "right", defaultVisible: false },
+
+  // 送礼
+  {
+    key: "total_send_gift_uv",
+    label: "送礼人数",
+    group: "送礼",
+    align: "right",
+    defaultVisible: false,
+  },
+  {
+    key: "total_sent_gift_cnt",
+    label: "送礼次数",
+    group: "送礼",
+    align: "right",
+    defaultVisible: false,
+  },
+
+  // 违规
+  {
+    key: "total_report_num",
+    label: "举报次数",
+    group: "违规",
     align: "right",
     defaultVisible: false,
   },
@@ -173,6 +310,27 @@ function loadCols(): Set<SortKey> {
 function saveCols(set: Set<SortKey>): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
+}
+
+function exportCsv(rows: Row[], cols: ColDef[]): void {
+  const get = (r: Row, k: SortKey): string => {
+    const v = (r as unknown as Record<string, unknown>)[k];
+    if (v == null) return "";
+    if (typeof v === "number") return String(v);
+    return String(v);
+  };
+  const header = cols.map((c) => c.label).join(",");
+  const lines = rows.map((r) =>
+    cols.map((c) => `"${get(r, c.key).replace(/"/g, '""')}"`).join(","),
+  );
+  const csv = "﻿" + header + "\n" + lines.join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `kuaishou-anchors-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function fmtChinese(n: number): string {
@@ -241,6 +399,7 @@ export function KuaishouAnchorTable(): React.JSX.Element {
   const colPickerRef = useRef<HTMLDivElement>(null);
 
   const [selectedAnchor, setSelectedAnchor] = useState<Row | null>(null);
+  const [showCompare, setShowCompare] = useState(true);
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
@@ -382,126 +541,96 @@ export function KuaishouAnchorTable(): React.JSX.Element {
     <div className="space-y-3">
       <DataToolbar
         filters={
-          <>
-            <PresetToolbar label="项目:">
-              {PRODUCT_OPTIONS.map((o) => (
-                <PresetChip
-                  key={o.value}
-                  active={product === o.value}
-                  onClick={() => setProduct(o.value)}
-                >
-                  {o.label}
-                </PresetChip>
-              ))}
-            </PresetToolbar>
-            <PresetToolbar label="时间:">
+          <div className="flex min-w-0 items-center gap-2">
+            <input
+              type="date"
+              value={dateFrom}
+              max={dateTo}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-8 w-[140px] shrink-0 rounded border border-transparent bg-transparent px-2 text-sm hover:border-slate-200 focus:border-primary focus:bg-white focus:outline-none"
+            />
+            <span className="text-muted-foreground shrink-0">~</span>
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom}
+              max={todayCST()}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-8 w-[140px] shrink-0 rounded border border-transparent bg-transparent px-2 text-sm hover:border-slate-200 focus:border-primary focus:bg-white focus:outline-none"
+            />
+            <div className="flex shrink-0 gap-1">
               {DAYS_PRESETS.map((p) => {
                 const r = presetRange(p.days);
                 const active = dateFrom === r.from && dateTo === r.to;
                 return (
-                  <PresetChip
+                  <Button
                     key={p.days}
-                    active={active}
+                    size="sm"
+                    variant={active ? "default" : "ghost"}
                     onClick={() => {
                       setDateFrom(r.from);
                       setDateTo(r.to);
                     }}
                   >
                     {p.label}
-                  </PresetChip>
+                  </Button>
                 );
               })}
-              <input
-                type="date"
-                value={dateFrom}
-                max={dateTo}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="h-7 rounded border border-slate-300 px-1.5 text-[12px] focus:border-primary focus:outline-none"
-              />
-              <span className="text-muted-foreground text-xs">~</span>
-              <input
-                type="date"
-                value={dateTo}
-                min={dateFrom}
-                max={todayCST()}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="h-7 rounded border border-slate-300 px-1.5 text-[12px] focus:border-primary focus:outline-none"
-              />
-            </PresetToolbar>
+            </div>
             <input
-              type="text"
               placeholder="搜索昵称 / 快手 ID"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-8 w-56 rounded border border-slate-300 px-2 text-sm focus:border-primary focus:outline-none"
+              className="ml-auto h-8 min-w-0 max-w-[220px] flex-1 rounded border border-transparent bg-transparent px-2 text-sm placeholder:text-slate-400 hover:border-slate-200 focus:border-primary focus:bg-white focus:outline-none"
             />
-          </>
+          </div>
         }
         actions={
-          <div ref={colPickerRef} className="relative">
+          <>
+            <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showCompare}
+                onChange={(e) => setShowCompare(e.target.checked)}
+                className="size-3.5 cursor-pointer accent-primary"
+              />
+              显示同比
+            </label>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => exportCsv(sortedRows, cols)}
+              className="gap-1"
+            >
+              <Download className="h-3.5 w-3.5" />
+              导出 CSV
+            </Button>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setColPicker(!colPicker)}
+              onClick={() => setColPicker(true)}
+              className="gap-1"
             >
-              列设置 ({visibleCols.size}/{COLUMNS.length})
+              <Settings2 className="h-3.5 w-3.5" />
+              自定义列
             </Button>
-            {colPicker && (
-              <div className="absolute right-0 top-full z-50 mt-1 w-[300px] rounded-md border border-slate-200 bg-white p-3 shadow-lg">
-                {(["基础", "公会", "直播表现", "其他"] as const).map((g) => {
-                  const groupCols = COLUMNS.filter((c) => c.group === g);
-                  if (groupCols.length === 0) return null;
-                  return (
-                    <div key={g} className="mb-2 last:mb-0">
-                      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        {g}
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                        {groupCols.map((c) => (
-                          <label
-                            key={c.key}
-                            className="flex cursor-pointer items-center gap-1.5 text-[12px] text-slate-700 hover:text-slate-900"
-                          >
-                            <input
-                              type="checkbox"
-                              className="h-3.5 w-3.5 cursor-pointer accent-blue-500"
-                              checked={visibleCols.has(c.key)}
-                              onChange={(e) => {
-                                const next = new Set(visibleCols);
-                                if (e.target.checked) next.add(c.key);
-                                else next.delete(c.key);
-                                setVisibleCols(next);
-                                saveCols(next);
-                              }}
-                              disabled={c.key === "account_name"}
-                            />
-                            {c.label}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="mt-2 flex justify-end gap-2 border-t border-slate-100 pt-2">
-                  <button
-                    onClick={() => {
-                      const next = new Set<SortKey>(
-                        COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
-                      );
-                      setVisibleCols(next);
-                      saveCols(next);
-                    }}
-                    className="text-[11px] text-slate-500 hover:text-slate-700"
-                  >
-                    重置默认
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          </>
         }
       />
+
+      {/* 项目预设 chip 第二行 */}
+      <PresetToolbar label="预设:">
+        {PRODUCT_OPTIONS.map((o) => (
+          <PresetChip
+            key={o.value}
+            active={product === o.value}
+            onClick={() => setProduct(o.value)}
+          >
+            {o.label}
+          </PresetChip>
+        ))}
+      </PresetToolbar>
 
       <KpiGrid items={kpiItems} />
 
@@ -635,9 +764,28 @@ export function KuaishouAnchorTable(): React.JSX.Element {
         anchor={selectedAnchor}
         onOpenChange={(open) => !open && setSelectedAnchor(null)}
       />
+
+      <ColumnCustomizer<KuaishouColKey>
+        open={colPicker}
+        onOpenChange={setColPicker}
+        selectedKeys={[...visibleCols].filter((k) => k !== "account_name") as KuaishouColKey[]}
+        onConfirm={(keys) => {
+          // 主播列 (account_name) 是 pinned，不在 customizer 里，但要保留
+          const next = new Set<SortKey>(["account_name", ...keys]);
+          setVisibleCols(next);
+          saveCols(next);
+        }}
+        allColumns={KS_COLUMNS}
+        groups={KS_GROUPS.filter((g) => g !== "基础")} // 基础组（pinned）不出现在 dialog
+        getColumnsByGroup={getKsColumnsByGroup}
+        getColumnsBySubGroup={getKsColumnsBySubGroup}
+      />
     </div>
   );
 }
+
+// 兼容（防止下面 unused warning）
+void KS_DEFAULT_VISIBLE;
 
 function renderCell(c: ColDef, r: Row): React.ReactNode {
   switch (c.key) {
@@ -718,6 +866,96 @@ function renderCell(c: ColDef, r: Row): React.ReactNode {
       ) : (
         <span className="text-muted-foreground">—</span>
       );
+    case "total_play_uv":
+      return r.total_play_uv > 0 ? (
+        fmtChinese(r.total_play_uv)
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "total_play_user_cnt":
+      return r.total_play_user_cnt > 0 ? (
+        fmtChinese(r.total_play_user_cnt)
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "avg_play_rate":
+      return r.avg_play_rate > 0 ? (
+        `${(r.avg_play_rate * 100).toFixed(1)}%`
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "avg_per_play_time_min":
+      return r.avg_per_play_time_min > 0 ? (
+        `${r.avg_per_play_time_min.toFixed(1)}分`
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "total_follow_author":
+      return r.total_follow_author > 0 ? (
+        fmtChinese(r.total_follow_author)
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "total_cancel_follow":
+      return r.total_cancel_follow > 0 ? (
+        fmtChinese(r.total_cancel_follow)
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "avg_transfer_fans_rate":
+      return r.avg_transfer_fans_rate > 0 ? (
+        `${(r.avg_transfer_fans_rate * 100).toFixed(2)}%`
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "total_like_cnt":
+      return r.total_like_cnt > 0 ? (
+        fmtChinese(r.total_like_cnt)
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "avg_like_rate":
+      return r.avg_like_rate > 0 ? (
+        `${(r.avg_like_rate * 100).toFixed(0)}%`
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "total_comment_cnt":
+      return r.total_comment_cnt > 0 ? (
+        fmtChinese(r.total_comment_cnt)
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "avg_comment_rate":
+      return r.avg_comment_rate > 0 ? (
+        `${(r.avg_comment_rate * 100).toFixed(2)}%`
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "total_share_cnt":
+      return r.total_share_cnt > 0 ? (
+        fmtChinese(r.total_share_cnt)
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "total_send_gift_uv":
+      return r.total_send_gift_uv > 0 ? (
+        fmtChinese(r.total_send_gift_uv)
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "total_sent_gift_cnt":
+      return r.total_sent_gift_cnt > 0 ? (
+        fmtChinese(r.total_sent_gift_cnt)
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    case "total_report_num":
+      return r.total_report_num > 0 ? (
+        r.total_report_num
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
     default:
       return "—";
   }
@@ -727,15 +965,32 @@ function pickSortValue(r: Row, key: SortKey): string | number | null {
   if (key === "fans_count") return r.fans_count;
   if (key === "live_status") return r.live_status === "living" ? 1 : 0;
   if (key === "agent_name") return r.agent_name ?? r.broker_name_raw ?? null;
-  if (
-    key === "session_count" ||
-    key === "total_amt" ||
-    key === "avg_acu" ||
-    key === "max_peak" ||
-    key === "total_add_fans" ||
-    key === "total_duration_h"
-  ) {
-    return r[key];
+  // 所有数值聚合字段统一返回 number
+  const numericKeys: SortKey[] = [
+    "session_count",
+    "total_amt",
+    "avg_acu",
+    "max_peak",
+    "total_add_fans",
+    "total_duration_h",
+    "total_play_uv",
+    "total_play_user_cnt",
+    "avg_play_rate",
+    "avg_per_play_time_min",
+    "total_follow_author",
+    "total_cancel_follow",
+    "avg_transfer_fans_rate",
+    "total_like_cnt",
+    "total_comment_cnt",
+    "total_share_cnt",
+    "avg_like_rate",
+    "avg_comment_rate",
+    "total_send_gift_uv",
+    "total_sent_gift_cnt",
+    "total_report_num",
+  ];
+  if (numericKeys.includes(key)) {
+    return r[key] as number;
   }
   return (r[key] as string | null) ?? null;
 }

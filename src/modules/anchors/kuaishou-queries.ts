@@ -42,12 +42,33 @@ export interface KuaishouAnchorRow {
   live_status: string;
   updated_at: Date;
   // 按时间窗聚合的指标（来自 kuaishou_live_session）
+  // 直播表现 - 基础
   session_count: number;
   total_amt: number;
   avg_acu: number;
   max_peak: number;
   total_add_fans: number;
   total_duration_h: number;
+  // 流量 - 扩展
+  total_play_uv: number;
+  total_play_user_cnt: number;
+  avg_play_rate: number; // 小数 0.3145
+  avg_per_play_time_min: number;
+  // 涨粉 - 扩展
+  total_follow_author: number;
+  total_cancel_follow: number;
+  avg_transfer_fans_rate: number; // 小数
+  // 互动
+  total_like_cnt: number;
+  total_comment_cnt: number;
+  total_share_cnt: number;
+  avg_like_rate: number; // 小数
+  avg_comment_rate: number; // 小数
+  // 送礼
+  total_send_gift_uv: number;
+  total_sent_gift_cnt: number;
+  // 违规
+  total_report_num: number;
 }
 
 export interface KuaishouAnchorKpi {
@@ -96,6 +117,8 @@ export async function listKuaishouAnchors(
   const where = conds.length > 0 ? and(...conds) : undefined;
 
   // 单次查询：member 表 LEFT JOIN dingtalk + LEFT JOIN session 聚合（按时间窗）
+  // play_rate / transfer_fans_rate / like_rate / comment_rate 在 DB 是 "31.45%" 字符串，
+  // 用 NULLIF + regexp_replace 转 numeric 再 AVG，结果是小数（0.3145）。
   const result = await db.execute<{
     user_id: string;
     member_name: string;
@@ -116,18 +139,48 @@ export async function listKuaishouAnchors(
     max_peak: number;
     total_add_fans: number;
     total_duration_ms: number;
+    total_play_uv: number;
+    total_play_user_cnt: number;
+    avg_play_rate: number;
+    avg_per_play_time_ms: number;
+    total_follow_author: number;
+    total_cancel_follow: number;
+    avg_transfer_fans_rate: number;
+    total_like_cnt: number;
+    total_comment_cnt: number;
+    total_share_cnt: number;
+    avg_like_rate: number;
+    avg_comment_rate: number;
+    total_send_gift_uv: number;
+    total_sent_gift_cnt: number;
+    total_report_num: number;
   }>(sql`
     SELECT
       m.user_id, m.member_name, m.avatar, m.fans_count, m.broker_name_raw,
       m.agent_dingtalk_user_id, du.name AS agent_name,
       m.inferred_product, m.joined_at, m.contract_expire_at, m.renewal_status,
       m.living_url, m.updated_at,
-      COALESCE(s.session_count, 0)::int       AS session_count,
-      COALESCE(s.total_amt, 0)::float         AS total_amt,
-      COALESCE(s.avg_acu, 0)::float           AS avg_acu,
-      COALESCE(s.max_peak, 0)::int            AS max_peak,
-      COALESCE(s.total_add_fans, 0)::int      AS total_add_fans,
-      COALESCE(s.total_duration_ms, 0)::float AS total_duration_ms
+      COALESCE(s.session_count, 0)::int                 AS session_count,
+      COALESCE(s.total_amt, 0)::float                   AS total_amt,
+      COALESCE(s.avg_acu, 0)::float                     AS avg_acu,
+      COALESCE(s.max_peak, 0)::int                      AS max_peak,
+      COALESCE(s.total_add_fans, 0)::int                AS total_add_fans,
+      COALESCE(s.total_duration_ms, 0)::float           AS total_duration_ms,
+      COALESCE(s.total_play_uv, 0)::int                 AS total_play_uv,
+      COALESCE(s.total_play_user_cnt, 0)::int           AS total_play_user_cnt,
+      COALESCE(s.avg_play_rate, 0)::float               AS avg_play_rate,
+      COALESCE(s.avg_per_play_time_ms, 0)::float        AS avg_per_play_time_ms,
+      COALESCE(s.total_follow_author, 0)::int           AS total_follow_author,
+      COALESCE(s.total_cancel_follow, 0)::int           AS total_cancel_follow,
+      COALESCE(s.avg_transfer_fans_rate, 0)::float      AS avg_transfer_fans_rate,
+      COALESCE(s.total_like_cnt, 0)::int                AS total_like_cnt,
+      COALESCE(s.total_comment_cnt, 0)::int             AS total_comment_cnt,
+      COALESCE(s.total_share_cnt, 0)::int               AS total_share_cnt,
+      COALESCE(s.avg_like_rate, 0)::float               AS avg_like_rate,
+      COALESCE(s.avg_comment_rate, 0)::float            AS avg_comment_rate,
+      COALESCE(s.total_send_gift_uv, 0)::int            AS total_send_gift_uv,
+      COALESCE(s.total_sent_gift_cnt, 0)::int           AS total_sent_gift_cnt,
+      COALESCE(s.total_report_num, 0)::int              AS total_report_num
     FROM kuaishou_member m
     LEFT JOIN dingtalk_user du ON du.user_id = m.agent_dingtalk_user_id
     LEFT JOIN (
@@ -138,7 +191,22 @@ export async function listKuaishouAnchors(
         AVG(valid_acu) AS avg_acu,
         MAX(max_concurrent_user_num) AS max_peak,
         SUM(add_fans_cnt) AS total_add_fans,
-        SUM(live_duration_ms) AS total_duration_ms
+        SUM(live_duration_ms) AS total_duration_ms,
+        SUM(play_uv) AS total_play_uv,
+        SUM(play_user_cnt) AS total_play_user_cnt,
+        AVG(NULLIF(regexp_replace(play_rate, '%$', ''), '')::numeric) / 100 AS avg_play_rate,
+        AVG(per_play_time_avg_ms) AS avg_per_play_time_ms,
+        SUM(follow_author_num) AS total_follow_author,
+        SUM(cancel_follow_author_num) AS total_cancel_follow,
+        AVG(NULLIF(regexp_replace(transfer_fans_rate, '%$', ''), '')::numeric) / 100 AS avg_transfer_fans_rate,
+        SUM(like_cnt) AS total_like_cnt,
+        SUM(comment_cnt) AS total_comment_cnt,
+        SUM(share_cnt) AS total_share_cnt,
+        AVG(NULLIF(regexp_replace(like_rate, '%$', ''), '')::numeric) / 100 AS avg_like_rate,
+        AVG(NULLIF(regexp_replace(comment_rate, '%$', ''), '')::numeric) / 100 AS avg_comment_rate,
+        SUM(send_gift_uv) AS total_send_gift_uv,
+        SUM(sent_gift_cnt) AS total_sent_gift_cnt,
+        SUM(report_num) AS total_report_num
       FROM kuaishou_live_session
       WHERE start_datetime >= to_timestamp(${startMs / 1000})
         AND start_datetime <= to_timestamp(${endMs / 1000})
@@ -169,6 +237,21 @@ export async function listKuaishouAnchors(
     max_peak: Number(r.max_peak),
     total_add_fans: Number(r.total_add_fans),
     total_duration_h: Number(r.total_duration_ms) / 3600_000,
+    total_play_uv: Number(r.total_play_uv),
+    total_play_user_cnt: Number(r.total_play_user_cnt),
+    avg_play_rate: Number(r.avg_play_rate),
+    avg_per_play_time_min: Number(r.avg_per_play_time_ms) / 60_000,
+    total_follow_author: Number(r.total_follow_author),
+    total_cancel_follow: Number(r.total_cancel_follow),
+    avg_transfer_fans_rate: Number(r.avg_transfer_fans_rate),
+    total_like_cnt: Number(r.total_like_cnt),
+    total_comment_cnt: Number(r.total_comment_cnt),
+    total_share_cnt: Number(r.total_share_cnt),
+    avg_like_rate: Number(r.avg_like_rate),
+    avg_comment_rate: Number(r.avg_comment_rate),
+    total_send_gift_uv: Number(r.total_send_gift_uv),
+    total_sent_gift_cnt: Number(r.total_sent_gift_cnt),
+    total_report_num: Number(r.total_report_num),
   }));
 }
 

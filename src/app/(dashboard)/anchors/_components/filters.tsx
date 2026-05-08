@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -10,6 +9,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { AnchorListFilters, ProjectFilter } from "@/modules/anchors";
+
+const transparentInput =
+  "h-8 rounded border border-transparent bg-transparent px-2 text-sm placeholder:text-slate-400 hover:border-slate-200 focus:border-primary focus:bg-white focus:outline-none";
 
 const yesterday = (): string => new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
 const daysAgo = (n: number): string =>
@@ -28,18 +30,18 @@ export function Filters({
 
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <Input
+      <input
         type="date"
         value={filters.date_from}
         onChange={(e) => onChange({ ...filters, date_from: e.target.value })}
-        className="w-[140px] shrink-0"
+        className={`${transparentInput} w-[140px] shrink-0`}
       />
       <span className="text-muted-foreground shrink-0">~</span>
-      <Input
+      <input
         type="date"
         value={filters.date_to}
         onChange={(e) => onChange({ ...filters, date_to: e.target.value })}
-        className="w-[140px] shrink-0"
+        className={`${transparentInput} w-[140px] shrink-0`}
       />
 
       <div className="flex shrink-0 gap-1">
@@ -67,11 +69,11 @@ export function Filters({
           <SelectItem value="three">三国</SelectItem>
         </SelectContent>
       </Select>
-      <Input
+      <input
         placeholder="搜索昵称/抖音号"
         value={filters.search ?? ""}
         onChange={(e) => onChange({ ...filters, search: e.target.value })}
-        className="ml-auto min-w-0 flex-1 max-w-[240px]"
+        className={`${transparentInput} ml-auto min-w-0 flex-1 max-w-[240px]`}
       />
     </div>
   );

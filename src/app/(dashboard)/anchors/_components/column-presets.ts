@@ -9,8 +9,8 @@ export type ColFmt =
   | "avatar"
   | "anchor_info";
 
-export interface ColumnDef {
-  key: keyof AnchorListRow | "project";
+export interface ColumnDef<TKey extends string = keyof AnchorListRow | "project"> {
+  key: TKey;
   label: string;
   group: string;
   /** 二级分组（中栏 customizer 显示，无则不分块） */

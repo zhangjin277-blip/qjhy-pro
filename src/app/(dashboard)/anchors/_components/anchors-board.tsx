@@ -38,7 +38,7 @@ export function AnchorsBoard(): React.JSX.Element {
 
   return (
     <div className="space-y-3">
-      <PresetToolbar>
+      <PresetToolbar label="平台:">
         <PresetChip active={platform === "douyin"} onClick={() => changePlatform("douyin")}>
           抖音
         </PresetChip>

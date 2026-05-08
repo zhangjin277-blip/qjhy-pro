@@ -1,12 +1,12 @@
 import { db } from "@/db/client";
-import { dingtalk_user } from "@/db/schema";
+import { dingtalk_user, live_anchor } from "@/db/schema";
 import { schedule_override } from "@/db/schema/schedule-override";
-import { and, eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { listAccounts } from "@/modules/live-account/server";
 import { listBindings } from "@/modules/live-anchor";
 import { TodayGantt } from "./_components/today-gantt";
 
-const LIVE_DEPT_ID = "724640467";
+const REPLACED_SEGMENT_REASON = "__qjhy_replaced_segment__";
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -54,13 +54,9 @@ export default async function ScheduleTodayPage({
         name: dingtalk_user.name,
         title: dingtalk_user.title,
       })
-      .from(dingtalk_user)
-      .where(
-        and(
-          eq(dingtalk_user.active, true),
-          sql`${dingtalk_user.dept_ids} @> ${JSON.stringify([LIVE_DEPT_ID])}::jsonb`,
-        ),
-      )
+      .from(live_anchor)
+      .innerJoin(dingtalk_user, eq(live_anchor.dingtalk_user_id, dingtalk_user.user_id))
+      .where(eq(dingtalk_user.active, true))
       .orderBy(dingtalk_user.name),
   ]);
 
@@ -116,6 +112,7 @@ export default async function ScheduleTodayPage({
     for (const ov of accOverrides) {
       const slots = (ov.time_slots as [string, string][] | null) ?? [];
       if (slots.length === 0) {
+        if (ov.reason === REPLACED_SEGMENT_REASON) continue;
         // override 显式标记休息：找该用户的 default slots 标记成 is_rest 显示
         const defaultBinding = accBindings.find((b) => b.dingtalk_user_id === ov.dingtalk_user_id);
         const defaultSlots = (defaultBinding?.time_slots as [string, string][] | null) ?? [];

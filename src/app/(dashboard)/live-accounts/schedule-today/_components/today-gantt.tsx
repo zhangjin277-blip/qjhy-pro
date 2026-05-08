@@ -1,9 +1,11 @@
 "use client";
 import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { pinyin } from "pinyin";
 import { cn } from "@/lib/utils/cn";
 import {
   appendTodayOverrideSlot,
+  replaceTodaySegment,
   saveTodayOverride,
   clearOneOverride,
   copyYesterdayOverrides,
@@ -99,6 +101,26 @@ function slotOverlapsSegments(segments: Segment[], start: number, end: number) {
   return segments.some((seg) => rangesOverlap(start, end, seg.start, seg.end));
 }
 
+function compactSearchText(value: string | null | undefined) {
+  return (value ?? "").toLowerCase().replace(/\s+/g, "");
+}
+
+function candidateSearchText(candidate: Candidate) {
+  const name = candidate.name ?? "";
+  const fullPinyin = pinyin(name, { style: pinyin.STYLE_NORMAL, heteronym: false })
+    .map((arr) => arr[0] ?? "")
+    .join("");
+  const initials = pinyin(name, { style: pinyin.STYLE_FIRST_LETTER, heteronym: false })
+    .map((arr) => arr[0] ?? "")
+    .join("");
+  return [
+    compactSearchText(name),
+    compactSearchText(candidate.title),
+    compactSearchText(fullPinyin),
+    compactSearchText(initials),
+  ].join(" ");
+}
+
 // 把 segments 转换为 OverrideSnapshot（仅 override 部分，default 不存）
 function snapshotOf(account: AccountSchedule): OverrideSnapshot {
   const byUser = new Map<string, { time_slots: [string, string][]; reason: string | null }>();
@@ -162,6 +184,12 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
     currentStart: number;
     currentEnd: number;
   } | null>(null);
+  const [optimisticResize, setOptimisticResize] = useState<{
+    account_id: string;
+    segIdx: number;
+    currentStart: number;
+    currentEnd: number;
+  } | null>(null);
 
   // 刚刚 resize 过：用于拦截 mouseup 后的 click 事件，避免误开 popover
   const justResizedRef = useRef(false);
@@ -169,6 +197,10 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
   // 持续同步 resize state 到 ref，避免 useEffect 闭包陷阱
   const resizeStateRef = useRef(resize);
   resizeStateRef.current = resize;
+
+  useEffect(() => {
+    setOptimisticResize(null);
+  }, [accounts]);
 
   /** 在保存某 account 之前压栈 snapshot（对当前页面状态） */
   function pushHistory(account_id: string) {
@@ -348,21 +380,33 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
       }, 250);
       // 仅当时段实际改变时保存
       if (r.currentStart === r.seg.start && r.currentEnd === r.seg.end) return;
+      setOptimisticResize({
+        account_id: r.account_id,
+        segIdx: r.segIdx,
+        currentStart: r.currentStart,
+        currentEnd: r.currentEnd,
+      });
       pushHistory(r.account_id);
       start(async () => {
-        await saveTodayOverride({
-          account_id: r.account_id,
-          date,
-          dingtalk_user_id: r.seg.user_id,
-          time_slots: [
-            [
-              `${r.currentStart.toString().padStart(2, "0")}:00`,
-              `${r.currentEnd.toString().padStart(2, "0")}:00`,
+        try {
+          await saveTodayOverride({
+            account_id: r.account_id,
+            date,
+            dingtalk_user_id: r.seg.user_id,
+            time_slots: [
+              [
+                `${r.currentStart.toString().padStart(2, "0")}:00`,
+                `${r.currentEnd.toString().padStart(2, "0")}:00`,
+              ],
             ],
-          ],
-          reason: r.seg.reason ?? null,
-        });
-        router.refresh();
+            reason: r.seg.reason ?? null,
+          });
+          router.refresh();
+        } catch (err) {
+          setOptimisticResize(null);
+          console.error("[resize] save failed", err);
+          alert("保存时段失败：" + String(err));
+        }
       });
     }
     document.addEventListener("mousemove", onMove);
@@ -602,7 +646,7 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
               key={acc.account_id}
               account={acc}
               date={date}
-              resize={resize}
+              resize={resize ?? optimisticResize}
               selected={selected}
               hoverTarget={hoverTarget}
               onSegHover={(seg, segIdx) =>
@@ -882,12 +926,9 @@ function SegmentPopover({
     });
   }, [anchor]);
 
-  const filtered = search.trim()
-    ? candidates.filter(
-        (c) =>
-          c.name?.toLowerCase().includes(search.toLowerCase()) ||
-          c.title?.toLowerCase().includes(search.toLowerCase()),
-      )
+  const searchTerm = compactSearchText(search);
+  const filtered = searchTerm
+    ? candidates.filter((candidate) => candidateSearchText(candidate).includes(searchTerm))
     : candidates;
 
   function handleSave(asRest = false) {
@@ -897,20 +938,29 @@ function SegmentPopover({
     }
     onBeforeMutate();
     start(async () => {
-      await saveTodayOverride({
+      const slot: [string, string] = [
+        `${slotStart.toString().padStart(2, "0")}:00`,
+        `${slotEnd.toString().padStart(2, "0")}:00`,
+      ];
+      const payload = {
         account_id,
         date,
         dingtalk_user_id: pickedUserId,
-        time_slots: asRest
-          ? []
-          : [
-              [
-                `${slotStart.toString().padStart(2, "0")}:00`,
-                `${slotEnd.toString().padStart(2, "0")}:00`,
-              ],
-            ],
+        time_slots: asRest ? [] : [slot],
         reason: reason.trim() || null,
-      });
+      };
+      if (segment && !asRest) {
+        await replaceTodaySegment({
+          ...payload,
+          from_dingtalk_user_id: segment.user_id,
+          from_time_slot: [
+            `${segment.start.toString().padStart(2, "0")}:00`,
+            `${segment.end.toString().padStart(2, "0")}:00`,
+          ],
+        });
+      } else {
+        await saveTodayOverride(payload);
+      }
       router.refresh();
       onClose();
     });

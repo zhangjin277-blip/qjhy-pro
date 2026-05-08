@@ -12,28 +12,36 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  ALL_COLUMNS,
-  ALL_GROUPS,
-  getColumnsByGroup,
-  getColumnsBySubGroup,
+  ALL_COLUMNS as DEFAULT_ALL_COLUMNS,
+  ALL_GROUPS as DEFAULT_ALL_GROUPS,
+  getColumnsByGroup as defaultGetColumnsByGroup,
+  getColumnsBySubGroup as defaultGetColumnsBySubGroup,
   type ColumnDef,
 } from "./column-presets";
 import { cn } from "@/lib/utils/cn";
 
-type ColKey = (typeof ALL_COLUMNS)[number]["key"];
-
-interface ColumnCustomizerProps {
+interface ColumnCustomizerProps<TKey extends string = string> {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** 当前已选列的 key 列表（保持顺序） */
-  selectedKeys: ColKey[];
-  onConfirm: (keys: ColKey[]) => void;
+  selectedKeys: TKey[];
+  onConfirm: (keys: TKey[]) => void;
   /** 当前激活的用户预设名（非 null 时显示「更新预设」按钮）*/
   activeUserPresetName?: string | null;
   /** 用工作副本更新当前用户预设 */
-  onUpdatePreset?: (keys: ColKey[]) => Promise<void> | void;
+  onUpdatePreset?: (keys: TKey[]) => Promise<void> | void;
   /** 用工作副本另存为新预设 */
-  onSaveAsNewPreset?: (keys: ColKey[]) => Promise<void> | void;
+  onSaveAsNewPreset?: (keys: TKey[]) => Promise<void> | void;
+  /** 全部候选列（默认抖音的 ALL_COLUMNS）。快手等其他平台传自己的列 */
+  allColumns?: ColumnDef<TKey>[];
+  /** 分组左栏顺序（默认抖音的 ALL_GROUPS） */
+  groups?: string[];
+  /** 给定分组返回所有列（默认抖音 fn） */
+  getColumnsByGroup?: (group: string) => ColumnDef<TKey>[];
+  /** 给定分组返回 subGroup 切块（默认抖音 fn） */
+  getColumnsBySubGroup?: (
+    group: string,
+  ) => { subGroup: string | null; columns: ColumnDef<TKey>[] }[];
 }
 
 /**
@@ -43,7 +51,7 @@ interface ColumnCustomizerProps {
  * 中栏：当前分组所有指标（复选框 + 搜索）
  * 右栏：已选列有序列表（ChevronUp/Down 上下移动，X 移除）
  */
-export function ColumnCustomizer({
+export function ColumnCustomizer<TKey extends string = string>({
   open,
   onOpenChange,
   selectedKeys,
@@ -51,10 +59,16 @@ export function ColumnCustomizer({
   activeUserPresetName,
   onUpdatePreset,
   onSaveAsNewPreset,
-}: ColumnCustomizerProps): React.JSX.Element {
+  allColumns = DEFAULT_ALL_COLUMNS as unknown as ColumnDef<TKey>[],
+  groups = [...DEFAULT_ALL_GROUPS],
+  getColumnsByGroup = defaultGetColumnsByGroup as unknown as (g: string) => ColumnDef<TKey>[],
+  getColumnsBySubGroup = defaultGetColumnsBySubGroup as unknown as (
+    g: string,
+  ) => { subGroup: string | null; columns: ColumnDef<TKey>[] }[],
+}: ColumnCustomizerProps<TKey>): React.JSX.Element {
   // 工作副本，确认时才回传
-  const [working, setWorking] = useState<ColKey[]>(() => [...selectedKeys]);
-  const [activeGroup, setActiveGroup] = useState<string>(ALL_GROUPS[0]);
+  const [working, setWorking] = useState<TKey[]>(() => [...selectedKeys]);
+  const [activeGroup, setActiveGroup] = useState<string>(groups[0] ?? "");
   const [search, setSearch] = useState("");
 
   // 每次打开重置工作副本（含父组件主动 open 的场景，handleOpenChange 不会触发）
@@ -62,7 +76,7 @@ export function ColumnCustomizer({
     if (open) {
       setWorking([...selectedKeys]);
       setSearch("");
-      setActiveGroup(ALL_GROUPS[0]);
+      setActiveGroup(groups[0] ?? "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -74,25 +88,25 @@ export function ColumnCustomizer({
   const workingSet = useMemo(() => new Set(working), [working]);
 
   // 中栏：当前分组的列（可搜索）
-  const midColumns = useMemo<ColumnDef[]>(() => {
+  const midColumns = useMemo<ColumnDef<TKey>[]>(() => {
     const groupCols = getColumnsByGroup(activeGroup);
     if (!search.trim()) return groupCols;
     const q = search.trim().toLowerCase();
     return groupCols.filter(
       (c) => c.label.toLowerCase().includes(q) || c.key.toLowerCase().includes(q),
     );
-  }, [activeGroup, search]);
+  }, [activeGroup, search, getColumnsByGroup]);
 
   // 按 subGroup 切块（仅在无搜索时分块；搜索时扁平展示）
   const midBlocks = useMemo(() => {
     if (search.trim()) return null;
     return getColumnsBySubGroup(activeGroup);
-  }, [activeGroup, search]);
+  }, [activeGroup, search, getColumnsBySubGroup]);
 
   // 左栏：分组 + 已选计数
   const groupCounts = useMemo(() => {
     const map: Record<string, { selected: number; total: number }> = {};
-    for (const g of ALL_GROUPS) {
+    for (const g of groups) {
       const cols = getColumnsByGroup(g);
       map[g] = {
         total: cols.length,
@@ -100,9 +114,9 @@ export function ColumnCustomizer({
       };
     }
     return map;
-  }, [workingSet]);
+  }, [workingSet, groups, getColumnsByGroup]);
 
-  function toggleKey(key: ColKey): void {
+  function toggleKey(key: TKey): void {
     if (workingSet.has(key)) {
       setWorking((prev) => prev.filter((k) => k !== key));
     } else {
@@ -110,7 +124,7 @@ export function ColumnCustomizer({
     }
   }
 
-  function toggleAll(keys: ColKey[]): void {
+  function toggleAll(keys: TKey[]): void {
     const allSelected = keys.every((k) => workingSet.has(k));
     if (allSelected) {
       setWorking((prev) => prev.filter((k) => !keys.includes(k)));
@@ -135,7 +149,7 @@ export function ColumnCustomizer({
     });
   }
 
-  function removeKey(key: ColKey): void {
+  function removeKey(key: TKey): void {
     setWorking((prev) => prev.filter((k) => k !== key));
   }
 
@@ -145,7 +159,7 @@ export function ColumnCustomizer({
   }
 
   // 右栏：按顺序展示已选列的 label
-  const labelMap = useMemo(() => new Map(ALL_COLUMNS.map((c) => [c.key, c.label])), []);
+  const labelMap = useMemo(() => new Map(allColumns.map((c) => [c.key, c.label])), [allColumns]);
 
   const midAllKeys = midColumns.map((c) => c.key);
   const allMidSelected = midAllKeys.length > 0 && midAllKeys.every((k) => workingSet.has(k));
@@ -160,7 +174,7 @@ export function ColumnCustomizer({
         <div className="grid grid-cols-[180px_minmax(420px,1fr)_240px] h-[560px] overflow-hidden">
           {/* 左栏：分组导航 */}
           <div className="border-r overflow-y-auto bg-muted/30">
-            {ALL_GROUPS.map((g) => {
+            {groups.map((g) => {
               const cnt = groupCounts[g] ?? { selected: 0, total: 0 };
               const isActive = activeGroup === g;
               return (
