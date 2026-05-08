@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { PresetChip, PresetToolbar } from "@/components/patterns/preset-toolbar";
-import { AnchorTable } from "./anchor-table";
-import { KuaishouAnchorTable } from "./kuaishou-anchor-table";
+import { GenericAnchorTable } from "./generic-anchor-table";
+import { douyinConfig } from "./douyin-config";
+import { kuaishouConfig } from "./kuaishou-config";
 
 type Platform = "douyin" | "kuaishou";
 const STORAGE_KEY = "qjhy.anchors.platform";
@@ -19,7 +20,6 @@ function readInitialPlatform(): Platform {
 }
 
 export function AnchorsBoard(): React.JSX.Element {
-  // SSR 一致性：先用默认值，挂载后再读 localStorage / URL
   const [platform, setPlatform] = useState<Platform>("douyin");
   const [hydrated, setHydrated] = useState(false);
 
@@ -46,8 +46,12 @@ export function AnchorsBoard(): React.JSX.Element {
           快手
         </PresetChip>
       </PresetToolbar>
-      {/* 挂载前不渲染 table 避免 hydration mismatch（platform 用户偏好需要客户端读取） */}
-      {hydrated && (platform === "douyin" ? <AnchorTable /> : <KuaishouAnchorTable />)}
+      {hydrated &&
+        (platform === "douyin" ? (
+          <GenericAnchorTable config={douyinConfig} />
+        ) : (
+          <GenericAnchorTable config={kuaishouConfig} />
+        ))}
     </div>
   );
 }

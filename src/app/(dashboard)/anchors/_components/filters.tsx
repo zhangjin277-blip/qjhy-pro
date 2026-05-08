@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { AnchorListFilters, ProjectFilter } from "@/modules/anchors";
+import type { AnchorFilters } from "./platform-config";
 
 const transparentInput =
   "h-8 rounded border border-transparent bg-transparent px-2 text-sm placeholder:text-slate-400 hover:border-slate-200 focus:border-primary focus:bg-white focus:outline-none";
@@ -21,8 +21,8 @@ export function Filters({
   filters,
   onChange,
 }: {
-  filters: AnchorListFilters;
-  onChange: (f: AnchorListFilters) => void;
+  filters: AnchorFilters;
+  onChange: (f: AnchorFilters) => void;
 }): React.JSX.Element {
   function setRange(from: string, to: string): void {
     onChange({ ...filters, date_from: from, date_to: to });
@@ -58,7 +58,7 @@ export function Filters({
 
       <Select
         value={filters.project ?? "all"}
-        onValueChange={(v) => onChange({ ...filters, project: v as ProjectFilter })}
+        onValueChange={(v) => onChange({ ...filters, project: v ?? "all" })}
       >
         <SelectTrigger className="w-[110px] shrink-0">
           <SelectValue />
