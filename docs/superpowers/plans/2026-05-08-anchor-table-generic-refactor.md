@@ -2,7 +2,9 @@
 
 > **目标**：抖音 / 快手两个 tab 100% 同款 UI 与交互。当前两份独立代码（AnchorTable + KuaishouAnchorTable），未来共用 `<GenericAnchorTable platformConfig>`。
 >
-> **进度**：Phase A 已 commit (`ColumnCustomizer` 通用化)，Phase B 已 commit (today/history 数据源切换)。剩 Phase C/D。
+> **进度**：Phase A 已 commit (`ColumnCustomizer` 通用化)，Phase B 已 commit (today/history 数据源切换)。
+>
+> **下一步顺序**：**先 Phase D 后 Phase C**（不要反过来，否则 C 的代码 D 时要重写）。
 
 ## 已完成（不要再做）
 
@@ -18,23 +20,9 @@
 - `/api/anchors-kuaishou` 接受 `data_source` query param
 - KuaishouAnchorTable 新增 PresetToolbar "数据:" chip 行（全部 / 历史权威 / 今日实时）+ URL 同步
 
-## 待做
+## 待做（先 D 后 C —— 顺序很关键）
 
-### Phase C — 用户预设保存到 DB（让快手也能"保存为预设"）
-
-**抖音现状**：
-- `column_preset` 表 (schema 在 `src/db/schema/column-preset.ts` 或类似)
-- `/api/column-presets` GET/POST/DELETE
-- AnchorTable 内有 `userPresets` state、`applyUserPreset` / `deleteUserPreset` / `pendingSaveColumns`
-- ColumnCustomizer 接 `onUpdatePreset` / `onSaveAsNewPreset` 回调
-
-**做法**：
-1. **Migration 0035**: `column_preset` 表加 `platform text NOT NULL DEFAULT 'douyin'`，索引改 `(user_id, platform)`
-2. `/api/column-presets` GET 接受 `?platform=` filter，POST 写入 platform
-3. KuaishouAnchorTable 复制抖音的预设状态机（`useState<UserColumnPreset[]>` 等）
-4. KuaishouAnchorTable 传 `onUpdatePreset` / `onSaveAsNewPreset` 给 ColumnCustomizer
-
-**风险**：抖音和快手的 ColKey 类型不兼容（不同字面量集合），column_preset.columns 字段是 `string[]`，抖音/快手各自用不同字面量，runtime OK，type-system 需要 cast。
+> **不要先做 C**：在 KuaishouAnchorTable 里加用户预设保存的代码，等 D 删掉这个组件后又要重写。先做 D 让两个 tab 共用 GenericAnchorTable，C 在 GenericAnchorTable 里实现一次两边都拿到。
 
 ### Phase D — AnchorTable 整体 generic 化（删除 KuaishouAnchorTable）
 
@@ -99,6 +87,24 @@
 5. **回归测试**两个 tab 完全一致 + KPI Picker 也通用化
 
 **预估工作量**：4-6 小时（包含调试）。
+
+### Phase C — 用户预设保存到 DB（D 完成后做）
+
+**前提**：D 完成，GenericAnchorTable 已经在用。
+
+**抖音现状**：
+- `column_preset` 表（schema 在 `src/db/schema/column-preset.ts` 或类似）
+- `/api/column-presets` GET/POST/DELETE
+- AnchorTable 内有 `userPresets` state、`applyUserPreset` / `deleteUserPreset` / `pendingSaveColumns`
+- ColumnCustomizer 接 `onUpdatePreset` / `onSaveAsNewPreset` 回调
+
+**做法**：
+1. **Migration**: `column_preset` 表加 `platform text NOT NULL DEFAULT 'douyin'`，索引改 `(user_id, platform)`
+2. `/api/column-presets` GET/POST 接受 `?platform=` filter
+3. 在 GenericAnchorTable（D 已完成）内部实现一次预设状态机，platform 由 platformConfig.id 传入
+4. 两个 tab 自动获得"保存为预设"功能
+
+**风险**：抖音和快手的 ColKey 类型不兼容（不同字面量集合），column_preset.columns 字段是 `string[]`，runtime OK，type-system 需要 generic cast。
 
 ## 关键文件 + 行号速查
 

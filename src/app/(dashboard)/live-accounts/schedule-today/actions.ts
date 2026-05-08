@@ -146,10 +146,7 @@ export async function replaceTodaySegment(
       session.user.id,
     );
   } else {
-    if (
-      fromNextSlots.length > 0 ||
-      fromDefaults.some((slot) => sameSlot(slot, input.from_time_slot))
-    ) {
+    if (fromNextSlots.length > 0 || fromDefaults.length > 0) {
       await writeOverrideSlots(
         {
           account_id: input.account_id,
