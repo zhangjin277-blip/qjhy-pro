@@ -388,12 +388,7 @@ export const kuaishouConfig: PlatformConfig<KuaishouColKey, KuaishouRow> = {
 
   allColumns: KS_COLUMNS,
   pinnedColumns: PINNED_KS,
-  customizerGroups: KS_GROUPS.filter((g) => g !== "基础"),
-  customizerGroupSections: [
-    { label: "基础", groups: ["公会信息", "直播表现"] },
-    { label: "历史权威", groups: ["流量", "涨粉", "互动", "送礼", "违规"] },
-    { label: "今日实时", groups: ["推广", "画像与状态"] },
-  ],
+  customizerGroups: [...KS_GROUPS],
   getColumnsByGroup: getKsColumnsByGroup,
   getColumnsBySubGroup: getKsColumnsBySubGroup,
 
@@ -440,7 +435,7 @@ export const kuaishouConfig: PlatformConfig<KuaishouColKey, KuaishouRow> = {
     ];
   },
 
-  compareMode: "kpi-only",
+  compareMode: "row+kpi",
   dataSourceEnabled: true,
   dataSourceColumnPresets: {
     all: KS_DEFAULT_VISIBLE,
@@ -501,9 +496,14 @@ export const kuaishouConfig: PlatformConfig<KuaishouColKey, KuaishouRow> = {
     return sp;
   },
   parseApiResponse(json) {
-    const d = (json ?? {}) as { rows?: KuaishouRow[]; kpi?: KuaishouServerKpi };
+    const d = (json ?? {}) as {
+      rows?: KuaishouRow[];
+      previousRows?: KuaishouRow[];
+      kpi?: KuaishouServerKpi;
+    };
     return {
       rows: d.rows ?? [],
+      previousRows: d.previousRows ?? [],
       serverKpi: d.kpi as unknown as Record<string, number>,
     };
   },
