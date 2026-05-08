@@ -26,6 +26,61 @@
 
 ### Phase D — AnchorTable 整体 generic 化（删除 KuaishouAnchorTable）
 
+**附带任务（D 一起做）**：
+
+#### D-1: 快手字段全暴露（90 个）+ 二级分组
+
+当前只暴露 25 个聚合列，剩 50+ 个在 raw jsonb 兜底。要让用户能勾选所有：
+
+1. **SQL 子查询扩展** (`src/modules/anchors/kuaishou-queries.ts`)：
+   - 加全部 today 独有 17 字段聚合（推广 8 + 画像 4 + 分级 3 + 状态 2）
+   - 加全部 history 独有的剩余字段（fans_club / 各种 _Uv 拆分 / live_video_amt 等）
+   - 商品字段虽然业务不要，但用户能勾选时再加（暂时跳过商品）
+   - 注意：单场粒度永远是 0 的字段（time / liveDay / liveCnt / validLiveCnt 等）不加，加了也是 0
+
+2. **Row + KS_COLUMNS 同步扩展**：从 25 → ~60 个字段（剩 30 个商品/累计统计跳过）
+
+3. **ColumnDef 加 `dataSource: 'today' | 'history' | 'common'` 字段**：标识字段来自哪个 API
+   - common：基础信息（主播/项目/经纪人等跨源通用）
+   - today：今日独有（推广 / 画像 / 分级）
+   - history：历史独有（涨粉 / 转粉率 / 有效观看率等深度指标）
+   - 同语义跨源字段标 common（今日和历史都拉得到，比如点赞/评论/流水）
+
+#### D-2: ColumnCustomizer 支持二级分组（dataSource 大分类 + 业务小分类）
+
+`ColumnCustomizer` 当前左栏只支持一层分组（如"流量"/"涨粉"）。改造成两层：
+
+```
+左栏布局：
+├── 基础信息 (4)
+├── 今日实时指标 (17)
+│   ├── 推广
+│   ├── 画像
+│   └── 分级
+└── 历史权威指标 (44)
+    ├── 流量
+    ├── 涨粉
+    ├── 互动
+    ├── 送礼
+    └── 违规
+```
+
+实现方式：
+- `ColumnDef` 加 `topGroup` 字段：`'common' | 'today' | 'history'`
+- `groups` prop 改成 nested：`{ topGroup: string; subGroups: string[] }[]`
+- 左栏渲染分两层（topGroup 标题 + subGroup 子项）
+- 抖音那边目前没有 dataSource 概念，topGroup 默认 'common' 不破坏现有
+
+#### D-3: 数据源切换 chip 联动列集
+
+phase B 加的「数据: 全部 / 历史权威 / 今日实时」切换：
+- 切到 'today' → 自定义列里只能勾选 today + common 字段
+- 切到 'history' → 只能勾选 history + common 字段
+- 切到 'all' → 全部可选（但 today 独有字段在 history-only 行里会显示 —）
+
+或者更简单：切换不影响列勾选，只影响行的过滤（保持当前行为）。让用户拍。
+
+
 **现状**：
 - `anchor-table.tsx` (1027 行) 抖音 specific
 - `kuaishou-anchor-table.tsx` (1000+ 行) 快手 specific（重复了 70% 逻辑）
