@@ -48,9 +48,9 @@ export function AnchorsBoard(): React.JSX.Element {
       </PresetToolbar>
       {hydrated &&
         (platform === "douyin" ? (
-          <GenericAnchorTable config={douyinConfig} />
+          <GenericAnchorTable key="douyin" config={douyinConfig} />
         ) : (
-          <GenericAnchorTable config={kuaishouConfig} />
+          <GenericAnchorTable key="kuaishou" config={kuaishouConfig} />
         ))}
     </div>
   );
