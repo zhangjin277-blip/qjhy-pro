@@ -368,6 +368,7 @@ export const kuaishouConfig: PlatformConfig<KuaishouColKey, KuaishouRow> = {
 
   defaultVisibleKeys: KS_DEFAULT_VISIBLE,
   defaultSort: { key: "total_amt", dir: "desc" },
+  defaultPageSize: 15,
   storageKeyPrefix: "qjhy:anchors:kuaishou:cols:",
   colsByPreset: false,
 

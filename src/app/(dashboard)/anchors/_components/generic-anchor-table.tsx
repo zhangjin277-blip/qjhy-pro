@@ -33,7 +33,7 @@ import type { UserColumnPreset } from "@/modules/column-presets";
 import type { ColumnDef } from "./column-presets";
 import type { AnchorFilters, PlatformConfig } from "./platform-config";
 
-const PAGE_SIZES = [50, 100, 200] as const;
+const PAGE_SIZES = [15, 50, 100, 200] as const;
 type PageSize = (typeof PAGE_SIZES)[number];
 type SortDir = "asc" | "desc";
 
@@ -54,7 +54,9 @@ export function GenericAnchorTable<TKey extends string, TRow>({
   const [sortKey, setSortKey] = useState<TKey>(config.defaultSort.key);
   const [sortDir, setSortDir] = useState<SortDir>(config.defaultSort.dir);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<PageSize>(50);
+  const [pageSize, setPageSize] = useState<PageSize>(
+    (config.defaultPageSize as PageSize | undefined) ?? 50,
+  );
 
   const [activePresetId, setActivePresetId] = useState<string>(config.defaultSystemPresetId);
   const [visibleKeys, setVisibleKeys] = useState<TKey[]>(() =>

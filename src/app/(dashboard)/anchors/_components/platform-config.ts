@@ -84,6 +84,8 @@ export interface PlatformConfig<TKey extends string, TRow> {
   defaultVisibleKeys: TKey[];
   /** 默认排序 */
   defaultSort: { key: TKey; dir: "asc" | "desc" };
+  /** 默认每页条数（必须在 PAGE_SIZES 内：15/50/100/200） */
+  defaultPageSize?: number;
 
   /** localStorage key 前缀（visibleCols + kpiKeys 各 platform 独立） */
   storageKeyPrefix: string;
