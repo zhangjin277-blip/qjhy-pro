@@ -179,7 +179,17 @@ export function GenericAnchorTable<TKey extends string, TRow>({
         setRows(parsed.rows);
         setPreviousRows(parsed.previousRows ?? []);
         setServerKpi(parsed.serverKpi ?? null);
-        setPeriodDays(parsed.days ?? 1);
+        // 优先用 API 返回的 days；否则从 filters.date_from/to 算（含两端）
+        const fallbackDays =
+          Math.max(
+            1,
+            Math.round(
+              (Date.parse(`${filters.date_to}T00:00:00Z`) -
+                Date.parse(`${filters.date_from}T00:00:00Z`)) /
+                86_400_000,
+            ) + 1,
+          ) || 1;
+        setPeriodDays(parsed.days ?? fallbackDays);
         setPage(1);
       } catch (e) {
         if (cancelled) return;
