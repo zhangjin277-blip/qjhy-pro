@@ -32,7 +32,15 @@ export interface KpiItem {
   onRemove?: () => void;
 }
 
-export function KpiGrid({ items }: { items: KpiItem[] }) {
+export interface KpiGridProps {
+  items: KpiItem[];
+  /** 选中的卡片 key（点击切换趋势图等场景） */
+  activeKey?: string | null;
+  /** 卡片点击回调；提供后卡片变成可交互（cursor + ring） */
+  onSelect?: (key: string) => void;
+}
+
+export function KpiGrid({ items, activeKey = null, onSelect }: KpiGridProps) {
   if (items.length === 0) return null;
 
   // 列数自适应：≤4 个用 4 列，5+ 用 6 列
@@ -41,18 +49,37 @@ export function KpiGrid({ items }: { items: KpiItem[] }) {
   return (
     <div className={cn("grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3", lgCols)}>
       {items.map((it) => (
-        <KpiCard key={it.key} item={it} />
+        <KpiCard key={it.key} item={it} active={activeKey === it.key} onSelect={onSelect} />
       ))}
     </div>
   );
 }
 
-function KpiCard({ item }: { item: KpiItem }) {
+function KpiCard({
+  item,
+  active,
+  onSelect,
+}: {
+  item: KpiItem;
+  active: boolean;
+  onSelect?: (key: string) => void;
+}) {
+  const interactive = !!onSelect;
   return (
-    <div className="group bg-card relative min-w-0 rounded-lg border border-border px-4 py-3">
+    <div
+      onClick={interactive ? () => onSelect?.(item.key) : undefined}
+      className={cn(
+        "group bg-card relative min-w-0 rounded-lg border px-4 py-3 transition",
+        active ? "border-primary shadow-[inset_0_0_0_1px_var(--primary)]" : "border-border",
+        interactive && "cursor-pointer hover:border-primary/40 hover:shadow-sm",
+      )}
+    >
       {item.onRemove && (
         <button
-          onClick={item.onRemove}
+          onClick={(e) => {
+            e.stopPropagation();
+            item.onRemove?.();
+          }}
           className="text-muted-foreground/40 hover:bg-muted hover:text-change-up absolute top-1 right-1 size-5 rounded-full opacity-0 transition group-hover:opacity-100"
           title="移除"
         >

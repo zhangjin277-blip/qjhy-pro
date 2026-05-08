@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils/cn";
+import { KuaishouAnchorDetailDrawer } from "./kuaishou-anchor-detail-drawer";
 
 interface Row {
   id: string;
@@ -95,6 +96,8 @@ export function KuaishouAnchorTable(): React.JSX.Element {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(50);
+
+  const [selectedAnchor, setSelectedAnchor] = useState<Row | null>(null);
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
@@ -295,7 +298,11 @@ export function KuaishouAnchorTable(): React.JSX.Element {
                 </TableRow>
               ) : (
                 pagedRows.map((r) => (
-                  <TableRow key={r.id} className="group hover:bg-[var(--hover-bg)]">
+                  <TableRow
+                    key={r.id}
+                    onClick={() => setSelectedAnchor(r)}
+                    className="group cursor-pointer hover:bg-[var(--hover-bg)]"
+                  >
                     <TableCell
                       className="px-3 py-2 sticky left-0 z-10 bg-white group-hover:bg-[var(--hover-bg)]"
                       style={{ width: "260px", maxWidth: "260px" }}
@@ -362,6 +369,11 @@ export function KuaishouAnchorTable(): React.JSX.Element {
         total={sortedRows.length}
         onPage={setPage}
         onPageSize={setPageSize}
+      />
+
+      <KuaishouAnchorDetailDrawer
+        anchor={selectedAnchor}
+        onOpenChange={(open) => !open && setSelectedAnchor(null)}
       />
     </div>
   );
