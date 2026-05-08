@@ -3,41 +3,41 @@ import type { ColumnDef } from "./column-presets";
 /**
  * 快手主播明细的列配置（独立于抖音）。
  *
- * 分组结构与抖音一致：
- *   - 左栏 group 平铺（基础 / 直播数据 / 今日实时）
- *   - 中栏 subGroup 切块（直播数据下：直播表现/流量/涨粉/互动/送礼/违规；
- *                       今日实时下：推广/画像与状态）
+ * 分组结构与抖音一致：左栏按业务平铺 group（无大类），中栏直接列出该 group 的列。
+ *
+ * 数据源差异通过 dataSource chip 联动 visibleKeys 切换（dataSourceColumnPresets），
+ * 不在 customizer 分组上区分 today/history。
  */
 
 export type KuaishouColKey =
-  // 基础（pinned）
+  // pinned
   | "account_name"
   | "product"
-  // 基础
+  // 公会信息
   | "agent_name"
   | "live_status"
   | "fans_count"
   | "joined_at"
   | "contract_expire_at"
-  // 直播数据 / 直播表现
+  // 直播表现
   | "session_count"
   | "total_amt"
   | "avg_acu"
   | "total_duration_h"
-  // 直播数据 / 流量
+  // 流量
   | "max_peak"
   | "total_play_uv"
   | "total_play_user_cnt"
   | "avg_play_rate"
   | "avg_per_play_time_min"
   | "avg_live_cover_ctr"
-  // 直播数据 / 涨粉
+  // 涨粉
   | "total_add_fans"
   | "total_follow_author"
   | "total_cancel_follow"
   | "avg_transfer_fans_rate"
   | "max_fans_club_cnt"
-  // 直播数据 / 互动
+  // 互动
   | "total_like_cnt"
   | "total_like_uv"
   | "avg_like_rate"
@@ -49,15 +49,15 @@ export type KuaishouColKey =
   | "avg_share_rate"
   | "total_interact_num"
   | "avg_interact_rate"
-  // 直播数据 / 送礼
+  // 送礼
   | "total_send_gift_uv"
   | "total_sent_gift_cnt"
   | "total_live_video_amt"
   | "total_live_chat_room_amt"
-  // 直播数据 / 违规
+  // 违规
   | "total_report_num"
   | "avg_report_rate"
-  // 今日实时 / 推广
+  // 推广
   | "total_promote_amt"
   | "total_promote_cost"
   | "total_promote_refund"
@@ -66,7 +66,7 @@ export type KuaishouColKey =
   | "avg_promote_roi"
   | "total_promote_orders"
   | "total_promote_fans_add"
-  // 今日实时 / 画像与状态
+  // 画像与状态
   | "fans_most_age"
   | "fans_male_rate"
   | "fans_most_province"
@@ -77,439 +77,162 @@ export type KuaishouColKey =
   | "settle_in_time"
   | "settle_province";
 
-export const KS_GROUPS = ["基础", "直播数据", "今日实时"];
+export const KS_GROUPS = [
+  "公会信息",
+  "直播表现",
+  "流量",
+  "涨粉",
+  "互动",
+  "送礼",
+  "违规",
+  "推广",
+  "画像与状态",
+];
 
 export const KS_COLUMNS: ColumnDef<KuaishouColKey>[] = [
-  // 基础（含 pinned）
+  // pinned
   {
     key: "account_name",
     label: "主播",
-    group: "基础",
+    group: "公会信息",
     align: "left",
     fmt: "anchor_info",
     sticky: true,
     pinned: true,
   },
-  { key: "product", label: "项目", group: "基础", align: "left", fmt: "text", pinned: true },
-  { key: "agent_name", label: "经纪人", group: "基础", align: "left", fmt: "text" },
-  { key: "live_status", label: "状态", group: "基础", align: "left", fmt: "text" },
-  { key: "fans_count", label: "粉丝数", group: "基础", align: "right", fmt: "number" },
-  { key: "joined_at", label: "入驻时间", group: "基础", align: "left", fmt: "timestamp" },
+  { key: "product", label: "项目", group: "公会信息", align: "left", fmt: "text", pinned: true },
+
+  // 公会信息
+  { key: "agent_name", label: "经纪人", group: "公会信息", align: "left", fmt: "text" },
+  { key: "live_status", label: "状态", group: "公会信息", align: "left", fmt: "text" },
+  { key: "fans_count", label: "粉丝数", group: "公会信息", align: "right", fmt: "number" },
+  { key: "joined_at", label: "入驻时间", group: "公会信息", align: "left", fmt: "timestamp" },
   {
     key: "contract_expire_at",
     label: "合约到期",
-    group: "基础",
+    group: "公会信息",
     align: "left",
     fmt: "timestamp",
   },
 
-  // 直播数据 / 直播表现
-  {
-    key: "session_count",
-    label: "场次",
-    group: "直播数据",
-    subGroup: "直播表现",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_amt",
-    label: "流水",
-    group: "直播数据",
-    subGroup: "直播表现",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "avg_acu",
-    label: "平均ACU",
-    group: "直播数据",
-    subGroup: "直播表现",
-    align: "right",
-    fmt: "number",
-  },
+  // 直播表现
+  { key: "session_count", label: "场次", group: "直播表现", align: "right", fmt: "number" },
+  { key: "total_amt", label: "流水", group: "直播表现", align: "right", fmt: "number" },
+  { key: "avg_acu", label: "平均ACU", group: "直播表现", align: "right", fmt: "number" },
   {
     key: "total_duration_h",
     label: "总直播时长",
-    group: "直播数据",
-    subGroup: "直播表现",
+    group: "直播表现",
     align: "right",
     fmt: "duration",
   },
 
-  // 直播数据 / 流量
-  {
-    key: "max_peak",
-    label: "峰值在线",
-    group: "直播数据",
-    subGroup: "流量",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_play_uv",
-    label: "有效观看人数",
-    group: "直播数据",
-    subGroup: "流量",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_play_user_cnt",
-    label: "总观看次数",
-    group: "直播数据",
-    subGroup: "流量",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "avg_play_rate",
-    label: "平均观看率",
-    group: "直播数据",
-    subGroup: "流量",
-    align: "right",
-    fmt: "percent",
-  },
+  // 流量
+  { key: "max_peak", label: "峰值在线", group: "流量", align: "right", fmt: "number" },
+  { key: "total_play_uv", label: "有效观看人数", group: "流量", align: "right", fmt: "number" },
+  { key: "total_play_user_cnt", label: "总观看次数", group: "流量", align: "right", fmt: "number" },
+  { key: "avg_play_rate", label: "平均观看率", group: "流量", align: "right", fmt: "percent" },
   {
     key: "avg_per_play_time_min",
     label: "平均观看时长",
-    group: "直播数据",
-    subGroup: "流量",
+    group: "流量",
     align: "right",
     fmt: "duration",
   },
-  {
-    key: "avg_live_cover_ctr",
-    label: "封面点击率",
-    group: "直播数据",
-    subGroup: "流量",
-    align: "right",
-    fmt: "percent",
-  },
+  { key: "avg_live_cover_ctr", label: "封面点击率", group: "流量", align: "right", fmt: "percent" },
 
-  // 直播数据 / 涨粉
-  {
-    key: "total_add_fans",
-    label: "净涨粉",
-    group: "直播数据",
-    subGroup: "涨粉",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_follow_author",
-    label: "直播关注",
-    group: "直播数据",
-    subGroup: "涨粉",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_cancel_follow",
-    label: "直播取关",
-    group: "直播数据",
-    subGroup: "涨粉",
-    align: "right",
-    fmt: "number",
-  },
+  // 涨粉
+  { key: "total_add_fans", label: "净涨粉", group: "涨粉", align: "right", fmt: "number" },
+  { key: "total_follow_author", label: "直播关注", group: "涨粉", align: "right", fmt: "number" },
+  { key: "total_cancel_follow", label: "直播取关", group: "涨粉", align: "right", fmt: "number" },
   {
     key: "avg_transfer_fans_rate",
     label: "平均转粉率",
-    group: "直播数据",
-    subGroup: "涨粉",
+    group: "涨粉",
     align: "right",
     fmt: "percent",
   },
-  {
-    key: "max_fans_club_cnt",
-    label: "粉丝团总数",
-    group: "直播数据",
-    subGroup: "涨粉",
-    align: "right",
-    fmt: "number",
-  },
+  { key: "max_fans_club_cnt", label: "粉丝团总数", group: "涨粉", align: "right", fmt: "number" },
 
-  // 直播数据 / 互动
-  {
-    key: "total_like_cnt",
-    label: "点赞",
-    group: "直播数据",
-    subGroup: "互动",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_like_uv",
-    label: "点赞人数",
-    group: "直播数据",
-    subGroup: "互动",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "avg_like_rate",
-    label: "点赞率",
-    group: "直播数据",
-    subGroup: "互动",
-    align: "right",
-    fmt: "percent",
-  },
-  {
-    key: "total_comment_cnt",
-    label: "评论",
-    group: "直播数据",
-    subGroup: "互动",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_comment_uv",
-    label: "评论人数",
-    group: "直播数据",
-    subGroup: "互动",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "avg_comment_rate",
-    label: "评论率",
-    group: "直播数据",
-    subGroup: "互动",
-    align: "right",
-    fmt: "percent",
-  },
-  {
-    key: "total_share_cnt",
-    label: "分享",
-    group: "直播数据",
-    subGroup: "互动",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_share_uv",
-    label: "分享人数",
-    group: "直播数据",
-    subGroup: "互动",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "avg_share_rate",
-    label: "分享率",
-    group: "直播数据",
-    subGroup: "互动",
-    align: "right",
-    fmt: "percent",
-  },
-  {
-    key: "total_interact_num",
-    label: "互动总量",
-    group: "直播数据",
-    subGroup: "互动",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "avg_interact_rate",
-    label: "互动率",
-    group: "直播数据",
-    subGroup: "互动",
-    align: "right",
-    fmt: "percent",
-  },
+  // 互动
+  { key: "total_like_cnt", label: "点赞", group: "互动", align: "right", fmt: "number" },
+  { key: "total_like_uv", label: "点赞人数", group: "互动", align: "right", fmt: "number" },
+  { key: "avg_like_rate", label: "点赞率", group: "互动", align: "right", fmt: "percent" },
+  { key: "total_comment_cnt", label: "评论", group: "互动", align: "right", fmt: "number" },
+  { key: "total_comment_uv", label: "评论人数", group: "互动", align: "right", fmt: "number" },
+  { key: "avg_comment_rate", label: "评论率", group: "互动", align: "right", fmt: "percent" },
+  { key: "total_share_cnt", label: "分享", group: "互动", align: "right", fmt: "number" },
+  { key: "total_share_uv", label: "分享人数", group: "互动", align: "right", fmt: "number" },
+  { key: "avg_share_rate", label: "分享率", group: "互动", align: "right", fmt: "percent" },
+  { key: "total_interact_num", label: "互动总量", group: "互动", align: "right", fmt: "number" },
+  { key: "avg_interact_rate", label: "互动率", group: "互动", align: "right", fmt: "percent" },
 
-  // 直播数据 / 送礼
-  {
-    key: "total_send_gift_uv",
-    label: "送礼人数",
-    group: "直播数据",
-    subGroup: "送礼",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_sent_gift_cnt",
-    label: "送礼次数",
-    group: "直播数据",
-    subGroup: "送礼",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_live_video_amt",
-    label: "竖屏流水",
-    group: "直播数据",
-    subGroup: "送礼",
-    align: "right",
-    fmt: "number",
-  },
+  // 送礼
+  { key: "total_send_gift_uv", label: "送礼人数", group: "送礼", align: "right", fmt: "number" },
+  { key: "total_sent_gift_cnt", label: "送礼次数", group: "送礼", align: "right", fmt: "number" },
+  { key: "total_live_video_amt", label: "竖屏流水", group: "送礼", align: "right", fmt: "number" },
   {
     key: "total_live_chat_room_amt",
     label: "聊天室流水",
-    group: "直播数据",
-    subGroup: "送礼",
+    group: "送礼",
     align: "right",
     fmt: "number",
   },
 
-  // 直播数据 / 违规
-  {
-    key: "total_report_num",
-    label: "举报次数",
-    group: "直播数据",
-    subGroup: "违规",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "avg_report_rate",
-    label: "举报率",
-    group: "直播数据",
-    subGroup: "违规",
-    align: "right",
-    fmt: "percent",
-  },
+  // 违规
+  { key: "total_report_num", label: "举报次数", group: "违规", align: "right", fmt: "number" },
+  { key: "avg_report_rate", label: "举报率", group: "违规", align: "right", fmt: "percent" },
 
-  // 今日实时 / 推广（today_extra；history 数据源时全 0）
-  {
-    key: "total_promote_amt",
-    label: "推广金额",
-    group: "今日实时",
-    subGroup: "推广",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_promote_cost",
-    label: "推广消耗",
-    group: "今日实时",
-    subGroup: "推广",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_promote_refund",
-    label: "推广退款",
-    group: "今日实时",
-    subGroup: "推广",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_promote_watch",
-    label: "推广观看",
-    group: "今日实时",
-    subGroup: "推广",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_promote_gmv",
-    label: "推广 GMV",
-    group: "今日实时",
-    subGroup: "推广",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "avg_promote_roi",
-    label: "推广 ROI",
-    group: "今日实时",
-    subGroup: "推广",
-    align: "right",
-    fmt: "number",
-  },
-  {
-    key: "total_promote_orders",
-    label: "推广订单",
-    group: "今日实时",
-    subGroup: "推广",
-    align: "right",
-    fmt: "number",
-  },
+  // 推广（today_extra；history 数据源时全 0）
+  { key: "total_promote_amt", label: "推广金额", group: "推广", align: "right", fmt: "number" },
+  { key: "total_promote_cost", label: "推广消耗", group: "推广", align: "right", fmt: "number" },
+  { key: "total_promote_refund", label: "推广退款", group: "推广", align: "right", fmt: "number" },
+  { key: "total_promote_watch", label: "推广观看", group: "推广", align: "right", fmt: "number" },
+  { key: "total_promote_gmv", label: "推广 GMV", group: "推广", align: "right", fmt: "number" },
+  { key: "avg_promote_roi", label: "推广 ROI", group: "推广", align: "right", fmt: "number" },
+  { key: "total_promote_orders", label: "推广订单", group: "推广", align: "right", fmt: "number" },
   {
     key: "total_promote_fans_add",
     label: "推广涨粉",
-    group: "今日实时",
-    subGroup: "推广",
+    group: "推广",
     align: "right",
     fmt: "number",
   },
 
-  // 今日实时 / 画像与状态（today_extra；取最新一场）
+  // 画像与状态（today_extra；取最新一场）
   {
     key: "fans_most_age",
     label: "主要粉丝年龄",
-    group: "今日实时",
-    subGroup: "画像与状态",
+    group: "画像与状态",
     align: "left",
     fmt: "text",
   },
   {
     key: "fans_male_rate",
     label: "男性粉丝率",
-    group: "今日实时",
-    subGroup: "画像与状态",
+    group: "画像与状态",
     align: "right",
     fmt: "percent",
   },
   {
     key: "fans_most_province",
     label: "主要粉丝省份",
-    group: "今日实时",
-    subGroup: "画像与状态",
+    group: "画像与状态",
     align: "left",
     fmt: "text",
   },
-  {
-    key: "author_type",
-    label: "主播分级",
-    group: "今日实时",
-    subGroup: "画像与状态",
-    align: "left",
-    fmt: "text",
-  },
-  {
-    key: "author_ratio",
-    label: "分成比例",
-    group: "今日实时",
-    subGroup: "画像与状态",
-    align: "right",
-    fmt: "percent",
-  },
-  {
-    key: "has_promote",
-    label: "有推广",
-    group: "今日实时",
-    subGroup: "画像与状态",
-    align: "left",
-    fmt: "text",
-  },
-  {
-    key: "has_punish",
-    label: "有处罚",
-    group: "今日实时",
-    subGroup: "画像与状态",
-    align: "left",
-    fmt: "text",
-  },
+  { key: "author_type", label: "主播分级", group: "画像与状态", align: "left", fmt: "text" },
+  { key: "author_ratio", label: "分成比例", group: "画像与状态", align: "right", fmt: "percent" },
+  { key: "has_promote", label: "有推广", group: "画像与状态", align: "left", fmt: "text" },
+  { key: "has_punish", label: "有处罚", group: "画像与状态", align: "left", fmt: "text" },
   {
     key: "settle_in_time",
     label: "签约时间",
-    group: "今日实时",
-    subGroup: "画像与状态",
+    group: "画像与状态",
     align: "left",
     fmt: "timestamp",
   },
-  {
-    key: "settle_province",
-    label: "签约省份",
-    group: "今日实时",
-    subGroup: "画像与状态",
-    align: "left",
-    fmt: "text",
-  },
+  { key: "settle_province", label: "签约省份", group: "画像与状态", align: "left", fmt: "text" },
 ];
 
 export function getKsColumnsByGroup(group: string): ColumnDef<KuaishouColKey>[] {
