@@ -1,204 +1,94 @@
 # 主播明细 AnchorTable 通用化重构 — Handoff
 
-> **目标**：抖音 / 快手两个 tab 100% 同款 UI 与交互。当前两份独立代码（AnchorTable + KuaishouAnchorTable），未来共用 `<GenericAnchorTable platformConfig>`。
+> **目标**：抖音 / 快手两个 tab 100% 同款 UI 与交互。共用 `<GenericAnchorTable platformConfig>`。
 >
-> **进度**：Phase A 已 commit (`ColumnCustomizer` 通用化)，Phase B 已 commit (today/history 数据源切换)。
->
-> **下一步顺序**：**先 Phase D 后 Phase C**（不要反过来，否则 C 的代码 D 时要重写）。
+> **当前进度**：Phase A/B/D 全部完成。Phase D 含 D-1/D-2/D-3 + 抽屉对齐。Phase C（DB 用户预设）未做。
 
-## 已完成（不要再做）
+## 已完成
 
 ### Phase A — ColumnCustomizer 通用化（commit 已合）
 - `column-presets.ts:12` `ColumnDef<TKey extends string = ...>` 加 generic
-- `column-customizer.tsx` 整体改成 `<TKey extends string>`，接受 4 个 props（带默认值兼容抖音）：
-  - `allColumns?` / `groups?` / `getColumnsByGroup?` / `getColumnsBySubGroup?`
-- 新建 `kuaishou-column-presets.ts`：28 列 + 8 分组（基础/公会信息/直播表现/流量/涨粉/互动/送礼/违规）
-- KuaishouAnchorTable 删除 popover，用 `<ColumnCustomizer<KuaishouColKey>>` dialog
+- `column-customizer.tsx` 整体改成 `<TKey extends string>`，接 `allColumns?` / `groups?` / `groupSections?` / `getColumnsByGroup?` / `getColumnsBySubGroup?`
 
 ### Phase B — today/history 切换（commit 已合）
 - `kuaishou-queries.ts:dateRangeToMs` 加 `dataSource: 'all'|'today'|'history'` 过滤
-- `/api/anchors-kuaishou` 接受 `data_source` query param
-- KuaishouAnchorTable 新增 PresetToolbar "数据:" chip 行（全部 / 历史权威 / 今日实时）+ URL 同步
+- `/api/anchors-kuaishou` 接 `data_source` query param
 
-## 待做（先 D 后 C —— 顺序很关键）
+### Phase D — GenericAnchorTable 抽取（commit a83f393）
+- 新增 `platform-config.ts` / `douyin-config.tsx` / `kuaishou-config.tsx` / `generic-anchor-table.tsx`
+- 删除 `anchor-table.tsx` (1027) + `kuaishou-anchor-table.tsx` (1118) + `csv-export.tsx` (60)，共减 2221 行
+- 切 platform 用 `key={platform}` 强制 React unmount + remount，重置全部 state（commit 6f0e420）
 
-> **不要先做 C**：在 KuaishouAnchorTable 里加用户预设保存的代码，等 D 删掉这个组件后又要重写。先做 D 让两个 tab 共用 GenericAnchorTable，C 在 GenericAnchorTable 里实现一次两边都拿到。
+### D-1 快手字段扩展（commit 31ece21 + b45d3ec hotfix + a6f3dec 删推广）
+- 字段从 25 → ~44（删推广 8 后）
+- queries.ts SQL 子查询 + KS_COLUMNS + KuaishouRow + renderCell 全同步
+- DISTINCT ON 拿最新一场 today_extra 9 字段（画像/分级/状态）
+- 推广 8 字段全删（业务不需要）：sync today_extra 不写入 / queries / UI / dataSourceColumnPresets
+- fans_male_rate / author_ratio 单位 0-100 范围 → SQL /100 转 0-1
+- valid_play_duration_avg_ms 删（schema 无此字段）
 
-### Phase D — AnchorTable 整体 generic 化（删除 KuaishouAnchorTable）
+### D-2 customizer 分组（commit 738c5be）
+- 最终方案：与抖音一致 — 左栏 9 个业务 group 平铺（公会信息/直播表现/流量/涨粉/互动/送礼/违规/画像与状态）
+- ColumnCustomizer 支持 `groupSections?` 两层分组（preserved，未来其他 platform 可用）
 
-**附带任务（D 一起做）**：
+### D-3 dataSource chip 联动列集（commit 373e271）
+- PlatformConfig 加 `dataSourceColumnPresets: { all/today/history: TKey[] }`
+- 切 chip 同步覆盖 visibleKeys（不持久化）
+- 快手三档预设：all 默认 7 列 / today 互动+送礼+画像 14 列 / history 流量+涨粉+互动+送礼 17 列
 
-#### D-1: 快手字段全暴露（90 个）+ 二级分组
+### 抽屉对齐（commit d40255c）
+- 快手抽屉接 `visibleColumns` + `kpiColumns` props
+- KPI 卡片用 kpiColumns（fallback 前 6 chartable）
+- 趋势图按选中 KPI 动态切换
+- 单场列表跟随主表 visibleColumns
+- `listKuaishouLiveSessions` 改 raw SQL 把 schema 字段名 alias 成主表 ColKey（`live_amt → total_amt` 等）
+- 删自带 COLUMNS / loadCols/saveCols / 列设置 popover
 
-当前只暴露 25 个聚合列，剩 50+ 个在 raw jsonb 兜底。要让用户能勾选所有：
+### 杂项
+- `PAGE_SIZES` 加 15 / 快手默认 15 条/页（commit a5ec6dc）
 
-1. **SQL 子查询扩展** (`src/modules/anchors/kuaishou-queries.ts`)：
-   - 加全部 today 独有 17 字段聚合（推广 8 + 画像 4 + 分级 3 + 状态 2）
-   - 加全部 history 独有的剩余字段（fans_club / 各种 _Uv 拆分 / live_video_amt 等）
-   - 商品字段虽然业务不要，但用户能勾选时再加（暂时跳过商品）
-   - 注意：单场粒度永远是 0 的字段（time / liveDay / liveCnt / validLiveCnt 等）不加，加了也是 0
+## 待做 — Phase C
 
-2. **Row + KS_COLUMNS 同步扩展**：从 25 → ~60 个字段（剩 30 个商品/累计统计跳过）
-
-3. **ColumnDef 加 `dataSource: 'today' | 'history' | 'common'` 字段**：标识字段来自哪个 API
-   - common：基础信息（主播/项目/经纪人等跨源通用）
-   - today：今日独有（推广 / 画像 / 分级）
-   - history：历史独有（涨粉 / 转粉率 / 有效观看率等深度指标）
-   - 同语义跨源字段标 common（今日和历史都拉得到，比如点赞/评论/流水）
-
-#### D-2: ColumnCustomizer 支持二级分组（dataSource 大分类 + 业务小分类）
-
-`ColumnCustomizer` 当前左栏只支持一层分组（如"流量"/"涨粉"）。改造成两层：
-
-```
-左栏布局：
-├── 基础信息 (4)
-├── 今日实时指标 (17)
-│   ├── 推广
-│   ├── 画像
-│   └── 分级
-└── 历史权威指标 (44)
-    ├── 流量
-    ├── 涨粉
-    ├── 互动
-    ├── 送礼
-    └── 违规
-```
-
-实现方式：
-- `ColumnDef` 加 `topGroup` 字段：`'common' | 'today' | 'history'`
-- `groups` prop 改成 nested：`{ topGroup: string; subGroups: string[] }[]`
-- 左栏渲染分两层（topGroup 标题 + subGroup 子项）
-- 抖音那边目前没有 dataSource 概念，topGroup 默认 'common' 不破坏现有
-
-#### D-3: 数据源切换 chip 联动列集
-
-phase B 加的「数据: 全部 / 历史权威 / 今日实时」切换：
-- 切到 'today' → 自定义列里只能勾选 today + common 字段
-- 切到 'history' → 只能勾选 history + common 字段
-- 切到 'all' → 全部可选（但 today 独有字段在 history-only 行里会显示 —）
-
-或者更简单：切换不影响列勾选，只影响行的过滤（保持当前行为）。让用户拍。
-
-
-**现状**：
-- `anchor-table.tsx` (1027 行) 抖音 specific
-- `kuaishou-anchor-table.tsx` (1000+ 行) 快手 specific（重复了 70% 逻辑）
-
-**目标**：
-```tsx
-<GenericAnchorTable<TConfig>
-  platformConfig={{
-    apiEndpoint: string,
-    allColumns: ColumnDef<TKey>[],
-    groups: string[],
-    presets: { id, label, keys }[],
-    defaultColumns: TKey[],
-    defaultKpiKeys: TKey[],
-    DrawerComponent: ComponentType<{ row, onClose }>,
-    rowSchema: ZodSchema, // 用于 fetch 后的 type-narrow
-    fmtRowCell: (col, row) => ReactNode, // 各 platform 自定义 cell 渲染
-  }}
-/>
-```
-
-**实施步骤**（推荐顺序）：
-
-1. **抽 platform-config 类型** (`platform-config.ts`)
-   ```ts
-   export interface PlatformConfig<TKey extends string, TRow> {
-     id: 'douyin' | 'kuaishou';
-     apiEndpoint: string;
-     allColumns: ColumnDef<TKey>[];
-     groups: string[];
-     getColumnsByGroup: (g: string) => ColumnDef<TKey>[];
-     getColumnsBySubGroup: (g: string) => { subGroup: string|null; columns: ColumnDef<TKey>[] }[];
-     defaultColumns: TKey[];
-     defaultKpiKeys: TKey[];
-     presets: { id: string; label: string; keys: TKey[] }[];
-     DrawerComponent: ComponentType<{ row: TRow | null; onOpenChange: (v: boolean) => void }>;
-     // platform-specific fetch + URL params 转换
-     buildApiParams: (filters: GenericFilters) => URLSearchParams;
-     parseApiResponse: (json: unknown) => { rows: TRow[]; kpi: GenericKpi };
-     // cell 渲染：fmt 不够时由 platform 决定
-     renderCell?: (col: ColumnDef<TKey>, row: TRow) => ReactNode;
-   }
-   ```
-
-2. **新建 douyin-config.ts / kuaishou-config.ts** 各自实现 PlatformConfig
-
-3. **抽 GenericAnchorTable** — 把 anchor-table.tsx 改成接受 platformConfig prop。难点：
-   - sortKey 从 `keyof AnchorListRow` 改成 `TKey`
-   - aggregate / formatCompare 等用 fmt 自动判断
-   - URL params (`date_from/to/project/search`) 是抖音-specific 命名 — 让 buildApiParams 自定义
-   - PINNED_COLUMNS — 抖音是 nick_name+project，快手是 account_name+product（platform-specific）
-
-4. **删除 KuaishouAnchorTable** + 更新 anchors-board.tsx：
-   ```tsx
-   const config = platform === 'douyin' ? douyinConfig : kuaishouConfig;
-   return <GenericAnchorTable platformConfig={config} />;
-   ```
-
-5. **回归测试**两个 tab 完全一致 + KPI Picker 也通用化
-
-**预估工作量**：4-6 小时（包含调试）。
-
-### Phase C — 用户预设保存到 DB（D 完成后做）
-
-**前提**：D 完成，GenericAnchorTable 已经在用。
+### 用户预设保存到 DB（让快手也开"保存为预设"）
 
 **抖音现状**：
-- `column_preset` 表（schema 在 `src/db/schema/column-preset.ts` 或类似）
-- `/api/column-presets` GET/POST/DELETE
-- AnchorTable 内有 `userPresets` state、`applyUserPreset` / `deleteUserPreset` / `pendingSaveColumns`
-- ColumnCustomizer 接 `onUpdatePreset` / `onSaveAsNewPreset` 回调
+- `column_preset` 表（在 `src/db/schema/`）
+- `/api/column-presets` GET/POST/PUT/DELETE
+- GenericAnchorTable 已实现 `userPresets` state、CRUD 函数（受 `userPresetsEnabled` 控制）
+- 抖音 `userPresetsEnabled=true`，快手 `userPresetsEnabled=false`
 
 **做法**：
-1. **Migration**: `column_preset` 表加 `platform text NOT NULL DEFAULT 'douyin'`，索引改 `(user_id, platform)`
-2. `/api/column-presets` GET/POST 接受 `?platform=` filter
-3. 在 GenericAnchorTable（D 已完成）内部实现一次预设状态机，platform 由 platformConfig.id 传入
-4. 两个 tab 自动获得"保存为预设"功能
+1. Migration: `column_preset` 表加 `platform text NOT NULL DEFAULT 'douyin'`，索引改 `(user_id, platform, name)`
+2. `/api/column-presets` GET 接 `?platform=` filter；POST 入参带 `platform`
+3. GenericAnchorTable 的 fetch/save/update 都加 `platform=config.id`
+4. 快手 config 改 `userPresetsEnabled=true`
+5. UserColumnPreset.project 字段 — 抖音用 `'all'|'ddz'|'three'`，快手用 product 名（"捕鱼大作战" 等）。需让 project 字段类型放宽成 string，或加 platform-specific column
 
-**风险**：抖音和快手的 ColKey 类型不兼容（不同字面量集合），column_preset.columns 字段是 `string[]`，runtime OK，type-system 需要 generic cast。
+**风险**：
+- 抖音和快手的 ColKey 类型不兼容（不同字面量集合），`column_preset.columns` 字段是 `string[]`，runtime OK，type-system 需要 generic cast
+- UserColumnPreset.project enum 太严格，需放宽
 
-## 关键文件 + 行号速查
+## 关键文件
 
-- `src/app/(dashboard)/anchors/_components/anchor-table.tsx`（抖音版，1027 行）
-- `src/app/(dashboard)/anchors/_components/kuaishou-anchor-table.tsx`（快手版，~1000 行）
-- `src/app/(dashboard)/anchors/_components/column-customizer.tsx`（已通用化，275 行）
-- `src/app/(dashboard)/anchors/_components/kpi-picker.tsx`（KPI 选择 dialog，待通用化）
-- `src/app/(dashboard)/anchors/_components/filters.tsx`（顶部过滤器，已透明底，待 project 参数化）
-- `src/app/(dashboard)/anchors/_components/column-presets.ts`（抖音列定义 1207 行 + ColumnDef generic 接口）
-- `src/app/(dashboard)/anchors/_components/kuaishou-column-presets.ts`（快手列定义，新建）
-- `src/modules/anchors/kuaishou-queries.ts`（含 dataSource 过滤）
-- `src/app/api/anchors-kuaishou/route.ts`（含 data_source 参数）
-- `src/app/api/column-presets/route.ts`（用户预设 CRUD）
-
-## 还差的具体差异（外壳通用化后顺手补）
-
-### 行级同比 chip（快手缺）
-抖音每行的数值列右侧有 `↑12.4%` 同比 chip（vs 前同期），快手只在 KPI 上有，每行数值没有。
-
-实现：
-1. `kuaishou-queries.ts` 加 prev period 同步查询：把当前已有的 `prev*` KPI 字段扩展到 row 粒度（每个 member 都返回 prev_session_count / prev_total_amt 等）
-2. `KuaishouAnchorRow` 加 `prev_*` 字段（每个聚合字段一个 prev）
-3. 表格 cell 渲染数值时用 `<DeltaPill cur prev>` 包裹（抖音的 `formatCompare` 函数可复用）
-4. 顶部 `showCompare` toggle 控制显隐（已有 state）
-
-### 显示同比 toggle 联动
-- 抖音的 `showCompare` toggle 控制 KPI footer + 每行 DeltaPill 都显示/隐藏
-- 快手 toggle 现在没有任何效果（只是 state 没接到 render 上）
+- `src/app/(dashboard)/anchors/_components/platform-config.ts` — PlatformConfig 接口
+- `src/app/(dashboard)/anchors/_components/generic-anchor-table.tsx` — 通用 table 主组件
+- `src/app/(dashboard)/anchors/_components/douyin-config.tsx` — 抖音配置
+- `src/app/(dashboard)/anchors/_components/kuaishou-config.tsx` — 快手配置
+- `src/app/(dashboard)/anchors/_components/column-customizer.tsx` — 三栏自定义列
+- `src/app/(dashboard)/anchors/_components/anchor-detail-drawer.tsx` — 抖音抽屉
+- `src/app/(dashboard)/anchors/_components/kuaishou-anchor-detail-drawer.tsx` — 快手抽屉
+- `src/modules/anchors/kuaishou-queries.ts` — 快手 SQL（主表聚合 + 单场 raw SQL）
+- `src/app/api/column-presets/route.ts` — 用户预设 CRUD
+- `src/db/schema/column-preset.ts` — 用户预设表 schema
 
 ## 已知坑
 
-1. **chrome-devtools MCP 频繁断开** — 用户验证时可能要刷新好几次。typecheck 过了基本就 OK。
-2. **抖音和快手字段语义不同** — 不能简单 SUM/AVG 通用，每个聚合字段要单独定义 fmt + render。
-3. **today / history 数据 dataSource='all' 时**会双计 — 同一场直播在 today 和 history 各有一行（虽然 today 同步会 skip 已 history 的，但旧数据可能有重叠）。建议默认 dataSource='history'。
+1. **chrome-devtools MCP 频繁断开** — typecheck 过基本就 OK
+2. **抖音和快手字段语义不同** — 各 platform 单独定义聚合 + render
+3. ~~**dataSource='all' 双计**~~ — 已确认不存在。同 live_stream_id 是 primary key，sync-history UPSERT 覆盖同行，data_source 字段从 'today' 改为 'history'，不会双计
 
-## 测试 checklist（Phase D 完成后）
+## 后续可优化
 
-- [ ] 抖音 tab 所有功能正常（日期/项目/搜索/列勾选/同比/预设/CSV 导出/KPI picker/抽屉）
-- [ ] 快手 tab 所有功能正常（同上）
-- [ ] 两个 tab 视觉/交互完全一致（同款 toolbar / 同款 KPI / 同款 dialog）
-- [ ] URL 参数同步（刷新保留 filter）
-- [ ] localStorage 用户预设跨设备不冲突（platform 区分）
+- **GenericAnchorDrawer 抽取**（不急）— 抖音/快手抽屉粒度不同（按日 vs 按场），统一成本约 500-800 行。等第三个 platform 出现再抽
+- **快手抽屉的同步 today_extra 画像**（每场显示该场画像而非"最新一场"）
+- **fans_male_rate / author_ratio / settle_in_time 单位实测**

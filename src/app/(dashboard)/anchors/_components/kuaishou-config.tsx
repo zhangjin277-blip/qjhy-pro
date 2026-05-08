@@ -287,12 +287,6 @@ function renderKuaishouCell(col: ColumnDef<KuaishouColKey>, r: KuaishouRow): Rea
       return r.total_send_gift_uv > 0 ? fmtChinese(r.total_send_gift_uv) : muted();
     case "total_report_num":
       return r.total_report_num > 0 ? r.total_report_num : muted();
-    case "avg_report_rate":
-      return numCell(r.avg_report_rate, (n) => `${(n * 100).toFixed(2)}%`);
-    case "avg_live_cover_ctr":
-      return numCell(r.avg_live_cover_ctr, (n) => `${(n * 100).toFixed(2)}%`);
-    case "max_fans_club_cnt":
-      return numCell(r.max_fans_club_cnt);
     case "avg_share_rate":
       return numCell(r.avg_share_rate, (n) => `${(n * 100).toFixed(2)}%`);
     // 画像/分级/状态

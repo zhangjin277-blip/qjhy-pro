@@ -24,19 +24,17 @@ export type KuaishouColKey =
   | "total_amt"
   | "avg_acu"
   | "total_duration_h"
-  // 流量
+  // 流量（API 不返回 live_cover_ctr）
   | "max_peak"
   | "total_play_uv"
   | "total_play_user_cnt"
   | "avg_play_rate"
   | "avg_per_play_time_min"
-  | "avg_live_cover_ctr"
-  // 涨粉
+  // 涨粉（API 不返回 fans_club_cnt）
   | "total_add_fans"
   | "total_follow_author"
   | "total_cancel_follow"
   | "avg_transfer_fans_rate"
-  | "max_fans_club_cnt"
   // 互动（公会后台只有"次数"和"播放比"，无"人数"和"互动总量"，API 单场粒度也不返回 _uv/interact）
   | "total_like_cnt"
   | "avg_like_rate"
@@ -46,9 +44,8 @@ export type KuaishouColKey =
   | "avg_share_rate"
   // 送礼（API 不返回 sent_gift_cnt / live_video_amt / live_chat_room_amt，已移除）
   | "total_send_gift_uv"
-  // 违规
+  // 违规（API 不返回 report_rate）
   | "total_report_num"
-  | "avg_report_rate"
   // 画像与状态
   | "fans_most_age"
   | "fans_male_rate"
@@ -121,7 +118,6 @@ export const KS_COLUMNS: ColumnDef<KuaishouColKey>[] = [
     align: "left",
     fmt: "duration",
   },
-  { key: "avg_live_cover_ctr", label: "封面点击率", group: "流量", align: "left", fmt: "percent" },
 
   // 涨粉
   { key: "total_add_fans", label: "净涨粉", group: "涨粉", align: "left", fmt: "number" },
@@ -134,7 +130,6 @@ export const KS_COLUMNS: ColumnDef<KuaishouColKey>[] = [
     align: "left",
     fmt: "percent",
   },
-  { key: "max_fans_club_cnt", label: "粉丝团总数", group: "涨粉", align: "left", fmt: "number" },
 
   // 互动（公会后台只有"次数"和"播放比"，无"人数"和"互动总量"）
   { key: "total_like_cnt", label: "点赞次数", group: "互动", align: "left", fmt: "number" },
@@ -149,7 +144,6 @@ export const KS_COLUMNS: ColumnDef<KuaishouColKey>[] = [
 
   // 违规
   { key: "total_report_num", label: "举报次数", group: "违规", align: "left", fmt: "number" },
-  { key: "avg_report_rate", label: "举报率", group: "违规", align: "left", fmt: "percent" },
 
   // 画像与状态（today_extra；取最新一场）
   {

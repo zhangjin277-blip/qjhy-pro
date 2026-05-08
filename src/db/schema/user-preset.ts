@@ -14,6 +14,7 @@ export const user_column_preset = pgTable(
   {
     id: serial("id").primaryKey(),
     dingtalk_user_id: text("dingtalk_user_id").notNull(),
+    platform: text("platform").notNull().default("douyin"), // 'douyin' | 'kuaishou'
     name: text("name").notNull(),
     columns: jsonb("columns").notNull().$type<string[]>(),
     project: text("project").notNull().default("all"),
@@ -21,7 +22,15 @@ export const user_column_preset = pgTable(
     updated_at: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => ({
-    unique_user_name: unique("uq_user_column_preset_user_name").on(t.dingtalk_user_id, t.name),
-    idx_user: index("idx_user_column_preset_user").on(t.dingtalk_user_id),
+    // 同一用户同一 platform 内 name 唯一（跨 platform 可同名）
+    unique_user_platform_name: unique("uq_user_column_preset_user_platform_name").on(
+      t.dingtalk_user_id,
+      t.platform,
+      t.name,
+    ),
+    idx_user_platform: index("idx_user_column_preset_user_platform").on(
+      t.dingtalk_user_id,
+      t.platform,
+    ),
   }),
 );
