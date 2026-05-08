@@ -6,11 +6,12 @@ import { cn } from "@/lib/utils/cn";
 import {
   appendTodayOverrideSlot,
   replaceTodaySegment,
+  resizeTodaySegment,
   saveTodayOverride,
   clearOneOverride,
   copyYesterdayOverrides,
   clearAllTodayOverrides,
-  replaceAccountDateOverrides,
+  replaceAccountDateSchedule,
 } from "../actions";
 
 interface Segment {
@@ -60,12 +61,17 @@ interface HoverTarget {
   canPaste: boolean;
 }
 
-// 撤销/恢复用的 snapshot：某 (account, date) 的 override 状态
-interface OverrideSnapshot {
+// 撤销/恢复用的 snapshot：某 (account, date) 的每日排班状态
+interface ScheduleSnapshot {
   account_id: string;
   date: string;
-  // 该账号当前的 override（每条记录的 user/slots/reason）
-  overrides: { dingtalk_user_id: string; time_slots: [string, string][]; reason: string | null }[];
+  segments: {
+    dingtalk_user_id: string;
+    time_slot: [string, string];
+    is_rest: boolean;
+    reason: string | null;
+    source: string;
+  }[];
 }
 
 function colorFor(name: string | null): string {
@@ -121,33 +127,16 @@ function candidateSearchText(candidate: Candidate) {
   ].join(" ");
 }
 
-// 把 segments 转换为 OverrideSnapshot（仅 override 部分，default 不存）
-function snapshotOf(account: AccountSchedule): OverrideSnapshot {
-  const byUser = new Map<string, { time_slots: [string, string][]; reason: string | null }>();
-  for (const seg of account.segments) {
-    if (seg.source !== "override") continue;
-    const key = seg.user_id;
-    const existing = byUser.get(key);
-    const slot: [string, string] = [
-      `${seg.start.toString().padStart(2, "0")}:00`,
-      `${seg.end.toString().padStart(2, "0")}:00`,
-    ];
-    if (seg.is_rest) {
-      // 休息：slots=[]（仅一次）
-      byUser.set(key, { time_slots: [], reason: seg.reason ?? null });
-    } else if (!existing) {
-      byUser.set(key, { time_slots: [slot], reason: seg.reason ?? null });
-    } else if (existing.time_slots.length > 0) {
-      existing.time_slots.push(slot);
-    }
-  }
+function snapshotOf(account: AccountSchedule): ScheduleSnapshot {
   return {
     account_id: account.account_id,
     date: "",
-    overrides: [...byUser.entries()].map(([user_id, v]) => ({
-      dingtalk_user_id: user_id,
-      time_slots: v.time_slots,
-      reason: v.reason,
+    segments: account.segments.map((seg) => ({
+      dingtalk_user_id: seg.user_id,
+      time_slot: hourSlot(seg.start, seg.end),
+      is_rest: seg.is_rest,
+      reason: seg.reason ?? null,
+      source: seg.source,
     })),
   };
 }
@@ -168,8 +157,8 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
   const [clipboard, setClipboard] = useState<ClipboardItem | null>(null);
 
   // 撤销/恢复 stacks
-  const historyRef = useRef<OverrideSnapshot[]>([]);
-  const redoRef = useRef<OverrideSnapshot[]>([]);
+  const historyRef = useRef<ScheduleSnapshot[]>([]);
+  const redoRef = useRef<ScheduleSnapshot[]>([]);
   const [, forceRerender] = useState(0);
   const bumpHistory = () => forceRerender((n) => n + 1);
 
@@ -212,11 +201,11 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
     bumpHistory();
   }
 
-  async function applySnapshot(snap: OverrideSnapshot) {
-    await replaceAccountDateOverrides({
+  async function applySnapshot(snap: ScheduleSnapshot) {
+    await replaceAccountDateSchedule({
       account_id: snap.account_id,
       date: snap.date || date,
-      overrides: snap.overrides,
+      segments: snap.segments,
     });
     router.refresh();
   }
@@ -389,7 +378,7 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
       pushHistory(r.account_id);
       start(async () => {
         try {
-          await saveTodayOverride({
+          await resizeTodaySegment({
             account_id: r.account_id,
             date,
             dingtalk_user_id: r.seg.user_id,
@@ -400,6 +389,10 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
               ],
             ],
             reason: r.seg.reason ?? null,
+            from_time_slot: [
+              `${r.seg.start.toString().padStart(2, "0")}:00`,
+              `${r.seg.end.toString().padStart(2, "0")}:00`,
+            ],
           });
           router.refresh();
         } catch (err) {
@@ -946,7 +939,8 @@ function SegmentPopover({
         account_id,
         date,
         dingtalk_user_id: pickedUserId,
-        time_slots: asRest ? [] : [slot],
+        time_slots: [slot],
+        is_rest: asRest,
         reason: reason.trim() || null,
       };
       if (segment && !asRest) {

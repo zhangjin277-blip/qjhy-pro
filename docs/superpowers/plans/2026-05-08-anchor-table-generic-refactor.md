@@ -174,6 +174,21 @@ phase B 加的「数据: 全部 / 历史权威 / 今日实时」切换：
 - `src/app/api/anchors-kuaishou/route.ts`（含 data_source 参数）
 - `src/app/api/column-presets/route.ts`（用户预设 CRUD）
 
+## 还差的具体差异（外壳通用化后顺手补）
+
+### 行级同比 chip（快手缺）
+抖音每行的数值列右侧有 `↑12.4%` 同比 chip（vs 前同期），快手只在 KPI 上有，每行数值没有。
+
+实现：
+1. `kuaishou-queries.ts` 加 prev period 同步查询：把当前已有的 `prev*` KPI 字段扩展到 row 粒度（每个 member 都返回 prev_session_count / prev_total_amt 等）
+2. `KuaishouAnchorRow` 加 `prev_*` 字段（每个聚合字段一个 prev）
+3. 表格 cell 渲染数值时用 `<DeltaPill cur prev>` 包裹（抖音的 `formatCompare` 函数可复用）
+4. 顶部 `showCompare` toggle 控制显隐（已有 state）
+
+### 显示同比 toggle 联动
+- 抖音的 `showCompare` toggle 控制 KPI footer + 每行 DeltaPill 都显示/隐藏
+- 快手 toggle 现在没有任何效果（只是 state 没接到 render 上）
+
 ## 已知坑
 
 1. **chrome-devtools MCP 频繁断开** — 用户验证时可能要刷新好几次。typecheck 过了基本就 OK。

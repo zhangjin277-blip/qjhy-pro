@@ -1,12 +1,10 @@
 import { db } from "@/db/client";
 import { dingtalk_user, live_anchor } from "@/db/schema";
-import { schedule_override } from "@/db/schema/schedule-override";
-import { eq } from "drizzle-orm";
+import { daily_schedule_segment } from "@/db/schema/daily-schedule";
+import { and, eq, inArray } from "drizzle-orm";
 import { listAccounts } from "@/modules/live-account/server";
 import { listBindings } from "@/modules/live-anchor";
 import { TodayGantt } from "./_components/today-gantt";
-
-const REPLACED_SEGMENT_REASON = "__qjhy_replaced_segment__";
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -32,22 +30,9 @@ export default async function ScheduleTodayPage({
   const weekday = isoWeekday(date);
   const product = sp.product ?? "捕鱼大作战"; // 默认只看捕鱼；?product=all 看全部
 
-  const [accounts, allBindings, dayOverrides, candidates] = await Promise.all([
+  const [accounts, allBindings, candidates] = await Promise.all([
     listAccounts(product === "all" ? {} : { product }),
     listBindings({}),
-    db
-      .select({
-        id: schedule_override.id,
-        account_id: schedule_override.account_id,
-        date: schedule_override.date,
-        dingtalk_user_id: schedule_override.dingtalk_user_id,
-        anchor_name: dingtalk_user.name,
-        time_slots: schedule_override.time_slots,
-        reason: schedule_override.reason,
-      })
-      .from(schedule_override)
-      .leftJoin(dingtalk_user, eq(schedule_override.dingtalk_user_id, dingtalk_user.user_id))
-      .where(eq(schedule_override.date, date)),
     db
       .select({
         user_id: dingtalk_user.user_id,
@@ -59,6 +44,85 @@ export default async function ScheduleTodayPage({
       .where(eq(dingtalk_user.active, true))
       .orderBy(dingtalk_user.name),
   ]);
+
+  const accountIds = accounts.map((account) => account.id);
+  let dayRows =
+    accountIds.length > 0
+      ? await db
+          .select({
+            id: daily_schedule_segment.id,
+            account_id: daily_schedule_segment.account_id,
+            date: daily_schedule_segment.date,
+            dingtalk_user_id: daily_schedule_segment.dingtalk_user_id,
+            anchor_name: dingtalk_user.name,
+            start_hour: daily_schedule_segment.start_hour,
+            end_hour: daily_schedule_segment.end_hour,
+            is_rest: daily_schedule_segment.is_rest,
+            source: daily_schedule_segment.source,
+            reason: daily_schedule_segment.reason,
+          })
+          .from(daily_schedule_segment)
+          .leftJoin(
+            dingtalk_user,
+            eq(daily_schedule_segment.dingtalk_user_id, dingtalk_user.user_id),
+          )
+          .where(
+            and(
+              eq(daily_schedule_segment.date, date),
+              inArray(daily_schedule_segment.account_id, accountIds),
+            ),
+          )
+      : [];
+
+  const initializedAccountIds = new Set(dayRows.map((row) => row.account_id));
+  const seedRows = [];
+  for (const acc of accounts) {
+    if (initializedAccountIds.has(acc.id)) continue;
+    const accBindings = allBindings.filter((binding) => binding.account_id === acc.id);
+    for (const binding of accBindings) {
+      const restDays = (binding.rest_days as number[] | null) ?? [];
+      if (restDays.includes(weekday)) continue;
+      const slots = (binding.time_slots as [string, string][] | null) ?? [];
+      for (const [start, end] of slots) {
+        seedRows.push({
+          account_id: acc.id,
+          date,
+          dingtalk_user_id: binding.dingtalk_user_id,
+          start_hour: parseHour(start),
+          end_hour: parseHour(end),
+          is_rest: false,
+          source: "default",
+          reason: null,
+          created_by: null,
+        });
+      }
+    }
+  }
+
+  if (seedRows.length > 0) {
+    await db.insert(daily_schedule_segment).values(seedRows);
+    dayRows = await db
+      .select({
+        id: daily_schedule_segment.id,
+        account_id: daily_schedule_segment.account_id,
+        date: daily_schedule_segment.date,
+        dingtalk_user_id: daily_schedule_segment.dingtalk_user_id,
+        anchor_name: dingtalk_user.name,
+        start_hour: daily_schedule_segment.start_hour,
+        end_hour: daily_schedule_segment.end_hour,
+        is_rest: daily_schedule_segment.is_rest,
+        source: daily_schedule_segment.source,
+        reason: daily_schedule_segment.reason,
+      })
+      .from(daily_schedule_segment)
+      .leftJoin(dingtalk_user, eq(daily_schedule_segment.dingtalk_user_id, dingtalk_user.user_id))
+      .where(
+        and(
+          eq(daily_schedule_segment.date, date),
+          inArray(daily_schedule_segment.account_id, accountIds),
+        ),
+      );
+  }
 
   // 合并 default + override，每个账号产生 segments
   interface Segment {
@@ -82,67 +146,18 @@ export default async function ScheduleTodayPage({
   }
 
   const data: AccountSchedule[] = accounts.map((acc) => {
-    const accBindings = allBindings.filter((b) => b.account_id === acc.id);
-    const accOverrides = dayOverrides.filter((o) => o.account_id === acc.id);
-
-    // 已 override 的用户集合（即便 slots=[] 也算覆盖）
-    const overrideUserIds = new Set(accOverrides.map((o) => o.dingtalk_user_id));
-
-    const segments: Segment[] = [];
-
-    // 1. default 部分（排除：今天 rest 的 / 已被 override 的）
-    for (const b of accBindings) {
-      if (overrideUserIds.has(b.dingtalk_user_id)) continue;
-      const restDays = (b.rest_days as number[] | null) ?? [];
-      if (restDays.includes(weekday)) continue;
-      const slots = (b.time_slots as [string, string][] | null) ?? [];
-      for (const [s, e] of slots) {
-        segments.push({
-          user_id: b.dingtalk_user_id,
-          user_name: b.anchor_name,
-          start: parseHour(s),
-          end: parseHour(e),
-          source: "default",
-          is_rest: false,
-        });
-      }
-    }
-
-    // 2. override 部分
-    for (const ov of accOverrides) {
-      const slots = (ov.time_slots as [string, string][] | null) ?? [];
-      if (slots.length === 0) {
-        if (ov.reason === REPLACED_SEGMENT_REASON) continue;
-        // override 显式标记休息：找该用户的 default slots 标记成 is_rest 显示
-        const defaultBinding = accBindings.find((b) => b.dingtalk_user_id === ov.dingtalk_user_id);
-        const defaultSlots = (defaultBinding?.time_slots as [string, string][] | null) ?? [];
-        for (const [s, e] of defaultSlots) {
-          segments.push({
-            user_id: ov.dingtalk_user_id,
-            user_name: ov.anchor_name,
-            start: parseHour(s),
-            end: parseHour(e),
-            source: "override",
-            is_rest: true,
-            override_id: ov.id,
-            reason: ov.reason,
-          });
-        }
-      } else {
-        for (const [s, e] of slots) {
-          segments.push({
-            user_id: ov.dingtalk_user_id,
-            user_name: ov.anchor_name,
-            start: parseHour(s),
-            end: parseHour(e),
-            source: "override",
-            is_rest: false,
-            override_id: ov.id,
-            reason: ov.reason,
-          });
-        }
-      }
-    }
+    const segments: Segment[] = dayRows
+      .filter((row) => row.account_id === acc.id)
+      .map((row) => ({
+        user_id: row.dingtalk_user_id,
+        user_name: row.anchor_name,
+        start: row.start_hour,
+        end: row.end_hour,
+        source: row.source === "default" ? "default" : "override",
+        is_rest: row.is_rest,
+        override_id: row.id,
+        reason: row.reason,
+      }));
 
     return {
       account_id: acc.id,
@@ -159,7 +174,7 @@ export default async function ScheduleTodayPage({
       <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
         <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">今日排班</span>
         <span className="ml-auto px-3 text-xs text-muted-foreground">
-          点击色块改主播 · 临时调班写入 schedule_override
+          点击色块改主播 · 今日排班独立保存
         </span>
       </div>
       <TodayGantt date={date} accounts={data} candidates={candidates} />

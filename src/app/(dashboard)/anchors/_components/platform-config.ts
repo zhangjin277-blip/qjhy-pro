@@ -73,6 +73,8 @@ export interface PlatformConfig<TKey extends string, TRow> {
   pinnedColumns: ColumnDef<TKey>[];
   /** ColumnCustomizer 中栏使用的分组（不含 pinned 组） */
   customizerGroups: string[];
+  /** 可选：两层分组（大类 → 小类），传则左栏按层级渲染。优先级高于 customizerGroups */
+  customizerGroupSections?: { label: string; groups: string[] }[];
   getColumnsByGroup: (group: string) => ColumnDef<TKey>[];
   getColumnsBySubGroup: (
     group: string,

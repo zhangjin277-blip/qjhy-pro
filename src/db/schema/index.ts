@@ -7,6 +7,7 @@ export * from "./auth";
 export * from "./brokers";
 export * from "./crawler";
 export * from "./dingtalk";
+export * from "./daily-schedule";
 export * from "./kuaishou-live-session";
 export * from "./kuaishou-member";
 export * from "./live-account";

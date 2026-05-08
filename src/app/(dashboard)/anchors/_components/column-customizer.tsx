@@ -36,6 +36,8 @@ interface ColumnCustomizerProps<TKey extends string = string> {
   allColumns?: ColumnDef<TKey>[];
   /** 分组左栏顺序（默认抖音的 ALL_GROUPS） */
   groups?: string[];
+  /** 可选：两层分组（大类→小类）。传则左栏按层级渲染，groups 自动从 sections.flatMap 推导 */
+  groupSections?: { label: string; groups: string[] }[];
   /** 给定分组返回所有列（默认抖音 fn） */
   getColumnsByGroup?: (group: string) => ColumnDef<TKey>[];
   /** 给定分组返回 subGroup 切块（默认抖音 fn） */
@@ -60,12 +62,18 @@ export function ColumnCustomizer<TKey extends string = string>({
   onUpdatePreset,
   onSaveAsNewPreset,
   allColumns = DEFAULT_ALL_COLUMNS as unknown as ColumnDef<TKey>[],
-  groups = [...DEFAULT_ALL_GROUPS],
+  groups: groupsProp = [...DEFAULT_ALL_GROUPS],
+  groupSections,
   getColumnsByGroup = defaultGetColumnsByGroup as unknown as (g: string) => ColumnDef<TKey>[],
   getColumnsBySubGroup = defaultGetColumnsBySubGroup as unknown as (
     g: string,
   ) => { subGroup: string | null; columns: ColumnDef<TKey>[] }[],
 }: ColumnCustomizerProps<TKey>): React.JSX.Element {
+  // 有 sections 时，groups 从 sections 推导；否则用 prop
+  const groups = useMemo(
+    () => (groupSections ? groupSections.flatMap((s) => s.groups) : groupsProp),
+    [groupSections, groupsProp],
+  );
   // 工作副本，确认时才回传
   const [working, setWorking] = useState<TKey[]>(() => [...selectedKeys]);
   const [activeGroup, setActiveGroup] = useState<string>(groups[0] ?? "");
@@ -172,33 +180,66 @@ export function ColumnCustomizer<TKey extends string = string>({
         </DialogHeader>
 
         <div className="grid grid-cols-[180px_minmax(420px,1fr)_240px] h-[560px] overflow-hidden">
-          {/* 左栏：分组导航 */}
+          {/* 左栏：分组导航（支持两层） */}
           <div className="border-r overflow-y-auto bg-muted/30">
-            {groups.map((g) => {
-              const cnt = groupCounts[g] ?? { selected: 0, total: 0 };
-              const isActive = activeGroup === g;
-              return (
-                <button
-                  key={g}
-                  onClick={() => {
-                    setActiveGroup(g);
-                    setSearch("");
-                  }}
-                  className={cn(
-                    "w-full text-left px-3 py-2.5 text-sm transition-colors",
-                    "flex items-center justify-between gap-1",
-                    isActive
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "hover:bg-muted/60 text-foreground",
-                  )}
-                >
-                  <span className="truncate">{g}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {cnt.selected}/{cnt.total}
-                  </span>
-                </button>
-              );
-            })}
+            {groupSections
+              ? groupSections.map((section) => (
+                  <div key={section.label} className="pb-1">
+                    <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {section.label}
+                    </div>
+                    {section.groups.map((g) => {
+                      const cnt = groupCounts[g] ?? { selected: 0, total: 0 };
+                      const isActive = activeGroup === g;
+                      return (
+                        <button
+                          key={g}
+                          onClick={() => {
+                            setActiveGroup(g);
+                            setSearch("");
+                          }}
+                          className={cn(
+                            "w-full text-left pl-5 pr-3 py-1.5 text-sm transition-colors",
+                            "flex items-center justify-between gap-1",
+                            isActive
+                              ? "bg-primary/10 text-primary font-medium"
+                              : "hover:bg-muted/60 text-foreground",
+                          )}
+                        >
+                          <span className="truncate">{g}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {cnt.selected}/{cnt.total}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))
+              : groups.map((g) => {
+                  const cnt = groupCounts[g] ?? { selected: 0, total: 0 };
+                  const isActive = activeGroup === g;
+                  return (
+                    <button
+                      key={g}
+                      onClick={() => {
+                        setActiveGroup(g);
+                        setSearch("");
+                      }}
+                      className={cn(
+                        "w-full text-left px-3 py-2.5 text-sm transition-colors",
+                        "flex items-center justify-between gap-1",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "hover:bg-muted/60 text-foreground",
+                      )}
+                    >
+                      <span className="truncate">{g}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {cnt.selected}/{cnt.total}
+                      </span>
+                    </button>
+                  );
+                })}
           </div>
 
           {/* 中栏：指标列表 */}

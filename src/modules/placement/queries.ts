@@ -284,6 +284,56 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
   }
   const overrideList = overrideRows as unknown as RawOverride[];
 
+  const dailyRows =
+    involvedAccountIds.length > 0
+      ? ((await db.execute(sql`
+          SELECT
+            ds.account_id,
+            ds.date::text AS date,
+            ds.dingtalk_user_id,
+            ds.start_hour,
+            ds.end_hour,
+            ds.is_rest,
+            du.name AS anchor_name
+          FROM daily_schedule_segment ds
+          LEFT JOIN dingtalk_user du ON du.user_id = ds.dingtalk_user_id
+          WHERE ds.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+            AND ds.account_id IN (${sql.join(
+              involvedAccountIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})
+        `)) as {
+          account_id: string;
+          date: string;
+          dingtalk_user_id: string;
+          start_hour: number;
+          end_hour: number;
+          is_rest: boolean;
+          anchor_name: string | null;
+        }[])
+      : [];
+
+  const dailyMap = new Map<
+    string,
+    { user: string; slots: [string, string][]; rest_days: number[] }[]
+  >();
+  for (const row of dailyRows) {
+    if (row.is_rest) continue;
+    const key = `${row.account_id}::${row.date}`;
+    const slot: [string, string] = [
+      `${row.start_hour.toString().padStart(2, "0")}:00`,
+      `${row.end_hour.toString().padStart(2, "0")}:00`,
+    ];
+    const rowsForDay = dailyMap.get(key) ?? [];
+    const existing = rowsForDay.find((item) => item.user === row.dingtalk_user_id);
+    if (existing) {
+      existing.slots.push(slot);
+    } else {
+      rowsForDay.push({ user: row.dingtalk_user_id, slots: [slot], rest_days: [] });
+    }
+    dailyMap.set(key, rowsForDay);
+  }
+
   // 4. Index overrides by (account_id, date) for fast lookup
   //    Map key: `${account_id}::${date}`
   const overrideMap = new Map<string, RawOverride[]>();
@@ -316,6 +366,11 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
   for (const ov of overrideList) {
     if (!anchorNames.has(ov.dingtalk_user_id)) {
       anchorNames.set(ov.dingtalk_user_id, ov.anchor_name);
+    }
+  }
+  for (const row of dailyRows) {
+    if (!anchorNames.has(row.dingtalk_user_id)) {
+      anchorNames.set(row.dingtalk_user_id, row.anchor_name);
     }
   }
 
@@ -384,6 +439,59 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
 
     for (const date of dates) {
       const key = `${accountId}::${date}`;
+      const dailyEffective = dailyMap.get(key);
+      if (dailyEffective) {
+        for (const eff of dailyEffective) {
+          for (const slot of eff.slots) {
+            const [slotStart, slotEnd] = slot;
+            const startHour = parseInt((slotStart ?? "0:00").split(":")[0] ?? "0");
+            const endHour = parseInt((slotEnd ?? "24:00").split(":")[0] ?? "24");
+
+            let totalCost = 0,
+              personalCost = 0;
+            let totalActs = 0,
+              personalActs = 0;
+            let totalPayment = 0,
+              personalPayment = 0;
+
+            for (const p of placementList) {
+              if (p.account_id !== accountId) continue;
+              if (p.date !== date) continue;
+              const h = p.hour;
+              if (h < startHour || h >= endHour) continue;
+              totalCost += p.cost;
+              totalActs += p.activations;
+              totalPayment += p.payment;
+              if (p.attributed_dingtalk_user_id === eff.user) {
+                personalCost += p.cost;
+                personalActs += p.activations;
+                personalPayment += p.payment;
+              }
+            }
+
+            if (totalCost === 0 && totalActs === 0) continue;
+
+            rows.push({
+              date,
+              time_slot: [slotStart, slotEnd],
+              account_id: accountId,
+              account_name: meta.account_name,
+              placement_label: meta.placement_label,
+              anchor_user_id: eff.user,
+              anchor_name: anchorNames.get(eff.user) ?? null,
+              total_cost: totalCost,
+              personal_cost: personalCost,
+              total_acts: totalActs,
+              personal_acts: personalActs,
+              total_unit_price: totalActs > 0 ? totalCost / totalActs : null,
+              personal_unit_price: personalActs > 0 ? personalCost / personalActs : null,
+              total_payment: totalPayment,
+              personal_payment: personalPayment,
+            });
+          }
+        }
+        continue;
+      }
       const dayOverrides = overrideMap.get(key) ?? [];
 
       // Convert override rows to OverrideSchedule[]
