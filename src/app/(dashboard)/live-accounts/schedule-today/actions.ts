@@ -237,6 +237,24 @@ export async function appendTodayOverrideSlot(input: SaveOverrideInput) {
   await touchSchedule(input.account_id, input.date);
 }
 
+/**
+ * 从今日排班移除某账号（删除该账号该日全部 segments + daily_schedule_day 记录）。
+ * page render 时 daily_schedule_day 不存在 → seed 重新生成。所以再次访问会回来。
+ * 用于"账号今日不播"的场景，仅当天清干净。
+ */
+export async function removeAccountFromToday(account_id: string, date: string) {
+  await requireUserId();
+  await db
+    .delete(daily_schedule_segment)
+    .where(
+      and(eq(daily_schedule_segment.account_id, account_id), eq(daily_schedule_segment.date, date)),
+    );
+  await db
+    .delete(daily_schedule_day)
+    .where(and(eq(daily_schedule_day.account_id, account_id), eq(daily_schedule_day.date, date)));
+  await touchSchedule(account_id, date);
+}
+
 export async function clearOneOverride(segment_id: string) {
   await requireUserId();
 

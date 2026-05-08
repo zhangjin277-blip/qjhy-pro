@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition, useEffect, useRef } from "react";
+import { Fragment, useMemo, useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { pinyin } from "pinyin";
 import { cn } from "@/lib/utils/cn";
@@ -190,6 +190,47 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
   useEffect(() => {
     setOptimisticResize(null);
   }, [accounts]);
+
+  // 隐藏列表（per-date localStorage） — 用户标记今日不播的账号
+  const hiddenStorageKey = `schedule-today-hidden:${date}`;
+  const [hiddenIds, setHiddenIdsState] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(hiddenStorageKey);
+      if (raw) setHiddenIdsState(new Set(JSON.parse(raw) as string[]));
+      else setHiddenIdsState(new Set());
+    } catch {
+      setHiddenIdsState(new Set());
+    }
+  }, [hiddenStorageKey]);
+  function persistHidden(next: Set<string>): void {
+    setHiddenIdsState(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(hiddenStorageKey, JSON.stringify([...next]));
+    }
+  }
+  function hideAccount(account_id: string): void {
+    const next = new Set(hiddenIds);
+    next.add(account_id);
+    persistHidden(next);
+  }
+  function restoreAllHidden(): void {
+    persistHidden(new Set());
+  }
+
+  // 过滤 + 按 product 分组（保持产品内原顺序）
+  const productGroups = useMemo(() => {
+    const filtered = accounts.filter((a) => !hiddenIds.has(a.account_id));
+    const groups = new Map<string, AccountSchedule[]>();
+    for (const acc of filtered) {
+      const list = groups.get(acc.product) ?? [];
+      list.push(acc);
+      groups.set(acc.product, list);
+    }
+    return [...groups.entries()].map(([product, list]) => ({ product, accounts: list }));
+  }, [accounts, hiddenIds]);
+  const hiddenCount = hiddenIds.size;
 
   /** 在保存某 account 之前压栈 snapshot（对当前页面状态） */
   function pushHistory(account_id: string) {
@@ -600,8 +641,20 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
           点击色块编辑 · ⌘/Ctrl+Z 撤销
         </span>
         {clipboard && (
-          <span className="ml-auto rounded bg-amber-50 px-2 py-0.5 text-amber-700">
+          <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">
             📋 已复制：{clipboard.user_name} · {clipboard.duration}h · 悬浮空白位置按 ⌘/Ctrl+V 粘贴
+          </span>
+        )}
+        {hiddenCount > 0 && (
+          <span className="ml-auto inline-flex items-center gap-1.5 text-muted-foreground">
+            已隐藏 <strong className="text-foreground">{hiddenCount}</strong> 个账号
+            <button
+              type="button"
+              onClick={restoreAllHidden}
+              className="text-primary hover:underline"
+            >
+              全部恢复
+            </button>
           </span>
         )}
       </div>
@@ -636,52 +689,61 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
             </div>
           </div>
 
-          {/* 行 */}
-          {accounts.map((acc) => (
-            <Row
-              key={acc.account_id}
-              account={acc}
-              date={date}
-              resize={resize ?? optimisticResize}
-              selected={selected}
-              hoverTarget={hoverTarget}
-              onSegHover={(seg, segIdx) =>
-                setHoverTargetIfChanged({
-                  account_id: acc.account_id,
-                  segIdx,
-                  segment: seg,
-                  defaultSlot: { start: seg.start, end: seg.end },
-                  canPaste: false,
-                })
-              }
-              onSegClick={(seg, segIdx, anchor) => {
-                if (justResizedRef.current) return; // 拖完抑制 click
-                setSelected({ account_id: acc.account_id, segIdx });
-                setPopover({
-                  account_id: acc.account_id,
-                  seg,
-                  defaultSlot: { start: seg.start, end: seg.end },
-                  anchor,
-                });
-              }}
-              onResizeStart={(seg, segIdx, edge, rowEl) => {
-                const rect = rowEl.getBoundingClientRect();
-                const pxPerHour = rect.width / HOURS_FULL;
-                setResize({
-                  account_id: acc.account_id,
-                  segIdx,
-                  edge,
-                  seg,
-                  pxPerHour,
-                  rowLeft: rect.left,
-                  currentStart: seg.start,
-                  currentEnd: seg.end,
-                });
-              }}
-              onEmptyClick={onRowEmptyClick}
-              onEmptyHover={onRowEmptyHover}
-              onRowLeave={() => setHoverTargetIfChanged(null)}
-            />
+          {/* 行 — 按产品分组 */}
+          {productGroups.map(({ product, accounts: list }) => (
+            <Fragment key={product}>
+              <div className="flex border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                {product}
+                <span className="ml-1 text-muted-foreground">({list.length})</span>
+              </div>
+              {list.map((acc) => (
+                <Row
+                  key={acc.account_id}
+                  account={acc}
+                  onRemove={() => hideAccount(acc.account_id)}
+                  date={date}
+                  resize={resize ?? optimisticResize}
+                  selected={selected}
+                  hoverTarget={hoverTarget}
+                  onSegHover={(seg, segIdx) =>
+                    setHoverTargetIfChanged({
+                      account_id: acc.account_id,
+                      segIdx,
+                      segment: seg,
+                      defaultSlot: { start: seg.start, end: seg.end },
+                      canPaste: false,
+                    })
+                  }
+                  onSegClick={(seg, segIdx, anchor) => {
+                    if (justResizedRef.current) return; // 拖完抑制 click
+                    setSelected({ account_id: acc.account_id, segIdx });
+                    setPopover({
+                      account_id: acc.account_id,
+                      seg,
+                      defaultSlot: { start: seg.start, end: seg.end },
+                      anchor,
+                    });
+                  }}
+                  onResizeStart={(seg, segIdx, edge, rowEl) => {
+                    const rect = rowEl.getBoundingClientRect();
+                    const pxPerHour = rect.width / HOURS_FULL;
+                    setResize({
+                      account_id: acc.account_id,
+                      segIdx,
+                      edge,
+                      seg,
+                      pxPerHour,
+                      rowLeft: rect.left,
+                      currentStart: seg.start,
+                      currentEnd: seg.end,
+                    });
+                  }}
+                  onEmptyClick={onRowEmptyClick}
+                  onEmptyHover={onRowEmptyHover}
+                  onRowLeave={() => setHoverTargetIfChanged(null)}
+                />
+              ))}
+            </Fragment>
           ))}
 
           {accounts.length === 0 && (
@@ -726,9 +788,11 @@ function Row({
   onEmptyClick,
   onEmptyHover,
   onRowLeave,
+  onRemove,
 }: {
   account: AccountSchedule;
   date: string;
+  onRemove?: () => void;
   resize: {
     account_id: string;
     segIdx: number;
@@ -764,9 +828,25 @@ function Row({
       : null;
 
   return (
-    <div className="flex border-b border-border/50 hover:bg-muted/20" onMouseLeave={onRowLeave}>
-      <div className="w-[200px] shrink-0 border-r border-border px-3 py-2 text-xs">
-        <div className="truncate font-medium text-foreground">{account.account_name}</div>
+    <div
+      className="group flex border-b border-border/50 hover:bg-muted/20"
+      onMouseLeave={onRowLeave}
+    >
+      <div className="relative w-[200px] shrink-0 border-r border-border px-3 py-2 text-xs">
+        {onRemove && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            title="今日不显示该账号"
+            className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+          >
+            ×
+          </button>
+        )}
+        <div className="truncate pr-5 font-medium text-foreground">{account.account_name}</div>
         <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
           <span
             className={cn(

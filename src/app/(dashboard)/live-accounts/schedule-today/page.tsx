@@ -48,7 +48,7 @@ export default async function ScheduleTodayPage({
   const sp = await searchParams;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : isoDate(new Date());
   const weekday = isoWeekday(date);
-  const product = sp.product ?? "捕鱼大作战"; // 默认只看捕鱼；?product=all 看全部
+  const product = sp.product ?? "all"; // 默认全部产品；?product=捕鱼大作战 切单产品
 
   const [accounts, allBindings, candidates] = await Promise.all([
     listAccounts(product === "all" ? {} : { product }),
