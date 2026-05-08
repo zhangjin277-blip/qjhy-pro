@@ -115,6 +115,12 @@ export interface PlatformConfig<TKey extends string, TRow> {
 
   /** 数据源 chip 行（today/history/all），仅快手 */
   dataSourceEnabled: boolean;
+  /** 切 dataSource chip 时同步覆盖的 visibleKeys 默认列集（不存储 — 切换即应用） */
+  dataSourceColumnPresets?: {
+    all: TKey[];
+    today: TKey[];
+    history: TKey[];
+  };
 
   /** 默认 filters 值 */
   defaultFilters: AnchorFilters;

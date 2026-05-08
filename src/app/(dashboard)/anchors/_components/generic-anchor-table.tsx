@@ -346,6 +346,13 @@ export function GenericAnchorTable<TKey extends string, TRow>({
     saveCols(config, activePresetId, keys);
   }
 
+  function applyDataSource(ds: "all" | "today" | "history"): void {
+    setFilters((f) => ({ ...f, data_source: ds }));
+    if (config.dataSourceColumnPresets) {
+      setVisibleKeys(config.dataSourceColumnPresets[ds]);
+    }
+  }
+
   function applyUserPreset(p: UserColumnPreset): void {
     setActiveUserPresetId(p.id);
     setActivePresetId("custom");
@@ -575,19 +582,19 @@ export function GenericAnchorTable<TKey extends string, TRow>({
         <PresetToolbar label="数据:">
           <PresetChip
             active={(filters.data_source ?? "all") === "all"}
-            onClick={() => setFilters((f) => ({ ...f, data_source: "all" }))}
+            onClick={() => applyDataSource("all")}
           >
             全部
           </PresetChip>
           <PresetChip
             active={filters.data_source === "history"}
-            onClick={() => setFilters((f) => ({ ...f, data_source: "history" }))}
+            onClick={() => applyDataSource("history")}
           >
             历史权威
           </PresetChip>
           <PresetChip
             active={filters.data_source === "today"}
-            onClick={() => setFilters((f) => ({ ...f, data_source: "today" }))}
+            onClick={() => applyDataSource("today")}
           >
             今日实时
           </PresetChip>
@@ -792,6 +799,7 @@ export function GenericAnchorTable<TKey extends string, TRow>({
         onSaveAsNewPreset={config.userPresetsEnabled ? (keys) => saveAsNewPreset(keys) : undefined}
         allColumns={config.allColumns}
         groups={config.customizerGroups}
+        groupSections={config.customizerGroupSections}
         getColumnsByGroup={config.getColumnsByGroup}
         getColumnsBySubGroup={config.getColumnsBySubGroup}
       />
