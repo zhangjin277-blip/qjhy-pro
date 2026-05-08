@@ -12,6 +12,8 @@ export interface KuaishouAnchorListFilters {
   dateTo?: string;
   /** 兼容老调用：传 daysBack 等价于 dateFrom=今天-(N-1) dateTo=今天。dateFrom/To 优先 */
   daysBack?: number;
+  /** 数据源过滤：'all'（默认） / 'today'（仅今日实时） / 'history'（仅历史权威） */
+  dataSource?: "all" | "today" | "history";
 }
 
 function dateRangeToMs(filters: KuaishouAnchorListFilters): { startMs: number; endMs: number } {
@@ -98,6 +100,7 @@ export async function listKuaishouAnchors(
   _emergencyMode = false,
 ): Promise<KuaishouAnchorRow[]> {
   const { startMs, endMs } = dateRangeToMs(filters);
+  const dataSource = filters.dataSource ?? "all";
 
   const conds: SQL[] = [];
   if (filters.product && filters.product !== "all") {
@@ -210,6 +213,13 @@ export async function listKuaishouAnchors(
       FROM kuaishou_live_session
       WHERE start_datetime >= to_timestamp(${startMs / 1000})
         AND start_datetime <= to_timestamp(${endMs / 1000})
+        ${
+          dataSource === "today"
+            ? sql`AND data_source = 'today'`
+            : dataSource === "history"
+              ? sql`AND data_source = 'history'`
+              : sql``
+        }
       GROUP BY member_id
     ) s ON s.member_id = m.user_id
     ${where ? sql`WHERE ${where}` : sql``}

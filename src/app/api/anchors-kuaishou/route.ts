@@ -31,12 +31,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const dateFrom = sp.get("date_from") ?? undefined;
   const dateTo = sp.get("date_to") ?? undefined;
   const daysParam = sp.get("days");
+  const dsParam = sp.get("data_source");
   const filters: KuaishouAnchorListFilters = {
     product: sp.get("product") ?? "all",
     search: sp.get("search") ?? undefined,
     dateFrom,
     dateTo,
     daysBack: !dateFrom && !dateTo && daysParam ? Math.min(Math.max(Number(daysParam), 1), 365) : 7,
+    dataSource: dsParam === "today" || dsParam === "history" || dsParam === "all" ? dsParam : "all",
   };
 
   const [rows, kpi] = await Promise.all([

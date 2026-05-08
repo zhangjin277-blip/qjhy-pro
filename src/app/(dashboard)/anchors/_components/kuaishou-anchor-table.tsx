@@ -400,6 +400,9 @@ export function KuaishouAnchorTable(): React.JSX.Element {
 
   const [selectedAnchor, setSelectedAnchor] = useState<Row | null>(null);
   const [showCompare, setShowCompare] = useState(true);
+  const [dataSource, setDataSource] = useState<"all" | "today" | "history">(
+    (searchParams.get("data_source") as "all" | "today" | "history") ?? "all",
+  );
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
@@ -428,6 +431,7 @@ export function KuaishouAnchorTable(): React.JSX.Element {
     sp.set("date_to", dateTo);
     if (product !== "all") sp.set("product", product);
     if (debouncedSearch) sp.set("search", debouncedSearch);
+    if (dataSource !== "all") sp.set("data_source", dataSource);
     // 写回 URL（不刷新页面）
     if (typeof window !== "undefined") {
       router.replace(`/anchors?${sp.toString()}`, { scroll: false });
@@ -437,6 +441,7 @@ export function KuaishouAnchorTable(): React.JSX.Element {
     apiSp.set("date_from", dateFrom);
     apiSp.set("date_to", dateTo);
     apiSp.set("product", product);
+    apiSp.set("data_source", dataSource);
     if (debouncedSearch) apiSp.set("search", debouncedSearch);
     (async () => {
       try {
@@ -465,7 +470,7 @@ export function KuaishouAnchorTable(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [product, debouncedSearch, dateFrom, dateTo, router]);
+  }, [product, debouncedSearch, dateFrom, dateTo, router, dataSource]);
 
   useEffect(() => {
     setPage(1);
@@ -630,6 +635,19 @@ export function KuaishouAnchorTable(): React.JSX.Element {
             {o.label}
           </PresetChip>
         ))}
+      </PresetToolbar>
+
+      {/* 数据源切换 */}
+      <PresetToolbar label="数据:">
+        <PresetChip active={dataSource === "all"} onClick={() => setDataSource("all")}>
+          全部
+        </PresetChip>
+        <PresetChip active={dataSource === "history"} onClick={() => setDataSource("history")}>
+          历史权威
+        </PresetChip>
+        <PresetChip active={dataSource === "today"} onClick={() => setDataSource("today")}>
+          今日实时
+        </PresetChip>
       </PresetToolbar>
 
       <KpiGrid items={kpiItems} />
