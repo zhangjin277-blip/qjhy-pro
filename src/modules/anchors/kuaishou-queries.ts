@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/db/client";
-import { kuaishou_member, kuaishou_live_session } from "@/db/schema";
-import { and, eq, isNull, sql, gte, type SQL } from "drizzle-orm";
+import { kuaishou_live_session } from "@/db/schema";
+import { and, eq, sql, gte, type SQL } from "drizzle-orm";
 
 export interface KuaishouAnchorListFilters {
   product?: string;
@@ -95,6 +95,10 @@ export interface KuaishouAnchorRow {
   has_punish: boolean | null;
   settle_in_time: number | null;
   settle_province: string | null;
+  // 投放数据（按 platform_account_id → live_account → placement_row 聚合，没合并 stub 的为 0）
+  total_cost: number;
+  total_activations: number;
+  total_payment: number;
 }
 
 export interface KuaishouAnchorKpi {
@@ -148,19 +152,18 @@ export async function listKuaishouAnchors(
   const { startMs, endMs } = dateRangeToMs(filters);
   const dataSource = filters.dataSource ?? "all";
 
+  // 用 m. 引用 alias，不能用 drizzle 表对象（会渲染成 "kuaishou_member"."xxx" 跟 alias 冲突）
   const conds: SQL[] = [];
   if (filters.product && filters.product !== "all") {
     if (filters.product === "未分类") {
-      conds.push(isNull(kuaishou_member.inferred_product));
+      conds.push(sql`m.inferred_product IS NULL`);
     } else {
-      conds.push(eq(kuaishou_member.inferred_product, filters.product));
+      conds.push(sql`m.inferred_product = ${filters.product}`);
     }
   }
   if (filters.search) {
     const s = `%${filters.search}%`;
-    conds.push(
-      sql`(${kuaishou_member.member_name} ILIKE ${s} OR ${kuaishou_member.user_id} ILIKE ${s})`,
-    );
+    conds.push(sql`(m.member_name ILIKE ${s} OR m.user_id ILIKE ${s})`);
   }
 
   const where = conds.length > 0 ? and(...conds) : undefined;
@@ -389,6 +392,10 @@ export async function listKuaishouAnchors(
     has_punish: r.has_punish,
     settle_in_time: r.settle_in_time == null ? null : Number(r.settle_in_time),
     settle_province: r.settle_province,
+    // 投放数据（待实现 placement_row join；暂填 0 兼容 type）
+    total_cost: 0,
+    total_activations: 0,
+    total_payment: 0,
   }));
 }
 
