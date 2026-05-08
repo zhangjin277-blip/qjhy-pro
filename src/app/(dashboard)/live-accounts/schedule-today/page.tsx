@@ -123,6 +123,8 @@ export default async function ScheduleTodayPage({
       const slots = (binding.time_slots as [string, string][] | null) ?? [];
       for (const slot of slots) {
         const { startHour, endHour } = parseSlotHours(slot);
+        // schema check: end_hour <= 28（最多到次日 04:00）；超界跳过避免 INSERT 失败
+        if (startHour < 0 || endHour <= startHour || endHour > 28) continue;
         seedRows.push({
           account_id: acc.id,
           date,
