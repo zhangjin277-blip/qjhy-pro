@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { KpiGrid, type KpiItem } from "@/components/patterns/kpi-grid";
@@ -63,10 +64,31 @@ const PRODUCT_OPTIONS = [
 ];
 
 const DAYS_PRESETS = [
-  { value: 1, label: "昨日" },
-  { value: 7, label: "近 7 日" },
-  { value: 30, label: "近 30 日" },
+  { days: 1, label: "昨日" },
+  { days: 7, label: "近 7 日" },
+  { days: 30, label: "近 30 日" },
 ];
+
+function todayCST(): string {
+  return new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+}
+function daysAgoCST(n: number): string {
+  return new Date(Date.now() - (n - 1) * 86400_000 + 8 * 3600_000).toISOString().slice(0, 10);
+}
+function presetRange(days: number): { from: string; to: string } {
+  if (days === 1) {
+    const y = daysAgoCST(2); // 昨日
+    return { from: y, to: y };
+  }
+  return { from: daysAgoCST(days), to: todayCST() };
+}
+function matchPreset(from: string, to: string): number | null {
+  for (const p of DAYS_PRESETS) {
+    const r = presetRange(p.days);
+    if (r.from === from && r.to === to) return p.days;
+  }
+  return null;
+}
 
 type SortKey =
   | "account_name"
@@ -181,9 +203,20 @@ function DeltaPill({ cur, prev }: { cur: number; prev: number }): React.JSX.Elem
 }
 
 export function KuaishouAnchorTable(): React.JSX.Element {
-  const [product, setProduct] = useState<string>("all");
-  const [search, setSearch] = useState<string>("");
-  const [days, setDays] = useState<number>(7);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // URL 初始值（mount 时只读一次）
+  const initialFrom = searchParams.get("date_from");
+  const initialTo = searchParams.get("date_to");
+  const initialProduct = searchParams.get("product") ?? "all";
+  const initialSearch = searchParams.get("search") ?? "";
+  const defaultRange = presetRange(7);
+
+  const [product, setProduct] = useState<string>(initialProduct);
+  const [search, setSearch] = useState<string>(initialSearch);
+  const [dateFrom, setDateFrom] = useState<string>(initialFrom ?? defaultRange.from);
+  const [dateTo, setDateTo] = useState<string>(initialTo ?? defaultRange.to);
   const [rows, setRows] = useState<Row[]>([]);
   const [kpi, setKpi] = useState<KpiResp>({
     total: 0,
@@ -226,17 +259,29 @@ export function KuaishouAnchorTable(): React.JSX.Element {
     return () => document.removeEventListener("mousedown", h);
   }, [colPicker]);
 
-  // 加载数据
+  // 加载数据 + 同步 URL
   useEffect(() => {
     setLoading(true);
     let cancelled = false;
     const sp = new URLSearchParams();
-    sp.set("product", product);
-    sp.set("days", String(days));
+    sp.set("platform", "kuaishou");
+    sp.set("date_from", dateFrom);
+    sp.set("date_to", dateTo);
+    if (product !== "all") sp.set("product", product);
     if (debouncedSearch) sp.set("search", debouncedSearch);
+    // 写回 URL（不刷新页面）
+    if (typeof window !== "undefined") {
+      router.replace(`/anchors?${sp.toString()}`, { scroll: false });
+    }
+    // API 请求用同样参数
+    const apiSp = new URLSearchParams();
+    apiSp.set("date_from", dateFrom);
+    apiSp.set("date_to", dateTo);
+    apiSp.set("product", product);
+    if (debouncedSearch) apiSp.set("search", debouncedSearch);
     (async () => {
       try {
-        const r = await fetch(`/api/anchors-kuaishou?${sp.toString()}`);
+        const r = await fetch(`/api/anchors-kuaishou?${apiSp.toString()}`);
         if (!r.ok) {
           if (r.status === 401) toast.error("登录已失效");
           else if (r.status === 403) toast.error("无权访问主播明细");
@@ -261,7 +306,7 @@ export function KuaishouAnchorTable(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [product, debouncedSearch, days]);
+  }, [product, debouncedSearch, dateFrom, dateTo, router]);
 
   useEffect(() => {
     setPage(1);
@@ -350,15 +395,38 @@ export function KuaishouAnchorTable(): React.JSX.Element {
               ))}
             </PresetToolbar>
             <PresetToolbar label="时间:">
-              {DAYS_PRESETS.map((p) => (
-                <PresetChip
-                  key={p.value}
-                  active={days === p.value}
-                  onClick={() => setDays(p.value)}
-                >
-                  {p.label}
-                </PresetChip>
-              ))}
+              {DAYS_PRESETS.map((p) => {
+                const r = presetRange(p.days);
+                const active = dateFrom === r.from && dateTo === r.to;
+                return (
+                  <PresetChip
+                    key={p.days}
+                    active={active}
+                    onClick={() => {
+                      setDateFrom(r.from);
+                      setDateTo(r.to);
+                    }}
+                  >
+                    {p.label}
+                  </PresetChip>
+                );
+              })}
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-7 rounded border border-slate-300 px-1.5 text-[12px] focus:border-primary focus:outline-none"
+              />
+              <span className="text-muted-foreground text-xs">~</span>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom}
+                max={todayCST()}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-7 rounded border border-slate-300 px-1.5 text-[12px] focus:border-primary focus:outline-none"
+              />
             </PresetToolbar>
             <input
               type="text"
@@ -445,9 +513,15 @@ export function KuaishouAnchorTable(): React.JSX.Element {
           </strong>
         </span>
         <span>
-          时间窗{" "}
-          <strong className="text-foreground">
-            {DAYS_PRESETS.find((p) => p.value === days)?.label}
+          时间{" "}
+          <strong className="text-foreground tabular-nums">
+            {dateFrom}
+            {dateFrom !== dateTo && ` ~ ${dateTo}`}
+            {matchPreset(dateFrom, dateTo) != null && (
+              <span className="text-muted-foreground/70 ml-1">
+                ({DAYS_PRESETS.find((p) => p.days === matchPreset(dateFrom, dateTo))?.label})
+              </span>
+            )}
           </strong>
         </span>
         <span>

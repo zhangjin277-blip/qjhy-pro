@@ -6,8 +6,24 @@ import { and, eq, isNull, sql, desc, gte, type SQL } from "drizzle-orm";
 export interface KuaishouAnchorListFilters {
   product?: string;
   search?: string;
-  /** 时间窗（天数），主表的聚合列按这个窗口算。默认 7 天 */
+  /** 时间窗起始日期 ISO "YYYY-MM-DD"（CST），含 */
+  dateFrom?: string;
+  /** 时间窗结束日期 ISO "YYYY-MM-DD"（CST），含 */
+  dateTo?: string;
+  /** 兼容老调用：传 daysBack 等价于 dateFrom=今天-(N-1) dateTo=今天。dateFrom/To 优先 */
   daysBack?: number;
+}
+
+function dateRangeToMs(filters: KuaishouAnchorListFilters): { startMs: number; endMs: number } {
+  if (filters.dateFrom && filters.dateTo) {
+    return {
+      startMs: new Date(`${filters.dateFrom}T00:00:00+08:00`).getTime(),
+      endMs: new Date(`${filters.dateTo}T23:59:59.999+08:00`).getTime(),
+    };
+  }
+  const days = filters.daysBack ?? 7;
+  const cutoff = new Date(Date.now() - days * 86400_000);
+  return { startMs: cutoff.getTime(), endMs: Date.now() };
 }
 
 export interface KuaishouAnchorRow {
@@ -60,8 +76,7 @@ export async function listKuaishouAnchors(
   filters: KuaishouAnchorListFilters = {},
   _emergencyMode = false,
 ): Promise<KuaishouAnchorRow[]> {
-  const daysBack = filters.daysBack ?? 7;
-  const cutoff = new Date(Date.now() - daysBack * 86400_000);
+  const { startMs, endMs } = dateRangeToMs(filters);
 
   const conds: SQL[] = [];
   if (filters.product && filters.product !== "all") {
@@ -80,8 +95,7 @@ export async function listKuaishouAnchors(
 
   const where = conds.length > 0 ? and(...conds) : undefined;
 
-  // 单次查询：member 表 LEFT JOIN dingtalk + LEFT JOIN session 聚合（按 daysBack 窗口）
-  const cutoffMs = cutoff.getTime();
+  // 单次查询：member 表 LEFT JOIN dingtalk + LEFT JOIN session 聚合（按时间窗）
   const result = await db.execute<{
     user_id: string;
     member_name: string;
@@ -126,7 +140,8 @@ export async function listKuaishouAnchors(
         SUM(add_fans_cnt) AS total_add_fans,
         SUM(live_duration_ms) AS total_duration_ms
       FROM kuaishou_live_session
-      WHERE start_datetime >= to_timestamp(${cutoffMs / 1000})
+      WHERE start_datetime >= to_timestamp(${startMs / 1000})
+        AND start_datetime <= to_timestamp(${endMs / 1000})
       GROUP BY member_id
     ) s ON s.member_id = m.user_id
     ${where ? sql`WHERE ${where}` : sql``}
@@ -189,10 +204,11 @@ export async function queryKuaishouAnchorKpi(
     totalAddFans += r.total_add_fans;
   }
 
-  // 前同期：再查一次按 [prevFrom, prevTo] 时间窗的聚合
-  const daysBack = filters.daysBack ?? 7;
-  const prevTo = new Date(Date.now() - daysBack * 86400_000);
-  const prevFrom = new Date(prevTo.getTime() - daysBack * 86400_000);
+  // 前同期：再查一次按等长前段时间窗的聚合
+  const { startMs: curStartMs, endMs: curEndMs } = dateRangeToMs(filters);
+  const lengthMs = curEndMs - curStartMs;
+  const prevEndMs = curStartMs - 1; // 窗口前一天
+  const prevStartMs = prevEndMs - lengthMs;
   const prevResult = await db.execute<{
     sessions: number;
     amt: number;
@@ -203,8 +219,8 @@ export async function queryKuaishouAnchorKpi(
       COALESCE(SUM(live_amt), 0)::float AS amt,
       COALESCE(SUM(add_fans_cnt), 0)::int AS add_fans
     FROM kuaishou_live_session
-    WHERE start_datetime >= to_timestamp(${prevFrom.getTime() / 1000})
-      AND start_datetime < to_timestamp(${prevTo.getTime() / 1000})
+    WHERE start_datetime >= to_timestamp(${prevStartMs / 1000})
+      AND start_datetime <= to_timestamp(${prevEndMs / 1000})
   `);
   const prev = prevResult[0] ?? { sessions: 0, amt: 0, add_fans: 0 };
 
