@@ -33,8 +33,17 @@ function parseHour(t: string): number {
   return Number.parseInt(t.split(":")[0] ?? "0", 10);
 }
 
+function parseSlotHours(slot: [string, string]) {
+  const startHour = parseHour(slot[0]);
+  let endHour = parseHour(slot[1]);
+  if (endHour <= startHour) endHour += 24;
+  return { startHour, endHour };
+}
+
 function sameSlot(a: [string, string], b: [string, string]) {
-  return a[0] === b[0] && a[1] === b[1];
+  const slotA = parseSlotHours(a);
+  const slotB = parseSlotHours(b);
+  return slotA.startHour === slotB.startHour && slotA.endHour === slotB.endHour;
 }
 
 function rowSlot(row: { start_hour: number; end_hour: number }): [string, string] {
@@ -61,17 +70,20 @@ async function insertSegments(input: SaveOverrideInput, createdBy: string, sourc
   if (input.time_slots.length === 0) return;
 
   await db.insert(daily_schedule_segment).values(
-    input.time_slots.map(([start, end]) => ({
-      account_id: input.account_id,
-      date: input.date,
-      dingtalk_user_id: input.dingtalk_user_id,
-      start_hour: parseHour(start),
-      end_hour: parseHour(end),
-      is_rest: input.is_rest ?? false,
-      source,
-      reason: input.reason ?? null,
-      created_by: createdBy,
-    })),
+    input.time_slots.map((slot) => {
+      const { startHour, endHour } = parseSlotHours(slot);
+      return {
+        account_id: input.account_id,
+        date: input.date,
+        dingtalk_user_id: input.dingtalk_user_id,
+        start_hour: startHour,
+        end_hour: endHour,
+        is_rest: input.is_rest ?? false,
+        source,
+        reason: input.reason ?? null,
+        created_by: createdBy,
+      };
+    }),
   );
 }
 
@@ -94,6 +106,7 @@ async function deleteSegmentBySlot(
   user_id: string,
   slot: [string, string],
 ) {
+  const { startHour, endHour } = parseSlotHours(slot);
   await db
     .delete(daily_schedule_segment)
     .where(
@@ -101,8 +114,8 @@ async function deleteSegmentBySlot(
         eq(daily_schedule_segment.account_id, account_id),
         eq(daily_schedule_segment.date, date),
         eq(daily_schedule_segment.dingtalk_user_id, user_id),
-        eq(daily_schedule_segment.start_hour, parseHour(slot[0])),
-        eq(daily_schedule_segment.end_hour, parseHour(slot[1])),
+        eq(daily_schedule_segment.start_hour, startHour),
+        eq(daily_schedule_segment.end_hour, endHour),
       ),
     );
 }
@@ -263,17 +276,20 @@ export async function replaceAccountDateSchedule(input: ScheduleSnapshotInput) {
 
   if (input.segments.length > 0) {
     await db.insert(daily_schedule_segment).values(
-      input.segments.map((segment) => ({
-        account_id: input.account_id,
-        date: input.date,
-        dingtalk_user_id: segment.dingtalk_user_id,
-        start_hour: parseHour(segment.time_slot[0]),
-        end_hour: parseHour(segment.time_slot[1]),
-        is_rest: segment.is_rest,
-        source: segment.source ?? "manual",
-        reason: segment.reason,
-        created_by: userId,
-      })),
+      input.segments.map((segment) => {
+        const { startHour, endHour } = parseSlotHours(segment.time_slot);
+        return {
+          account_id: input.account_id,
+          date: input.date,
+          dingtalk_user_id: segment.dingtalk_user_id,
+          start_hour: startHour,
+          end_hour: endHour,
+          is_rest: segment.is_rest,
+          source: segment.source ?? "manual",
+          reason: segment.reason,
+          created_by: userId,
+        };
+      }),
     );
   }
 

@@ -47,6 +47,39 @@ const JOB_MAP = {
   profile: JOB_NAMES.FETCH_PROFILE,
 };
 
+/** 手动触发快手同步（成员 / 历史直播 / 今日实时） */
+const TriggerKuaishouSyncInput = z.object({
+  type: z.enum(["members", "history", "today"]),
+  fromDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  toDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+});
+export async function triggerKuaishouSync(input: unknown): Promise<{ ok: true }> {
+  const data = TriggerKuaishouSyncInput.parse(input);
+  const { userId } = await requireAdmin();
+  const jobName =
+    data.type === "members"
+      ? JOB_NAMES.SYNC_KUAISHOU_MEMBERS
+      : data.type === "history"
+        ? JOB_NAMES.SYNC_KUAISHOU_HISTORY_LIVE
+        : JOB_NAMES.SYNC_KUAISHOU_TODAY_LIVE;
+  const payload = data.type === "history" ? { fromDate: data.fromDate, toDate: data.toDate } : {};
+  await enqueue(jobName, payload);
+  await writeAuditLog({
+    user_id: userId,
+    action: "CRAWLER_KUAISHOU_TRIGGER",
+    target_type: "crawler",
+    target_id: data.type,
+    after: data as unknown as Record<string, unknown>,
+  });
+  return { ok: true };
+}
+
 /** 按类型 × 日期范围批量入队（每天一个 job）。用于补漏数据，不触发其它采集任务。*/
 export async function backfillRange(input: unknown): Promise<{ ok: true; days: number }> {
   const data = BackfillRangeInput.parse(input);

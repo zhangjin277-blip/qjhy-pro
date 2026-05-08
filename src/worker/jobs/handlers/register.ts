@@ -7,6 +7,8 @@ import { fetchMinigameHandler } from "./fetch-minigame";
 import { fetchPortraitHandler } from "./fetch-portrait";
 import { fetchSessionMgHandler } from "./fetch-session-mg";
 import { syncKuaishouMembersHandler } from "./sync-kuaishou-members";
+import { syncKuaishouHistoryLiveSessionsHandler } from "./sync-kuaishou-history-live";
+import { syncKuaishouTodayLiveSessionsHandler } from "./sync-kuaishou-today-live";
 import type PgBoss from "pg-boss";
 
 // batchSize=1: one job at a time, avoids rate-limit / Cookie contention.
@@ -38,5 +40,19 @@ export async function registerCrawlerHandlers(): Promise<void> {
     if (job === undefined) return;
     await syncKuaishouMembersHandler();
   });
-  console.log("[crawler] all 8 handlers registered");
+  await boss.work(JOB_NAMES.SYNC_KUAISHOU_HISTORY_LIVE, { batchSize: 1 }, async (jobs) => {
+    const job = jobs.at(0);
+    if (job === undefined) return;
+    const data = (job.data ?? {}) as { fromDate?: string; toDate?: string };
+    await syncKuaishouHistoryLiveSessionsHandler({
+      fromDate: data.fromDate,
+      toDate: data.toDate,
+    });
+  });
+  await boss.work(JOB_NAMES.SYNC_KUAISHOU_TODAY_LIVE, { batchSize: 1 }, async (jobs) => {
+    const job = jobs.at(0);
+    if (job === undefined) return;
+    await syncKuaishouTodayLiveSessionsHandler();
+  });
+  console.log("[crawler] all 10 handlers registered");
 }

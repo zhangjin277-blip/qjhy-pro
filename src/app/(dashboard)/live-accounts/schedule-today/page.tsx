@@ -20,6 +20,13 @@ function parseHour(t: string): number {
   return parseInt(t.split(":")[0] ?? "0", 10);
 }
 
+function parseSlotHours(slot: [string, string]) {
+  const startHour = parseHour(slot[0]);
+  let endHour = parseHour(slot[1]);
+  if (endHour <= startHour) endHour += 24;
+  return { startHour, endHour };
+}
+
 export default async function ScheduleTodayPage({
   searchParams,
 }: {
@@ -83,13 +90,14 @@ export default async function ScheduleTodayPage({
       const restDays = (binding.rest_days as number[] | null) ?? [];
       if (restDays.includes(weekday)) continue;
       const slots = (binding.time_slots as [string, string][] | null) ?? [];
-      for (const [start, end] of slots) {
+      for (const slot of slots) {
+        const { startHour, endHour } = parseSlotHours(slot);
         seedRows.push({
           account_id: acc.id,
           date,
           dingtalk_user_id: binding.dingtalk_user_id,
-          start_hour: parseHour(start),
-          end_hour: parseHour(end),
+          start_hour: startHour,
+          end_hour: endHour,
           is_rest: false,
           source: "default",
           reason: null,

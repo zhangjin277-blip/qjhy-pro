@@ -41,10 +41,11 @@ registerJob({
   },
 });
 
-// Phase 2.3b: 快手 history 直播数据（每日 03:00，跑 D-2 ~ D-1）
+// Phase 2.3b: 快手 history 直播数据（每日 11:00，跑 D-2 ~ D-1）
+// 快手 history API 一般上午 10 点才更新昨天数据，11 点跑能拉到完整数据
 registerJob({
   name: "sync-kuaishou-history-live",
-  schedule: "0 3 * * *",
+  schedule: "0 11 * * *",
   task: async () => {
     await syncKuaishouHistoryLiveSessionsHandler();
   },

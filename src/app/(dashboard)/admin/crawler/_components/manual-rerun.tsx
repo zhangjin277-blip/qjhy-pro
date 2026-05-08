@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { rerunCrawl, backfillRange } from "@/modules/crawler";
+import { rerunCrawl, backfillRange, triggerKuaishouSync } from "@/modules/crawler";
 
 const JOB_OPTIONS: { value: "minigame" | "daily" | "portrait" | "profile"; label: string }[] = [
   { value: "minigame", label: "小游戏数据" },
@@ -25,6 +25,37 @@ export function ManualRerun(): React.JSX.Element {
   const [bfTo, setBfTo] = useState(today);
   const [bfBusy, setBfBusy] = useState(false);
   const [bfMsg, setBfMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  // 快手同步触发
+  const [ksBusy, setKsBusy] = useState<"members" | "history" | "today" | null>(null);
+  const [ksMsg, setKsMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [ksHistoryFrom, setKsHistoryFrom] = useState(ninetyDaysAgo);
+  const [ksHistoryTo, setKsHistoryTo] = useState(today);
+
+  async function runKsSync(type: "members" | "history" | "today"): Promise<void> {
+    setKsBusy(type);
+    setKsMsg(null);
+    try {
+      await triggerKuaishouSync({
+        type,
+        fromDate: type === "history" ? ksHistoryFrom : undefined,
+        toDate: type === "history" ? ksHistoryTo : undefined,
+      });
+      setKsMsg({
+        kind: "ok",
+        text:
+          type === "members"
+            ? "快手成员同步已入队"
+            : type === "history"
+              ? `快手历史直播 ${ksHistoryFrom} ~ ${ksHistoryTo} 已入队`
+              : "快手今日实时直播已入队",
+      });
+    } catch (e) {
+      setKsMsg({ kind: "err", text: `失败: ${(e as Error).message}` });
+    } finally {
+      setKsBusy(null);
+    }
+  }
 
   return (
     <div className="bg-card space-y-4 rounded-lg border p-4">
@@ -134,6 +165,48 @@ export function ManualRerun(): React.JSX.Element {
             }
           >
             {bfMsg.text}
+          </div>
+        )}
+      </div>
+
+      {/* 快手同步触发 */}
+      <div className="space-y-2 border-t pt-4">
+        <h3 className="font-semibold">快手同步</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button disabled={ksBusy !== null} onClick={() => runKsSync("members")} variant="outline">
+            {ksBusy === "members" ? "入队中..." : "成员同步"}
+          </Button>
+          <Button disabled={ksBusy !== null} onClick={() => runKsSync("today")} variant="outline">
+            {ksBusy === "today" ? "入队中..." : "今日实时直播"}
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            type="date"
+            value={ksHistoryFrom}
+            onChange={(e) => setKsHistoryFrom(e.target.value)}
+            className="max-w-[160px]"
+          />
+          <span className="text-muted-foreground text-xs">~</span>
+          <Input
+            type="date"
+            value={ksHistoryTo}
+            onChange={(e) => setKsHistoryTo(e.target.value)}
+            className="max-w-[160px]"
+          />
+          <Button disabled={ksBusy !== null} onClick={() => runKsSync("history")}>
+            {ksBusy === "history" ? "入队中..." : "历史直播（按日期范围）"}
+          </Button>
+        </div>
+        {ksMsg && (
+          <div
+            className={
+              ksMsg.kind === "ok"
+                ? "text-change-down text-sm"
+                : "text-change-up text-sm whitespace-pre-wrap"
+            }
+          >
+            {ksMsg.text}
           </div>
         )}
       </div>

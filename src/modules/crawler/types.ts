@@ -7,6 +7,8 @@ export const JOB_NAMES = {
   FETCH_PORTRAIT: "crawler:fetch_portrait", // per anchor
   FETCH_SESSION_MG: "crawler:fetch_session_mg", // per room_id
   SYNC_KUAISHOU_MEMBERS: "crawler:sync_kuaishou_members", // 快手机构成员同步（live_account 字段对齐）
+  SYNC_KUAISHOU_HISTORY_LIVE: "crawler:sync_kuaishou_history_live", // 快手历史直播数据
+  SYNC_KUAISHOU_TODAY_LIVE: "crawler:sync_kuaishou_today_live", // 快手今日实时直播数据
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
