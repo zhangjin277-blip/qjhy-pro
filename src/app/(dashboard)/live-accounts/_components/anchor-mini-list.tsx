@@ -26,10 +26,8 @@ export function AnchorMiniList({ bindings, currentHour }: AnchorMiniListProps) {
         const [from, to] = getAvatarGradient(idx);
         const firstName = (b.anchor_name ?? "?").slice(0, 1);
 
-        // Build time label
-        const timeLabel = b.time_slots
-          .map(([s, e]) => `${s.slice(0, 5)}–${e.slice(0, 5)}`)
-          .join(" / ");
+        // 时间段每段一行（多段不挤同一行）
+        const timeLines = b.time_slots.map(([s, e]) => `${s.slice(0, 5)}–${e.slice(0, 5)}`);
 
         return (
           <div
@@ -45,22 +43,25 @@ export function AnchorMiniList({ bindings, currentHour }: AnchorMiniListProps) {
             >
               {firstName}
             </div>
-            {/* Name */}
-            <span className="font-medium text-slate-800 shrink-0">
-              {b.anchor_name ?? "—"}
-              {isNow && (
-                <span className="ml-1.5 rounded bg-blue-500 px-1 py-0 text-[9px] font-medium text-white">
-                  当前
-                </span>
-              )}
-            </span>
-            {/* Time */}
+            {/* Name — 当前直播中：标红 */}
             <span
-              className="ml-auto text-[10.5px] text-slate-500 tabular-nums"
+              className={`min-w-0 flex-shrink truncate font-medium ${
+                isNow ? "text-rose-500" : "text-slate-800"
+              }`}
+            >
+              {b.anchor_name ?? "—"}
+            </span>
+            {/* Time — 多段每段独占一行 */}
+            <div
+              className="ml-auto flex flex-col items-end gap-0.5 text-[10.5px] leading-tight text-slate-500 tabular-nums"
               style={{ fontFamily: 'ui-monospace, "SF Mono", monospace' }}
             >
-              {timeLabel}
-            </span>
+              {timeLines.map((t, i) => (
+                <span key={i} className="whitespace-nowrap">
+                  {t}
+                </span>
+              ))}
+            </div>
           </div>
         );
       })}

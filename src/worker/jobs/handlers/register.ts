@@ -6,6 +6,7 @@ import { fetchGameHandler } from "./fetch-game";
 import { fetchMinigameHandler } from "./fetch-minigame";
 import { fetchPortraitHandler } from "./fetch-portrait";
 import { fetchSessionMgHandler } from "./fetch-session-mg";
+import { syncKuaishouMembersHandler } from "./sync-kuaishou-members";
 import type PgBoss from "pg-boss";
 
 // batchSize=1: one job at a time, avoids rate-limit / Cookie contention.
@@ -31,5 +32,11 @@ export async function registerCrawlerHandlers(): Promise<void> {
   await boss.work(JOB_NAMES.FETCH_MINIGAME, { batchSize: 1 }, runFirst(fetchMinigameHandler));
   await boss.work(JOB_NAMES.FETCH_PORTRAIT, { batchSize: 1 }, runFirst(fetchPortraitHandler));
   await boss.work(JOB_NAMES.FETCH_SESSION_MG, { batchSize: 1 }, runFirst(fetchSessionMgHandler));
-  console.log("[crawler] all 7 handlers registered");
+  // 快手成员同步无 payload，封装成忽略 jobs 数据的 handler
+  await boss.work(JOB_NAMES.SYNC_KUAISHOU_MEMBERS, { batchSize: 1 }, async (jobs) => {
+    const job = jobs.at(0);
+    if (job === undefined) return;
+    await syncKuaishouMembersHandler();
+  });
+  console.log("[crawler] all 8 handlers registered");
 }

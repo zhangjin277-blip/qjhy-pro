@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { crawler_cookie_session } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-export type Basecamp = "cs" | "nc1" | "nc2";
+export type Basecamp = "cs" | "nc1" | "nc2" | "kuaishou";
 
 export interface CookieRecord {
   basecamp: Basecamp;

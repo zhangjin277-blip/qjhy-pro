@@ -370,7 +370,7 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
               onClick={() => toggleDate(d)}
               className="flex w-full items-center justify-between bg-primary/[0.06] px-3 py-2 text-left transition-colors hover:bg-primary/[0.12]"
             >
-              <span className="flex items-center gap-2">
+              <span className="flex min-w-0 items-center gap-2">
                 <span
                   className={`text-[9px] text-primary transition-transform ${
                     isDayOpen ? "rotate-90" : ""
@@ -379,29 +379,13 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
                   ▶
                 </span>
                 <span className="text-[12px] font-semibold text-primary">{d}</span>
+                <span className="text-muted-foreground/40">·</span>
+                <span className="truncate text-[11px] tabular-nums text-muted-foreground">
+                  消耗 {fmtMoney(dCost)} · 激活 {fmtChinese(dActs)} · 付费 {fmtMoney(dPay)}
+                </span>
               </span>
-              <span className="flex gap-3 text-[11.5px] tabular-nums text-muted-foreground">
-                <span>
-                  消耗 <b className="font-semibold text-foreground">{fmtMoney(dCost)}</b>
-                </span>
-                <span>
-                  激活 <b className="font-semibold text-foreground">{fmtChinese(dActs)}</b>
-                </span>
-                <span>
-                  单价{" "}
-                  <b className="font-semibold text-foreground">
-                    {dCpa == null ? "—" : `¥${dCpa.toFixed(2)}`}
-                  </b>
-                </span>
-                <span>
-                  付费 <b className="font-semibold text-foreground">{fmtMoney(dPay)}</b>
-                </span>
-                <span>
-                  ARPU{" "}
-                  <b className="font-semibold text-foreground">
-                    {dArpu == null ? "—" : `¥${dArpu.toFixed(2)}`}
-                  </b>
-                </span>
+              <span className="shrink-0 text-[10.5px] text-muted-foreground">
+                {isDayOpen ? "收起" : "展开"}
               </span>
             </button>
             {isDayOpen && (
@@ -466,6 +450,26 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
                       </tr>
                     );
                   })}
+                  <tr className="border-t border-primary/20 bg-primary/[0.035] font-semibold text-foreground">
+                    <td className="px-3 py-1.5 whitespace-nowrap">合计</td>
+                    <td className="px-3 py-1.5">{fmtMoney(dCost)}</td>
+                    <td className="px-3 py-1.5">{fmtChinese(dActs)}</td>
+                    <td className="px-3 py-1.5">
+                      {dCpa == null ? (
+                        <span className="text-muted-foreground/40">—</span>
+                      ) : (
+                        `¥${dCpa.toFixed(2)}`
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5">{fmtMoney(dPay)}</td>
+                    <td className="px-3 py-1.5">
+                      {dArpu == null ? (
+                        <span className="text-muted-foreground/40">—</span>
+                      ) : (
+                        `¥${dArpu.toFixed(2)}`
+                      )}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             )}

@@ -203,22 +203,43 @@ export function SummaryTable({ rows, subAccounts, filter }: SummaryTableProps) {
                     }`}
                   >
                     <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10.5px] font-semibold text-white shadow-sm ${
-                            isKuaishou
-                              ? "bg-gradient-to-br from-[#ffedd5] to-[#ff7d00]"
-                              : "bg-gradient-to-br from-[#d1e9ff] to-[#1677ff]"
-                          }`}
-                        >
-                          {avatarChar(label)}
-                        </div>
+                      <div className="flex items-center gap-2.5">
+                        {r.avatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={r.avatar}
+                            alt={r.account_name ?? label}
+                            className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10.5px] font-semibold text-white shadow-sm ${
+                              isKuaishou
+                                ? "bg-gradient-to-br from-[#ffedd5] to-[#ff7d00]"
+                                : "bg-gradient-to-br from-[#d1e9ff] to-[#1677ff]"
+                            }`}
+                          >
+                            {avatarChar(label)}
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <div className="truncate text-[13px] font-semibold text-foreground">
-                            {label}
+                            {r.account_name ?? label}
                           </div>
-                          <div className="mt-0.5 flex items-center gap-1">
+                          <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                             <PlatformBadge platforms={r.platforms} />
+                            {r.platform_account_id && (
+                              <span className="tabular-nums">{r.platform_account_id}</span>
+                            )}
+                            {label !== "（无标签）" && (
+                              <>
+                                <span className="text-muted-foreground/40">·</span>
+                                <span className="rounded bg-purple-50 px-1.5 py-0 text-[10.5px] text-purple-700">
+                                  {label}
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>

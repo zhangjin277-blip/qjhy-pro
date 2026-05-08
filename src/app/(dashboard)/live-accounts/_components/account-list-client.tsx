@@ -59,6 +59,7 @@ interface Props {
   anchors: AnchorLite[];
   avatarByPlatformId: Record<string, string | null>;
   overridesByAccount: Record<string, OverrideRowView[]>;
+  placementLabelOptions: string[];
 }
 
 export function AccountListClient({
@@ -71,6 +72,7 @@ export function AccountListClient({
   anchors,
   avatarByPlatformId,
   overridesByAccount,
+  placementLabelOptions,
 }: Props) {
   const router = useRouter();
   const isRotation = ROTATION_PRODUCTS.includes(selectedProduct);
@@ -226,6 +228,7 @@ export function AccountListClient({
         defaultProduct={selectedProduct}
         bindingsByAccount={bindingsByAccount}
         overridesByAccount={overridesByAccount}
+        placementLabelOptions={placementLabelOptions}
       />
     </div>
   );

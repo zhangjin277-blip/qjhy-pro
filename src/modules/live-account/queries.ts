@@ -24,6 +24,7 @@ export async function listAccounts(
       platform_account_id: live_account.platform_account_id,
       platform_uid: live_account.platform_uid,
       platform_real_name: live_account.platform_real_name,
+      avatar: live_account.avatar,
       phone: live_account.phone,
       phone_index: live_account.phone_index,
       phone_real_name: live_account.phone_real_name,

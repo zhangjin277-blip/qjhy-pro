@@ -186,9 +186,9 @@ export function AccountTable({
                         name={account.account_name}
                         platform={account.platform}
                         avatarUrl={
-                          account.platform_account_id
+                          (account.platform_account_id
                             ? avatarByPlatformId[account.platform_account_id]
-                            : null
+                            : null) ?? account.avatar
                         }
                       />
                       <div className="min-w-0 flex-1">

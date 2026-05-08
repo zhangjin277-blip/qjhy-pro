@@ -69,3 +69,36 @@ export async function openDouyinPage(cookies: Record<string, string>): Promise<P
 
   return page;
 }
+
+/**
+ * 打开快手机构后台 page，注入 Cookie。
+ * cookie domain `.kuaishou.com`；goto 成员管理列表页加载快手前端 SDK（自动给后续 fetch 加 sig3 签名）。
+ */
+export async function openKuaishouPage(cookies: Record<string, string>): Promise<Page> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setUserAgent(
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+  );
+
+  console.log("[puppeteer/kuaishou] setting cookies for", Object.keys(cookies).length, "keys");
+  const cookieEntries = Object.entries(cookies).map(([name, value]) => ({
+    name,
+    value,
+    domain: ".kuaishou.com",
+    path: "/",
+  }));
+  await page.setCookie(...cookieEntries);
+
+  console.log("[puppeteer/kuaishou] navigating to member list page");
+  await page.goto("https://jigou.kuaishou.com/operation/member/list_v2/list", {
+    waitUntil: "networkidle2",
+    timeout: 60_000,
+  });
+  // 同抖音：等 SPA router + 前端签名 SDK 注入
+  await new Promise((r) => setTimeout(r, 5000));
+  console.log("[puppeteer/kuaishou] page ready, url=", page.url());
+
+  return page;
+}

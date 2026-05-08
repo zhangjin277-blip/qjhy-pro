@@ -27,40 +27,48 @@ export default async function LiveAccountsPage({
     : DEFAULT_PRODUCT;
 
   // Parallel fetch
-  const [accounts, allBindings, rooms, allAnchors, activeUsers, douyinAvatars] = await Promise.all([
-    listAccounts({ product: selectedProduct }),
-    listBindings({}),
-    listRooms(),
-    listAnchors({}),
-    // 仅直播一部下、在职的钉钉用户（运营 select 候选）
-    db
-      .select({
-        user_id: dingtalk_user.user_id,
-        name: dingtalk_user.name,
-        title: dingtalk_user.title,
-        active: dingtalk_user.active,
-      })
-      .from(dingtalk_user)
-      .where(
-        and(
-          eq(dingtalk_user.active, true),
-          sql`${dingtalk_user.dept_ids} @> ${JSON.stringify([LIVE_DEPT_ID])}::jsonb`,
-        ),
-      )
-      .orderBy(dingtalk_user.name),
-    // 抖音账号 → anchor_profile.avatar 反向 join（仅当前 product 的）
-    db
-      .select({
-        platform_account_id: live_account.platform_account_id,
-        avatar: anchor_profile.avatar,
-      })
-      .from(live_account)
-      .leftJoin(
-        anchor_profile,
-        eq(live_account.platform_account_id, anchor_profile.aweme_display_id),
-      )
-      .where(and(eq(live_account.platform, "抖音"), eq(live_account.product, selectedProduct))),
-  ]);
+  const [accounts, allBindings, rooms, allAnchors, activeUsers, douyinAvatars, placementLabelRows] =
+    await Promise.all([
+      listAccounts({ product: selectedProduct }),
+      listBindings({}),
+      listRooms(),
+      listAnchors({}),
+      // 直播一部 + 所有子部门下、在职的钉钉用户（运营 select 候选）
+      // 递归 CTE 展开 dept_id 树，再用 dept_ids ?| 命中
+      db.execute<{ user_id: string; name: string; title: string | null; active: boolean }>(sql`
+        WITH RECURSIVE dept_tree AS (
+          SELECT dept_id FROM dingtalk_dept WHERE dept_id = ${LIVE_DEPT_ID}
+          UNION ALL
+          SELECT d.dept_id FROM dingtalk_dept d JOIN dept_tree t ON d.parent_id = t.dept_id
+        )
+        SELECT user_id, name, title, active
+        FROM dingtalk_user
+        WHERE active = true
+          AND dept_ids ?| ARRAY(SELECT dept_id FROM dept_tree)
+        ORDER BY name
+      `),
+      // 抖音账号 → anchor_profile.avatar 反向 join（仅当前 product 的）
+      db
+        .select({
+          platform_account_id: live_account.platform_account_id,
+          avatar: anchor_profile.avatar,
+        })
+        .from(live_account)
+        .leftJoin(
+          anchor_profile,
+          eq(live_account.platform_account_id, anchor_profile.aweme_display_id),
+        )
+        .where(and(eq(live_account.platform, "抖音"), eq(live_account.product, selectedProduct))),
+      // 全部 distinct placement_label 供编辑下拉选
+      db
+        .selectDistinct({ placement_label: live_account.placement_label })
+        .from(live_account)
+        .where(sql`${live_account.placement_label} IS NOT NULL`)
+        .orderBy(live_account.placement_label),
+    ]);
+  const placementLabelOptions = (placementLabelRows as { placement_label: string | null }[])
+    .map((r) => r.placement_label)
+    .filter((l): l is string => !!l);
 
   // 抖音账号 platform_account_id → avatar URL
   const avatarByPlatformId: Record<string, string | null> = {};
@@ -169,6 +177,7 @@ export default async function LiveAccountsPage({
         anchors={anchors}
         avatarByPlatformId={avatarByPlatformId}
         overridesByAccount={overridesByAccount}
+        placementLabelOptions={placementLabelOptions}
       />
     </div>
   );

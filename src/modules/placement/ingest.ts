@@ -97,11 +97,12 @@ export async function ingestRows(input: IngestInput) {
     }
     if (!accId) {
       // 所有来源都自动建 stub —— excel/pro3 都需要，避免上传后数据全跳
+      // 默认快手：业务上 stub 多来自轮播主播（PRO3/Excel 上传），实际都是快手
       const stubId = crypto.randomUUID();
       await db.insert(live_account).values({
         id: stubId,
         account_name: r.account_name,
-        platform: "抖音",
+        platform: "快手",
         product: productByDataset[input.dataset_id] ?? "捕鱼大作战",
         placement_label: r.account_name,
         live_status: "unknown",

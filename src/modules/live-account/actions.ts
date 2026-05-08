@@ -1,10 +1,10 @@
 "use server";
 import { db } from "@/db/client";
-import { live_account } from "@/db/schema";
+import { live_account, placement_row, schedule_override } from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
 import { requireAdmin } from "@/lib/admin-guard";
 import { AppError } from "@/lib/errors";
-import { eq } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
 import { UpsertAccountInput, DeleteAccountInput } from "./schema";
 
 export async function upsertAccount(input: unknown) {
@@ -68,6 +68,19 @@ export async function deleteAccount(input: unknown) {
   const [before] = await db.select().from(live_account).where(eq(live_account.id, id));
   if (!before) throw new AppError("LIVE_ACCOUNT_NOT_FOUND", "直播账号不存在", 404);
 
+  const [placementCount] = await db
+    .select({ n: count() })
+    .from(placement_row)
+    .where(eq(placement_row.live_account_id, id));
+  if (placementCount && placementCount.n > 0) {
+    throw new AppError(
+      "LIVE_ACCOUNT_HAS_PLACEMENTS",
+      `该账号有 ${placementCount.n} 条投放历史数据，无法删除。请先在投放页清理或迁移这些数据。`,
+      409,
+    );
+  }
+
+  await db.delete(schedule_override).where(eq(schedule_override.account_id, id));
   await db.delete(live_account).where(eq(live_account.id, id));
 
   await writeAuditLog({

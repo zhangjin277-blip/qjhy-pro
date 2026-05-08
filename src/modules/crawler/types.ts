@@ -6,6 +6,7 @@ export const JOB_NAMES = {
   FETCH_MINIGAME: "crawler:fetch_minigame", // per anchor
   FETCH_PORTRAIT: "crawler:fetch_portrait", // per anchor
   FETCH_SESSION_MG: "crawler:fetch_session_mg", // per room_id
+  SYNC_KUAISHOU_MEMBERS: "crawler:sync_kuaishou_members", // 快手机构成员同步（live_account 字段对齐）
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];

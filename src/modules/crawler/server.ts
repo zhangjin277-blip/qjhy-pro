@@ -53,3 +53,20 @@ export {
   parseSessionMinigameResponse,
   type SessionMgRow,
 } from "./adapters/session-minigame";
+export {
+  fetchKuaishouMembers,
+  mapKuaishouMember,
+  inferProductFromName,
+  normalizePersonName,
+  type KuaishouMemberRaw,
+  type MappedMember,
+} from "./adapters/kuaishou-member";
+export {
+  fetchKuaishouHistoryLiveSessions,
+  parseLiveAmt,
+  type KuaishouHistoryLiveRaw,
+} from "./adapters/kuaishou-history-live";
+export {
+  fetchKuaishouTodayLiveSessions,
+  type KuaishouTodayLiveRaw,
+} from "./adapters/kuaishou-today-live";

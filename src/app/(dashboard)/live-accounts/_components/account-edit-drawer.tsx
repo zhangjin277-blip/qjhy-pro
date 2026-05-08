@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition, useRef } from "react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { upsertAccount } from "@/modules/live-account";
+import { upsertAccount, deleteAccount } from "@/modules/live-account";
 import type { AccountWithRelations } from "@/modules/live-account";
 import { AnchorBindingForm } from "./anchor-binding-form";
 import { ScheduleOverrideTab } from "./schedule-override-tab";
@@ -111,6 +111,119 @@ function SearchableUserSelect({
   );
 }
 
+/**
+ * 投放标签下拉：搜索 + 从已有标签选 + 允许新增（输入新值后回车提交）。
+ * 用 datalist 风格的 popover：上面输入框，下面 filtered 列表，回车/点击都能选。
+ */
+function SearchablePlacementLabelSelect({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  const filtered = query.trim()
+    ? options.filter((o) => o.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+  const queryIsNewLabel =
+    query.trim().length > 0 && !options.some((o) => o.toLowerCase() === query.trim().toLowerCase());
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between rounded border border-slate-200 bg-white px-3 py-2 text-left text-[13px] text-slate-800 hover:border-slate-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+      >
+        <span className={value ? "" : "text-slate-300"}>{value || "— 选择或输入新标签 —"}</span>
+        <span className="text-slate-400">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && query.trim()) {
+                onChange(query.trim());
+                setOpen(false);
+                setQuery("");
+              }
+            }}
+            placeholder="搜索或输入新标签后回车…"
+            className="w-full rounded-t-md border-b border-slate-200 px-3 py-2 text-[13px] outline-none"
+          />
+          <div className="max-h-60 overflow-y-auto py-1">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+                setQuery("");
+              }}
+              className="w-full px-3 py-1.5 text-left text-[12px] text-slate-400 hover:bg-slate-50"
+            >
+              — 不指定 —
+            </button>
+            {queryIsNewLabel && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(query.trim());
+                  setOpen(false);
+                  setQuery("");
+                }}
+                className="w-full px-3 py-1.5 text-left text-[13px] text-blue-600 hover:bg-blue-50"
+              >
+                + 新增标签「{query.trim()}」
+              </button>
+            )}
+            {filtered.length === 0 && !queryIsNewLabel ? (
+              <div className="px-3 py-2 text-[12px] text-slate-400">无匹配标签</div>
+            ) : (
+              filtered.map((label) => (
+                <button
+                  type="button"
+                  key={label}
+                  onClick={() => {
+                    onChange(label);
+                    setOpen(false);
+                    setQuery("");
+                  }}
+                  className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] hover:bg-slate-50 ${
+                    label === value ? "bg-blue-50 text-blue-700" : "text-slate-700"
+                  }`}
+                >
+                  <span className="font-medium">{label}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const PRODUCT_PLATFORMS: Record<string, string[]> = {
   途游斗地主: ["抖音"],
   富豪麻将: ["抖音"],
@@ -174,6 +287,8 @@ interface AccountEditDrawerProps {
   defaultProduct?: string;
   bindingsByAccount: Record<string, BindingLite[]>;
   overridesByAccount: Record<string, OverrideRowView[]>;
+  /** 已有 placement_label 列表（去重，从所有 live_account 收集），供下拉选 */
+  placementLabelOptions: string[];
 }
 
 type TabKey = "basic" | "bindings";
@@ -205,6 +320,7 @@ export function AccountEditDrawer({
   defaultProduct = "捕鱼大作战",
   bindingsByAccount,
   overridesByAccount,
+  placementLabelOptions,
 }: AccountEditDrawerProps) {
   const isEdit = account !== null;
   const [tab, setTab] = useState<TabKey>("basic");
@@ -284,6 +400,26 @@ export function AccountEditDrawer({
     if (!allowed.includes(platform)) {
       setPlatform(allowed[0] ?? "抖音");
     }
+  };
+
+  const handleDelete = () => {
+    if (!account) return;
+    if (
+      !confirm(
+        `确认删除账号「${account.account_name}」？\n该操作不可撤销，关联的排班/绑定也会一并清理。`,
+      )
+    )
+      return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await deleteAccount({ id: account.id });
+        onOpenChange(false);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "删除失败，请重试";
+        setError(msg);
+      }
+    });
   };
 
   const handleSave = () => {
@@ -547,11 +683,10 @@ export function AccountEditDrawer({
                 </FormField>
 
                 <FormField label="投放标签">
-                  <input
-                    className={inputCls}
-                    placeholder="如：福利官"
+                  <SearchablePlacementLabelSelect
                     value={placementLabel}
-                    onChange={(e) => setPlacementLabel(e.target.value)}
+                    onChange={setPlacementLabel}
+                    options={placementLabelOptions}
                   />
                 </FormField>
 
@@ -594,21 +729,34 @@ export function AccountEditDrawer({
 
           {/* Footer (only for basic tab) */}
           {tab === "basic" && (
-            <div className="border-t border-slate-200 px-6 py-4 flex items-center justify-end gap-3">
-              <button
-                className="rounded-[5px] border border-slate-200 px-4 py-2 text-[13px] text-slate-600 hover:bg-slate-50"
-                onClick={() => onOpenChange(false)}
-                disabled={isPending}
-              >
-                取消
-              </button>
-              <button
-                className="rounded-[5px] bg-blue-500 px-4 py-2 text-[13px] font-medium text-white hover:bg-blue-600 disabled:opacity-60"
-                onClick={handleSave}
-                disabled={isPending || !accountName.trim()}
-              >
-                {isPending ? "保存中…" : "保存"}
-              </button>
+            <div className="border-t border-slate-200 px-6 py-4 flex items-center justify-between gap-3">
+              <div>
+                {isEdit && (
+                  <button
+                    className="rounded-[5px] border border-red-200 px-4 py-2 text-[13px] text-red-600 hover:bg-red-50 disabled:opacity-60"
+                    onClick={handleDelete}
+                    disabled={isPending}
+                  >
+                    删除账号
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  className="rounded-[5px] border border-slate-200 px-4 py-2 text-[13px] text-slate-600 hover:bg-slate-50"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isPending}
+                >
+                  取消
+                </button>
+                <button
+                  className="rounded-[5px] bg-blue-500 px-4 py-2 text-[13px] font-medium text-white hover:bg-blue-600 disabled:opacity-60"
+                  onClick={handleSave}
+                  disabled={isPending || !accountName.trim()}
+                >
+                  {isPending ? "保存中…" : "保存"}
+                </button>
+              </div>
             </div>
           )}
         </div>

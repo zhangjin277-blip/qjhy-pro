@@ -602,13 +602,20 @@ export interface SummaryRowExt extends SummaryRow {
   account_count: number;
   platforms: string[]; // 该 anchor_label 下涉及的平台
   prev_cost: number; // 前期同长度的 cost（用于同比）
+  // 来自 live_account 的展示字段（placement_label unique，直接 join）
+  account_name: string | null;
+  platform_account_id: string | null;
+  avatar: string | null;
 }
 
 export async function querySummaryExt(filter: BoardFilter): Promise<SummaryRowExt[]> {
-  // 1. 主表
+  // 1. 主表（placement_label 是 unique，直接取代表 live_account 字段）
   const main = (await db.execute(sql`
     SELECT
       a.placement_label,
+      MAX(a.account_name)            AS account_name,
+      MAX(a.platform_account_id)     AS platform_account_id,
+      MAX(a.avatar)                  AS avatar,
       COUNT(*)::int                             AS row_count,
       COUNT(DISTINCT a.id)::int                 AS account_count,
       ARRAY_AGG(DISTINCT a.platform) FILTER (WHERE a.platform IS NOT NULL) AS platforms,
@@ -626,6 +633,9 @@ export async function querySummaryExt(filter: BoardFilter): Promise<SummaryRowEx
     LIMIT 100
   `)) as unknown as {
     placement_label: string | null;
+    account_name: string | null;
+    platform_account_id: string | null;
+    avatar: string | null;
     row_count: number;
     account_count: number;
     platforms: string[] | null;
@@ -706,6 +716,9 @@ export async function querySummaryExt(filter: BoardFilter): Promise<SummaryRowEx
       account_count: Number(r.account_count),
       platforms: (r.platforms ?? []).filter(Boolean),
       prev_cost: prevByLabel.get(r.placement_label) ?? 0,
+      account_name: r.account_name,
+      platform_account_id: r.platform_account_id,
+      avatar: r.avatar,
     };
   });
 }

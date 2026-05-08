@@ -1,4 +1,4 @@
-import { AnchorTable } from "./_components/anchor-table";
+import { AnchorsBoard } from "./_components/anchors-board";
 
 export default function AnchorsPage(): React.JSX.Element {
   return (
@@ -6,7 +6,7 @@ export default function AnchorsPage(): React.JSX.Element {
       <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
         <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">主播明细</span>
       </div>
-      <AnchorTable />
+      <AnchorsBoard />
     </div>
   );
 }

@@ -58,7 +58,7 @@ export const NAV: NavItem[] = [
     icon: BarChart3,
     children: [
       { key: "data-board", label: "业务看板", href: "/dashboard" },
-      { key: "data-placement", label: "💸 投放数据", href: "/placements" },
+      { key: "data-placement", label: "投放数据", href: "/placements" },
       { key: "data-realtime", label: "实时数据", href: "/live/realtime", disabled: true },
       { key: "data-daily", label: "主播日报", href: "/live/daily", disabled: true },
       { key: "data-rank", label: "排行榜", href: "/live/rank", disabled: true },
@@ -71,7 +71,8 @@ export const NAV: NavItem[] = [
     children: [
       { key: "live-accounts", label: "直播账号", href: "/live-accounts" },
       { key: "live-anchors", label: "主播档案", href: "/live-anchors" },
-      { key: "live-schedule", label: "排班总览", href: "/live-accounts/schedule-overview" },
+      { key: "live-today", label: "今日排班", href: "/live-accounts/schedule-today" },
+      { key: "live-schedule", label: "默认排班", href: "/live-accounts/schedule-overview" },
     ],
   },
   {

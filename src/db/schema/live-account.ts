@@ -16,6 +16,7 @@ export const live_account = pgTable(
     platform_account_id: text("platform_account_id"), // 抖音号 / 快手号
     platform_uid: text("platform_uid"), // 平台唯一 UID
     platform_real_name: text("platform_real_name"),
+    avatar: text("avatar"), // 平台头像 CDN URL（与 anchor_profile.avatar 同风格存原始链接）
 
     phone: text("phone"),
     phone_index: text("phone_index"), // 'SJ-250421-011' 公司资产编号
