@@ -55,8 +55,42 @@ export interface KuaishouRow {
   // 送礼
   total_send_gift_uv: number;
   total_sent_gift_cnt: number;
+  total_live_video_amt: number;
+  total_live_chat_room_amt: number;
   // 违规
   total_report_num: number;
+  avg_report_rate: number;
+  // 流量补
+  avg_live_cover_ctr: number;
+  avg_valid_play_duration_min: number;
+  // 涨粉补
+  max_fans_club_cnt: number;
+  // 互动补
+  total_like_uv: number;
+  total_comment_uv: number;
+  avg_share_rate: number;
+  total_share_uv: number;
+  total_interact_num: number;
+  avg_interact_rate: number;
+  // 推广（today_extra）
+  total_promote_amt: number;
+  total_promote_cost: number;
+  total_promote_refund: number;
+  total_promote_watch: number;
+  total_promote_gmv: number;
+  avg_promote_roi: number;
+  total_promote_orders: number;
+  total_promote_fans_add: number;
+  // 画像/分级/状态（today_extra 最新一场）
+  fans_most_age: string | null;
+  fans_male_rate: number | null;
+  fans_most_province: string | null;
+  author_type: string | null;
+  author_ratio: number | null;
+  has_promote: boolean | null;
+  has_punish: boolean | null;
+  settle_in_time: number | null;
+  settle_province: string | null;
 }
 
 interface KuaishouServerKpi {
@@ -195,6 +229,13 @@ function renderKuaishouCell(col: ColumnDef<KuaishouColKey>, r: KuaishouRow): Rea
   const muted = (txt: ReactNode = "—"): ReactNode => (
     <span className="text-muted-foreground">{txt}</span>
   );
+  const numCell = (v: number, fmt: (n: number) => ReactNode = fmtChinese): ReactNode =>
+    v > 0 ? fmt(v) : muted();
+  const pctNullable = (v: number | null, digits = 2): ReactNode =>
+    v != null ? `${(v * 100).toFixed(digits)}%` : muted();
+  const textNullable = (v: string | null): ReactNode => v ?? muted();
+  const boolDisplay = (v: boolean | null): ReactNode =>
+    v === true ? "是" : v === false ? "否" : muted();
   switch (col.key) {
     case "agent_name":
       return r.agent_name ?? muted(r.broker_name_raw ?? "未分配");
@@ -258,6 +299,69 @@ function renderKuaishouCell(col: ColumnDef<KuaishouColKey>, r: KuaishouRow): Rea
       return r.total_sent_gift_cnt > 0 ? fmtChinese(r.total_sent_gift_cnt) : muted();
     case "total_report_num":
       return r.total_report_num > 0 ? r.total_report_num : muted();
+    case "avg_report_rate":
+      return numCell(r.avg_report_rate, (n) => `${(n * 100).toFixed(2)}%`);
+    case "avg_live_cover_ctr":
+      return numCell(r.avg_live_cover_ctr, (n) => `${(n * 100).toFixed(2)}%`);
+    case "avg_valid_play_duration_min":
+      return numCell(r.avg_valid_play_duration_min, (n) => `${n.toFixed(1)}分`);
+    case "max_fans_club_cnt":
+      return numCell(r.max_fans_club_cnt);
+    case "total_like_uv":
+      return numCell(r.total_like_uv);
+    case "total_comment_uv":
+      return numCell(r.total_comment_uv);
+    case "avg_share_rate":
+      return numCell(r.avg_share_rate, (n) => `${(n * 100).toFixed(2)}%`);
+    case "total_share_uv":
+      return numCell(r.total_share_uv);
+    case "total_interact_num":
+      return numCell(r.total_interact_num);
+    case "avg_interact_rate":
+      return numCell(r.avg_interact_rate, (n) => `${(n * 100).toFixed(2)}%`);
+    case "total_live_video_amt":
+      return numCell(r.total_live_video_amt, fmtMoney);
+    case "total_live_chat_room_amt":
+      return numCell(r.total_live_chat_room_amt, fmtMoney);
+    // 推广
+    case "total_promote_amt":
+      return numCell(r.total_promote_amt, fmtMoney);
+    case "total_promote_cost":
+      return numCell(r.total_promote_cost, fmtMoney);
+    case "total_promote_refund":
+      return numCell(r.total_promote_refund, fmtMoney);
+    case "total_promote_watch":
+      return numCell(r.total_promote_watch);
+    case "total_promote_gmv":
+      return numCell(r.total_promote_gmv, fmtMoney);
+    case "avg_promote_roi":
+      return numCell(r.avg_promote_roi, (n) => n.toFixed(2));
+    case "total_promote_orders":
+      return numCell(r.total_promote_orders);
+    case "total_promote_fans_add":
+      return numCell(r.total_promote_fans_add);
+    // 画像/分级/状态
+    case "fans_most_age":
+      return textNullable(r.fans_most_age);
+    case "fans_male_rate":
+      return pctNullable(r.fans_male_rate, 1);
+    case "fans_most_province":
+      return textNullable(r.fans_most_province);
+    case "author_type":
+      return textNullable(r.author_type);
+    case "author_ratio":
+      return pctNullable(r.author_ratio);
+    case "has_promote":
+      return boolDisplay(r.has_promote);
+    case "has_punish":
+      return boolDisplay(r.has_punish);
+    case "settle_in_time":
+      if (!r.settle_in_time) return muted();
+      return new Date(
+        r.settle_in_time > 1e10 ? r.settle_in_time : r.settle_in_time * 1000,
+      ).toLocaleDateString("zh-CN");
+    case "settle_province":
+      return textNullable(r.settle_province);
     case "product":
       return r.product;
     default:

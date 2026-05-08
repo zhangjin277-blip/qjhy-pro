@@ -69,8 +69,42 @@ export interface KuaishouAnchorRow {
   // 送礼
   total_send_gift_uv: number;
   total_sent_gift_cnt: number;
+  total_live_video_amt: number;
+  total_live_chat_room_amt: number;
   // 违规
   total_report_num: number;
+  avg_report_rate: number;
+  // 流量 - 补
+  avg_live_cover_ctr: number;
+  avg_valid_play_duration_min: number;
+  // 涨粉 - 补
+  max_fans_club_cnt: number;
+  // 互动 - 补
+  total_like_uv: number;
+  total_comment_uv: number;
+  avg_share_rate: number;
+  total_share_uv: number;
+  total_interact_num: number;
+  avg_interact_rate: number;
+  // today_extra - 推广（仅 today data_source 时聚合，history 全 NULL → 0）
+  total_promote_amt: number;
+  total_promote_cost: number;
+  total_promote_refund: number;
+  total_promote_watch: number;
+  total_promote_gmv: number;
+  avg_promote_roi: number;
+  total_promote_orders: number;
+  total_promote_fans_add: number;
+  // today_extra - 画像 / 分级 / 状态（取最新一场 today_extra）
+  fans_most_age: string | null;
+  fans_male_rate: number | null;
+  fans_most_province: string | null;
+  author_type: string | null;
+  author_ratio: number | null;
+  has_promote: boolean | null;
+  has_punish: boolean | null;
+  settle_in_time: number | null;
+  settle_province: string | null;
 }
 
 export interface KuaishouAnchorKpi {
@@ -157,6 +191,35 @@ export async function listKuaishouAnchors(
     total_send_gift_uv: number;
     total_sent_gift_cnt: number;
     total_report_num: number;
+    avg_live_cover_ctr: number;
+    avg_valid_play_duration_ms: number;
+    max_fans_club_cnt: number;
+    total_like_uv: number;
+    total_comment_uv: number;
+    avg_share_rate: number;
+    total_share_uv: number;
+    total_interact_num: number;
+    avg_interact_rate: number;
+    total_live_video_amt: number;
+    total_live_chat_room_amt: number;
+    avg_report_rate: number;
+    total_promote_amt: number;
+    total_promote_cost: number;
+    total_promote_refund: number;
+    total_promote_watch: number;
+    total_promote_gmv: number;
+    avg_promote_roi: number;
+    total_promote_orders: number;
+    total_promote_fans_add: number;
+    fans_most_age: string | null;
+    fans_male_rate: number | null;
+    fans_most_province: string | null;
+    author_type: string | null;
+    author_ratio: number | null;
+    has_promote: boolean | null;
+    has_punish: boolean | null;
+    settle_in_time: number | null;
+    settle_province: string | null;
   }>(sql`
     SELECT
       m.user_id, m.member_name, m.avatar, m.fans_count, m.broker_name_raw,
@@ -183,9 +246,48 @@ export async function listKuaishouAnchors(
       COALESCE(s.avg_comment_rate, 0)::float            AS avg_comment_rate,
       COALESCE(s.total_send_gift_uv, 0)::int            AS total_send_gift_uv,
       COALESCE(s.total_sent_gift_cnt, 0)::int           AS total_sent_gift_cnt,
-      COALESCE(s.total_report_num, 0)::int              AS total_report_num
+      COALESCE(s.total_report_num, 0)::int              AS total_report_num,
+      COALESCE(s.avg_live_cover_ctr, 0)::float          AS avg_live_cover_ctr,
+      COALESCE(s.avg_valid_play_duration_ms, 0)::float  AS avg_valid_play_duration_ms,
+      COALESCE(s.max_fans_club_cnt, 0)::int             AS max_fans_club_cnt,
+      COALESCE(s.total_like_uv, 0)::int                 AS total_like_uv,
+      COALESCE(s.total_comment_uv, 0)::int              AS total_comment_uv,
+      COALESCE(s.avg_share_rate, 0)::float              AS avg_share_rate,
+      COALESCE(s.total_share_uv, 0)::int                AS total_share_uv,
+      COALESCE(s.total_interact_num, 0)::int            AS total_interact_num,
+      COALESCE(s.avg_interact_rate, 0)::float           AS avg_interact_rate,
+      COALESCE(s.total_live_video_amt, 0)::float        AS total_live_video_amt,
+      COALESCE(s.total_live_chat_room_amt, 0)::float    AS total_live_chat_room_amt,
+      COALESCE(s.avg_report_rate, 0)::float             AS avg_report_rate,
+      COALESCE(s.total_promote_amt, 0)::float           AS total_promote_amt,
+      COALESCE(s.total_promote_cost, 0)::float          AS total_promote_cost,
+      COALESCE(s.total_promote_refund, 0)::float        AS total_promote_refund,
+      COALESCE(s.total_promote_watch, 0)::int           AS total_promote_watch,
+      COALESCE(s.total_promote_gmv, 0)::float           AS total_promote_gmv,
+      COALESCE(s.avg_promote_roi, 0)::float             AS avg_promote_roi,
+      COALESCE(s.total_promote_orders, 0)::int          AS total_promote_orders,
+      COALESCE(s.total_promote_fans_add, 0)::int        AS total_promote_fans_add,
+      lt.fans_most_age, lt.fans_male_rate, lt.fans_most_province,
+      lt.author_type, lt.author_ratio,
+      lt.has_promote, lt.has_punish, lt.settle_in_time, lt.settle_province
     FROM kuaishou_member m
     LEFT JOIN dingtalk_user du ON du.user_id = m.agent_dingtalk_user_id
+    LEFT JOIN (
+      SELECT DISTINCT ON (member_id)
+        member_id,
+        today_extra->>'fansMostAge' AS fans_most_age,
+        NULLIF(today_extra->>'fansMaleRate','')::numeric AS fans_male_rate,
+        today_extra->>'fansMostProvince' AS fans_most_province,
+        today_extra->>'authorType' AS author_type,
+        NULLIF(today_extra->>'ratio','')::numeric AS author_ratio,
+        NULLIF(today_extra->>'hasPromote','')::boolean AS has_promote,
+        NULLIF(today_extra->>'hasPunish','')::boolean AS has_punish,
+        NULLIF(today_extra->>'settleInTime','')::numeric AS settle_in_time,
+        today_extra->>'settleProvince' AS settle_province
+      FROM kuaishou_live_session
+      WHERE today_extra IS NOT NULL
+      ORDER BY member_id, start_datetime DESC
+    ) lt ON lt.member_id = m.user_id
     LEFT JOIN (
       SELECT
         member_id,
@@ -209,7 +311,27 @@ export async function listKuaishouAnchors(
         AVG(NULLIF(regexp_replace(comment_rate, '%$', ''), '')::numeric) / 100 AS avg_comment_rate,
         SUM(send_gift_uv) AS total_send_gift_uv,
         SUM(sent_gift_cnt) AS total_sent_gift_cnt,
-        SUM(report_num) AS total_report_num
+        SUM(report_num) AS total_report_num,
+        AVG(NULLIF(regexp_replace(live_cover_ctr, '%$', ''), '')::numeric) / 100 AS avg_live_cover_ctr,
+        AVG(valid_play_duration_avg_ms) AS avg_valid_play_duration_ms,
+        MAX(fans_club_cnt) AS max_fans_club_cnt,
+        SUM(like_uv) AS total_like_uv,
+        SUM(comment_uv) AS total_comment_uv,
+        AVG(NULLIF(regexp_replace(share_rate, '%$', ''), '')::numeric) / 100 AS avg_share_rate,
+        SUM(share_uv) AS total_share_uv,
+        SUM(interact_num) AS total_interact_num,
+        AVG(NULLIF(regexp_replace(interact_rate, '%$', ''), '')::numeric) / 100 AS avg_interact_rate,
+        SUM(live_video_amt) AS total_live_video_amt,
+        SUM(live_chat_room_amt) AS total_live_chat_room_amt,
+        AVG(NULLIF(regexp_replace(report_rate, '%$', ''), '')::numeric) / 100 AS avg_report_rate,
+        SUM(NULLIF(today_extra->>'promoteAmt','')::numeric) AS total_promote_amt,
+        SUM(NULLIF(today_extra->>'promoteCost','')::numeric) AS total_promote_cost,
+        SUM(NULLIF(today_extra->>'promoteRefund','')::numeric) AS total_promote_refund,
+        SUM(NULLIF(today_extra->>'promoteWatchCnt','')::numeric) AS total_promote_watch,
+        SUM(NULLIF(today_extra->>'promoteGmv','')::numeric) AS total_promote_gmv,
+        AVG(NULLIF(today_extra->>'promoteRoi','')::numeric) AS avg_promote_roi,
+        SUM(NULLIF(today_extra->>'promoteOrderCnt','')::numeric) AS total_promote_orders,
+        SUM(NULLIF(today_extra->>'promoteFansAdd','')::numeric) AS total_promote_fans_add
       FROM kuaishou_live_session
       WHERE start_datetime >= to_timestamp(${startMs / 1000})
         AND start_datetime <= to_timestamp(${endMs / 1000})
@@ -262,6 +384,35 @@ export async function listKuaishouAnchors(
     total_send_gift_uv: Number(r.total_send_gift_uv),
     total_sent_gift_cnt: Number(r.total_sent_gift_cnt),
     total_report_num: Number(r.total_report_num),
+    avg_live_cover_ctr: Number(r.avg_live_cover_ctr),
+    avg_valid_play_duration_min: Number(r.avg_valid_play_duration_ms) / 60_000,
+    max_fans_club_cnt: Number(r.max_fans_club_cnt),
+    total_like_uv: Number(r.total_like_uv),
+    total_comment_uv: Number(r.total_comment_uv),
+    avg_share_rate: Number(r.avg_share_rate),
+    total_share_uv: Number(r.total_share_uv),
+    total_interact_num: Number(r.total_interact_num),
+    avg_interact_rate: Number(r.avg_interact_rate),
+    total_live_video_amt: Number(r.total_live_video_amt),
+    total_live_chat_room_amt: Number(r.total_live_chat_room_amt),
+    avg_report_rate: Number(r.avg_report_rate),
+    total_promote_amt: Number(r.total_promote_amt),
+    total_promote_cost: Number(r.total_promote_cost),
+    total_promote_refund: Number(r.total_promote_refund),
+    total_promote_watch: Number(r.total_promote_watch),
+    total_promote_gmv: Number(r.total_promote_gmv),
+    avg_promote_roi: Number(r.avg_promote_roi),
+    total_promote_orders: Number(r.total_promote_orders),
+    total_promote_fans_add: Number(r.total_promote_fans_add),
+    fans_most_age: r.fans_most_age,
+    fans_male_rate: r.fans_male_rate == null ? null : Number(r.fans_male_rate),
+    fans_most_province: r.fans_most_province,
+    author_type: r.author_type,
+    author_ratio: r.author_ratio == null ? null : Number(r.author_ratio),
+    has_promote: r.has_promote,
+    has_punish: r.has_punish,
+    settle_in_time: r.settle_in_time == null ? null : Number(r.settle_in_time),
+    settle_province: r.settle_province,
   }));
 }
 
