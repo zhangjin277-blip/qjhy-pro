@@ -1,5 +1,6 @@
 import { listBatches } from "@/modules/placement/server";
 import Link from "next/link";
+import { DeleteBatchButton } from "./_components/delete-batch-button";
 
 export default async function BatchesPage() {
   const batches = await listBatches({ limit: 50 });
@@ -22,6 +23,7 @@ export default async function BatchesPage() {
                 "状态",
                 "上传人",
                 "时间",
+                "操作",
               ].map((c) => (
                 <th key={c} className="px-3 py-2 text-left text-xs font-medium text-slate-500">
                   {c}
@@ -67,6 +69,9 @@ export default async function BatchesPage() {
                 <td className="px-3 py-2">{b.uploaded_by_name ?? "-"}</td>
                 <td className="px-3 py-2 text-xs text-slate-500">
                   {new Date(b.uploaded_at).toLocaleString("zh-CN")}
+                </td>
+                <td className="px-3 py-2">
+                  <DeleteBatchButton batchId={b.id} fileName={b.file_name} source={b.source} />
                 </td>
               </tr>
             ))}

@@ -9,6 +9,7 @@ const TEST_DATASET = "product_buyu";
 
 beforeEach(async () => {
   await db.execute(sql`DELETE FROM placement_row`);
+  await db.execute(sql`DELETE FROM placement_cumulative_raw`);
   await db.execute(sql`DELETE FROM placement_import_batch`);
 });
 

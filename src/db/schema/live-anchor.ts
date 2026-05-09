@@ -13,7 +13,7 @@ export const live_anchor = pgTable(
       .primaryKey()
       .references(() => dingtalk_user.user_id),
 
-    business_line: text("business_line").notNull(), // '捕鱼' | '斗地主' | '麻将'
+    business_line: text("business_line").notNull(), // 拆到产品级：'捕鱼大作战' | '途游休闲捕鱼' | '电玩捕鱼' | '斗地主' | '麻将' | '三国:冰河时代'
     employment_type: text("employment_type").notNull(), // '正式' | '合作' | '试播'
     work_status: text("work_status").notNull().default("active"), // 'active' | 'rest' | 'leave'
 

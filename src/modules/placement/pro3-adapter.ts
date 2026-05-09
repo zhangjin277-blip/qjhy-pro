@@ -48,9 +48,12 @@ export function readPro3Placements(
         if (!date) continue;
 
         // 小时：dataHour / 时间
+        // PRO3 SQLite 里 dataHour 用终点编号（1=[00,01)..24=[23,24)），跟巨量后台一致；
+        // 系统统一存起点编号（0~23），所以 -1。dataHour=0 是 PRO3 脏数据（不存在 [-1,0)），skip。
         const hourRaw = c["dataHour"] ?? c["时间"] ?? "";
-        const hour = parseHour(hourRaw);
-        if (hour === null) continue;
+        const hourEndpoint = parseHour(hourRaw);
+        if (hourEndpoint === null || hourEndpoint < 1 || hourEndpoint > 24) continue;
+        const hour = hourEndpoint - 1;
 
         // 归因 key 用 anchorName（主播标签如"蓝V"），1:N 对应多个广告账户名
         // 「账户名称」是广告账户名（"ldl-直播-蓝V" / "ldl-直播-蓝V-3"），同主播下多包必须按它做差分

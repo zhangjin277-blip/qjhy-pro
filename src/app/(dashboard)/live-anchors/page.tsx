@@ -1,27 +1,34 @@
 import { listAnchors } from "@/modules/live-anchor/server";
 import { listBindings } from "@/modules/live-anchor";
 import { db } from "@/db/client";
-import { dingtalk_user } from "@/db/schema";
 import { sql } from "drizzle-orm";
 import { AnchorListClient } from "./_components/anchor-list-client";
 
 const LIVE_DEPT_ID = "724640467";
 
+interface DeptUserRow {
+  user_id: string;
+  name: string;
+  title: string | null;
+  active: boolean;
+}
+
 export default async function LiveAnchorsPage() {
   const [anchors, allBindings, deptUsers] = await Promise.all([
     listAnchors({}),
     listBindings({}),
-    // 直播一部下所有钉钉用户（含离职），用于"添加新主播"下拉
-    db
-      .select({
-        user_id: dingtalk_user.user_id,
-        name: dingtalk_user.name,
-        title: dingtalk_user.title,
-        active: dingtalk_user.active,
-      })
-      .from(dingtalk_user)
-      .where(sql`${dingtalk_user.dept_ids} @> ${JSON.stringify([LIVE_DEPT_ID])}::jsonb`)
-      .orderBy(dingtalk_user.name),
+    // 直播一部及全部子部门（合作主播/运营/后期/...）下的钉钉用户，用于"添加新主播"下拉
+    db.execute(sql`
+      WITH RECURSIVE tree AS (
+        SELECT dept_id FROM dingtalk_dept WHERE dept_id = ${LIVE_DEPT_ID}
+        UNION ALL
+        SELECT d.dept_id FROM dingtalk_dept d JOIN tree t ON d.parent_id = t.dept_id
+      )
+      SELECT user_id, name, title, active
+      FROM dingtalk_user
+      WHERE dept_ids ?| (SELECT array_agg(dept_id) FROM tree)
+      ORDER BY name
+    `) as unknown as Promise<DeptUserRow[]>,
   ]);
 
   // 分组 bindings by anchor (dingtalk_user_id)

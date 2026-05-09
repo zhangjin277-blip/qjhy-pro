@@ -4,10 +4,7 @@ import { registerJob, startScheduler } from "./scheduler";
 import { syncDingtalk } from "./jobs/sync-dingtalk";
 import { crawlOrchestrator } from "./jobs/crawl-orchestrator";
 import { registerCrawlerHandlers } from "./jobs/handlers/register";
-import { syncKuaishouMembersHandler } from "./jobs/handlers/sync-kuaishou-members";
-import { syncKuaishouHistoryLiveSessionsHandler } from "./jobs/handlers/sync-kuaishou-history-live";
-import { syncKuaishouTodayLiveSessionsHandler } from "./jobs/handlers/sync-kuaishou-today-live";
-import { stopBoss } from "@/modules/crawler/server";
+import { enqueue, JOB_NAMES, stopBoss } from "@/modules/crawler/server";
 import { closeBrowser } from "@/lib/puppeteer";
 import { runCronAttributionSweep } from "@/modules/placement-attribution/server";
 
@@ -33,11 +30,12 @@ registerJob({
 });
 
 // Phase 2.3a: 快手公会成员同步（每日 02:30，比钉钉晚 30min 避开瞬时高峰）
+// cron → enqueue → pg-boss handler，与抖音模式一致，确保 admin/crawler 队列页可见
 registerJob({
   name: "sync-kuaishou-members",
   schedule: "30 2 * * *",
   task: async () => {
-    await syncKuaishouMembersHandler();
+    await enqueue(JOB_NAMES.SYNC_KUAISHOU_MEMBERS, {});
   },
 });
 
@@ -47,7 +45,7 @@ registerJob({
   name: "sync-kuaishou-history-live",
   schedule: "0 11 * * *",
   task: async () => {
-    await syncKuaishouHistoryLiveSessionsHandler();
+    await enqueue(JOB_NAMES.SYNC_KUAISHOU_HISTORY_LIVE, {});
   },
 });
 
@@ -56,7 +54,7 @@ registerJob({
   name: "sync-kuaishou-today-live",
   schedule: "*/30 * * * *",
   task: async () => {
-    await syncKuaishouTodayLiveSessionsHandler();
+    await enqueue(JOB_NAMES.SYNC_KUAISHOU_TODAY_LIVE, {});
   },
 });
 

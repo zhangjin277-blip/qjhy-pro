@@ -27,10 +27,15 @@ export function parseDateText(input: unknown): string | null {
   return null;
 }
 
-/** 19 / "19" / "19:00" / "19点" → 19；超 0-23 → null */
+/**
+ * 19 / "19" / "19:00" / "19点" → 19；超 0-24 → null。
+ * 注意：返回 0-24 原始值（含 24）。语义归一化由 adapter 负责：
+ * - PRO3 (0-23 起点编号) 直接存
+ * - Excel 上传 (1-24 终点编号) 需 -1 转起点（adapter 内做）
+ */
 export function parseHour(input: unknown): number | null {
   if (typeof input === "number") {
-    if (Number.isInteger(input) && input >= 0 && input <= 23) return input;
+    if (Number.isInteger(input) && input >= 0 && input <= 24) return input;
     return null;
   }
   if (typeof input !== "string") return null;
@@ -39,14 +44,14 @@ export function parseHour(input: unknown): number | null {
   const colonMatch = trimmed.match(/^(\d{1,2}):/);
   if (colonMatch) {
     const h = Number(colonMatch[1]);
-    return h >= 0 && h <= 23 ? h : null;
+    return h >= 0 && h <= 24 ? h : null;
   }
   const cnMatch = trimmed.match(/^(\d{1,2})点$/);
   if (cnMatch) {
     const h = Number(cnMatch[1]);
-    return h >= 0 && h <= 23 ? h : null;
+    return h >= 0 && h <= 24 ? h : null;
   }
   const num = Number(trimmed);
-  if (Number.isInteger(num) && num >= 0 && num <= 23) return num;
+  if (Number.isInteger(num) && num >= 0 && num <= 24) return num;
   return null;
 }

@@ -1,6 +1,7 @@
 export type { LiveAnchor, AnchorWithDingtalk } from "./types";
 export {
   BusinessLine,
+  BUSINESS_LINE_VALUES,
   EmploymentType,
   WorkStatus,
   UpsertAnchorInput,

@@ -11,7 +11,12 @@ import type { FetchSimplePayload } from "@/modules/crawler/server";
  * (live cps + live cps_all + video cps + video cps_all)
  * 然后通过抖音号反查 anchor_id 入库。
  */
-export async function fetchGameHandler(payload: FetchSimplePayload): Promise<void> {
+export interface FetchGameResult {
+  rows: number;
+  unmatched: number;
+}
+
+export async function fetchGameHandler(payload: FetchSimplePayload): Promise<FetchGameResult> {
   const { date, basecamp } = payload;
 
   // 抖音号 → anchor_id 映射（仅非三国主播）
@@ -116,6 +121,7 @@ export async function fetchGameHandler(payload: FetchSimplePayload): Promise<voi
       }
     }
     console.log(`[fetch-game] done: ${total} rows synced, ${unmatched} unmatched (date=${date})`);
+    return { rows: total, unmatched };
   } catch (e) {
     if (e instanceof CookieExpiredError) {
       await markCookieExpired(basecamp);

@@ -26,7 +26,7 @@ export function resolveFilter(
     dateFrom = fromQ <= toQ ? fromQ : toQ;
     dateTo = fromQ <= toQ ? toQ : fromQ;
   } else {
-    const preset = (searchParams.preset as string) ?? "last7";
+    const preset = (searchParams.preset as string) ?? "today";
     const days = PRESET_DAYS[preset] ?? 7;
     const today = new Date();
     const to = new Date(today);

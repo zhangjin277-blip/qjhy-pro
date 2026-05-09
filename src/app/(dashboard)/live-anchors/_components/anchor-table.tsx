@@ -3,17 +3,47 @@
 import type { AnchorWithDingtalk } from "@/modules/live-anchor";
 import { PlatformBadge } from "../../live-accounts/_components/platform-badge";
 
+// 业务线 → 配色（捕鱼三个产品用蓝色系区分；其它各取一色）
+const BUSINESS_LINE_STYLES: Record<string, { gradient: string; chip: string }> = {
+  捕鱼大作战: {
+    gradient: "from-blue-400 to-blue-600",
+    chip: "bg-blue-100 text-blue-800 border-blue-200",
+  },
+  途游休闲捕鱼: {
+    gradient: "from-sky-400 to-sky-600",
+    chip: "bg-sky-100 text-sky-800 border-sky-200",
+  },
+  电玩捕鱼: {
+    gradient: "from-cyan-400 to-cyan-600",
+    chip: "bg-cyan-100 text-cyan-800 border-cyan-200",
+  },
+  斗地主: {
+    gradient: "from-amber-400 to-amber-600",
+    chip: "bg-amber-100 text-amber-800 border-amber-200",
+  },
+  麻将: {
+    gradient: "from-purple-400 to-purple-600",
+    chip: "bg-purple-100 text-purple-800 border-purple-200",
+  },
+  "三国:冰河时代": {
+    gradient: "from-emerald-400 to-emerald-600",
+    chip: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  },
+  // 历史值 "捕鱼"（迁移期残留）兜底
+  捕鱼: {
+    gradient: "from-blue-400 to-blue-600",
+    chip: "bg-blue-100 text-blue-800 border-blue-200",
+  },
+};
+const BUSINESS_LINE_FALLBACK = {
+  gradient: "from-slate-400 to-slate-600",
+  chip: "bg-slate-100 text-slate-600 border-slate-200",
+};
+
 // 头像：名字首字 + 固定渐变色（按业务线）
 function AnchorAvatar({ name, business_line }: { name: string; business_line: string }) {
   const initial = Array.from(name.trim())[0] ?? "?";
-  const gradient =
-    business_line === "捕鱼"
-      ? "from-blue-400 to-blue-600"
-      : business_line === "斗地主"
-        ? "from-amber-400 to-amber-600"
-        : business_line === "麻将"
-          ? "from-purple-400 to-purple-600"
-          : "from-slate-400 to-slate-600";
+  const { gradient } = BUSINESS_LINE_STYLES[business_line] ?? BUSINESS_LINE_FALLBACK;
 
   return (
     <div
@@ -27,17 +57,10 @@ function AnchorAvatar({ name, business_line }: { name: string; business_line: st
 
 // 业务线 chip
 function BusinessLineChip({ value }: { value: string }) {
-  const cls =
-    value === "捕鱼"
-      ? "bg-blue-100 text-blue-800 border-blue-200"
-      : value === "斗地主"
-        ? "bg-amber-100 text-amber-800 border-amber-200"
-        : value === "麻将"
-          ? "bg-purple-100 text-purple-800 border-purple-200"
-          : "bg-slate-100 text-slate-600 border-slate-200";
+  const { chip } = BUSINESS_LINE_STYLES[value] ?? BUSINESS_LINE_FALLBACK;
   return (
     <span
-      className={`inline-flex items-center rounded-sm border px-[7px] py-[1px] text-[11px] font-medium ${cls}`}
+      className={`inline-flex items-center rounded-sm border px-[7px] py-[1px] text-[11px] font-medium ${chip}`}
     >
       {value}
     </span>

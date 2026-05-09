@@ -1,8 +1,12 @@
 import "server-only";
 import { db } from "@/db/client";
 import { live_account } from "@/db/schema/live-account";
-import { placement_import_batch, placement_row } from "@/db/schema/placements";
-import { eq, isNotNull, sql } from "drizzle-orm";
+import {
+  placement_import_batch,
+  placement_row,
+  placement_cumulative_raw,
+} from "@/db/schema/placements";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { computeIncrements, type RawCumulativeRow } from "./incremental";
 import { notifyDingtalk } from "@/lib/notify";
 
@@ -131,57 +135,127 @@ export async function ingestRows(input: IngestInput) {
     });
   }
 
-  // 5. 算增量（累计值 → 小时级增量），按 (account, subaccount, dataset) 分组分别做差分
-  const incremented = computeIncrements(matched);
-
-  // 5.5 多个 subaccount 的 (date, hour, dataset, account) 增量做 SUM 合并
-  //     这一步是修复 PRO3 多广告账户主播 ingest 时互相 upsert 覆盖的根因
-  const mergedMap = new Map<string, RawCumulativeRow>();
-  for (const r of incremented) {
-    const key = `${r.date}|${r.hour}|${r.dataset_id}|${r.account_key}`;
-    const existing = mergedMap.get(key);
-    if (!existing) {
-      mergedMap.set(key, { ...r });
-    } else {
-      existing.cost_yuan += r.cost_yuan;
-      existing.activations += r.activations;
-      existing.payment_yuan += r.payment_yuan;
-      existing.start_download += r.start_download;
-      existing.finish_download += r.finish_download;
-      // raw 用第一条即可（仅供溯源）
-    }
-  }
-  const merged = [...mergedMap.values()];
-
-  // 6. 事务内批量 upsert
+  // 5+6. 增量计算 & upsert
+  // 两条路径：
+  //  - excel-upload：跨 batch 差分（用户每小时单独上传，单 batch 只有 1 行没法做差）
+  //                  → 写 cumulative_raw（按 subaccount 维度保留全量累计），
+  //                    然后对涉及的 (dataset, account, date) 重算 placement_row 全天增量
+  //  - pro3-migration：旧逻辑（一次性 ingest 全量数据，computeIncrements 内部能正确差分）
   let inserted = 0;
   let updated = 0;
   await db.transaction(async (tx) => {
-    for (const r of merged) {
-      const result = await tx
-        .insert(placement_row)
-        .values({
-          date: r.date,
-          hour: r.hour,
-          dataset_id: r.dataset_id,
-          live_account_id: r.account_key,
-          cost_yuan: String(r.cost_yuan),
-          activations: r.activations,
-          payment_yuan: String(r.payment_yuan),
-          start_download: r.start_download,
-          finish_download: r.finish_download,
-          attribution_dirty: true,
-          raw: r.raw,
-          import_batch_id: batch.id,
-        })
-        .onConflictDoUpdate({
-          target: [
-            placement_row.date,
-            placement_row.hour,
-            placement_row.dataset_id,
-            placement_row.live_account_id,
-          ],
-          set: {
+    if (input.source === "excel-upload") {
+      // (a) UPSERT cumulative_raw（保留每次上传的累计原始值，按 subaccount 维度）
+      for (const r of matched) {
+        await tx
+          .insert(placement_cumulative_raw)
+          .values({
+            date: r.date,
+            hour: r.hour,
+            dataset_id: r.dataset_id,
+            live_account_id: r.account_key,
+            subaccount_name: r.subaccount_key,
+            cost_yuan: String(r.cost_yuan),
+            activations: r.activations,
+            payment_yuan: String(r.payment_yuan),
+            start_download: r.start_download,
+            finish_download: r.finish_download,
+            raw: r.raw,
+            import_batch_id: batch.id,
+          })
+          .onConflictDoUpdate({
+            target: [
+              placement_cumulative_raw.date,
+              placement_cumulative_raw.hour,
+              placement_cumulative_raw.dataset_id,
+              placement_cumulative_raw.live_account_id,
+              placement_cumulative_raw.subaccount_name,
+            ],
+            set: {
+              cost_yuan: String(r.cost_yuan),
+              activations: r.activations,
+              payment_yuan: String(r.payment_yuan),
+              start_download: r.start_download,
+              finish_download: r.finish_download,
+              raw: r.raw,
+              import_batch_id: batch.id,
+              updated_at: sql`now()`,
+            },
+          });
+      }
+
+      // (b) 收集涉及的 (dataset_id, account_key, date) 三元组
+      const triples = new Set<string>();
+      for (const r of matched) {
+        triples.add(`${r.dataset_id}|${r.account_key}|${r.date}`);
+      }
+
+      // (c) 对每个三元组重算 placement_row
+      for (const triple of triples) {
+        const [tDataset, tAccount, tDate] = triple.split("|") as [string, string, string];
+
+        // 拉该 (dataset, account, date) 在 cumulative_raw 的所有 subaccount × 小时
+        const cumRowsRaw = await tx
+          .select()
+          .from(placement_cumulative_raw)
+          .where(
+            and(
+              eq(placement_cumulative_raw.dataset_id, tDataset),
+              eq(placement_cumulative_raw.live_account_id, tAccount),
+              eq(placement_cumulative_raw.date, tDate),
+            ),
+          );
+
+        const cumRows: RawCumulativeRow[] = cumRowsRaw.map((c) => ({
+          date: c.date,
+          hour: c.hour,
+          dataset_id: c.dataset_id,
+          account_key: c.live_account_id,
+          subaccount_key: c.subaccount_name,
+          cost_yuan: Number(c.cost_yuan),
+          activations: c.activations,
+          payment_yuan: Number(c.payment_yuan),
+          start_download: c.start_download,
+          finish_download: c.finish_download,
+          raw: c.raw,
+        }));
+
+        // 按 subaccount 分组做差分
+        const incRows = computeIncrements(cumRows);
+
+        // SUM 各 subaccount 的增量到 (date, hour) 维度
+        const hourlyMap = new Map<number, RawCumulativeRow>();
+        for (const r of incRows) {
+          const existing = hourlyMap.get(r.hour);
+          if (!existing) {
+            hourlyMap.set(r.hour, { ...r });
+          } else {
+            existing.cost_yuan += r.cost_yuan;
+            existing.activations += r.activations;
+            existing.payment_yuan += r.payment_yuan;
+            existing.start_download += r.start_download;
+            existing.finish_download += r.finish_download;
+          }
+        }
+
+        // DELETE 该 (dataset, account, date) 在 placement_row 的所有 hour
+        await tx
+          .delete(placement_row)
+          .where(
+            and(
+              eq(placement_row.dataset_id, tDataset),
+              eq(placement_row.live_account_id, tAccount),
+              eq(placement_row.date, tDate),
+            ),
+          );
+
+        // INSERT 重算后的增量
+        for (const r of hourlyMap.values()) {
+          await tx.insert(placement_row).values({
+            date: r.date,
+            hour: r.hour,
+            dataset_id: r.dataset_id,
+            live_account_id: r.account_key,
             cost_yuan: String(r.cost_yuan),
             activations: r.activations,
             payment_yuan: String(r.payment_yuan),
@@ -190,17 +264,72 @@ export async function ingestRows(input: IngestInput) {
             attribution_dirty: true,
             raw: r.raw,
             import_batch_id: batch.id,
-            updated_at: sql`now()`,
-          },
-        })
-        .returning({ id: placement_row.id, xmax: sql<string>`xmax::text` });
+          });
+          inserted++;
+        }
+      }
+      void inArray; // 保持 import 不被 lint 抹掉（暂保留，后续如需 batch 删可用）
+    } else {
+      // pro3-migration: 旧逻辑——一次性 ingest 全量，computeIncrements 单 batch 内做差
+      const incremented = computeIncrements(matched);
+      const mergedMap = new Map<string, RawCumulativeRow>();
+      for (const r of incremented) {
+        const key = `${r.date}|${r.hour}|${r.dataset_id}|${r.account_key}`;
+        const existing = mergedMap.get(key);
+        if (!existing) {
+          mergedMap.set(key, { ...r });
+        } else {
+          existing.cost_yuan += r.cost_yuan;
+          existing.activations += r.activations;
+          existing.payment_yuan += r.payment_yuan;
+          existing.start_download += r.start_download;
+          existing.finish_download += r.finish_download;
+        }
+      }
+      for (const r of mergedMap.values()) {
+        const result = await tx
+          .insert(placement_row)
+          .values({
+            date: r.date,
+            hour: r.hour,
+            dataset_id: r.dataset_id,
+            live_account_id: r.account_key,
+            cost_yuan: String(r.cost_yuan),
+            activations: r.activations,
+            payment_yuan: String(r.payment_yuan),
+            start_download: r.start_download,
+            finish_download: r.finish_download,
+            attribution_dirty: true,
+            raw: r.raw,
+            import_batch_id: batch.id,
+          })
+          .onConflictDoUpdate({
+            target: [
+              placement_row.date,
+              placement_row.hour,
+              placement_row.dataset_id,
+              placement_row.live_account_id,
+            ],
+            set: {
+              cost_yuan: String(r.cost_yuan),
+              activations: r.activations,
+              payment_yuan: String(r.payment_yuan),
+              start_download: r.start_download,
+              finish_download: r.finish_download,
+              attribution_dirty: true,
+              raw: r.raw,
+              import_batch_id: batch.id,
+              updated_at: sql`now()`,
+            },
+          })
+          .returning({ id: placement_row.id, xmax: sql<string>`xmax::text` });
 
-      // postgres: xmax = '0' 表示新插入（无旧版本），否则是 UPDATE
-      const isNew = result.at(0)?.xmax === "0";
-      if (isNew) {
-        inserted++;
-      } else {
-        updated++;
+        const isNew = result.at(0)?.xmax === "0";
+        if (isNew) {
+          inserted++;
+        } else {
+          updated++;
+        }
       }
     }
   });

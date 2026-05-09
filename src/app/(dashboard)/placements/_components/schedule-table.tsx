@@ -1,8 +1,43 @@
-import { Fragment } from "react";
 import type { ScheduleRow } from "@/modules/placement/server";
+
+interface YesterdayKpi {
+  cost: number;
+  acts: number;
+  payment: number;
+}
+
+/** 昨日按小时聚合的数据：byAccount[accountId][hour] = {cost, acts, payment} */
+type YesterdayHourly = Record<string, Record<number, YesterdayKpi>>;
 
 interface ScheduleTableProps {
   rows: ScheduleRow[];
+  /** 昨日按 (account, hour) 维度的数据，可选 */
+  yesterdayHourly?: YesterdayHourly;
+  /** 用于 account 级 KPI 同比的 cutoff hour（看今天=当前小时；看历史=24） */
+  yesterdayCutoffHour?: number;
+}
+
+/** 把 byHour 里 [startHour, endHour) 的累计加起来；endHour > 24 时支持跨夜（hour mod 24） */
+function sumYesterdayRange(
+  byHour: Record<number, YesterdayKpi> | undefined,
+  startHour: number,
+  endHour: number,
+): YesterdayKpi | null {
+  if (!byHour) return null;
+  let cost = 0;
+  let acts = 0;
+  let payment = 0;
+  let hasData = false;
+  for (let h = startHour; h < endHour; h++) {
+    const cell = byHour[h % 24];
+    if (cell) {
+      cost += cell.cost;
+      acts += cell.acts;
+      payment += cell.payment;
+      hasData = true;
+    }
+  }
+  return hasData ? { cost, acts, payment } : null;
 }
 
 function fmtChinese(n: number): string {
@@ -21,47 +56,8 @@ function fmtPrice(n: number | null): string {
   return "¥" + n.toFixed(0);
 }
 
-function avatarChar(s: string): string {
-  return s.length <= 2 ? s : s.slice(0, 2);
-}
-
 function parseHour(t: string): number {
   return parseInt(t.split(":")[0] ?? "0", 10);
-}
-
-function isOvernight(slot: [string, string]): boolean {
-  const [s, e] = slot;
-  const sh = parseHour(s);
-  const eh = parseHour(e);
-  return eh > 24 || eh < sh;
-}
-
-function fmtSlot(slot: [string, string]): string {
-  // 把 21:00 — 27:00 显示成 21 — 03（凌晨）
-  const [s, e] = slot;
-  const sh = parseHour(s);
-  const eh = parseHour(e);
-  const displayE = eh > 24 ? eh - 24 : eh;
-  const sm = s.split(":")[1] ?? "00";
-  const em = e.split(":")[1] ?? "00";
-  const sStr = sm === "00" ? `${sh.toString().padStart(2, "0")}` : s;
-  const eStr =
-    em === "00"
-      ? `${displayE.toString().padStart(2, "0")}`
-      : `${displayE.toString().padStart(2, "0")}:${em}`;
-  return `${sStr} — ${eStr}`;
-}
-
-function sharePct(personal: number, total: number): string | null {
-  if (total === 0) return null;
-  const p = (personal / total) * 100;
-  return p.toFixed(0);
-}
-
-function shareClass(pct: number): string {
-  if (pct >= 50) return "text-[var(--change-down)]";
-  if (pct >= 30) return "text-[#ff7d00]";
-  return "text-muted-foreground/70";
 }
 
 interface Group {
@@ -74,6 +70,17 @@ interface Group {
   totalActs: number;
   totalPayment: number;
   totalUnitPrice: number | null;
+  maxEndHour: number; // 用于决定 axis 是否扩展（跨夜场景）
+}
+
+interface AnchorRollup {
+  anchorUserId: string;
+  anchorName: string | null;
+  shifts: number;
+  cost: number;
+  acts: number;
+  payment: number;
+  unit: number | null;
 }
 
 function groupRows(rows: ScheduleRow[]): Group[] {
@@ -92,19 +99,27 @@ function groupRows(rows: ScheduleRow[]): Group[] {
         totalActs: 0,
         totalPayment: 0,
         totalUnitPrice: null,
+        maxEndHour: 24,
       };
       map.set(key, g);
     }
     g.rows.push(r);
   }
-  // 计算每个 group 的当日累计（取该 account_id 在该 date 任一行的 total_*，因为 total_* 已经是该账号的整体）
-  // 但注意：querySchedule 里 total 是该 slot 内的总，而不是当日总。需用各 slot total 求和? 实际上每个 slot 的 total_cost 是该时段内所有归属 cost 的和，多个 slot 可能时段重叠—— 默认排班一般不重叠
   for (const g of map.values()) {
     g.totalCost = g.rows.reduce((s, r) => s + r.total_cost, 0);
     g.totalActs = g.rows.reduce((s, r) => s + r.total_acts, 0);
     g.totalPayment = g.rows.reduce((s, r) => s + r.total_payment, 0);
     g.totalUnitPrice = g.totalActs > 0 ? g.totalCost / g.totalActs : null;
     g.rows.sort((a, b) => a.time_slot[0].localeCompare(b.time_slot[0]));
+    g.maxEndHour = Math.max(
+      24,
+      ...g.rows.map((r) => {
+        const eh = parseHour(r.time_slot[1]);
+        const sh = parseHour(r.time_slot[0]);
+        // 跨夜（eh < sh）按 eh + 24 处理
+        return eh < sh ? eh + 24 : eh;
+      }),
+    );
   }
   return [...map.values()].sort((a, b) => {
     if (a.date > b.date) return -1;
@@ -113,7 +128,374 @@ function groupRows(rows: ScheduleRow[]): Group[] {
   });
 }
 
-export function ScheduleTable({ rows }: ScheduleTableProps) {
+function rollupAnchors(rows: ScheduleRow[]): AnchorRollup[] {
+  const map = new Map<string, AnchorRollup>();
+  for (const r of rows) {
+    let a = map.get(r.anchor_user_id);
+    if (!a) {
+      a = {
+        anchorUserId: r.anchor_user_id,
+        anchorName: r.anchor_name,
+        shifts: 0,
+        cost: 0,
+        acts: 0,
+        payment: 0,
+        unit: null,
+      };
+      map.set(r.anchor_user_id, a);
+    }
+    a.shifts += 1;
+    a.cost += r.personal_cost;
+    a.acts += r.personal_acts;
+    a.payment += r.personal_payment;
+  }
+  for (const a of map.values()) {
+    a.unit = a.acts > 0 ? a.cost / a.acts : null;
+  }
+  return [...map.values()].sort((a, b) => b.cost - a.cost);
+}
+
+// 计算班次在时间轴上的位置（百分比），跨夜处理
+function shiftPosition(
+  slot: [string, string],
+  axisEnd: number,
+): { left: number; width: number; overnight: boolean } {
+  const sh = parseHour(slot[0]);
+  let eh = parseHour(slot[1]);
+  const overnight = eh < sh || eh > 24;
+  if (eh < sh) eh += 24;
+  const left = (sh / axisEnd) * 100;
+  const width = ((eh - sh) / axisEnd) * 100;
+  return { left, width, overnight };
+}
+
+function ShiftBlock({
+  row,
+  axisEnd,
+  yesterdayByHour,
+}: {
+  row: ScheduleRow;
+  axisEnd: number;
+  yesterdayByHour?: Record<number, YesterdayKpi>;
+}) {
+  const { left, width, overnight } = shiftPosition(row.time_slot, axisEnd);
+  // 时段宽度过窄时（< 10%）压缩 stat label 为 1 字
+  const compact = width < 10;
+  // 班次同时段昨日同比：按 [start, end) 求和昨日小时数据
+  const sh = parseHour(row.time_slot[0]);
+  let eh = parseHour(row.time_slot[1]);
+  if (eh < sh) eh += 24;
+  // 班次块只在头部消耗显示同比，底部 mini stat 太窄不显
+  const prev = sumYesterdayRange(yesterdayByHour, sh, eh);
+  const dCost = kpiDelta(row.personal_cost, prev?.cost);
+  const tone = overnight
+    ? {
+        border: "border-amber-500",
+        bg: "bg-amber-50/80",
+        text: "text-amber-700",
+        divider: "border-amber-500/15",
+      }
+    : {
+        border: "border-blue-500",
+        bg: "bg-blue-50/90",
+        text: "text-blue-700",
+        divider: "border-blue-500/15",
+      };
+  return (
+    <div
+      className={`absolute inset-y-2 flex flex-col overflow-hidden rounded-md border-l-[3px] px-2 py-1.5 transition-shadow hover:shadow-md ${tone.border} ${tone.bg}`}
+      style={{ left: `${left}%`, width: `calc(${width}% - 2px)` }}
+    >
+      {/* 头部：主播名 / 消耗 + 同比 */}
+      <div className="flex items-baseline justify-between gap-2">
+        <span className={`truncate text-[12.5px] font-semibold ${tone.text}`}>
+          {row.anchor_name ?? "未命名"}
+        </span>
+        <span className="flex shrink-0 items-baseline gap-1">
+          <span className="text-[12.5px] font-semibold tabular-nums text-slate-900">
+            {fmtMoney(row.personal_cost)}
+          </span>
+          <DeltaArrow delta={dCost} />
+        </span>
+      </div>
+      {/* 底部：3 列 mini stat（窄空间，不显同比，避免数值被截）*/}
+      <div className={`mt-auto grid grid-cols-3 gap-1 border-t pt-1 ${tone.divider}`}>
+        <ShiftStat label={compact ? "激" : "激活"} value={`${row.personal_acts}`} />
+        <ShiftStat label="CPA" value={fmtPrice(row.personal_unit_price)} />
+        <ShiftStat label={compact ? "付" : "付费"} value={fmtMoney(row.personal_payment)} />
+      </div>
+    </div>
+  );
+}
+
+function ShiftStat({
+  label,
+  value,
+  delta,
+}: {
+  label: string;
+  value: string;
+  delta?: KpiDelta | null;
+}) {
+  return (
+    <div className="flex flex-col leading-tight">
+      <span className="text-[9px] uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="mt-0.5 flex items-baseline gap-1">
+        <span className="truncate text-[11px] font-semibold tabular-nums text-slate-900">
+          {value}
+        </span>
+        <DeltaArrow delta={delta} compact />
+      </span>
+    </div>
+  );
+}
+
+function RollupStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col leading-tight">
+      <span className="text-[10px] text-slate-500">{label}</span>
+      <span className="mt-0.5 truncate text-[12.5px] font-semibold tabular-nums text-slate-900">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function DeltaArrow({ delta, compact = false }: { delta?: KpiDelta | null; compact?: boolean }) {
+  if (!delta) return null;
+  const cls =
+    delta.arrow === "up"
+      ? "text-[var(--change-up)]"
+      : delta.arrow === "down"
+        ? "text-[var(--change-down)]"
+        : "text-muted-foreground/60";
+  const size = compact ? "text-[9px]" : "text-[10px]";
+  return (
+    <span className={`${size} font-medium tabular-nums ${cls}`}>
+      {delta.arrow === "up" ? "↑" : delta.arrow === "down" ? "↓" : "—"}
+      {delta.arrow !== "flat" && Math.abs(delta.pct).toFixed(0) + "%"}
+    </span>
+  );
+}
+
+function AxisTicks({ axisEnd }: { axisEnd: number }) {
+  // 整点刻度：每 3 小时一个标签
+  const step = 3;
+  const ticks: number[] = [];
+  for (let h = 0; h <= axisEnd; h += step) ticks.push(h);
+  if (!ticks.includes(axisEnd)) ticks.push(axisEnd);
+  return (
+    <div className="relative h-5">
+      {ticks.map((h) => {
+        const display = h > 24 ? `${h - 24}` : `${h}`;
+        const isCrossNight = h === 24 && axisEnd > 24;
+        return (
+          <span
+            key={h}
+            className={`absolute top-0 -translate-x-1/2 text-[10px] tabular-nums tracking-wider ${
+              isCrossNight ? "font-medium text-amber-600" : "text-muted-foreground/60"
+            }`}
+            style={{ left: `${(h / axisEnd) * 100}%` }}
+          >
+            {display}
+            {h > 24 && <span className="ml-0.5 text-[9px] text-amber-500">+1</span>}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function GridLines({ axisEnd }: { axisEnd: number }) {
+  // 每 3 小时一道虚线 + 24 点处加深线（如果跨夜）
+  const lines: { hour: number; key: string; cls: string }[] = [];
+  for (let h = 3; h < axisEnd; h += 3) {
+    lines.push({
+      hour: h,
+      key: `g${h}`,
+      cls: h === 24 ? "border-amber-300/60" : "border-slate-100",
+    });
+  }
+  return (
+    <>
+      {lines.map((l) => (
+        <div
+          key={l.key}
+          className={`pointer-events-none absolute inset-y-0 border-l border-dashed ${l.cls}`}
+          style={{ left: `${(l.hour / axisEnd) * 100}%` }}
+        />
+      ))}
+    </>
+  );
+}
+
+interface KpiDelta {
+  pct: number; // 百分比变化（正负）
+  arrow: "up" | "down" | "flat";
+  prevText: string; // "昨日 ¥X" 副文本
+}
+
+function kpiDelta(curr: number | null, prev: number | null | undefined): KpiDelta | null {
+  if (prev == null || curr == null) return null;
+  if (prev === 0) {
+    if (curr === 0) return { pct: 0, arrow: "flat", prevText: "昨日 0" };
+    return null; // 昨日为 0 时百分比无意义
+  }
+  const pct = ((curr - prev) / prev) * 100;
+  const arrow = Math.abs(pct) < 0.5 ? "flat" : pct > 0 ? "up" : "down";
+  // prevText 由调用方决定（数字格式不一），这里只算 pct/arrow，prevText 留空字符串
+  return { pct, arrow, prevText: "" };
+}
+
+function KpiCell({
+  label,
+  value,
+  delta,
+}: {
+  label: string;
+  value: string;
+  delta: KpiDelta | null;
+}) {
+  return (
+    <div className="px-5 py-3">
+      <div className="text-[11px] tracking-wide text-slate-700">{label}</div>
+      <div className="mt-0.5 flex items-baseline gap-1.5">
+        <span className="text-[20px] font-semibold tracking-tight tabular-nums text-slate-900">
+          {value}
+        </span>
+        {delta && (
+          <span
+            className={`text-[11px] font-medium tabular-nums ${
+              delta.arrow === "up"
+                ? "text-[var(--change-up)]"
+                : delta.arrow === "down"
+                  ? "text-[var(--change-down)]"
+                  : "text-muted-foreground/60"
+            }`}
+          >
+            {delta.arrow === "up" ? "↑" : delta.arrow === "down" ? "↓" : "—"}
+            {delta.arrow !== "flat" && Math.abs(delta.pct).toFixed(1) + "%"}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GroupCard({
+  g,
+  yesterdayByHour,
+  cutoffHour,
+}: {
+  g: Group;
+  yesterdayByHour?: Record<number, YesterdayKpi>;
+  cutoffHour: number;
+}) {
+  const rollups = rollupAnchors(g.rows);
+  const showRollup = !(g.rows.length === 1 && rollups.length === 1);
+  const axisEnd = g.maxEndHour;
+  // account 级同比：累加昨日 0~cutoffHour（看历史时 cutoffHour=24）
+  const yesterdayKpi = sumYesterdayRange(yesterdayByHour, 0, cutoffHour);
+  const cpaToday = g.totalActs > 0 ? g.totalCost / g.totalActs : null;
+  const cpaPrev =
+    yesterdayKpi && yesterdayKpi.acts > 0 ? yesterdayKpi.cost / yesterdayKpi.acts : null;
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+      {/* 顶部信息条 */}
+      <div className="flex items-baseline gap-3 border-b border-slate-100 px-5 py-3">
+        <span className="rounded bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600">
+          {g.placementLabel ?? "（无标签）"}
+        </span>
+        <span className="text-[15px] font-semibold tracking-tight text-slate-900">
+          {g.accountName}
+        </span>
+        <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
+          {g.date} · {g.rows.length} 班次
+        </span>
+      </div>
+
+      {/* 4 大字 KPI（含昨日同时段同比） */}
+      <div className="grid grid-cols-4 divide-x divide-slate-100 bg-slate-50/40">
+        <KpiCell
+          label="当日消耗"
+          value={fmtMoney(g.totalCost)}
+          delta={kpiDelta(g.totalCost, yesterdayKpi?.cost)}
+        />
+        <KpiCell
+          label="激活"
+          value={fmtChinese(g.totalActs)}
+          delta={kpiDelta(g.totalActs, yesterdayKpi?.acts)}
+        />
+        <KpiCell
+          label="CPA"
+          value={fmtPrice(g.totalUnitPrice)}
+          delta={kpiDelta(cpaToday, cpaPrev)}
+        />
+        <KpiCell
+          label="付费"
+          value={fmtMoney(g.totalPayment)}
+          delta={kpiDelta(g.totalPayment, yesterdayKpi?.payment)}
+        />
+      </div>
+
+      {/* 时间轴 */}
+      <div className="px-5 pb-4 pt-4">
+        <AxisTicks axisEnd={axisEnd} />
+        <div className="relative mt-1 h-[100px] rounded-md border border-slate-100 bg-slate-50/40">
+          <GridLines axisEnd={axisEnd} />
+          {g.rows.map((r) => (
+            <ShiftBlock
+              key={`${g.accountId}-${r.time_slot[0]}-${r.anchor_user_id}`}
+              row={r}
+              axisEnd={axisEnd}
+              yesterdayByHour={yesterdayByHour}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* 主播汇总 pill 条 */}
+      {showRollup && rollups.length > 0 && (
+        <div className="border-t border-dashed border-slate-200 bg-slate-50/30 px-5 py-3">
+          <div className="mb-2 text-[11px] font-medium text-slate-700">主播汇总</div>
+          <div className="grid grid-cols-4 gap-2">
+            {rollups.map((a) => (
+              <div
+                key={a.anchorUserId}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
+              >
+                {/* 头部：主播名 + 班次 chip */}
+                <div className="mb-2 flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                  <span className="text-[12.5px] font-semibold text-slate-900">
+                    {a.anchorName ?? "未命名"}
+                  </span>
+                  <span className="ml-auto rounded bg-slate-100 px-1.5 text-[10px] text-slate-600">
+                    {a.shifts} 班
+                  </span>
+                </div>
+                {/* 底部：4 列 KPI（上标题下数字） */}
+                <div className="grid grid-cols-4 gap-1">
+                  <RollupStat label="消耗" value={fmtMoney(a.cost)} />
+                  <RollupStat label="激活" value={String(a.acts)} />
+                  <RollupStat label="CPA" value={fmtPrice(a.unit)} />
+                  <RollupStat label="付费" value={fmtMoney(a.payment)} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ScheduleTable({
+  rows,
+  yesterdayHourly,
+  yesterdayCutoffHour = 24,
+}: ScheduleTableProps) {
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-white p-12 text-center">
@@ -127,279 +509,27 @@ export function ScheduleTable({ rows }: ScheduleTableProps) {
 
   const groups = groupRows(rows);
 
-  // footer 合计
-  const grandTotalCost = groups.reduce((s, g) => s + g.totalCost, 0);
-  const grandTotalActs = groups.reduce((s, g) => s + g.totalActs, 0);
-  const grandTotalPay = groups.reduce((s, g) => s + g.totalPayment, 0);
-  const allRowsCount = rows.length;
-
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-border bg-muted/40/60 px-4 py-3 text-xs text-muted-foreground">
-        <div>
-          <span className="font-medium text-foreground/90">{allRowsCount} 班次</span>
-          <span className="mx-2 text-muted-foreground/40">·</span>
-          <span>{groups.length} (账号 × 日期) 组合</span>
-          <span className="mx-2 text-muted-foreground/40">·</span>
-          <span className="text-muted-foreground/70">同主播多包按账号汇总</span>
-        </div>
-        <div className="flex gap-4 text-[11px] text-muted-foreground/70">
-          <span>
-            <b className="font-medium text-primary">个人</b> = 该时段当班主播实际增量
-          </span>
-          <span>
-            <b className="font-medium text-muted-foreground">累计</b> = 该投放账号当日总数
-          </span>
-        </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground/70">
+        <span>
+          <strong className="font-medium text-slate-700">{rows.length}</strong> 班次 ·
+          <strong className="ml-1 font-medium text-slate-700">{groups.length}</strong> (账号 × 日期)
+          组合
+        </span>
+        <span className="text-muted-foreground/50">
+          班次块宽度 = 时长 · 跨夜班次（橙色）以 24+ 显示
+        </span>
       </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm" style={{ fontVariantNumeric: "tabular-nums" }}>
-          <thead>
-            <tr className="bg-muted/40">
-              <th
-                rowSpan={2}
-                className="border-b border-r border-border px-3 py-2 text-left text-[11.5px] font-medium text-muted-foreground"
-                style={{ minWidth: 110 }}
-              >
-                排班时段
-              </th>
-              <th
-                rowSpan={2}
-                className="border-b border-r border-border px-3 py-2 text-left text-[11.5px] font-medium text-muted-foreground"
-                style={{ minWidth: 130 }}
-              >
-                当班主播
-              </th>
-              <th
-                rowSpan={2}
-                className="border-b border-r border-border px-3 py-2 text-left text-[11.5px] font-medium text-muted-foreground"
-              >
-                投放账号
-              </th>
-              <th
-                colSpan={2}
-                className="border-b border-r border-border px-3 py-1.5 text-center text-[11.5px] font-medium text-muted-foreground"
-              >
-                消耗
-              </th>
-              <th
-                colSpan={2}
-                className="border-b border-r border-border px-3 py-1.5 text-center text-[11.5px] font-medium text-muted-foreground"
-              >
-                激活
-              </th>
-              <th
-                colSpan={2}
-                className="border-b border-r border-border px-3 py-1.5 text-center text-[11.5px] font-medium text-muted-foreground"
-              >
-                CPA
-              </th>
-              <th
-                colSpan={2}
-                className="border-b border-border px-3 py-1.5 text-center text-[11.5px] font-medium text-muted-foreground"
-              >
-                付费
-              </th>
-            </tr>
-            <tr className="bg-muted/40">
-              <th className="border-b border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-primary">
-                个人
-              </th>
-              <th className="border-b border-r border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-muted-foreground">
-                累计
-              </th>
-              <th className="border-b border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-primary">
-                个人
-              </th>
-              <th className="border-b border-r border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-muted-foreground">
-                累计
-              </th>
-              <th className="border-b border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-primary">
-                个人
-              </th>
-              <th className="border-b border-r border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-muted-foreground">
-                累计
-              </th>
-              <th className="border-b border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-primary">
-                个人
-              </th>
-              <th className="border-b border-border px-3 py-1.5 text-left text-[10.5px] font-medium text-muted-foreground">
-                累计
-              </th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {groups.map((g) => {
-              const summaryUnit = g.totalUnitPrice;
-              return (
-                <Fragment key={`${g.date}::${g.accountId}`}>
-                  {/* 主播-账号 summary 行 */}
-                  <tr className="bg-primary/[0.06]">
-                    <td
-                      colSpan={3}
-                      className="border-b border-primary/20 px-3 py-2 text-[13px] font-semibold text-primary"
-                    >
-                      ▼ {g.placementLabel ?? "（无标签）"}
-                      <span className="ml-2 text-[11.5px] font-normal text-muted-foreground">
-                        {g.accountName}
-                      </span>
-                      <span className="ml-2 inline-flex items-center rounded-full bg-primary/20 px-2 py-0.5 text-[11px] font-medium text-primary">
-                        {g.rows.length} 班次 · {g.date}
-                      </span>
-                    </td>
-                    <td className="border-b border-primary/20 px-3 py-2 text-[13px] font-semibold text-primary">
-                      {fmtMoney(g.totalCost)}
-                    </td>
-                    <td className="border-b border-r border-primary/20 px-3 py-2 text-[13px] text-muted-foreground">
-                      {fmtMoney(g.totalCost)}
-                    </td>
-                    <td className="border-b border-primary/20 px-3 py-2 text-[13px] font-semibold text-primary">
-                      {fmtChinese(g.totalActs)}
-                    </td>
-                    <td className="border-b border-r border-primary/20 px-3 py-2 text-[13px] text-muted-foreground">
-                      {fmtChinese(g.totalActs)}
-                    </td>
-                    <td className="border-b border-primary/20 px-3 py-2 text-[13px] font-semibold text-primary">
-                      {fmtPrice(summaryUnit)}
-                    </td>
-                    <td className="border-b border-r border-primary/20 px-3 py-2 text-[13px] text-muted-foreground">
-                      {fmtPrice(summaryUnit)}
-                    </td>
-                    <td className="border-b border-primary/20 px-3 py-2 text-[13px] font-semibold text-primary">
-                      {fmtMoney(g.totalPayment)}
-                    </td>
-                    <td className="border-b border-primary/20 px-3 py-2 text-[13px] text-muted-foreground">
-                      {fmtMoney(g.totalPayment)}
-                    </td>
-                  </tr>
-
-                  {/* 班次行 */}
-                  {g.rows.map((r, i) => {
-                    const overnight = isOvernight(r.time_slot);
-                    const costShare = sharePct(r.personal_cost, r.total_cost);
-                    const actsShare = sharePct(r.personal_acts, r.total_acts);
-                    const paymentShare = sharePct(r.personal_payment, r.total_payment);
-                    return (
-                      <tr
-                        key={`${g.date}-${g.accountId}-${i}`}
-                        className="border-b border-border/50 transition-colors hover:bg-[var(--hover-bg)]"
-                      >
-                        <td className="border-r border-border/50 px-3 py-2.5">
-                          <span
-                            className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[12.5px] font-semibold ${
-                              overnight ? "bg-accent text-primary" : "bg-muted text-foreground/90"
-                            }`}
-                          >
-                            {fmtSlot(r.time_slot)}
-                            {overnight && (
-                              <span className="rounded bg-primary px-1 py-px text-[9px] font-medium text-white">
-                                跨夜
-                              </span>
-                            )}
-                          </span>
-                        </td>
-                        <td className="border-r border-border/50 px-3 py-2.5">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-[#d1e9ff] to-[#1677ff] text-[10px] font-semibold text-white">
-                              {avatarChar(r.anchor_name ?? r.anchor_user_id)}
-                            </div>
-                            <div className="leading-tight">
-                              <div className="text-[12.5px] font-semibold text-foreground">
-                                {r.anchor_name ?? r.anchor_user_id}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="border-r border-border/50 px-3 py-2.5 text-[12.5px] text-muted-foreground">
-                          <span className="font-mono">{r.account_name}</span>
-                        </td>
-                        {/* 消耗 */}
-                        <td className="px-3 py-2.5 text-[13px] font-semibold text-primary">
-                          {fmtMoney(r.personal_cost)}
-                          {costShare && (
-                            <span className={`ml-1 text-[10px] ${shareClass(parseInt(costShare))}`}>
-                              {costShare}%
-                            </span>
-                          )}
-                        </td>
-                        <td className="border-r border-border/50 px-3 py-2.5 text-[13px] text-muted-foreground">
-                          {fmtMoney(r.total_cost)}
-                        </td>
-                        {/* 激活 */}
-                        <td className="px-3 py-2.5 text-[13px] font-semibold text-primary">
-                          {fmtChinese(r.personal_acts)}
-                          {actsShare && (
-                            <span className={`ml-1 text-[10px] ${shareClass(parseInt(actsShare))}`}>
-                              {actsShare}%
-                            </span>
-                          )}
-                        </td>
-                        <td className="border-r border-border/50 px-3 py-2.5 text-[13px] text-muted-foreground">
-                          {fmtChinese(r.total_acts)}
-                        </td>
-                        {/* CPA */}
-                        <td className="px-3 py-2.5 text-[13px] font-semibold text-primary">
-                          {fmtPrice(r.personal_unit_price)}
-                        </td>
-                        <td className="border-r border-border/50 px-3 py-2.5 text-[13px] text-muted-foreground">
-                          {fmtPrice(r.total_unit_price)}
-                        </td>
-                        {/* 付费 */}
-                        <td className="px-3 py-2.5 text-[13px] font-semibold text-primary">
-                          {fmtMoney(r.personal_payment)}
-                          {paymentShare && (
-                            <span
-                              className={`ml-1 text-[10px] ${shareClass(parseInt(paymentShare))}`}
-                            >
-                              {paymentShare}%
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-[13px] text-muted-foreground">
-                          {fmtMoney(r.total_payment)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </Fragment>
-              );
-            })}
-          </tbody>
-
-          <tfoot>
-            <tr className="bg-muted">
-              <td colSpan={3} className="px-3 py-2.5 text-[12px] font-medium text-muted-foreground">
-                合计 · {allRowsCount} 班次 · {groups.length} 组合
-              </td>
-              <td className="px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
-                {fmtMoney(grandTotalCost)}
-              </td>
-              <td className="border-r border-border px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
-                {fmtMoney(grandTotalCost)}
-              </td>
-              <td className="px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
-                {fmtChinese(grandTotalActs)}
-              </td>
-              <td className="border-r border-border px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
-                {fmtChinese(grandTotalActs)}
-              </td>
-              <td className="px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
-                {fmtPrice(grandTotalActs > 0 ? grandTotalCost / grandTotalActs : null)}
-              </td>
-              <td className="border-r border-border px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
-                {fmtPrice(grandTotalActs > 0 ? grandTotalCost / grandTotalActs : null)}
-              </td>
-              <td className="px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
-                {fmtMoney(grandTotalPay)}
-              </td>
-              <td className="px-3 py-2.5 text-[13px] font-semibold text-foreground/90">
-                {fmtMoney(grandTotalPay)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+      <div className="space-y-4">
+        {groups.map((g) => (
+          <GroupCard
+            key={`${g.date}::${g.accountId}`}
+            g={g}
+            yesterdayByHour={yesterdayHourly?.[g.accountId]}
+            cutoffHour={yesterdayCutoffHour}
+          />
+        ))}
       </div>
     </div>
   );

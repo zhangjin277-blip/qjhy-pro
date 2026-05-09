@@ -99,7 +99,15 @@ function SearchableUserSelect({
   );
 }
 
-const BUSINESS_LINES = ["捕鱼", "斗地主", "麻将"] as const;
+const BUSINESS_LINES = [
+  "捕鱼大作战",
+  "途游休闲捕鱼",
+  "电玩捕鱼",
+  "斗地主",
+  "麻将",
+  "三国:冰河时代",
+] as const;
+type BusinessLineValue = (typeof BUSINESS_LINES)[number];
 const EMPLOYMENT_TYPES = ["正式", "合作", "试播"] as const;
 const WORK_STATUSES = [
   { value: "active", label: "在播" },
@@ -160,7 +168,7 @@ export function AnchorEditDrawer({
 
   // Form state
   const [selectedUserId, setSelectedUserId] = useState("");
-  const [businessLine, setBusinessLine] = useState<"捕鱼" | "斗地主" | "麻将">("捕鱼");
+  const [businessLine, setBusinessLine] = useState<BusinessLineValue>("捕鱼大作战");
   const [employmentType, setEmploymentType] = useState<"正式" | "合作" | "试播">("正式");
   const [workStatus, setWorkStatus] = useState<"active" | "rest" | "leave">("active");
   const [trialStartDate, setTrialStartDate] = useState("");
@@ -175,7 +183,7 @@ export function AnchorEditDrawer({
     if (!open) return;
     if (anchor) {
       setSelectedUserId(anchor.dingtalk_user_id);
-      setBusinessLine(anchor.business_line as "捕鱼" | "斗地主" | "麻将");
+      setBusinessLine(anchor.business_line as BusinessLineValue);
       setEmploymentType(anchor.employment_type as "正式" | "合作" | "试播");
       setWorkStatus(anchor.work_status as "active" | "rest" | "leave");
       setTrialStartDate(anchor.trial_start_date ?? "");
@@ -184,7 +192,7 @@ export function AnchorEditDrawer({
       setExternalName(anchor.external_name ?? "");
     } else {
       setSelectedUserId("");
-      setBusinessLine("捕鱼");
+      setBusinessLine("捕鱼大作战");
       setEmploymentType("正式");
       setWorkStatus("active");
       setTrialStartDate("");

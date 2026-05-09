@@ -14,6 +14,43 @@ interface JobRow {
   completed_on: string | null;
   dur_s: number | null;
   err: string | null;
+  output: Record<string, unknown> | null;
+}
+
+/**
+ * 把 handler 返回的 output（pgboss.job.output）格式化成简短文本。
+ * 各 handler 字段不一致，按优先级提取常用统计字段。
+ */
+function formatOutputSummary(output: Record<string, unknown> | null): string {
+  if (!output) return "—";
+  const num = (k: string): number | null => {
+    const v = output[k];
+    return typeof v === "number" ? v : null;
+  };
+  // 快手 history：fromDate~toDate 范围
+  const inserted = num("inserted");
+  const updated = num("updated");
+  const total = num("total");
+  const rows = num("rows");
+  const fail = num("fail");
+  const unmatched = num("unmatched");
+  const skippedHistory = num("skippedHistory");
+  // 优先 inserted/updated 详细；否则 rows/total
+  if (inserted !== null && updated !== null) {
+    const parts = [`+${inserted}`, `~${updated}`];
+    if (skippedHistory !== null && skippedHistory > 0) parts.push(`跳${skippedHistory}`);
+    return parts.join(" / ");
+  }
+  if (rows !== null) {
+    const parts = [`${rows} 行`];
+    if (fail !== null && fail > 0) parts.push(`失败 ${fail}`);
+    if (unmatched !== null && unmatched > 0) parts.push(`未匹配 ${unmatched}`);
+    return parts.join(" · ");
+  }
+  if (total !== null) return `${total} 行`;
+  // check_data_ready 之类
+  if ("ready" in output) return output.ready === true ? "就绪" : "未就绪";
+  return "—";
 }
 
 const JOB_LABEL: Record<string, string> = {
@@ -23,6 +60,9 @@ const JOB_LABEL: Record<string, string> = {
   "crawler:fetch_portrait": "主播肖像",
   "crawler:fetch_game": "推广游戏",
   "crawler:fetch_minigame": "小游戏",
+  "crawler:sync_kuaishou_members": "快手·成员同步",
+  "crawler:sync_kuaishou_history_live": "快手·历史直播",
+  "crawler:sync_kuaishou_today_live": "快手·今日实时直播",
 };
 
 const STATE_LABEL: Record<string, string> = {
@@ -104,6 +144,7 @@ export function QueueStatus(): React.JSX.Element {
                 <th className="px-2 py-1.5 text-left">Job</th>
                 <th className="px-2 py-1.5 text-left">日期</th>
                 <th className="px-2 py-1.5 text-left">状态</th>
+                <th className="px-2 py-1.5 text-left">更新</th>
                 <th className="px-2 py-1.5 text-right">耗时</th>
                 <th className="px-2 py-1.5 text-left">完成时间</th>
                 <th className="px-2 py-1.5 text-left">错误</th>
@@ -128,6 +169,9 @@ export function QueueStatus(): React.JSX.Element {
                       {STATE_LABEL[j.state] ?? j.state}
                       {j.attempt && j.attempt > 1 ? ` ×${j.attempt}` : ""}
                     </span>
+                  </td>
+                  <td className="px-2 py-1.5 text-foreground text-xs">
+                    {formatOutputSummary(j.output)}
                   </td>
                   <td className="px-2 py-1.5 text-right text-muted-foreground">
                     {j.dur_s != null ? `${j.dur_s}s` : "—"}

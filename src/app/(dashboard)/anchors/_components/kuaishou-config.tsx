@@ -546,16 +546,63 @@ export const kuaishouConfig: PlatformConfig<KuaishouColKey, KuaishouRow> = {
   },
 
   exportCsv(rows, visibleColumns) {
-    const get = (r: KuaishouRow, k: KuaishouColKey): string => {
-      const v = (r as unknown as Record<string, unknown>)[k];
-      if (v == null) return "";
+    // 派生列（client 端算，row 里没有这几个字段）
+    const getDerived = (r: KuaishouRow, key: KuaishouColKey): number | null => {
+      switch (key) {
+        case "cpa":
+          return r.total_activations > 0 ? r.total_cost / r.total_activations : null;
+        case "arpu":
+          return r.total_activations > 0 ? r.total_payment / r.total_activations : null;
+        case "roi":
+          return r.total_cost > 0 ? r.total_payment / r.total_cost : null;
+        default:
+          return null;
+      }
+    };
+    // CSV 单元格格式化：number 保留 2 位（整数原样），percent 转 X.XX%
+    const formatCell = (v: unknown, fmt: string | undefined): string => {
+      if (v == null || v === "") return "";
+      if (fmt === "percent") {
+        return typeof v === "number" ? `${(v * 100).toFixed(2)}%` : "";
+      }
+      if (fmt === "number") {
+        if (typeof v !== "number" || !Number.isFinite(v)) return "";
+        return Number.isInteger(v) ? String(v) : v.toFixed(2);
+      }
+      if (fmt === "duration") {
+        return typeof v === "number" ? `${v.toFixed(1)}h` : "";
+      }
+      if (typeof v === "boolean") return v ? "1" : "0";
       return String(v);
     };
-    const header = visibleColumns.map((c) => c.label).join(",");
-    const lines = rows.map((r) =>
-      visibleColumns.map((c) => `"${get(r, c.key).replace(/"/g, '""')}"`).join(","),
-    );
-    const csv = "﻿" + header + "\n" + lines.join("\n");
+    const headers: string[] = [];
+    for (const c of visibleColumns) {
+      if (c.fmt === "anchor_info") {
+        headers.push("主播", "快手ID");
+      } else {
+        headers.push(c.label);
+      }
+    }
+    const lines: string[] = [headers.join(",")];
+    const derivedKeys = new Set<KuaishouColKey>(["cpa", "arpu", "roi"]);
+    for (const r of rows) {
+      const cells: string[] = [];
+      for (const c of visibleColumns) {
+        if (c.fmt === "anchor_info") {
+          cells.push(
+            `"${String(r.account_name ?? "").replace(/"/g, '""')}"`,
+            `"${String(r.platform_account_id ?? "").replace(/"/g, '""')}"`,
+          );
+          continue;
+        }
+        const v = derivedKeys.has(c.key)
+          ? getDerived(r, c.key)
+          : (r as unknown as Record<string, unknown>)[c.key];
+        cells.push(`"${formatCell(v, c.fmt).replace(/"/g, '""')}"`);
+      }
+      lines.push(cells.join(","));
+    }
+    const csv = "﻿" + lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

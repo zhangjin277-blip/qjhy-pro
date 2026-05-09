@@ -12,7 +12,11 @@ import {
 } from "@/modules/crawler/server";
 import type { FetchSimplePayload } from "@/modules/crawler/server";
 
-export async function fetchDailyHandler(payload: FetchSimplePayload): Promise<void> {
+export interface FetchDailyResult {
+  rows: number;
+}
+
+export async function fetchDailyHandler(payload: FetchSimplePayload): Promise<FetchDailyResult> {
   const { date, basecamp } = payload;
   const cookies = await getActiveCookies(basecamp);
   const page = await openDouyinPage(cookies);
@@ -48,6 +52,7 @@ export async function fetchDailyHandler(payload: FetchSimplePayload): Promise<vo
 
     // 触发下游 per-anchor jobs
     await enqueueDownstream(date, basecamp);
+    return { rows: totalFetched };
   } catch (e) {
     if (e instanceof CookieExpiredError) {
       await markCookieExpired(basecamp);

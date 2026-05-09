@@ -10,7 +10,13 @@ import {
   type FetchSimplePayload,
 } from "@/modules/crawler/server";
 
-export async function fetchProfileHandler(payload: FetchSimplePayload): Promise<void> {
+export interface FetchProfileResult {
+  rows: number;
+}
+
+export async function fetchProfileHandler(
+  payload: FetchSimplePayload,
+): Promise<FetchProfileResult> {
   const { basecamp } = payload;
   let cookies: Record<string, string>;
   try {
@@ -45,6 +51,7 @@ export async function fetchProfileHandler(payload: FetchSimplePayload): Promise<
       });
     }
     console.log(`[fetch-profile] synced ${rows.length} anchors for ${basecamp}`);
+    return { rows: rows.length };
   } catch (e) {
     if (e instanceof CookieExpiredError) {
       await markCookieExpired(basecamp);

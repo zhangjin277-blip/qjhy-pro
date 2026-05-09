@@ -10,7 +10,15 @@ import {
 } from "@/modules/crawler/server";
 import type { CheckDataReadyPayload } from "@/modules/crawler/server";
 
-export async function checkDataReadyHandler(payload: CheckDataReadyPayload): Promise<void> {
+export interface CheckDataReadyResult {
+  ready: boolean;
+  attempt: number;
+  detail: string;
+}
+
+export async function checkDataReadyHandler(
+  payload: CheckDataReadyPayload,
+): Promise<CheckDataReadyResult> {
   const { date, basecamp, attempt } = payload;
   const cookies = await getActiveCookies(basecamp);
   const page = await openDouyinPage(cookies);
@@ -20,7 +28,7 @@ export async function checkDataReadyHandler(payload: CheckDataReadyPayload): Pro
       console.log(`[check-data-ready] ✓ ready (${detail}) attempt=${attempt}`);
       await enqueue(JOB_NAMES.FETCH_PROFILE, { date, basecamp });
       await enqueue(JOB_NAMES.FETCH_DAILY, { date, basecamp });
-      return;
+      return { ready: true, attempt, detail };
     }
     if (attempt >= MAX_READINESS_ATTEMPTS) {
       await notifyCrawlerError({
@@ -29,7 +37,7 @@ export async function checkDataReadyHandler(payload: CheckDataReadyPayload): Pro
         impact: `${date} 数据未采集`,
         action: "等待平台刷新或联系开发",
       });
-      return;
+      return { ready: false, attempt, detail };
     }
     await enqueue<CheckDataReadyPayload>(
       JOB_NAMES.CHECK_DATA_READY,
@@ -37,6 +45,7 @@ export async function checkDataReadyHandler(payload: CheckDataReadyPayload): Pro
       { startAfter: new Date(Date.now() + READINESS_RETRY_INTERVAL_MS) },
     );
     console.log(`[check-data-ready] not ready (${detail}) attempt=${attempt}, retry in 30 min`);
+    return { ready: false, attempt, detail };
   } finally {
     await page.close();
   }

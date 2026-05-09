@@ -14,7 +14,15 @@ import type { FetchSimplePayload } from "@/modules/crawler/server";
  * 一个 anchor ~1s，1591 anchor 约 30 分钟。
  * 比 per-anchor pg-boss job 节省 1591 次 page launch + setCookie + navigate 开销（每次约 10s）。
  */
-export async function fetchPortraitHandler(payload: FetchSimplePayload): Promise<void> {
+export interface FetchPortraitResult {
+  rows: number;
+  fail: number;
+  total: number;
+}
+
+export async function fetchPortraitHandler(
+  payload: FetchSimplePayload,
+): Promise<FetchPortraitResult> {
   const { date, basecamp } = payload;
 
   // 取当日开播的主播
@@ -24,7 +32,7 @@ export async function fetchPortraitHandler(payload: FetchSimplePayload): Promise
     .where(and(eq(anchor_daily.date, date), gt(anchor_daily.live_duration_1d, "0")));
   if (liveAnchors.length === 0) {
     console.log(`[fetch-portrait] no live anchors for ${date}`);
-    return;
+    return { rows: 0, fail: 0, total: 0 };
   }
   console.log(`[fetch-portrait] ${liveAnchors.length} anchors to fetch for ${date}`);
 
@@ -71,6 +79,7 @@ export async function fetchPortraitHandler(payload: FetchSimplePayload): Promise
       }
     }
     console.log(`[fetch-portrait] done: ${success} success, ${fail} fail (date=${date})`);
+    return { rows: success, fail, total: liveAnchors.length };
   } catch (e) {
     if (e instanceof CookieExpiredError) {
       await markCookieExpired(basecamp);

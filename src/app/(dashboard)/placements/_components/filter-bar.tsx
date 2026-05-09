@@ -1,8 +1,8 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PresetChip } from "@/components/patterns/preset-toolbar";
 import {
   Select,
   SelectContent,
@@ -36,8 +36,13 @@ function presetToRange(preset: string): { from: string; to: string } {
   return { from: isoDate(from), to: isoDate(to) };
 }
 
+interface AnchorLabelOption {
+  label: string;
+  account_name: string | null;
+}
+
 interface FilterBarProps {
-  anchorLabels?: string[];
+  anchorLabels?: AnchorLabelOption[];
 }
 
 export function FilterBar({ anchorLabels = [] }: FilterBarProps) {
@@ -51,8 +56,8 @@ export function FilterBar({ anchorLabels = [] }: FilterBarProps) {
   const anchor = sp.get("anchor") ?? "";
 
   const effective =
-    fromUrl && toUrl ? { from: fromUrl, to: toUrl } : presetToRange(presetUrl || "last7");
-  const activePreset = !fromUrl && !toUrl ? presetUrl || "last7" : "";
+    fromUrl && toUrl ? { from: fromUrl, to: toUrl } : presetToRange(presetUrl || "today");
+  const activePreset = !fromUrl && !toUrl ? presetUrl || "today" : "";
 
   const [search, setSearch] = useState(sp.get("q") ?? "");
 
@@ -95,34 +100,18 @@ export function FilterBar({ anchorLabels = [] }: FilterBarProps) {
       />
 
       <div className="flex shrink-0 gap-1">
-        <Button
-          size="sm"
-          variant={activePreset === "today" ? "secondary" : "ghost"}
-          onClick={() => applyPreset("today")}
-        >
+        <PresetChip active={activePreset === "today"} onClick={() => applyPreset("today")}>
           今日
-        </Button>
-        <Button
-          size="sm"
-          variant={activePreset === "yesterday" ? "secondary" : "ghost"}
-          onClick={() => applyPreset("yesterday")}
-        >
+        </PresetChip>
+        <PresetChip active={activePreset === "yesterday"} onClick={() => applyPreset("yesterday")}>
           昨日
-        </Button>
-        <Button
-          size="sm"
-          variant={activePreset === "last7" ? "secondary" : "ghost"}
-          onClick={() => applyPreset("last7")}
-        >
+        </PresetChip>
+        <PresetChip active={activePreset === "last7"} onClick={() => applyPreset("last7")}>
           近 7 日
-        </Button>
-        <Button
-          size="sm"
-          variant={activePreset === "last30" ? "secondary" : "ghost"}
-          onClick={() => applyPreset("last30")}
-        >
+        </PresetChip>
+        <PresetChip active={activePreset === "last30"} onClick={() => applyPreset("last30")}>
           近 30 日
-        </Button>
+        </PresetChip>
       </div>
 
       {anchorLabels.length > 0 && (
@@ -130,14 +119,14 @@ export function FilterBar({ anchorLabels = [] }: FilterBarProps) {
           value={anchor || "all"}
           onValueChange={(v) => pushWith({ anchor: v === "all" ? null : v })}
         >
-          <SelectTrigger className="w-[140px] shrink-0">
+          <SelectTrigger className="w-[200px] shrink-0">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部主播</SelectItem>
-            {anchorLabels.map((l) => (
-              <SelectItem key={l} value={l}>
-                {l}
+            {anchorLabels.map((opt) => (
+              <SelectItem key={opt.label} value={opt.label}>
+                {opt.account_name ?? opt.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -145,7 +134,7 @@ export function FilterBar({ anchorLabels = [] }: FilterBarProps) {
       )}
 
       <Input
-        placeholder="搜索账号 / 主播（回车）"
+        placeholder="搜索账号昵称（回车）"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         onKeyDown={(e) => {

@@ -1,5 +1,10 @@
 import { auth } from "@/lib/auth";
-import { ingestRows, parseXlsx } from "@/modules/placement/server";
+import {
+  ingestRows,
+  parseXlsx,
+  detectDatasetFromRows,
+  type DetectResult,
+} from "@/modules/placement/server";
 import { runAttributionJob } from "@/modules/placement-attribution/server";
 import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -12,9 +17,9 @@ export async function POST(req: NextRequest) {
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
-  const datasetId = formData.get("dataset_id") as string | null;
+  const datasetIdInput = formData.get("dataset_id") as string | null;
 
-  if (!file || !datasetId) {
+  if (!file || !datasetIdInput) {
     return NextResponse.json({ error: "缺少 file 或 dataset_id" }, { status: 400 });
   }
   if (file.size > 10 * 1024 * 1024) {
@@ -23,6 +28,23 @@ export async function POST(req: NextRequest) {
 
   const buf = Buffer.from(await file.arrayBuffer());
   const parsed = parseXlsx(buf, file.name);
+
+  // dataset_id="auto" 时按主播标签投票推断
+  let datasetId = datasetIdInput;
+  let detect: DetectResult | null = null;
+  if (datasetIdInput === "auto") {
+    detect = await detectDatasetFromRows(parsed.rows);
+    if (!detect.datasetId) {
+      return NextResponse.json(
+        {
+          error: "自动识别失败：未能匹配主播标签到任何产品。请手动选择产品后重试。",
+          detect,
+        },
+        { status: 400 },
+      );
+    }
+    datasetId = detect.datasetId;
+  }
 
   const batch = await ingestRows({
     source: "excel-upload",
@@ -39,5 +61,5 @@ export async function POST(req: NextRequest) {
     console.error("[attribution-job-failed]", err);
   });
 
-  return NextResponse.json({ batch });
+  return NextResponse.json({ batch, detect, datasetId });
 }

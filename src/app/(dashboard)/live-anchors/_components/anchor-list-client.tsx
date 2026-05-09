@@ -9,9 +9,12 @@ import { AnchorEditDrawer } from "./anchor-edit-drawer";
 
 const BUSINESS_LINE_TABS = [
   { key: "all", label: "全部" },
-  { key: "捕鱼", label: "捕鱼" },
+  { key: "捕鱼大作战", label: "捕鱼大作战" },
+  { key: "途游休闲捕鱼", label: "途游休闲捕鱼" },
+  { key: "电玩捕鱼", label: "电玩捕鱼" },
   { key: "斗地主", label: "斗地主" },
   { key: "麻将", label: "麻将" },
+  { key: "三国:冰河时代", label: "三国:冰河时代" },
 ] as const;
 
 const PAGE_SIZES = [25, 50, 100] as const;
@@ -69,9 +72,12 @@ export function AnchorListClient({ initialAnchors, bindingsByAnchor, deptUsers }
 
   const counts: Record<TabKey, number> = {
     all: initialAnchors.length,
-    捕鱼: initialAnchors.filter((a) => a.business_line === "捕鱼").length,
+    捕鱼大作战: initialAnchors.filter((a) => a.business_line === "捕鱼大作战").length,
+    途游休闲捕鱼: initialAnchors.filter((a) => a.business_line === "途游休闲捕鱼").length,
+    电玩捕鱼: initialAnchors.filter((a) => a.business_line === "电玩捕鱼").length,
     斗地主: initialAnchors.filter((a) => a.business_line === "斗地主").length,
     麻将: initialAnchors.filter((a) => a.business_line === "麻将").length,
+    "三国:冰河时代": initialAnchors.filter((a) => a.business_line === "三国:冰河时代").length,
   };
 
   const openEdit = (anchor: AnchorWithDingtalk) => {

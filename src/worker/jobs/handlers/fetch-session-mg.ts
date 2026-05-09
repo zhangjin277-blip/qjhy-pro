@@ -8,7 +8,14 @@ import {
 } from "@/modules/crawler/adapters/session-minigame";
 import type { FetchSessionMgPayload } from "@/modules/crawler/server";
 
-export async function fetchSessionMgHandler(payload: FetchSessionMgPayload): Promise<void> {
+export interface FetchSessionMgResult {
+  rows: number;
+  room_id: string;
+}
+
+export async function fetchSessionMgHandler(
+  payload: FetchSessionMgPayload,
+): Promise<FetchSessionMgResult> {
   const { room_id, anchor_id, basecamp } = payload;
   const cookies = await getActiveCookies(basecamp);
   const page = await openDouyinPage(cookies);
@@ -34,6 +41,7 @@ export async function fetchSessionMgHandler(payload: FetchSessionMgPayload): Pro
         target: session_minigame_convert.room_id,
         set: { ...dbRow, synced_at: new Date() },
       });
+    return { rows: 1, room_id };
   } catch (e) {
     if (e instanceof CookieExpiredError) {
       await markCookieExpired(basecamp);

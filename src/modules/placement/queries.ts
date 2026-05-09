@@ -240,6 +240,8 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
     LEFT JOIN dingtalk_user du ON du.user_id = d.dingtalk_user_id
     WHERE (d.effective_from IS NULL OR d.effective_from <= ${filter.date_to})
       AND (d.effective_to IS NULL OR d.effective_to >= ${filter.date_from})
+      ${filter.anchor_label ? sql`AND a.placement_label = ${filter.anchor_label}` : sql``}
+      ${filter.search ? sql`AND (a.account_name ILIKE ${"%" + filter.search + "%"} OR a.placement_label ILIKE ${"%" + filter.search + "%"})` : sql``}
   `);
 
   interface RawSchedule {
@@ -736,6 +738,8 @@ export async function querySummaryExt(filter: BoardFilter): Promise<SummaryRowEx
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${filter.anchor_label ? sql`AND a.placement_label = ${filter.anchor_label}` : sql``}
+    ${filter.search ? sql`AND (a.account_name ILIKE ${"%" + filter.search + "%"} OR a.placement_label ILIKE ${"%" + filter.search + "%"})` : sql``}
     GROUP BY a.placement_label
     ORDER BY cost DESC NULLS LAST
     LIMIT 100
@@ -766,6 +770,8 @@ export async function querySummaryExt(filter: BoardFilter): Promise<SummaryRowEx
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${filter.anchor_label ? sql`AND a.placement_label = ${filter.anchor_label}` : sql``}
+    ${filter.search ? sql`AND (a.account_name ILIKE ${"%" + filter.search + "%"} OR a.placement_label ILIKE ${"%" + filter.search + "%"})` : sql``}
     GROUP BY a.placement_label, p.date
     ORDER BY p.date
   `)) as unknown as { placement_label: string | null; date: string; cost: number }[];
@@ -787,6 +793,8 @@ export async function querySummaryExt(filter: BoardFilter): Promise<SummaryRowEx
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${prevFrom.toISOString().slice(0, 10)} AND ${prevTo.toISOString().slice(0, 10)}
     ${datasetClause(filter.dataset_ids)}
+    ${filter.anchor_label ? sql`AND a.placement_label = ${filter.anchor_label}` : sql``}
+    ${filter.search ? sql`AND (a.account_name ILIKE ${"%" + filter.search + "%"} OR a.placement_label ILIKE ${"%" + filter.search + "%"})` : sql``}
     GROUP BY a.placement_label
   `)) as unknown as { placement_label: string | null; cost: number }[];
 
@@ -903,15 +911,114 @@ export async function queryAccountHourly(
   }));
 }
 
-export async function queryAnchorLabels(filter: BoardFilter): Promise<string[]> {
+export interface AnchorLabelOption {
+  label: string; // placement_label，用于过滤
+  account_name: string | null; // 代表 account_name，用于展示
+}
+
+export async function queryAnchorLabels(filter: BoardFilter): Promise<AnchorLabelOption[]> {
   const result = await db.execute(sql`
-    SELECT DISTINCT a.placement_label
+    SELECT
+      a.placement_label                 AS label,
+      MAX(a.account_name)               AS account_name
     FROM placement_row p
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
       AND a.placement_label IS NOT NULL
-    ORDER BY 1
+    GROUP BY a.placement_label
+    ORDER BY a.placement_label
   `);
-  return (result as unknown as { placement_label: string }[]).map((r) => r.placement_label);
+  return (result as unknown as { label: string; account_name: string | null }[]).map((r) => ({
+    label: r.label,
+    account_name: r.account_name,
+  }));
+}
+
+/**
+ * 「主播 × 投放」视图的「昨日同时段累计」对比数据。
+ *
+ * 口径：filter.date 范围各 -1 天作为昨日窗口；
+ *   若 filter.date_to ≥ 今天（按 Asia/Shanghai），则 cutoff_hour = 当前 Shanghai 小时（含同时刻截止公平对比）；
+ *   否则 cutoff_hour = 24（看历史时全天对比）。
+ * 返回：Map<account_id, { cost, acts, payment }>
+ */
+export interface ScheduleYesterdayKpi {
+  cost: number;
+  acts: number;
+  payment: number;
+}
+
+function shanghaiTodayAndHour(): { date: string; hour: number } {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = fmt.formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const y = get("year");
+  const m = get("month");
+  const d = get("day");
+  const h = parseInt(get("hour") || "0", 10);
+  return { date: `${y}-${m}-${d}`, hour: h };
+}
+
+function isoSubDays(iso: string, n: number): string {
+  const d = new Date(iso + "T12:00:00Z"); // noon UTC 避开 DST 边界
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** 昨日按 (account, hour) 维度的小时级累计，client 可按班次 [start, end) 任意求和。 */
+export interface ScheduleYesterdayHourly {
+  byAccount: Record<string, Record<number, ScheduleYesterdayKpi>>;
+  cutoffHour: number; // 用于 account 级 KPI 同比；当 filter.date_to >= 今天时 = 当前 Shanghai 小时，否则 24
+}
+
+export async function queryScheduleYesterdayHourly(
+  filter: BoardFilter,
+): Promise<ScheduleYesterdayHourly> {
+  const { date: today, hour: nowHour } = shanghaiTodayAndHour();
+  const cutoff = filter.date_to >= today ? nowHour : 24;
+
+  const yFrom = isoSubDays(filter.date_from, 1);
+  const yTo = isoSubDays(filter.date_to, 1);
+
+  const rows = (await db.execute(sql`
+    SELECT
+      p.live_account_id            AS account_id,
+      p.hour                       AS hour,
+      SUM(p.cost_yuan)::float      AS cost,
+      SUM(p.activations)::int      AS acts,
+      SUM(p.payment_yuan)::float   AS payment
+    FROM placement_row p
+    WHERE p.date BETWEEN ${yFrom} AND ${yTo}
+    ${datasetClause(filter.dataset_ids)}
+    GROUP BY p.live_account_id, p.hour
+  `)) as unknown as {
+    account_id: string;
+    hour: number;
+    cost: number;
+    acts: number;
+    payment: number;
+  }[];
+
+  const byAccount: Record<string, Record<number, ScheduleYesterdayKpi>> = {};
+  for (const r of rows) {
+    let bucket = byAccount[r.account_id];
+    if (!bucket) {
+      bucket = {};
+      byAccount[r.account_id] = bucket;
+    }
+    bucket[r.hour] = {
+      cost: Number(r.cost),
+      acts: Number(r.acts),
+      payment: Number(r.payment),
+    };
+  }
+  return { byAccount, cutoffHour: cutoff };
 }

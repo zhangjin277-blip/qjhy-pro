@@ -1,14 +1,17 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PresetChip, PresetToolbar } from "@/components/patterns/preset-toolbar";
 import { DATASET_LABEL, type DatasetId } from "@/modules/placement";
+
+type DatasetOrAuto = DatasetId | "auto";
 
 export function UploadDropzone() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
-  const datasetRef = useRef<DatasetId>("product_buyu");
-  const [dataset, setDataset] = useState<DatasetId>("product_buyu");
+  const datasetRef = useRef<DatasetOrAuto>("auto");
+  const [dataset, setDataset] = useState<DatasetOrAuto>("auto");
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [batches, setBatches] = useState<{ name: string; result: unknown }[]>([]);
@@ -63,21 +66,22 @@ export function UploadDropzone() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium">产品：</label>
-        <select
-          value={dataset}
-          onChange={(e) => setDataset(e.target.value as DatasetId)}
-          disabled={uploading}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm disabled:opacity-50"
-        >
+      <div className="flex flex-wrap items-center gap-3">
+        <PresetToolbar label="产品:">
+          <PresetChip active={dataset === "auto"} onClick={() => !uploading && setDataset("auto")}>
+            自动识别
+          </PresetChip>
           {(Object.keys(DATASET_LABEL) as DatasetId[]).map((k) => (
-            <option key={k} value={k}>
+            <PresetChip key={k} active={dataset === k} onClick={() => !uploading && setDataset(k)}>
               {DATASET_LABEL[k]}
-            </option>
+            </PresetChip>
           ))}
-        </select>
-        <span className="text-xs text-slate-400">拖入或选择 Excel 后立即上传</span>
+        </PresetToolbar>
+        <span className="text-xs text-slate-400">
+          {dataset === "auto"
+            ? "按主播标签自动识别产品（识别失败会提示手动选）"
+            : "拖入或选择 Excel 后立即上传"}
+        </span>
       </div>
 
       <div
@@ -159,8 +163,19 @@ export function UploadDropzone() {
       {batches.length > 0 && (
         <div className="space-y-2">
           {batches.map((b, i) => {
-            const r = b.result as { ok?: boolean; error?: string } & Record<string, unknown>;
+            const r = b.result as {
+              ok?: boolean;
+              error?: string;
+              datasetId?: DatasetId;
+              detect?: {
+                datasetId: DatasetId | null;
+                votes: Record<DatasetId, number>;
+                unmatched: string[];
+                mixed: boolean;
+              } | null;
+            } & Record<string, unknown>;
             const ok = !r.error;
+            const recognizedLabel = r.datasetId ? DATASET_LABEL[r.datasetId] : null;
             return (
               <div
                 key={i}
@@ -172,6 +187,19 @@ export function UploadDropzone() {
                 <span className="ml-2 text-xs text-slate-500">
                   {ok ? "上传成功" : `失败：${r.error}`}
                 </span>
+                {ok && r.detect && recognizedLabel && (
+                  <div className="mt-1 text-xs text-slate-600">
+                    自动识别 → <strong className="text-slate-800">{recognizedLabel}</strong>
+                    {r.detect.mixed && (
+                      <span className="ml-2 text-amber-600">⚠ 多产品票数接近，请核对</span>
+                    )}
+                    {r.detect.unmatched.length > 0 && (
+                      <span className="ml-2 text-slate-400">
+                        未匹配标签：{r.detect.unmatched.join(", ")}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {ok && (
                   <pre className="mt-1 overflow-x-auto text-[11px] text-slate-500">
                     {JSON.stringify(b.result, null, 2)}

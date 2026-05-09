@@ -14,24 +14,35 @@ interface JobRow extends Record<string, unknown> {
   completed_on: string | null;
   dur_s: number | null;
   err: string | null;
+  output: Record<string, unknown> | null;
 }
 
 export async function GET(): Promise<NextResponse> {
   await requireAdmin();
 
   // 直接 SQL 读 pgboss.job — 比 boss.getQueueSize 信息丰富，且避开 server barrel 的 puppeteer 链
+  // 日期 fallback：date > fromDate~toDate > created_on 当天（按上海时区）
   const jobs = (await db.execute<JobRow>(sql`
     SELECT
       id::text AS id,
       name,
       state,
-      data->>'date' AS date,
+      COALESCE(
+        data->>'date',
+        CASE
+          WHEN data->>'fromDate' IS NOT NULL AND data->>'toDate' IS NOT NULL
+            THEN (data->>'fromDate') || '~' || (data->>'toDate')
+          ELSE NULL
+        END,
+        to_char(created_on AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD')
+      ) AS date,
       (data->>'attempt')::int AS attempt,
       created_on::text AS created_on,
       started_on::text AS started_on,
       completed_on::text AS completed_on,
       EXTRACT(EPOCH FROM (completed_on - started_on))::int AS dur_s,
-      output->>'error' AS err
+      output->>'error' AS err,
+      CASE WHEN state = 'completed' THEN output ELSE NULL END AS output
     FROM pgboss.job
     WHERE name LIKE 'crawler:%'
       AND created_on > now() - interval '24 hours'

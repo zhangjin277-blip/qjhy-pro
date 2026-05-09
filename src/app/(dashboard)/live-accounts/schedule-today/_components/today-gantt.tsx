@@ -99,6 +99,11 @@ function hourSlot(start: number, end: number): [string, string] {
   return [`${start.toString().padStart(2, "0")}:00`, `${end.toString().padStart(2, "0")}:00`];
 }
 
+function formatHourLabel(hour: number): string {
+  const display = hour >= 24 ? hour - 24 : hour;
+  return `${display.toString().padStart(2, "0")}:00`;
+}
+
 function rangesOverlap(startA: number, endA: number, startB: number, endB: number) {
   return startA < endB && startB < endA;
 }
@@ -796,6 +801,7 @@ function Row({
   resize: {
     account_id: string;
     segIdx: number;
+    edge?: "left" | "right";
     currentStart: number;
     currentEnd: number;
   } | null;
@@ -903,6 +909,7 @@ function Row({
           const width = `${((endC - startC) / HOURS_FULL) * 100}%`;
           const bg = seg.is_rest ? "var(--change-up)" : colorFor(seg.user_name);
           const isSelected = selected?.account_id === account.account_id && selected?.segIdx === i;
+          const isResizing = resize?.account_id === account.account_id && resize.segIdx === i;
           return (
             <div
               key={i}
@@ -918,6 +925,7 @@ function Row({
                   ? "border-2 border-change-up bg-change-up/10 text-change-up"
                   : "text-foreground/80",
                 isSelected && "ring-2 ring-primary z-[3]",
+                isResizing && "z-[4] shadow-md",
               )}
               style={{
                 left,
@@ -927,6 +935,26 @@ function Row({
               }}
               title={`${seg.user_name ?? "未知"} · ${renderStart}:00 — ${renderEnd > 24 ? renderEnd - 24 : renderEnd}:00${seg.is_rest ? " · 休息" : ""}${seg.reason ? ` · ${seg.reason}` : ""}`}
             >
+              {isResizing && (
+                <>
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute left-1 top-1/2 z-[2] -translate-y-1/2 rounded bg-slate-900/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white shadow-sm",
+                      resize.edge === "left" && "bg-primary text-primary-foreground",
+                    )}
+                  >
+                    {formatHourLabel(renderStart)}
+                  </span>
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute right-1 top-1/2 z-[2] -translate-y-1/2 rounded bg-slate-900/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white shadow-sm",
+                      resize.edge === "right" && "bg-primary text-primary-foreground",
+                    )}
+                  >
+                    {formatHourLabel(renderEnd)}
+                  </span>
+                </>
+              )}
               <span className="px-2 truncate">
                 {seg.is_rest ? "⚠ " : ""}
                 {seg.user_name ?? "—"}

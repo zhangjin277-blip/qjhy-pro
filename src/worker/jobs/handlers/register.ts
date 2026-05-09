@@ -13,11 +13,14 @@ import type PgBoss from "pg-boss";
 
 // batchSize=1: one job at a time, avoids rate-limit / Cookie contention.
 // pg-boss WorkHandler always passes at least 1 job when batchSize=1.
-function runFirst<T>(fn: (data: T) => Promise<void>): (jobs: PgBoss.Job<T>[]) => Promise<void> {
+// Handler return value 会作为 pgboss.job.output 写回，供 admin/crawler 队列页展示。
+function runFirst<T, R>(
+  fn: (data: T) => Promise<R>,
+): (jobs: PgBoss.Job<T>[]) => Promise<R | undefined> {
   return async (jobs) => {
     const job = jobs.at(0);
-    if (job === undefined) return;
-    await fn(job.data);
+    if (job === undefined) return undefined;
+    return await fn(job.data);
   };
 }
 
@@ -37,22 +40,22 @@ export async function registerCrawlerHandlers(): Promise<void> {
   // 快手成员同步无 payload，封装成忽略 jobs 数据的 handler
   await boss.work(JOB_NAMES.SYNC_KUAISHOU_MEMBERS, { batchSize: 1 }, async (jobs) => {
     const job = jobs.at(0);
-    if (job === undefined) return;
-    await syncKuaishouMembersHandler();
+    if (job === undefined) return undefined;
+    return await syncKuaishouMembersHandler();
   });
   await boss.work(JOB_NAMES.SYNC_KUAISHOU_HISTORY_LIVE, { batchSize: 1 }, async (jobs) => {
     const job = jobs.at(0);
-    if (job === undefined) return;
+    if (job === undefined) return undefined;
     const data = (job.data ?? {}) as { fromDate?: string; toDate?: string };
-    await syncKuaishouHistoryLiveSessionsHandler({
+    return await syncKuaishouHistoryLiveSessionsHandler({
       fromDate: data.fromDate,
       toDate: data.toDate,
     });
   });
   await boss.work(JOB_NAMES.SYNC_KUAISHOU_TODAY_LIVE, { batchSize: 1 }, async (jobs) => {
     const job = jobs.at(0);
-    if (job === undefined) return;
-    await syncKuaishouTodayLiveSessionsHandler();
+    if (job === undefined) return undefined;
+    return await syncKuaishouTodayLiveSessionsHandler();
   });
   console.log("[crawler] all 10 handlers registered");
 }

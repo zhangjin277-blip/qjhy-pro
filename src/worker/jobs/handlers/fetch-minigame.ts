@@ -9,7 +9,14 @@ import type { FetchSimplePayload } from "@/modules/crawler/server";
  * Batch 模式：用 JSON 直查 API 一次拉所有三国主播 × 所有小游戏的数据。
  * scene 当前只 live。
  */
-export async function fetchMinigameHandler(payload: FetchSimplePayload): Promise<void> {
+export interface FetchMinigameResult {
+  rows: number;
+  unmatched: number;
+}
+
+export async function fetchMinigameHandler(
+  payload: FetchSimplePayload,
+): Promise<FetchMinigameResult> {
   const { date, basecamp } = payload;
 
   // 抖音号 → anchor_id 映射（全量主播）
@@ -92,6 +99,7 @@ export async function fetchMinigameHandler(payload: FetchSimplePayload): Promise
       total++;
     }
     console.log(`[fetch-minigame] done: ${total} rows synced, ${unmatched} unmatched`);
+    return { rows: total, unmatched };
   } catch (e) {
     if (e instanceof CookieExpiredError) {
       await markCookieExpired(basecamp);

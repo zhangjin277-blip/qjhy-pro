@@ -50,7 +50,8 @@ describe("parseXlsx — 9 列模板（蓝v-安卓，lanv-9cols.xlsx）", () => {
     expect(first).toBeDefined();
     expect(first?.account_name).toBeTruthy();
     expect(first?.date).toBe("2026-05-06");
-    expect(first?.hour).toBe(19);
+    // CSV "小时 19" 是终点编号（[18:00, 19:00)）；adapter -1 后存起点 18
+    expect(first?.hour).toBe(18);
     expect(first?.cost_yuan).toBeGreaterThan(0);
     expect(out.date_range_from).toBe("2026-05-06");
     expect(out.date_range_to).toBe("2026-05-06");

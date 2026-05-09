@@ -3,9 +3,10 @@ import { db } from "@/db/client";
 import { live_anchor, dingtalk_user } from "@/db/schema";
 import { eq, and, sql, type SQL } from "drizzle-orm";
 import type { AnchorWithDingtalk } from "./types";
+import type { BusinessLine } from "./schema";
 
 export interface ListAnchorsParams {
-  business_line?: "捕鱼" | "斗地主" | "麻将";
+  business_line?: BusinessLine;
   work_status?: "active" | "rest" | "leave";
 }
 

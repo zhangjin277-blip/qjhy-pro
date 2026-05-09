@@ -1,6 +1,15 @@
 import { z } from "zod";
 
-export const BusinessLine = z.enum(["捕鱼", "斗地主", "麻将"]);
+// business_line 拆到产品级（捕鱼分 3 个产品）。"捕鱼" 是历史值，存量迁移时用，新建禁用。
+export const BUSINESS_LINE_VALUES = [
+  "捕鱼大作战",
+  "途游休闲捕鱼",
+  "电玩捕鱼",
+  "斗地主",
+  "麻将",
+  "三国:冰河时代",
+] as const;
+export const BusinessLine = z.enum(BUSINESS_LINE_VALUES);
 export type BusinessLine = z.infer<typeof BusinessLine>;
 
 export const EmploymentType = z.enum(["正式", "合作", "试播"]);

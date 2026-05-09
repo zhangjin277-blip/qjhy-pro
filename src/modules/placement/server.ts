@@ -21,6 +21,7 @@ export {
   queryKpiSummary,
   querySubAccountsAll,
   queryAccountHourly,
+  queryScheduleYesterdayHourly,
   type BoardFilter,
   type DatasetCount,
   type DetailRow,
@@ -31,5 +32,10 @@ export {
   type KpiSummary,
   type SubAccountRow,
   type AccountHourlyRow,
+  type AnchorLabelOption,
+  type ScheduleYesterdayKpi,
+  type ScheduleYesterdayHourly,
 } from "./queries";
 export { readPro3Placements, type Pro3Dataset } from "./pro3-adapter";
+export { detectDatasetFromRows, type DetectResult } from "./detect-dataset";
+export { deleteBatchAndRecompute, type DeleteBatchResult } from "./batch-delete";

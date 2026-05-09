@@ -143,14 +143,16 @@ export function parseXlsx(buffer: Buffer | ArrayBuffer, filename: string): Parse
     }
 
     // 小时解析：优先 hour_text，其次 time_text（"时间" 列 "19:00"）
+    // Excel 上传的"小时"列是终点编号（1=00~01, 24=23~24）；DB 存起点编号（0~23），所以 -1
     const hourText = findValue(row, COLUMN_ALIAS.hour_text);
     const timeText = findValue(row, COLUMN_ALIAS.time_text);
     const hourSource = hourText ?? timeText;
-    const hour = parseHour(hourSource);
-    if (hour === null) {
-      errors.push({ row, reason: `无法识别小时：${String(hourSource)}` });
+    const hourRaw = parseHour(hourSource);
+    if (hourRaw === null || hourRaw < 1 || hourRaw > 24) {
+      errors.push({ row, reason: `无法识别小时（应为 1~24）：${String(hourSource)}` });
       continue;
     }
+    const hour = hourRaw - 1;
 
     rows.push({
       account_name: anchorStr,

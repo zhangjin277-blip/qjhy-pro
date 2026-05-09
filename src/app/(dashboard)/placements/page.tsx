@@ -3,6 +3,7 @@ import {
   queryDatasetCounts,
   querySummaryExt,
   querySchedule,
+  queryScheduleYesterdayHourly,
   queryTrend,
   queryAnchorLabels,
   queryKpiSummary,
@@ -46,7 +47,10 @@ export default async function PlacementsPage({
 
   async function buildViewData() {
     if (view === "schedule") {
-      const rows = await querySchedule(filter);
+      const [rows, yesterdayHourly] = await Promise.all([
+        querySchedule(filter),
+        queryScheduleYesterdayHourly(filter),
+      ]);
       const csvRows = rows as unknown as Record<string, unknown>[];
       const csvColumns: CsvCol[] = [
         { key: "date", label: "日期" },
@@ -58,7 +62,13 @@ export default async function PlacementsPage({
         { key: "personal_acts", label: "个人激活" },
       ];
       const csvFilename = `投放-主播投放-${filter.date_from}_${filter.date_to}.csv`;
-      const tableContent = <ScheduleTable rows={rows} />;
+      const tableContent = (
+        <ScheduleTable
+          rows={rows}
+          yesterdayHourly={yesterdayHourly.byAccount}
+          yesterdayCutoffHour={yesterdayHourly.cutoffHour}
+        />
+      );
       return { tableContent, csvRows, csvColumns, csvFilename };
     }
     // summary (default)
