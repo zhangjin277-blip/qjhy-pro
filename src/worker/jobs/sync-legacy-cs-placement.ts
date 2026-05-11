@@ -15,8 +15,8 @@
  * 失败处理：
  * - 抛错 → 上层 scheduler 兜底捕获 + notifyError + audit。
  */
-import { readPro3Placements } from "@/modules/placement/server";
-import { ingestRows } from "@/modules/placement/server";
+import { readPro3Placements, ingestRows } from "@/modules/placement/server";
+import { runAttributionJob } from "@/modules/placement-attribution/server";
 import { writeAuditLog } from "@/lib/audit";
 import { notifyError } from "@/lib/notify";
 
@@ -57,6 +57,12 @@ export async function syncLegacyCsPlacement(): Promise<void> {
       uploaded_by: null,
       rows,
       parse_errors: [],
+    });
+
+    // 跟 Excel 上传一致：ingest 完立即触发归因，让 UI 立刻能按主播/运营看到数据。
+    // 不 await，让 sync 主流程快速返回；归因失败只 log 不影响 sync。
+    runAttributionJob({ batch_id: ingestResult.id }).catch((err) => {
+      console.error("[sync-legacy-cs] attribution-job-failed:", err);
     });
 
     await writeAuditLog({
