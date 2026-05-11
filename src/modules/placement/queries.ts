@@ -1,7 +1,18 @@
 import "server-only";
 import { db } from "@/db/client";
-import { sql } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
+import { dingtalk_user } from "@/db/schema";
+import { resolvePermission, getManagedDeptIds } from "@/modules/permissions/server";
 import { mergeWithOverride } from "@/modules/schedule-override";
+
+/**
+ * Placement 数据可见范围（按 placement_row.attributed_dingtalk_user_id 过滤）。
+ * 由 page.tsx 入口调 `resolvePlacementScope(userId, isEmergency)` 解析后填进 BoardFilter。
+ */
+export type PlacementScope =
+  | { kind: "all" }
+  | { kind: "reject" }
+  | { kind: "user_ids"; ids: string[] };
 
 export interface BoardFilter {
   date_from: string; // ISO
@@ -10,6 +21,8 @@ export interface BoardFilter {
   search?: string; // 账号名 / 主播名 模糊
   anchor_label?: string; // placement_label 精确筛选（detail 视图）
   view?: "detail" | "summary" | "schedule"; // 当前视图模式
+  /** 权限范围；不传等价于 {kind:"all"}（旧调用方兼容；admin 入口可省略） */
+  scope?: PlacementScope;
 }
 
 function datasetClause(ds?: string[]) {
@@ -19,6 +32,50 @@ function datasetClause(ds?: string[]) {
     sql`, `,
   )})`;
 }
+
+/**
+ * 返回 `AND ...` 形式的 SQL 片段，注入到现有 WHERE 子句后用。
+ * 默认表别名是 `p`（placement_row）；其他场景传 columnRef 覆盖。
+ */
+function scopeClause(
+  scope: PlacementScope | undefined,
+  columnRef: SQL = sql`p.attributed_dingtalk_user_id`,
+) {
+  if (!scope || scope.kind === "all") return sql``;
+  if (scope.kind === "reject") return sql`AND FALSE`;
+  if (scope.ids.length === 0) return sql`AND FALSE`;
+  return sql`AND ${columnRef} = ANY(ARRAY[${sql.join(
+    scope.ids.map((id) => sql`${id}`),
+    sql`, `,
+  )}]::text[])`;
+}
+
+/**
+ * 解析当前用户在 placement 模块的可见范围。
+ * 由 page.tsx 在拿到 dingtalkUserId 后调用，结果塞进 BoardFilter.scope。
+ */
+export async function resolvePlacementScope(
+  userId: string,
+  emergencyMode = false,
+): Promise<PlacementScope> {
+  if (emergencyMode) return { kind: "all" };
+  const perm = await resolvePermission(userId, "placement");
+  if (perm.scope === "none") return { kind: "reject" };
+  if (perm.scope === "all") return { kind: "all" };
+  if (perm.scope === "self") return { kind: "user_ids", ids: [userId] };
+  // team
+  const deptIds = await getManagedDeptIds(userId);
+  if (deptIds.length === 0) return { kind: "reject" };
+  const teamUsers = await db
+    .select({ user_id: dingtalk_user.user_id })
+    .from(dingtalk_user)
+    .where(
+      sql`${dingtalk_user.dept_ids} ?| ${sql.raw(`ARRAY[${deptIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")}]::text[]`)}`,
+    );
+  if (teamUsers.length === 0) return { kind: "reject" };
+  return { kind: "user_ids", ids: teamUsers.map((u) => u.user_id) };
+}
+void eq; // silence unused-import lint if not used elsewhere
 
 // postgres-js 适配器 db.execute 直接返回数组（不是 {rows} 包装），统一用 result + cast
 type Row = Record<string, unknown>;
@@ -39,6 +96,7 @@ export async function queryByAccount(filter: BoardFilter): Promise<Row[]> {
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     ${filter.search ? sql`AND (a.account_name ILIKE ${"%" + filter.search + "%"} OR a.placement_label ILIKE ${"%" + filter.search + "%"})` : sql``}
     GROUP BY a.id, a.account_name, a.placement_label, a.platform
     ORDER BY cost DESC NULLS LAST
@@ -63,6 +121,7 @@ export async function queryByAnchor(filter: BoardFilter): Promise<Row[]> {
     LEFT JOIN live_anchor la   ON la.dingtalk_user_id = p.attributed_dingtalk_user_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     GROUP BY p.attributed_dingtalk_user_id, du.name, la.business_line, p.attribution_source
     ORDER BY cost DESC NULLS LAST
     LIMIT 200
@@ -83,6 +142,7 @@ export async function queryByHour(filter: BoardFilter): Promise<Row[]> {
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     GROUP BY p.live_account_id, a.account_name, p.hour
     ORDER BY a.account_name, p.hour
     LIMIT 5000
@@ -144,6 +204,7 @@ export async function queryDetail(filter: BoardFilter): Promise<DetailRow[]> {
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     ${anchorClause}
     ORDER BY p.date DESC, p.hour DESC, a.placement_label
     LIMIT 500
@@ -180,6 +241,7 @@ export async function querySummary(filter: BoardFilter): Promise<SummaryRow[]> {
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     GROUP BY a.placement_label
     ORDER BY cost DESC NULLS LAST
     LIMIT 100
@@ -388,6 +450,7 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
     FROM placement_row p
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
   `);
 
   interface RawPlacement {
@@ -597,6 +660,7 @@ export async function queryTrend(filter: BoardFilter): Promise<TrendPoint[]> {
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     GROUP BY 1, 2, 3
     ORDER BY 2, 3
   `);
@@ -636,6 +700,7 @@ export async function queryKpiSummary(filter: BoardFilter): Promise<KpiSummary> 
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
   `)) as unknown as { cost: number; activations: number; payment: number }[];
 
   // 前期同样长度对比
@@ -658,6 +723,7 @@ export async function queryKpiSummary(filter: BoardFilter): Promise<KpiSummary> 
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${prevFromStr} AND ${prevToStr}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
   `)) as unknown as { cost: number; activations: number; payment: number }[];
 
   // 当期按日 sparkline
@@ -671,6 +737,7 @@ export async function queryKpiSummary(filter: BoardFilter): Promise<KpiSummary> 
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     GROUP BY p.date
     ORDER BY p.date
   `)) as unknown as { date: string; cost: number; activations: number; payment: number }[];
@@ -738,6 +805,7 @@ export async function querySummaryExt(filter: BoardFilter): Promise<SummaryRowEx
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     ${filter.anchor_label ? sql`AND a.placement_label = ${filter.anchor_label}` : sql``}
     ${filter.search ? sql`AND (a.account_name ILIKE ${"%" + filter.search + "%"} OR a.placement_label ILIKE ${"%" + filter.search + "%"})` : sql``}
     GROUP BY a.placement_label
@@ -770,6 +838,7 @@ export async function querySummaryExt(filter: BoardFilter): Promise<SummaryRowEx
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     ${filter.anchor_label ? sql`AND a.placement_label = ${filter.anchor_label}` : sql``}
     ${filter.search ? sql`AND (a.account_name ILIKE ${"%" + filter.search + "%"} OR a.placement_label ILIKE ${"%" + filter.search + "%"})` : sql``}
     GROUP BY a.placement_label, p.date
@@ -793,6 +862,7 @@ export async function querySummaryExt(filter: BoardFilter): Promise<SummaryRowEx
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${prevFrom.toISOString().slice(0, 10)} AND ${prevTo.toISOString().slice(0, 10)}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     ${filter.anchor_label ? sql`AND a.placement_label = ${filter.anchor_label}` : sql``}
     ${filter.search ? sql`AND (a.account_name ILIKE ${"%" + filter.search + "%"} OR a.placement_label ILIKE ${"%" + filter.search + "%"})` : sql``}
     GROUP BY a.placement_label
@@ -864,6 +934,7 @@ export async function querySubAccountsAll(filter: BoardFilter): Promise<SubAccou
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     GROUP BY a.placement_label, a.id, a.account_name, a.platform
     ORDER BY a.placement_label, cost DESC NULLS LAST
   `)) as unknown as SubAccountRow[];
@@ -899,6 +970,7 @@ export async function queryAccountHourly(
     WHERE p.live_account_id = ${accountId}
       AND p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     GROUP BY p.date, p.hour
     ORDER BY p.date DESC, p.hour ASC
   `)) as unknown as AccountHourlyRow[];
@@ -925,6 +997,7 @@ export async function queryAnchorLabels(filter: BoardFilter): Promise<AnchorLabe
     JOIN live_account a ON a.id = p.live_account_id
     WHERE p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
       AND a.placement_label IS NOT NULL
     GROUP BY a.placement_label
     ORDER BY a.placement_label
@@ -998,6 +1071,7 @@ export async function queryScheduleYesterdayHourly(
     FROM placement_row p
     WHERE p.date BETWEEN ${yFrom} AND ${yTo}
     ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
     GROUP BY p.live_account_id, p.hour
   `)) as unknown as {
     account_id: string;

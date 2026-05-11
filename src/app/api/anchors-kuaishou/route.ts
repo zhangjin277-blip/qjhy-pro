@@ -44,7 +44,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   const [rows, previousRows, kpi] = await Promise.all([
     listKuaishouAnchors(dingtalkUserId, filters, isEmergency),
-    listKuaishouAnchorsPrev(dingtalkUserId, filters),
+    listKuaishouAnchorsPrev(dingtalkUserId, filters, isEmergency),
     queryKuaishouAnchorKpi(dingtalkUserId, filters, isEmergency),
   ]);
   return NextResponse.json({ rows, previousRows, kpi });

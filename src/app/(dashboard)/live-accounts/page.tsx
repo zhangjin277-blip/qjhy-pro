@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { dingtalk_user, anchor_profile, live_account } from "@/db/schema";
 import { schedule_override } from "@/db/schema/schedule-override";
@@ -7,6 +8,7 @@ import { listAnchors } from "@/modules/live-anchor/server";
 import { listBindings } from "@/modules/live-anchor";
 import { listRooms } from "@/modules/live-room/server";
 import { Product } from "@/modules/live-account";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { AccountListClient } from "./_components/account-list-client";
 import type { OverrideRowView } from "./_components/schedule-override-tab";
 
@@ -21,6 +23,17 @@ export default async function LiveAccountsPage({
 }: {
   searchParams: Promise<{ product?: string }>;
 }) {
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind === "unauth") redirect("/login");
+  if (ctx.kind === "user_not_synced") {
+    return (
+      <div className="p-6 text-sm text-red-600">
+        当前账号尚未同步到钉钉用户表，无法计算权限。请联系管理员。
+      </div>
+    );
+  }
+  const { dingtalkUserId, isEmergency } = ctx;
+
   const sp = await searchParams;
   const selectedProduct = PRODUCTS.includes(sp.product as (typeof PRODUCTS)[number])
     ? (sp.product as string)
@@ -29,10 +42,10 @@ export default async function LiveAccountsPage({
   // Parallel fetch
   const [accounts, allBindings, rooms, allAnchors, activeUsers, douyinAvatars, placementLabelRows] =
     await Promise.all([
-      listAccounts({ product: selectedProduct }),
+      listAccounts({ product: selectedProduct }, dingtalkUserId, isEmergency),
       listBindings({}),
-      listRooms(),
-      listAnchors({}),
+      listRooms(dingtalkUserId, isEmergency),
+      listAnchors({}, dingtalkUserId, isEmergency),
       // 直播一部 + 所有子部门下、在职的钉钉用户（运营 select 候选）
       // 递归 CTE 展开 dept_id 树，再用 dept_ids ?| 命中
       db.execute<{ user_id: string; name: string; title: string | null; active: boolean }>(sql`

@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import {
   queryDatasetCounts,
   querySummaryExt,
@@ -8,8 +9,10 @@ import {
   queryAnchorLabels,
   queryKpiSummary,
   querySubAccountsAll,
+  resolvePlacementScope,
 } from "@/modules/placement/server";
 import { resolveFilter } from "@/modules/placement";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import { DatasetTabs } from "./_components/dataset-tabs";
@@ -28,8 +31,27 @@ export default async function PlacementsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // 解析当前用户的 placement scope（none → 拒绝；team/self → 限定 user_ids；all → 不过滤）
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind === "unauth") redirect("/login");
+  if (ctx.kind === "user_not_synced") {
+    return (
+      <div className="p-6 text-sm text-red-600">
+        当前账号尚未同步到钉钉用户表，无法计算权限。请联系管理员。
+      </div>
+    );
+  }
+  const scope = await resolvePlacementScope(ctx.dingtalkUserId, ctx.isEmergency);
+  if (scope.kind === "reject") {
+    return (
+      <div className="p-6 text-sm text-muted-foreground">
+        无投放数据查看权限。请联系管理员开通 placement 板块权限。
+      </div>
+    );
+  }
+
   const sp = await searchParams;
-  const filter = resolveFilter(sp);
+  const filter = { ...resolveFilter(sp), scope };
   const view = filter.view === "schedule" ? "schedule" : "summary";
 
   const [counts, anchorLabels, kpi] = await Promise.all([

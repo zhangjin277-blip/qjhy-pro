@@ -85,14 +85,16 @@ export async function upsertOverride(input: unknown): Promise<{ ok: true }> {
     })
     .onConflictDoUpdate({
       target: [auth_permission_override.user_id, auth_permission_override.module],
+      // 仅 update 调用方实际传了的字段——未传的 can_* / scope 保留旧值，
+      // 避免"只想改 scope"的请求把 can_admin 等清空。
       set: {
-        scope: data.scope ?? null,
-        can_edit: data.can_edit ?? null,
-        can_export: data.can_export ?? null,
-        can_admin: data.can_admin ?? null,
         reason: data.reason,
         expires_at: data.expires_at ? new Date(data.expires_at) : null,
         created_by: opUser,
+        ...(data.scope !== undefined && { scope: data.scope }),
+        ...(data.can_edit !== undefined && { can_edit: data.can_edit }),
+        ...(data.can_export !== undefined && { can_export: data.can_export }),
+        ...(data.can_admin !== undefined && { can_admin: data.can_admin }),
       },
     });
 
@@ -151,13 +153,15 @@ export async function upsertOverrideBatch(input: unknown): Promise<{ ok: true; c
       })
       .onConflictDoUpdate({
         target: [auth_permission_override.user_id, auth_permission_override.module],
+        // 仅 update 调用方实际传了的 can_* 字段（undefined = 不动）。
+        // entry.scope 在 batch 里是必填（null 已在上面 delete 分支处理），所以总要 update。
         set: {
           scope: entry.scope,
-          can_edit: entry.can_edit ?? null,
-          can_export: entry.can_export ?? null,
-          can_admin: entry.can_admin ?? null,
           reason: data.reason,
           created_by: opUser,
+          ...(entry.can_edit !== undefined && { can_edit: entry.can_edit }),
+          ...(entry.can_export !== undefined && { can_export: entry.can_export }),
+          ...(entry.can_admin !== undefined && { can_admin: entry.can_admin }),
         },
       });
     count++;

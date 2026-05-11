@@ -1,8 +1,10 @@
+import { redirect } from "next/navigation";
 import { listAnchors } from "@/modules/live-anchor/server";
 import { listBindings } from "@/modules/live-anchor";
 import { db } from "@/db/client";
 import { sql } from "drizzle-orm";
 import { AnchorListClient } from "./_components/anchor-list-client";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 
 const LIVE_DEPT_ID = "724640467";
 
@@ -14,8 +16,19 @@ interface DeptUserRow {
 }
 
 export default async function LiveAnchorsPage() {
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind === "unauth") redirect("/login");
+  if (ctx.kind === "user_not_synced") {
+    return (
+      <div className="p-6 text-sm text-red-600">
+        当前账号尚未同步到钉钉用户表，无法计算权限。请联系管理员。
+      </div>
+    );
+  }
+  const { dingtalkUserId, isEmergency } = ctx;
+
   const [anchors, allBindings, deptUsers] = await Promise.all([
-    listAnchors({}),
+    listAnchors({}, dingtalkUserId, isEmergency),
     listBindings({}),
     // 直播一部及全部子部门（合作主播/运营/后期/...）下的钉钉用户，用于"添加新主播"下拉
     db.execute(sql`

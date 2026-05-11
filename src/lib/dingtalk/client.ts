@@ -13,6 +13,8 @@
  *
  * 参考实现：miracle-pro3/server/services/dingtalk/dingtalkOpenService.js
  */
+import { z } from "zod";
+
 import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 
@@ -23,6 +25,17 @@ import {
   type DingtalkDept,
   type DingtalkUser,
 } from "./types";
+
+const DingtalkGetByUnionidResponse = z.object({
+  errcode: z.number(),
+  errmsg: z.string().optional(),
+  result: z
+    .object({
+      userid: z.string(),
+      contact_type: z.number().optional(),
+    })
+    .optional(),
+});
 
 const NEW_API_BASE = "https://api.dingtalk.com";
 const TOPAPI_BASE = "https://oapi.dingtalk.com";
@@ -276,6 +289,31 @@ export async function fetchAllUsers(): Promise<DingtalkUser[]> {
   }
 
   return Array.from(userMap.values());
+}
+
+/**
+ * 通过钉钉 unionId 反查 userid（钉钉企业内通讯录的 userid）。
+ *
+ * 用途：钉钉 OAuth 登录回调里 better-auth 拿到的是 unionId，需要换成 userid
+ * 才能把 dingtalk_user.unionid 更新成 auth_user.id（让请求路径上的权限匹配生效）。
+ *
+ * 接口：POST /topapi/user/getbyunionid
+ * 找不到时返回 null（钉钉会回 errcode=60121 不存在），调用方自行决定是否报错。
+ */
+export async function fetchUseridByUnionid(unionid: string): Promise<string | null> {
+  try {
+    const resp = await callTopApi(
+      "/topapi/user/getbyunionid",
+      { unionid },
+      DingtalkGetByUnionidResponse,
+    );
+    return resp.result?.userid ?? null;
+  } catch (err) {
+    if (err instanceof AppError && err.code === "DINGTALK_API_FAILED") {
+      return null;
+    }
+    throw err;
+  }
 }
 
 /**

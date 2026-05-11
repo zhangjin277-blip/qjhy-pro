@@ -1,9 +1,12 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { genericOAuth } from "better-auth/plugins";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { auth_account, auth_session, auth_user, auth_verification } from "@/db/schema/auth";
+import { dingtalk_user } from "@/db/schema/dingtalk";
 import { env } from "@/lib/env";
+import { fetchUseridByUnionid } from "@/lib/dingtalk";
 import {
   dingtalkGetToken,
   dingtalkGetUserInfo,
@@ -35,6 +38,38 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true, // 应急后门
     autoSignIn: true,
+  },
+  databaseHooks: {
+    account: {
+      create: {
+        // 钉钉 OAuth 首次登录后，自动把 dingtalk_user.unionid patch 成 auth_user.id (cuid)，
+        // 让 admin-guard / requireAuthUser 等"unionid = session.user.id"匹配立即生效，
+        // 新员工无需管理员手动跑 SQL。
+        // 已登录过的用户不会触发 account.create，所以不会重复跑。
+        after: async (account: { providerId?: string; accountId?: string; userId?: string }) => {
+          if (account.providerId !== "dingtalk") return;
+          if (!account.accountId || !account.userId) return;
+          try {
+            const userid = await fetchUseridByUnionid(account.accountId);
+            if (!userid) {
+              console.warn(
+                `[auth] dingtalk OAuth: getbyunionid 找不到 userid (unionId=${account.accountId})`,
+              );
+              return;
+            }
+            await db
+              .update(dingtalk_user)
+              .set({ unionid: account.userId, synced_at: sql`NOW()` })
+              .where(eq(dingtalk_user.user_id, userid));
+            console.log(
+              `[auth] dingtalk OAuth: patched dingtalk_user(${userid}).unionid = ${account.userId}`,
+            );
+          } catch (err) {
+            console.error("[auth] dingtalk OAuth auto-patch failed:", err);
+          }
+        },
+      },
+    },
   },
   plugins: isDingtalkProviderConfigured()
     ? [

@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "@/db/client";
 import { live_anchor, dingtalk_user } from "@/db/schema";
-import { eq, and, sql, type SQL } from "drizzle-orm";
+import { eq, and, inArray, sql, type SQL } from "drizzle-orm";
+import { resolvePermission, getManagedDeptIds } from "@/modules/permissions/server";
 import type { AnchorWithDingtalk } from "./types";
 import type { BusinessLine } from "./schema";
 
@@ -10,8 +11,45 @@ export interface ListAnchorsParams {
   work_status?: "active" | "rest" | "leave";
 }
 
-export async function listAnchors(params: ListAnchorsParams = {}): Promise<AnchorWithDingtalk[]> {
+/**
+ * 按 live_anchor 模块的 scope 过滤主播档案。
+ *
+ * - all:  不过滤
+ * - team: live_anchor.dingtalk_user_id ∈ 团队成员
+ * - self: live_anchor.dingtalk_user_id = 自己（即看自己作为主播的档案）
+ * - none: 直接返回 []
+ */
+export async function listAnchors(
+  params: ListAnchorsParams = {},
+  userId?: string,
+  emergencyMode = false,
+): Promise<AnchorWithDingtalk[]> {
   const conditions: SQL[] = [];
+
+  if (!emergencyMode && userId) {
+    const perm = await resolvePermission(userId, "live_anchor");
+    if (perm.scope === "none") return [];
+    if (perm.scope === "self") {
+      conditions.push(eq(live_anchor.dingtalk_user_id, userId));
+    } else if (perm.scope === "team") {
+      const deptIds = await getManagedDeptIds(userId);
+      if (deptIds.length === 0) return [];
+      const teamUsers = await db
+        .select({ user_id: dingtalk_user.user_id })
+        .from(dingtalk_user)
+        .where(
+          sql`${dingtalk_user.dept_ids} ?| ${sql.raw(`ARRAY[${deptIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")}]::text[]`)}`,
+        );
+      if (teamUsers.length === 0) return [];
+      conditions.push(
+        inArray(
+          live_anchor.dingtalk_user_id,
+          teamUsers.map((u) => u.user_id),
+        ),
+      );
+    }
+  }
+
   if (params.business_line) {
     conditions.push(eq(live_anchor.business_line, params.business_line));
   }
@@ -47,7 +85,11 @@ export async function listAnchors(params: ListAnchorsParams = {}): Promise<Ancho
   return rows;
 }
 
-export async function getAnchorById(dingtalk_user_id: string): Promise<AnchorWithDingtalk | null> {
-  const rows = await listAnchors();
+export async function getAnchorById(
+  dingtalk_user_id: string,
+  userId?: string,
+  emergencyMode = false,
+): Promise<AnchorWithDingtalk | null> {
+  const rows = await listAnchors({}, userId, emergencyMode);
   return rows.find((r) => r.dingtalk_user_id === dingtalk_user_id) ?? null;
 }

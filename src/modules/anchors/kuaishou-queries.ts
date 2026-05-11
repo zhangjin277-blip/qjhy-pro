@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "@/db/client";
-import { kuaishou_live_session } from "@/db/schema";
+import { dingtalk_user, kuaishou_live_session } from "@/db/schema";
 import { and, eq, sql, gte, type SQL } from "drizzle-orm";
+import { resolvePermission, getManagedDeptIds } from "@/modules/permissions/server";
 
 export interface KuaishouAnchorListFilters {
   product?: string;
@@ -131,6 +132,7 @@ export interface KuaishouAnchorKpi {
 export async function listKuaishouAnchorsPrev(
   userId: string,
   filters: KuaishouAnchorListFilters = {},
+  emergencyMode = false,
 ): Promise<KuaishouAnchorRow[]> {
   const { startMs, endMs } = dateRangeToMs(filters);
   const lengthMs = endMs - startMs;
@@ -138,24 +140,34 @@ export async function listKuaishouAnchorsPrev(
   const prevStartMs = prevEndMs - lengthMs;
   const prevDateFrom = new Date(prevStartMs + 8 * 3600_000).toISOString().slice(0, 10);
   const prevDateTo = new Date(prevEndMs + 8 * 3600_000).toISOString().slice(0, 10);
-  return listKuaishouAnchors(userId, {
-    ...filters,
-    dateFrom: prevDateFrom,
-    dateTo: prevDateTo,
-    daysBack: undefined,
-  });
+  return listKuaishouAnchors(
+    userId,
+    {
+      ...filters,
+      dateFrom: prevDateFrom,
+      dateTo: prevDateTo,
+      daysBack: undefined,
+    },
+    emergencyMode,
+  );
 }
 
 /**
  * 主播明细列表（公会全量数据，独立于 live_account）。
  * 主播明细 = kuaishou_member 全表，按 product/search 筛选。
  *
- * 注意：暂时不做 perm scope 过滤（公会成员是基础信息）。emergencyMode 仅用于保留原 API 签名兼容。
+ * 权限按 anchors module 的 scope 过滤：
+ * - all: 不过滤
+ * - team: agent_dingtalk_user_id ∈ 团队成员
+ * - self: agent_dingtalk_user_id = 自己
+ * - none: 直接返回空
+ *
+ * emergencyMode=true 时绕过权限（应急后门看全量）。
  */
 export async function listKuaishouAnchors(
-  _userId: string,
+  userId: string,
   filters: KuaishouAnchorListFilters = {},
-  _emergencyMode = false,
+  emergencyMode = false,
 ): Promise<KuaishouAnchorRow[]> {
   const { startMs, endMs } = dateRangeToMs(filters);
   const dataSource = filters.dataSource ?? "all";
@@ -165,6 +177,29 @@ export async function listKuaishouAnchors(
 
   // 用 m. 引用 alias，不能用 drizzle 表对象（会渲染成 "kuaishou_member"."xxx" 跟 alias 冲突）
   const conds: SQL[] = [];
+
+  // ── 权限 scope 过滤 ──────────────────────────────────────────────────
+  if (!emergencyMode) {
+    const perm = await resolvePermission(userId, "anchors");
+    if (perm.scope === "none") return [];
+    if (perm.scope === "self") {
+      conds.push(sql`m.agent_dingtalk_user_id = ${userId}`);
+    } else if (perm.scope === "team") {
+      const deptIds = await getManagedDeptIds(userId);
+      if (deptIds.length === 0) return [];
+      const teamUsers = await db
+        .select({ user_id: dingtalk_user.user_id })
+        .from(dingtalk_user)
+        .where(
+          sql`${dingtalk_user.dept_ids} ?| ${sql.raw(`ARRAY[${deptIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")}]::text[]`)}`,
+        );
+      if (teamUsers.length === 0) return [];
+      const literal = teamUsers.map((u) => `'${u.user_id.replace(/'/g, "''")}'`).join(",");
+      conds.push(sql`m.agent_dingtalk_user_id = ANY(ARRAY[${sql.raw(literal)}]::text[])`);
+    }
+    // perm.scope === "all" → 不加过滤
+  }
+
   if (filters.product && filters.product !== "all") {
     // effective product: manual_product 优先于 inferred_product
     if (filters.product === "未分类") {
