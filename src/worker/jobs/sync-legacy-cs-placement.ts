@@ -31,7 +31,10 @@ export async function syncLegacyCsPlacement(): Promise<void> {
     const today = new Date();
     const cutoff = new Date(today.getTime() - SYNC_WINDOW_DAYS * 86400_000);
     const dateFrom = cutoff.toISOString().slice(0, 10);
-    const dateTo = today.toISOString().slice(0, 10);
+    // 旧库 business_data.data_date 是 datetime 文本（"2026-05-11 13:00:00"）。
+    // 字符串比较时 "2026-05-11 13:00:00" > "2026-05-11" 会被 <= dateTo 过滤掉。
+    // 用"明天"作 dateTo，覆盖到 "2026-05-11 24:00:00" 这种边界。
+    const dateTo = new Date(today.getTime() + 86400_000).toISOString().slice(0, 10);
 
     const rows = readPro3Placements(LEGACY_SQLITE_PATH, "product_buyu", {
       date_from: dateFrom,
