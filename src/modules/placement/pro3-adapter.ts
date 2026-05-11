@@ -1,5 +1,7 @@
 import "server-only";
-import Database from "better-sqlite3";
+// Node 22 内置 sqlite 模块；零 native build 依赖，跨容器环境最稳。
+// API 与 better-sqlite3 类似：DatabaseSync(path, { readOnly }) + prepare().all(...args)。
+import { DatabaseSync } from "node:sqlite";
 import { parseDateText, parseHour, parseUnitNumber } from "./parse-utils";
 import type { IngestRow } from "./ingest";
 
@@ -16,7 +18,7 @@ export function readPro3Placements(
   dataset: Pro3Dataset,
   opts: { limit?: number; date_from?: string; date_to?: string } = {},
 ): IngestRow[] {
-  const sqlite = new Database(sqlitePath, { readonly: true });
+  const sqlite = new DatabaseSync(sqlitePath, { readOnly: true });
   try {
     let query = `SELECT type, data_date, content FROM business_data WHERE type = ?`;
     const params: (string | number)[] = [`custom-ds-${dataset}`];
@@ -32,7 +34,7 @@ export function readPro3Placements(
       query += ` LIMIT ?`;
       params.push(opts.limit);
     }
-    const rows = sqlite.prepare(query).all(...params) as Pro3Row[];
+    const rows = sqlite.prepare(query).all(...params) as unknown as Pro3Row[];
 
     const result: IngestRow[] = [];
     for (const r of rows) {

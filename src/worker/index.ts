@@ -7,6 +7,7 @@ import { registerCrawlerHandlers } from "./jobs/handlers/register";
 import { enqueue, JOB_NAMES, stopBoss } from "@/modules/crawler/server";
 import { closeBrowser } from "@/lib/puppeteer";
 import { runCronAttributionSweep } from "@/modules/placement-attribution/server";
+import { syncLegacyCsPlacement } from "./jobs/sync-legacy-cs-placement";
 
 // Phase 1: 钉钉同步
 registerJob({
@@ -56,6 +57,14 @@ registerJob({
   task: async () => {
     await enqueue(JOB_NAMES.SYNC_KUAISHOU_TODAY_LIVE, {});
   },
+});
+
+// Phase 2.4: 老中台（miracle-pro-cs SQLite）→ 本中台捕鱼投放增量同步（每小时整点）
+// 读 /app/legacy.sqlite 最近 7 天 product_buyu 行，upsert 到 placement_row。
+registerJob({
+  name: "sync-legacy-cs-placement",
+  schedule: "5 * * * *",
+  task: syncLegacyCsPlacement,
 });
 
 registerJob({
