@@ -1,4 +1,8 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import type { ScheduleRow } from "@/modules/placement/server";
+import { cn } from "@/lib/utils/cn";
 
 interface YesterdayKpi {
   cost: number;
@@ -54,6 +58,10 @@ function fmtMoney(n: number): string {
 function fmtPrice(n: number | null): string {
   if (n == null) return "—";
   return "¥" + n.toFixed(0);
+}
+
+function fmtSlot(slot: [string, string]): string {
+  return `${slot[0]} - ${slot[1]}`;
 }
 
 function parseHour(t: string): number {
@@ -155,6 +163,10 @@ function rollupAnchors(rows: ScheduleRow[]): AnchorRollup[] {
   return [...map.values()].sort((a, b) => b.cost - a.cost);
 }
 
+function rowKey(row: ScheduleRow): string {
+  return `${row.date}::${row.account_id}::${row.anchor_user_id}::${row.time_slot[0]}-${row.time_slot[1]}`;
+}
+
 // 计算班次在时间轴上的位置（百分比），跨夜处理
 function shiftPosition(
   slot: [string, string],
@@ -173,10 +185,14 @@ function ShiftBlock({
   row,
   axisEnd,
   yesterdayByHour,
+  selected,
+  onSelect,
 }: {
   row: ScheduleRow;
   axisEnd: number;
   yesterdayByHour?: Record<number, YesterdayKpi>;
+  selected: boolean;
+  onSelect: (row: ScheduleRow) => void;
 }) {
   const { left, width, overnight } = shiftPosition(row.time_slot, axisEnd);
   // 时段宽度过窄时（< 10%）压缩 stat label 为 1 字
@@ -202,8 +218,15 @@ function ShiftBlock({
         divider: "border-blue-500/15",
       };
   return (
-    <div
-      className={`absolute inset-y-2 flex flex-col overflow-hidden rounded-md border-l-[3px] px-2 py-1.5 transition-shadow hover:shadow-md ${tone.border} ${tone.bg}`}
+    <button
+      type="button"
+      onClick={() => onSelect(row)}
+      className={cn(
+        "absolute inset-y-2 flex flex-col overflow-hidden rounded-md border-l-[3px] px-2 py-1.5 text-left transition hover:shadow-md",
+        tone.border,
+        tone.bg,
+        selected && "ring-2 ring-primary shadow-md",
+      )}
       style={{ left: `${left}%`, width: `calc(${width}% - 2px)` }}
     >
       {/* 头部：主播名 / 消耗 + 同比 */}
@@ -224,7 +247,7 @@ function ShiftBlock({
         <ShiftStat label="CPA" value={fmtPrice(row.personal_unit_price)} />
         <ShiftStat label={compact ? "付" : "付费"} value={fmtMoney(row.personal_payment)} />
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -250,13 +273,22 @@ function ShiftStat({
   );
 }
 
-function RollupStat({ label, value }: { label: string; value: string }) {
+function InlineMetric({
+  label,
+  value,
+  delta,
+}: {
+  label: string;
+  value: string;
+  delta?: KpiDelta | null;
+}) {
   return (
-    <div className="flex flex-col leading-tight">
-      <span className="text-[10px] text-slate-500">{label}</span>
-      <span className="mt-0.5 truncate text-[12.5px] font-semibold tabular-nums text-slate-900">
-        {value}
-      </span>
+    <div className="min-w-[92px] border-l border-border/70 pl-3 leading-tight first:border-l-0 first:pl-0">
+      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className="mt-1 flex items-baseline gap-1">
+        <span className="text-[14px] font-semibold text-slate-900 tabular-nums">{value}</span>
+        <DeltaArrow delta={delta} compact />
+      </div>
     </div>
   );
 }
@@ -347,52 +379,20 @@ function kpiDelta(curr: number | null, prev: number | null | undefined): KpiDelt
   return { pct, arrow, prevText: "" };
 }
 
-function KpiCell({
-  label,
-  value,
-  delta,
-}: {
-  label: string;
-  value: string;
-  delta: KpiDelta | null;
-}) {
-  return (
-    <div className="px-5 py-3">
-      <div className="text-[11px] tracking-wide text-slate-700">{label}</div>
-      <div className="mt-0.5 flex items-baseline gap-1.5">
-        <span className="text-[20px] font-semibold tracking-tight tabular-nums text-slate-900">
-          {value}
-        </span>
-        {delta && (
-          <span
-            className={`text-[11px] font-medium tabular-nums ${
-              delta.arrow === "up"
-                ? "text-[var(--change-up)]"
-                : delta.arrow === "down"
-                  ? "text-[var(--change-down)]"
-                  : "text-muted-foreground/60"
-            }`}
-          >
-            {delta.arrow === "up" ? "↑" : delta.arrow === "down" ? "↓" : "—"}
-            {delta.arrow !== "flat" && Math.abs(delta.pct).toFixed(1) + "%"}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function GroupCard({
   g,
   yesterdayByHour,
   cutoffHour,
+  selectedKey,
+  onSelect,
 }: {
   g: Group;
   yesterdayByHour?: Record<number, YesterdayKpi>;
   cutoffHour: number;
+  selectedKey: string | null;
+  onSelect: (row: ScheduleRow) => void;
 }) {
   const rollups = rollupAnchors(g.rows);
-  const showRollup = !(g.rows.length === 1 && rollups.length === 1);
   const axisEnd = g.maxEndHour;
   // account 级同比：累加昨日 0~cutoffHour（看历史时 cutoffHour=24）
   const yesterdayKpi = sumYesterdayRange(yesterdayByHour, 0, cutoffHour);
@@ -401,92 +401,61 @@ function GroupCard({
     yesterdayKpi && yesterdayKpi.acts > 0 ? yesterdayKpi.cost / yesterdayKpi.acts : null;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
-      {/* 顶部信息条 */}
-      <div className="flex items-baseline gap-3 border-b border-slate-100 px-5 py-3">
-        <span className="rounded bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600">
-          {g.placementLabel ?? "（无标签）"}
-        </span>
-        <span className="text-[15px] font-semibold tracking-tight text-slate-900">
-          {g.accountName}
-        </span>
-        <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
-          {g.date} · {g.rows.length} 班次
-        </span>
+    <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border/70 px-4 py-3">
+        <div className="min-w-[220px] flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+              {g.placementLabel ?? "无标签"}
+            </span>
+            <span className="truncate text-[15px] font-semibold tracking-tight text-slate-900">
+              {g.accountName}
+            </span>
+          </div>
+          <div className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+            {g.date} · {g.rows.length} 班次 · {rollups.length} 主播
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <InlineMetric
+            label="消耗"
+            value={fmtMoney(g.totalCost)}
+            delta={kpiDelta(g.totalCost, yesterdayKpi?.cost)}
+          />
+          <InlineMetric
+            label="激活"
+            value={fmtChinese(g.totalActs)}
+            delta={kpiDelta(g.totalActs, yesterdayKpi?.acts)}
+          />
+          <InlineMetric
+            label="CPA"
+            value={fmtPrice(g.totalUnitPrice)}
+            delta={kpiDelta(cpaToday, cpaPrev)}
+          />
+          <InlineMetric
+            label="付费"
+            value={fmtMoney(g.totalPayment)}
+            delta={kpiDelta(g.totalPayment, yesterdayKpi?.payment)}
+          />
+        </div>
       </div>
 
-      {/* 4 大字 KPI（含昨日同时段同比） */}
-      <div className="grid grid-cols-4 divide-x divide-slate-100 bg-slate-50/40">
-        <KpiCell
-          label="当日消耗"
-          value={fmtMoney(g.totalCost)}
-          delta={kpiDelta(g.totalCost, yesterdayKpi?.cost)}
-        />
-        <KpiCell
-          label="激活"
-          value={fmtChinese(g.totalActs)}
-          delta={kpiDelta(g.totalActs, yesterdayKpi?.acts)}
-        />
-        <KpiCell
-          label="CPA"
-          value={fmtPrice(g.totalUnitPrice)}
-          delta={kpiDelta(cpaToday, cpaPrev)}
-        />
-        <KpiCell
-          label="付费"
-          value={fmtMoney(g.totalPayment)}
-          delta={kpiDelta(g.totalPayment, yesterdayKpi?.payment)}
-        />
-      </div>
-
-      {/* 时间轴 */}
-      <div className="px-5 pb-4 pt-4">
+      <div className="px-4 pb-3 pt-3">
         <AxisTicks axisEnd={axisEnd} />
-        <div className="relative mt-1 h-[100px] rounded-md border border-slate-100 bg-slate-50/40">
+        <div className="relative mt-1 h-[86px] rounded-md border border-slate-100 bg-slate-50/40">
           <GridLines axisEnd={axisEnd} />
           {g.rows.map((r) => (
             <ShiftBlock
-              key={`${g.accountId}-${r.time_slot[0]}-${r.anchor_user_id}`}
+              key={rowKey(r)}
               row={r}
               axisEnd={axisEnd}
               yesterdayByHour={yesterdayByHour}
+              selected={selectedKey === rowKey(r)}
+              onSelect={onSelect}
             />
           ))}
         </div>
       </div>
-
-      {/* 主播汇总 pill 条 */}
-      {showRollup && rollups.length > 0 && (
-        <div className="border-t border-dashed border-slate-200 bg-slate-50/30 px-5 py-3">
-          <div className="mb-2 text-[11px] font-medium text-slate-700">主播汇总</div>
-          <div className="grid grid-cols-4 gap-2">
-            {rollups.map((a) => (
-              <div
-                key={a.anchorUserId}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
-              >
-                {/* 头部：主播名 + 班次 chip */}
-                <div className="mb-2 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                  <span className="text-[12.5px] font-semibold text-slate-900">
-                    {a.anchorName ?? "未命名"}
-                  </span>
-                  <span className="ml-auto rounded bg-slate-100 px-1.5 text-[10px] text-slate-600">
-                    {a.shifts} 班
-                  </span>
-                </div>
-                {/* 底部：4 列 KPI（上标题下数字） */}
-                <div className="grid grid-cols-4 gap-1">
-                  <RollupStat label="消耗" value={fmtMoney(a.cost)} />
-                  <RollupStat label="激活" value={String(a.acts)} />
-                  <RollupStat label="CPA" value={fmtPrice(a.unit)} />
-                  <RollupStat label="付费" value={fmtMoney(a.payment)} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -496,6 +465,14 @@ export function ScheduleTable({
   yesterdayHourly,
   yesterdayCutoffHour = 24,
 }: ScheduleTableProps) {
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const groups = useMemo(() => groupRows(rows), [rows]);
+  const selectedRow = useMemo(() => {
+    if (!selectedKey) return rows[0] ?? null;
+    return rows.find((row) => rowKey(row) === selectedKey) ?? rows[0] ?? null;
+  }, [rows, selectedKey]);
+  const activeKey = selectedRow ? rowKey(selectedRow) : null;
+
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-white p-12 text-center">
@@ -506,8 +483,6 @@ export function ScheduleTable({
       </div>
     );
   }
-
-  const groups = groupRows(rows);
 
   return (
     <div className="space-y-3">
@@ -521,15 +496,120 @@ export function ScheduleTable({
           班次块宽度 = 时长 · 跨夜班次（橙色）以 24+ 显示
         </span>
       </div>
-      <div className="space-y-4">
-        {groups.map((g) => (
-          <GroupCard
-            key={`${g.date}::${g.accountId}`}
-            g={g}
-            yesterdayByHour={yesterdayHourly?.[g.accountId]}
-            cutoffHour={yesterdayCutoffHour}
-          />
-        ))}
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-3">
+          {groups.map((g) => (
+            <GroupCard
+              key={`${g.date}::${g.accountId}`}
+              g={g}
+              yesterdayByHour={yesterdayHourly?.[g.accountId]}
+              cutoffHour={yesterdayCutoffHour}
+              selectedKey={activeKey}
+              onSelect={(row) => setSelectedKey(rowKey(row))}
+            />
+          ))}
+        </div>
+        <ScheduleDetailPanel
+          row={selectedRow}
+          yesterdayByHour={selectedRow ? yesterdayHourly?.[selectedRow.account_id] : undefined}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ScheduleDetailPanel({
+  row,
+  yesterdayByHour,
+}: {
+  row: ScheduleRow | null;
+  yesterdayByHour?: Record<number, YesterdayKpi>;
+}) {
+  if (!row) {
+    return (
+      <aside className="hidden w-[320px] shrink-0 rounded-lg border border-border bg-white p-4 shadow-sm xl:block">
+        <div className="text-sm font-medium text-slate-900">时段详情</div>
+        <div className="mt-2 text-xs text-muted-foreground">点击左侧时间轴里的班次查看明细。</div>
+      </aside>
+    );
+  }
+
+  const sh = parseHour(row.time_slot[0]);
+  let eh = parseHour(row.time_slot[1]);
+  if (eh < sh) eh += 24;
+  const prev = sumYesterdayRange(yesterdayByHour, sh, eh);
+  const cpaPrev = prev && prev.acts > 0 ? prev.cost / prev.acts : null;
+  const cpaDelta = kpiDelta(row.personal_unit_price, cpaPrev);
+
+  return (
+    <aside className="hidden h-fit w-[320px] shrink-0 rounded-lg border border-border bg-white shadow-sm xl:sticky xl:top-3 xl:block">
+      <div className="border-b border-border/70 px-4 py-3">
+        <div className="text-xs text-muted-foreground">时段详情</div>
+        <div className="mt-1 text-base font-semibold text-slate-900">
+          {row.anchor_name ?? "未命名"}
+        </div>
+        <div className="mt-1 text-[11px] text-muted-foreground">
+          {row.account_name} · {row.date} · {fmtSlot(row.time_slot)}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 p-4">
+        <DetailMetric
+          label="个人消耗"
+          value={fmtMoney(row.personal_cost)}
+          delta={kpiDelta(row.personal_cost, prev?.cost)}
+        />
+        <DetailMetric
+          label="激活"
+          value={String(row.personal_acts)}
+          delta={kpiDelta(row.personal_acts, prev?.acts)}
+        />
+        <DetailMetric label="CPA" value={fmtPrice(row.personal_unit_price)} delta={cpaDelta} />
+        <DetailMetric
+          label="付费"
+          value={fmtMoney(row.personal_payment)}
+          delta={kpiDelta(row.personal_payment, prev?.payment)}
+        />
+      </div>
+
+      <div className="border-t border-border/70 px-4 py-3">
+        <div className="mb-2 text-xs font-medium text-slate-700">账号当日累计</div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+          <span className="text-muted-foreground">累计消耗</span>
+          <span className="text-right font-semibold text-slate-900">
+            {fmtMoney(row.total_cost)}
+          </span>
+          <span className="text-muted-foreground">累计激活</span>
+          <span className="text-right font-semibold text-slate-900">{row.total_acts}</span>
+          <span className="text-muted-foreground">累计 CPA</span>
+          <span className="text-right font-semibold text-slate-900">
+            {fmtPrice(row.total_unit_price)}
+          </span>
+          <span className="text-muted-foreground">累计付费</span>
+          <span className="text-right font-semibold text-slate-900">
+            {fmtMoney(row.total_payment)}
+          </span>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function DetailMetric({
+  label,
+  value,
+  delta,
+}: {
+  label: string;
+  value: string;
+  delta: KpiDelta | null;
+}) {
+  return (
+    <div className="rounded-md border border-border/70 bg-slate-50/60 px-3 py-2">
+      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className="mt-1 flex items-baseline gap-1.5">
+        <span className="text-[15px] font-semibold text-slate-900 tabular-nums">{value}</span>
+        <DeltaArrow delta={delta} compact />
       </div>
     </div>
   );

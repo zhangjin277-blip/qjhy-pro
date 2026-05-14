@@ -70,3 +70,5 @@ export {
   fetchKuaishouTodayLiveSessions,
   type KuaishouTodayLiveRaw,
 } from "./adapters/kuaishou-today-live";
+export { fetchVideoListForAnchor, type VideoSnapshotRow } from "./adapters/video-list";
+export { resolveOfflineOpAnchors, type OfflineOpAnchor } from "./offline-op-anchors";

@@ -9,6 +9,8 @@ export interface AnchorListFilters {
   broker_ids?: string[];
   health_min?: number;
   search?: string;
+  /** 当前页面真正需要的字段；为空时按兼容模式全量查询 */
+  fields?: string[];
 }
 
 export interface AnchorListRow {
@@ -76,6 +78,13 @@ export interface AnchorListRow {
   video_view_count: number | null;
   video_like_count: number | null;
   video_comment_count: number | null;
+  /**
+   * 有效视频数（仅"线下运营"组带的主播有数据；其他主播为 null）
+   * 来源：douyin_video_snapshot 每日 12:00 拉取近 30 天发布的视频快照，
+   *      取每个 item_id 最新 snapshot_date 行 → is_secret=0 计数。
+   * publish_time 范围跟随 filters.date_from/date_to。
+   */
+  valid_video_count: number | null;
 
   // ── 7. 直播 portrait（曝光/进房/付费转化）────────────────
   show_uv: number | null;
@@ -280,6 +289,8 @@ export type AnchorDailyRow = {
   | "first_live_time_in_faction"
   | "wait_for_leave"
   | "income_percent"
+  // 视频快照按"区间"聚合（仅在主播列表/抽屉汇总位置显示），不进 daily 行
+  | "valid_video_count"
   // 旧兼容
   | "minigame_income"
   | "game_income"

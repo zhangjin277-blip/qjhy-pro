@@ -67,6 +67,15 @@ registerJob({
   task: syncLegacyCsPlacement,
 });
 
+// 抖音视频快照（每天 12:00）：仅"线下运营"组带的主播，近 30 天滑动窗口
+registerJob({
+  name: "fetch-video",
+  schedule: "0 12 * * *",
+  task: async () => {
+    await enqueue(JOB_NAMES.FETCH_VIDEO, { basecamp: "cs" });
+  },
+});
+
 registerJob({
   name: "heartbeat",
   schedule: "0 * * * *",

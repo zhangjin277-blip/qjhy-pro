@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import { db } from "@/db/client";
-import { dingtalk_user } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { SavePresetSchema, type PresetPlatform } from "@/modules/column-presets";
 import { listUserPresets, createUserPreset } from "@/modules/column-presets/server";
 
@@ -12,16 +8,14 @@ function parsePlatform(v: string | null): PresetPlatform {
 }
 
 async function resolveUserId(): Promise<string | NextResponse> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const isEmergency = session.user.email === "emergency@qjhy.local";
-  if (isEmergency) return session.user.id;
-  const [du] = await db
-    .select({ user_id: dingtalk_user.user_id })
-    .from(dingtalk_user)
-    .where(eq(dingtalk_user.unionid, session.user.id));
-  if (!du) return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
-  return du.user_id;
+  const currentUser = await getCurrentDingtalkUser();
+  if (currentUser.kind === "unauth") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (currentUser.kind === "user_not_synced") {
+    return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
+  }
+  return currentUser.dingtalkUserId;
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {

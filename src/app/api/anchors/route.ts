@@ -1,33 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import { db } from "@/db/client";
-import { dingtalk_user } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { listAnchors } from "@/modules/anchors/server";
 import { AnchorListFiltersSchema } from "@/modules/anchors";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  // Resolve dingtalk user_id from session (better-auth user.id = dingtalk unionid)
-  const isEmergency = session.user.email === "emergency@qjhy.local";
-  let dingtalkUserId: string;
-
-  if (isEmergency) {
-    // Emergency admin sees all — use a sentinel that resolvePermission handles as admin
-    // Fall back: find the emergency user by email in dingtalk_user is N/A.
-    // For emergency admin, we pass session.user.id and let resolvePermission return "all"
-    // (emergency user has an override row with scope=all from seeding)
-    dingtalkUserId = session.user.id;
-  } else {
-    const [du] = await db
-      .select({ user_id: dingtalk_user.user_id })
-      .from(dingtalk_user)
-      .where(eq(dingtalk_user.unionid, session.user.id));
-    if (!du) return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
-    dingtalkUserId = du.user_id;
+  const currentUser = await getCurrentDingtalkUser();
+  if (currentUser.kind === "unauth") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (currentUser.kind === "user_not_synced") {
+    return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
   }
 
   const sp = req.nextUrl.searchParams;
@@ -39,6 +21,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     broker_ids: sp.getAll("broker_id").filter(Boolean),
     health_min: sp.get("health_min") ? Number(sp.get("health_min")) : undefined,
     search: sp.get("search") ?? undefined,
+    fields: parseFields(sp),
   });
 
   if (!parseResult.success) {
@@ -50,23 +33,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   const filters = parseResult.data;
 
-  // 计算前一周期（与当前周期等长，紧邻在前）
   const dFrom = new Date(filters.date_from);
   const dTo = new Date(filters.date_to);
   const days = Math.round((dTo.getTime() - dFrom.getTime()) / 86400_000) + 1;
-  const prevTo = new Date(dFrom);
-  prevTo.setDate(prevTo.getDate() - 1);
-  const prevFrom = new Date(prevTo);
-  prevFrom.setDate(prevFrom.getDate() - (days - 1));
-  const prevFilters = {
-    ...filters,
-    date_from: prevFrom.toISOString().slice(0, 10),
-    date_to: prevTo.toISOString().slice(0, 10),
-  };
 
-  const [rows, previousRows] = await Promise.all([
-    listAnchors(dingtalkUserId, filters),
-    listAnchors(dingtalkUserId, prevFilters),
-  ]);
-  return NextResponse.json({ rows, previousRows, days });
+  const rows = await listAnchors(currentUser.dingtalkUserId, filters);
+  return NextResponse.json({ rows, days });
+}
+
+function parseFields(sp: URLSearchParams): string[] | undefined {
+  const values = sp
+    .getAll("fields")
+    .flatMap((v) => v.split(","))
+    .map((v) => v.trim())
+    .filter(Boolean);
+  return values.length > 0 ? [...new Set(values)] : undefined;
 }

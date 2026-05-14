@@ -146,9 +146,14 @@ function snapshotOf(account: AccountSchedule): ScheduleSnapshot {
   };
 }
 
-export function TodayGantt({ date, accounts, candidates }: Props) {
+export function TodayGantt({ date, accounts: initialAccounts, candidates }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [accounts, setAccounts] = useState(initialAccounts);
+
+  useEffect(() => {
+    setAccounts(initialAccounts);
+  }, [initialAccounts]);
 
   const [popover, setPopover] = useState<{
     account_id: string;
@@ -184,6 +189,7 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
     currentStart: number;
     currentEnd: number;
   } | null>(null);
+  const [resizeSaving, setResizeSaving] = useState(false);
 
   // 刚刚 resize 过：用于拦截 mouseup 后的 click 事件，避免误开 popover
   const justResizedRef = useRef(false);
@@ -422,6 +428,7 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
         currentEnd: r.currentEnd,
       });
       pushHistory(r.account_id);
+      setResizeSaving(true);
       start(async () => {
         try {
           await resizeTodaySegment({
@@ -440,11 +447,32 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
               `${r.seg.end.toString().padStart(2, "0")}:00`,
             ],
           });
+          setAccounts((prev) =>
+            prev.map((account) => {
+              if (account.account_id !== r.account_id) return account;
+              return {
+                ...account,
+                segments: account.segments.map((segment, idx) =>
+                  idx === r.segIdx
+                    ? {
+                        ...segment,
+                        start: r.currentStart,
+                        end: r.currentEnd,
+                        source: "override",
+                        reason: r.seg.reason ?? null,
+                      }
+                    : segment,
+                ),
+              };
+            }),
+          );
           router.refresh();
         } catch (err) {
           setOptimisticResize(null);
           console.error("[resize] save failed", err);
           alert("保存时段失败：" + String(err));
+        } finally {
+          setResizeSaving(false);
         }
       });
     }
@@ -720,7 +748,7 @@ export function TodayGantt({ date, accounts, candidates }: Props) {
                     })
                   }
                   onSegClick={(seg, segIdx, anchor) => {
-                    if (justResizedRef.current) return; // 拖完抑制 click
+                    if (justResizedRef.current || resizeSaving) return; // 拖完/保存中抑制 click
                     setSelected({ account_id: acc.account_id, segIdx });
                     setPopover({
                       account_id: acc.account_id,

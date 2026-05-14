@@ -1,12 +1,9 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { genericOAuth } from "better-auth/plugins";
-import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { auth_account, auth_session, auth_user, auth_verification } from "@/db/schema/auth";
-import { dingtalk_user } from "@/db/schema/dingtalk";
 import { env } from "@/lib/env";
-import { fetchUseridByUnionid } from "@/lib/dingtalk";
 import {
   dingtalkGetToken,
   dingtalkGetUserInfo,
@@ -38,83 +35,6 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true, // 应急后门
     autoSignIn: true,
-  },
-  databaseHooks: {
-    account: {
-      create: {
-        // 钉钉 OAuth 首次登录后，自动把 dingtalk_user.unionid patch 成 auth_user.id (cuid)，
-        // 让 admin-guard / requireAuthUser 等"unionid = session.user.id"匹配立即生效，
-        // 新员工无需管理员手动跑 SQL。
-        // 已登录过的用户不会触发 account.create，所以不会重复跑。
-        after: async (account: { providerId?: string; accountId?: string; userId?: string }) => {
-          if (account.providerId !== "dingtalk") return;
-          if (!account.accountId || !account.userId) return;
-          const cuid = account.userId;
-          try {
-            // ── 主路径：钉钉 getbyunionid 反查 userid（最准） ──
-            let userid: string | null = null;
-            try {
-              userid = await fetchUseridByUnionid(account.accountId);
-            } catch (err) {
-              console.warn("[auth] dingtalk OAuth: getbyunionid 调用异常:", err);
-            }
-
-            // ── Fallback：拿 auth_user.name 在 dingtalk_user 表里按 name 匹配 ──
-            //   钉钉 getbyunionid 对部分外部联系人 / 跨企业用户会返回空，
-            //   此时退而求其次用 OAuth 给的 nick 找。要求 name 全局唯一才 patch。
-            if (!userid) {
-              const [u] = await db
-                .select({ name: auth_user.name })
-                .from(auth_user)
-                .where(eq(auth_user.id, cuid));
-              if (u?.name) {
-                // 钉钉昵称常带 "/铁柱" 之类的后缀，先去掉再匹配
-                const candidates = [
-                  u.name,
-                  u.name.split("/")[0]?.trim(),
-                  u.name.split("(")[0]?.trim(),
-                  u.name.split("（")[0]?.trim(),
-                ].filter((n): n is string => typeof n === "string" && n.length > 0);
-                for (const candidate of candidates) {
-                  const matches = await db
-                    .select({ user_id: dingtalk_user.user_id })
-                    .from(dingtalk_user)
-                    .where(eq(dingtalk_user.name, candidate));
-                  if (matches.length === 1 && matches[0]) {
-                    userid = matches[0].user_id;
-                    console.log(
-                      `[auth] dingtalk OAuth: name fallback matched "${candidate}" → ${userid}`,
-                    );
-                    break;
-                  }
-                  if (matches.length > 1) {
-                    console.warn(
-                      `[auth] dingtalk OAuth: name "${candidate}" 在 dingtalk_user 有 ${matches.length} 个匹配，跳过自动 patch`,
-                    );
-                  }
-                }
-              }
-            }
-
-            if (!userid) {
-              console.warn(
-                `[auth] dingtalk OAuth: 主路径+name fallback 都找不到 dingtalk_user，留待管理员手动 patch (cuid=${cuid}, unionId=${account.accountId})`,
-              );
-              return;
-            }
-            await db
-              .update(dingtalk_user)
-              .set({ unionid: cuid, synced_at: sql`NOW()` })
-              .where(eq(dingtalk_user.user_id, userid));
-            console.log(
-              `[auth] dingtalk OAuth: patched dingtalk_user(${userid}).unionid = ${cuid}`,
-            );
-          } catch (err) {
-            console.error("[auth] dingtalk OAuth auto-patch failed:", err);
-          }
-        },
-      },
-    },
   },
   plugins: isDingtalkProviderConfigured()
     ? [

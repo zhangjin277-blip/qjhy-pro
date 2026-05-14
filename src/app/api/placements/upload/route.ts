@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import {
   ingestRows,
   parseXlsx,
@@ -13,6 +14,10 @@ export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
+  const currentUser = await getCurrentDingtalkUser();
+  if (currentUser.kind === "user_not_synced") {
+    return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
   }
 
   const formData = await req.formData();

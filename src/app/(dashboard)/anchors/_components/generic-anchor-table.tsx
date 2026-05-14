@@ -50,6 +50,8 @@ export function GenericAnchorTable<TKey extends string, TRow>({
   const [periodDays, setPeriodDays] = useState(1);
   const [showCompare, setShowCompare] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [loadedApiParams, setLoadedApiParams] = useState<string | null>(null);
 
   const [sortKey, setSortKey] = useState<TKey>(config.defaultSort.key);
   const [sortDir, setSortDir] = useState<SortDir>(config.defaultSort.dir);
@@ -77,6 +79,11 @@ export function GenericAnchorTable<TKey extends string, TRow>({
   const [kpiPickerOpen, setKpiPickerOpen] = useState(false);
   const [kpiKeys, setKpiKeys] = useState<TKey[]>(() =>
     loadKpiKeys(config, config.defaultSystemPresetId),
+  );
+
+  const requestedFieldKeys = useMemo(
+    () => uniqueKeys([...visibleKeys, ...kpiKeys, sortKey]),
+    [visibleKeys, kpiKeys, sortKey],
   );
 
   // ── URL 初始应用（mount 一次） ─────────────────────────────────────────────
@@ -146,6 +153,8 @@ export function GenericAnchorTable<TKey extends string, TRow>({
   // ── 数据 fetch + URL 同步 ────────────────────────────────────────────────
   useEffect(() => {
     setLoading(true);
+    setCompareLoading(false);
+    setLoadedApiParams(null);
     let cancelled = false;
     const apiSp = config.buildApiParams(filters);
     // URL 同步（含 platform=id）
@@ -155,9 +164,11 @@ export function GenericAnchorTable<TKey extends string, TRow>({
       const url = `${window.location.pathname}?${urlSp.toString()}`;
       window.history.replaceState(null, "", url);
     }
+    appendFieldParams(apiSp, requestedFieldKeys);
+    const apiParamsString = apiSp.toString();
     (async () => {
       try {
-        const r = await fetch(`${config.apiEndpoint}?${apiSp.toString()}`);
+        const r = await fetch(`${config.apiEndpoint}?${apiParamsString}`);
         if (!r.ok) {
           const errBody: { error?: string } = await r.json().catch(() => ({}));
           if (cancelled) return;
@@ -171,14 +182,16 @@ export function GenericAnchorTable<TKey extends string, TRow>({
           setPreviousRows([]);
           setServerKpi(null);
           setPeriodDays(1);
+          setLoadedApiParams(null);
           return;
         }
         const json = await r.json();
         if (cancelled) return;
         const parsed = config.parseApiResponse(json);
         setRows(parsed.rows);
-        setPreviousRows(parsed.previousRows ?? []);
+        setPreviousRows(config.compareEndpoint ? [] : (parsed.previousRows ?? []));
         setServerKpi(parsed.serverKpi ?? null);
+        setLoadedApiParams(apiParamsString);
         // 优先用 API 返回的 days；否则从 filters.date_from/to 算（含两端）
         const fallbackDays =
           Math.max(
@@ -197,6 +210,7 @@ export function GenericAnchorTable<TKey extends string, TRow>({
         setRows([]);
         setPreviousRows([]);
         setServerKpi(null);
+        setLoadedApiParams(null);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -205,7 +219,49 @@ export function GenericAnchorTable<TKey extends string, TRow>({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
+  }, [filters, requestedFieldKeys]);
+
+  useEffect(() => {
+    if (!config.compareEndpoint || config.compareMode === "none" || !showCompare) {
+      if (config.compareEndpoint) {
+        setCompareLoading(false);
+        setPreviousRows([]);
+      }
+      return;
+    }
+    if (!loadedApiParams) return;
+
+    let cancelled = false;
+    setCompareLoading(true);
+    setPreviousRows([]);
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const r = await fetch(`${config.compareEndpoint}?${loadedApiParams}`);
+          if (!r.ok) {
+            if (!cancelled) setPreviousRows([]);
+            return;
+          }
+          const json = await r.json();
+          if (cancelled) return;
+          const parsed = config.parseApiResponse(json);
+          setPreviousRows(parsed.previousRows ?? parsed.rows ?? []);
+          if (parsed.days) setPeriodDays(parsed.days);
+        } catch {
+          if (!cancelled) setPreviousRows([]);
+        } finally {
+          if (!cancelled) setCompareLoading(false);
+        }
+      })();
+    }, 450);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedApiParams, showCompare, config.compareEndpoint]);
 
   // ?anchor_id auto-open 抽屉 + 联动 preset
   useEffect(() => {
@@ -236,7 +292,11 @@ export function GenericAnchorTable<TKey extends string, TRow>({
   // ── Derived ───────────────────────────────────────────────────────────────
   const visibleColumns = useMemo<ColumnDef<TKey>[]>(() => {
     const map = new Map(config.allColumns.map((c) => [c.key, c]));
-    const picked = visibleKeys.map((k) => map.get(k)).filter(Boolean) as ColumnDef<TKey>[];
+    const pinnedKeys = new Set(config.pinnedColumns.map((c) => c.key));
+    const picked = uniqueKeys(visibleKeys)
+      .filter((k) => !pinnedKeys.has(k))
+      .map((k) => map.get(k))
+      .filter(Boolean) as ColumnDef<TKey>[];
     return [...config.pinnedColumns, ...picked];
   }, [visibleKeys, config.allColumns, config.pinnedColumns]);
 
@@ -654,6 +714,9 @@ export function GenericAnchorTable<TKey extends string, TRow>({
         <span>
           列数 <strong className="text-foreground">{visibleColumns.length}</strong>
         </span>
+        {compareLoading && showCompare && (
+          <span className="text-muted-foreground/70">同比后台加载中...</span>
+        )}
       </div>
 
       <div
@@ -955,6 +1018,15 @@ function loadKpiKeys<TKey extends string, TRow>(
     /* fallthrough */
   }
   return def;
+}
+
+function uniqueKeys<TKey extends string>(keys: TKey[]): TKey[] {
+  return [...new Set(keys)];
+}
+
+function appendFieldParams(sp: URLSearchParams, keys: string[]): void {
+  if (keys.length === 0) return;
+  sp.set("fields", keys.join(","));
 }
 
 function aggregate<TRow, TKey extends string>(

@@ -9,19 +9,51 @@ import { fetchSessionMgHandler } from "./fetch-session-mg";
 import { syncKuaishouMembersHandler } from "./sync-kuaishou-members";
 import { syncKuaishouHistoryLiveSessionsHandler } from "./sync-kuaishou-history-live";
 import { syncKuaishouTodayLiveSessionsHandler } from "./sync-kuaishou-today-live";
+import { fetchVideoHandler } from "./fetch-video";
 import type PgBoss from "pg-boss";
 
 // batchSize=1: one job at a time, avoids rate-limit / Cookie contention.
 // pg-boss WorkHandler always passes at least 1 job when batchSize=1.
 // Handler return value 会作为 pgboss.job.output 写回，供 admin/crawler 队列页展示。
+//
+// 抛错必须 sanitize：drizzle 抛 SQL 错时会把 query parameters（可能含 BigInt）
+// 挂到 error 上。pg-boss Manager.fail() 写 output(jsonb) 时 JSON.stringify
+// 遇到 BigInt 字段会抛 Uncaught Exception → worker 进程整个 crash → docker
+// 自动重启 → 同一 job 再跑再炸，死循环。
+function sanitizeError(e: unknown): Error {
+  if (e instanceof Error) {
+    let msg = e.message;
+    // drizzle 把底层 PostgresError 挂在 .cause 上（带具体 detail，如 "value too long"），
+    // 但 cause 上也可能挂 BigInt parameters。只摘 message 字段并入主消息。
+    const cause = (e as { cause?: unknown }).cause;
+    if (cause instanceof Error && cause.message && cause.message !== e.message) {
+      msg += `\n  → ${cause.message}`;
+    }
+    const clean = new Error(msg);
+    clean.name = e.name;
+    return clean;
+  }
+  return new Error(String(e));
+}
+
 function runFirst<T, R>(
   fn: (data: T) => Promise<R>,
 ): (jobs: PgBoss.Job<T>[]) => Promise<R | undefined> {
   return async (jobs) => {
     const job = jobs.at(0);
     if (job === undefined) return undefined;
-    return await fn(job.data);
+    try {
+      return await fn(job.data);
+    } catch (e) {
+      throw sanitizeError(e);
+    }
   };
+}
+
+function wrap<R>(fn: () => Promise<R>): Promise<R> {
+  return fn().catch((e) => {
+    throw sanitizeError(e);
+  });
 }
 
 export async function registerCrawlerHandlers(): Promise<void> {
@@ -41,21 +73,24 @@ export async function registerCrawlerHandlers(): Promise<void> {
   await boss.work(JOB_NAMES.SYNC_KUAISHOU_MEMBERS, { batchSize: 1 }, async (jobs) => {
     const job = jobs.at(0);
     if (job === undefined) return undefined;
-    return await syncKuaishouMembersHandler();
+    return await wrap(() => syncKuaishouMembersHandler());
   });
   await boss.work(JOB_NAMES.SYNC_KUAISHOU_HISTORY_LIVE, { batchSize: 1 }, async (jobs) => {
     const job = jobs.at(0);
     if (job === undefined) return undefined;
     const data = (job.data ?? {}) as { fromDate?: string; toDate?: string };
-    return await syncKuaishouHistoryLiveSessionsHandler({
-      fromDate: data.fromDate,
-      toDate: data.toDate,
-    });
+    return await wrap(() =>
+      syncKuaishouHistoryLiveSessionsHandler({
+        fromDate: data.fromDate,
+        toDate: data.toDate,
+      }),
+    );
   });
   await boss.work(JOB_NAMES.SYNC_KUAISHOU_TODAY_LIVE, { batchSize: 1 }, async (jobs) => {
     const job = jobs.at(0);
     if (job === undefined) return undefined;
-    return await syncKuaishouTodayLiveSessionsHandler();
+    return await wrap(() => syncKuaishouTodayLiveSessionsHandler());
   });
-  console.log("[crawler] all 10 handlers registered");
+  await boss.work(JOB_NAMES.FETCH_VIDEO, { batchSize: 1 }, runFirst(fetchVideoHandler));
+  console.log("[crawler] all 11 handlers registered");
 }

@@ -294,8 +294,8 @@ export async function fetchAllUsers(): Promise<DingtalkUser[]> {
 /**
  * 通过钉钉 unionId 反查 userid（钉钉企业内通讯录的 userid）。
  *
- * 用途：钉钉 OAuth 登录回调里 better-auth 拿到的是 unionId，需要换成 userid
- * 才能把 dingtalk_user.unionid 更新成 auth_user.id（让请求路径上的权限匹配生效）。
+ * 用途：钉钉 OAuth 登录后拿到 unionId，需要换成本企业 userid
+ * 才能进入权限系统。
  *
  * 接口：POST /topapi/user/getbyunionid
  * 找不到时返回 null（钉钉会回 errcode=60121 不存在），调用方自行决定是否报错。

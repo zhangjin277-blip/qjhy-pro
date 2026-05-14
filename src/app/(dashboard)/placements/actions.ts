@@ -1,10 +1,14 @@
 "use server";
 import {
   queryAccountHourly,
+  querySchedule,
+  queryScheduleYesterdayHourly,
   deleteBatchAndRecompute,
   resolvePlacementScope,
   type BoardFilter,
   type AccountHourlyRow,
+  type ScheduleRow,
+  type ScheduleYesterdayHourly,
   type DeleteBatchResult,
 } from "@/modules/placement/server";
 import { requireAdmin } from "@/lib/admin-guard";
@@ -22,6 +26,24 @@ export async function fetchAccountHourly(
   const scope = await resolvePlacementScope(ctx.dingtalkUserId, ctx.isEmergency);
   if (scope.kind === "reject") return [];
   return queryAccountHourly({ ...filter, scope }, accountId);
+}
+
+export async function fetchAnchorSchedule(
+  filter: BoardFilter,
+  anchorLabel: string | null,
+): Promise<{ rows: ScheduleRow[]; yesterdayHourly: ScheduleYesterdayHourly }> {
+  if (!anchorLabel) return { rows: [], yesterdayHourly: { byAccount: {}, cutoffHour: 24 } };
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind !== "ok") return { rows: [], yesterdayHourly: { byAccount: {}, cutoffHour: 24 } };
+  const scope = await resolvePlacementScope(ctx.dingtalkUserId, ctx.isEmergency);
+  if (scope.kind === "reject")
+    return { rows: [], yesterdayHourly: { byAccount: {}, cutoffHour: 24 } };
+  const nextFilter = { ...filter, scope, anchor_label: anchorLabel };
+  const [rows, yesterdayHourly] = await Promise.all([
+    querySchedule(nextFilter),
+    queryScheduleYesterdayHourly(nextFilter),
+  ]);
+  return { rows, yesterdayHourly };
 }
 
 export async function deleteBatchAction(batchId: string): Promise<DeleteBatchResult> {

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { db } from "@/db/client";
 import { anchor_profile, broker_user_mapping, dingtalk_user } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -23,8 +22,13 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const currentUser = await getCurrentDingtalkUser();
+  if (currentUser.kind === "unauth") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (currentUser.kind === "user_not_synced") {
+    return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
+  }
 
   const { id: anchorId } = await ctx.params;
   if (!anchorId) return NextResponse.json({ error: "MISSING_ANCHOR_ID" }, { status: 400 });
@@ -43,18 +47,7 @@ export async function GET(
   const { date_from, date_to } = parsed.data;
 
   // ── 权限检查 ─────────────────────────────────────────────
-  const isEmergency = session.user.email === "emergency@qjhy.local";
-  let dingtalkUserId: string;
-  if (isEmergency) {
-    dingtalkUserId = session.user.id;
-  } else {
-    const [du] = await db
-      .select({ user_id: dingtalk_user.user_id })
-      .from(dingtalk_user)
-      .where(eq(dingtalk_user.unionid, session.user.id));
-    if (!du) return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
-    dingtalkUserId = du.user_id;
-  }
+  const dingtalkUserId = currentUser.dingtalkUserId;
 
   const perm = await resolvePermission(dingtalkUserId, "anchors");
   if (perm.scope === "none") {

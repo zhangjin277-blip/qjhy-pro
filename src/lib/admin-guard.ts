@@ -1,16 +1,14 @@
-import { db } from "@/db/client";
-import { dingtalk_user } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { resolveDingtalkIdentityByAuthUserId } from "@/lib/auth/dingtalk-identity";
 import { AppError } from "@/lib/errors";
 import { resolvePermission } from "@/modules/permissions/server";
-import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 
 /**
  * 校验当前调用者是 admin。
  *
- * better-auth 的 user.id 是钉钉 unionid，但权限模型查的是 dingtalk_user.user_id。
- * 这里通过 unionid → dingtalk_user.user_id 转换后再 resolve。
+ * better-auth 的 user.id 是 auth_user.id，权限模型查的是 dingtalk_user.user_id。
+ * 这里通过 auth_account 里的钉钉 unionId 转换后再 resolve。
  *
  * 应急后门用户（emergency-admin）拥有 admin 权限。
  */
@@ -24,23 +22,20 @@ export async function requireAdmin(): Promise<{ userId: string }> {
     return { userId: session.user.id };
   }
 
-  const [du] = await db
-    .select({ user_id: dingtalk_user.user_id })
-    .from(dingtalk_user)
-    .where(eq(dingtalk_user.unionid, session.user.id));
-  if (!du) {
+  const identity = await resolveDingtalkIdentityByAuthUserId(session.user.id);
+  if (identity.kind !== "ok") {
     throw new AppError(
       "AUTH_USER_NOT_SYNCED",
-      "用户尚未同步到 dingtalk_user 表，无法计算权限",
+      "当前钉钉账号不在本企业通讯录或已离职，无法计算权限",
       403,
     );
   }
 
   // can_admin 用 'permissions' 板块的权限位作为判断依据：
   // 该位为 true 才允许进入权限管理 / 审计等管理面板。
-  const perm = await resolvePermission(du.user_id, "permissions");
+  const perm = await resolvePermission(identity.dingtalkUserId, "permissions");
   if (!perm.can_admin) {
     throw new AppError("AUTH_FORBIDDEN", "需要管理员权限", 403);
   }
-  return { userId: du.user_id };
+  return { userId: identity.dingtalkUserId };
 }

@@ -3,6 +3,7 @@
 import { db } from "@/db/client";
 import { daily_schedule_day, daily_schedule_segment } from "@/db/schema/daily-schedule";
 import { auth } from "@/lib/auth";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { headers } from "next/headers";
 import { and, eq, inArray } from "drizzle-orm";
 import { markDirtyByAccountDate, runAttributionJob } from "@/modules/placement-attribution/server";
@@ -56,6 +57,8 @@ function rowSlot(row: { start_hour: number; end_hour: number }): [string, string
 async function requireUserId() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) throw new Error("UNAUTHORIZED");
+  const currentUser = await getCurrentDingtalkUser();
+  if (currentUser.kind !== "ok") throw new Error("AUTH_USER_NOT_SYNCED");
   return session.user.id;
 }
 

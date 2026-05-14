@@ -128,9 +128,8 @@ async function upsertUser(user: DingtalkUser): Promise<void> {
     .onConflictDoUpdate({
       target: dingtalk_user.user_id,
       set: {
-        // 只在 unionid 还是兜底状态（=user_id）时才覆盖；
-        // 已被钉钉 OAuth 登录后 patch 成 auth_user.id 的不再动，避免每天同步把登录关系打散。
-        unionid: sql`CASE WHEN ${dingtalk_user.unionid} = ${dingtalk_user.user_id} THEN excluded.unionid ELSE ${dingtalk_user.unionid} END`,
+        // listsimple 返回真实 unionid 时，以钉钉为准；没返回时保留现有值。
+        unionid: sql`CASE WHEN excluded.unionid <> excluded.user_id THEN excluded.unionid ELSE ${dingtalk_user.unionid} END`,
         name: user.name,
         dept_ids: deptIds,
         active: true,

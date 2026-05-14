@@ -1,40 +1,36 @@
-import { auth } from "@/lib/auth";
-import { db } from "@/db/client";
-import { dingtalk_user } from "@/db/schema";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { resolvePermission } from "@/modules/permissions/server";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
 import { PermissionsTabs } from "./_components/tabs";
 
 export default async function PermissionsAdminPage() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/login");
+  const currentUser = await getCurrentDingtalkUser();
+  if (currentUser.kind === "unauth") redirect("/login");
 
   // 应急用户直接 admin
-  if (session.user.email === "emergency@qjhy.local") {
+  if (currentUser.kind === "ok" && currentUser.isEmergency) {
     return renderAdminPage();
   }
 
-  // 钉钉用户：unionid → dingtalk_user.user_id → 查权限
-  const [du] = await db
-    .select({ user_id: dingtalk_user.user_id })
-    .from(dingtalk_user)
-    .where(eq(dingtalk_user.unionid, session.user.id));
-
-  if (!du) {
+  // 钉钉用户：auth_user.id → auth_account.unionId → 本企业 dingtalk_user.user_id → 查权限
+  if (currentUser.kind === "user_not_synced") {
     return (
       <div className="max-w-2xl p-8">
         <h2 className="text-xl font-semibold">权限不足</h2>
         <p className="text-muted-foreground mt-2">
-          当前用户尚未同步到组织架构表（unionid: <code>{session.user.id}</code>
-          ）。 请等待下一次钉钉同步（每天 02:00），或让管理员手动触发。
+          当前钉钉账号不在本企业通讯录或已离职
+          {currentUser.dingtalkUnionId ? (
+            <>
+              （unionId: <code>{currentUser.dingtalkUnionId}</code>）
+            </>
+          ) : null}
+          ，无法进入权限系统。
         </p>
       </div>
     );
   }
 
-  const perm = await resolvePermission(du.user_id, "permissions");
+  const perm = await resolvePermission(currentUser.dingtalkUserId, "permissions");
   if (!perm.can_admin) {
     return (
       <div className="max-w-2xl p-8">

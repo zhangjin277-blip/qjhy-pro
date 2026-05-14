@@ -1,5 +1,5 @@
 import { db } from "@/db/client";
-import { kuaishou_live_session } from "@/db/schema";
+import { kuaishou_live_session, kuaishou_member } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { openKuaishouPage, CookieExpiredError } from "@/lib/puppeteer";
 import {
@@ -15,6 +15,7 @@ interface SyncResult {
   inserted: number;
   updated: number;
   skippedHistory: number; // 已经被 history 升级的不动
+  newMembers: number; // today-live 出现但 kuaishou_member 表里没有 → 补 stub
 }
 
 /**
@@ -45,6 +46,14 @@ export async function syncKuaishouTodayLiveSessionsHandler(): Promise<SyncResult
   try {
     const list = await fetchKuaishouTodayLiveSessions(page);
     console.log(`[today-live] fetched ${list.length} sessions`);
+
+    // today-live 可能包含 kuaishou_member 表里没有的主播（未签约 / 新加入的）
+    // 02:30 cron 只 sync 公会签约成员，跟 today-live 的"全部开播主播"有差集。
+    // 必须先 ensure FK 目标存在，否则 INSERT live_session 会违反外键约束。
+    const newMembers = await ensureMembersExist(list);
+    if (newMembers > 0) {
+      console.log(`[today-live] upserted ${newMembers} stub members`);
+    }
 
     let inserted = 0;
     let updated = 0;
@@ -114,6 +123,7 @@ export async function syncKuaishouTodayLiveSessionsHandler(): Promise<SyncResult
       inserted,
       updated,
       skippedHistory,
+      newMembers,
     };
     console.log("[sync-kuaishou-today-live] done", summary);
     return summary;
@@ -135,6 +145,37 @@ export async function syncKuaishouTodayLiveSessionsHandler(): Promise<SyncResult
   } finally {
     await page.close();
   }
+}
+
+/**
+ * today-live 返回的主播可能不在 kuaishou_member 表（未签约 / 新加入）。
+ * INSERT live_session 前先 upsert 一条 stub 进 kuaishou_member 满足 FK 约束，
+ * 等下次 02:30 sync-kuaishou-members 会用机构后台权威字段覆盖（onConflictDoUpdate）。
+ * 返回新插入的成员数（仅 stat 用）。
+ */
+async function ensureMembersExist(list: KuaishouTodayLiveRaw[]): Promise<number> {
+  // 同一 today-live 批次里同一 memberId 可能多次出现（每场直播一行），去重
+  const seen = new Map<string, KuaishouTodayLiveRaw>();
+  for (const r of list) seen.set(String(r.memberId), r);
+  if (seen.size === 0) return 0;
+
+  const now = new Date();
+  const values = [...seen.entries()].map(([userId, r]) => ({
+    user_id: userId,
+    member_name: r.memberName,
+    avatar: r.headImg,
+    raw: {} as Record<string, unknown>,
+    synced_at: now,
+    updated_at: now,
+  }));
+
+  // member 已存在的不动其他字段（02:30 sync 跑过的字段权威），仅 stub 缺失行
+  const result = await db
+    .insert(kuaishou_member)
+    .values(values)
+    .onConflictDoNothing({ target: kuaishou_member.user_id })
+    .returning({ user_id: kuaishou_member.user_id });
+  return result.length;
 }
 
 function mapRowToValues(r: KuaishouTodayLiveRaw) {

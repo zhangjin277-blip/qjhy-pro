@@ -74,6 +74,13 @@ export const ALL_COLUMNS: ColumnDef[] = [
     align: "left",
     fmt: "text",
   },
+  {
+    key: "valid_video_count",
+    label: "视频有效数",
+    group: "基础",
+    align: "left",
+    fmt: "number",
+  },
 
   // ── 2. 签约（anchor-list 签约/经纪人）─────────────────────────────────────
   { key: "broker_name", label: "运营经纪人", group: "签约", align: "left", fmt: "text" },

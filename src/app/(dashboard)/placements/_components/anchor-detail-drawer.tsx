@@ -5,8 +5,10 @@ import type {
   SubAccountRow,
   AccountHourlyRow,
   BoardFilter,
+  ScheduleRow,
+  ScheduleYesterdayHourly,
 } from "@/modules/placement/server";
-import { fetchAccountHourly } from "../actions";
+import { fetchAccountHourly, fetchAnchorSchedule } from "../actions";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 
 interface AnchorDetailDrawerProps {
@@ -43,6 +45,12 @@ interface HourlyState {
   loading: boolean;
 }
 
+interface ScheduleState {
+  rows: ScheduleRow[];
+  yesterdayHourly: ScheduleYesterdayHourly;
+  loading: boolean;
+}
+
 export function AnchorDetailDrawer({
   open,
   onClose,
@@ -53,12 +61,48 @@ export function AnchorDetailDrawer({
 }: AnchorDetailDrawerProps) {
   const [openPkg, setOpenPkg] = useState<string | null>(null);
   const [hourlyMap, setHourlyMap] = useState<Record<string, HourlyState>>({});
+  const [selectedScheduleKey, setSelectedScheduleKey] = useState<string | null>(null);
+  const [scheduleState, setScheduleState] = useState<ScheduleState>({
+    rows: [],
+    yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
+    loading: false,
+  });
 
   // 切换主播时重置内部状态
   useEffect(() => {
     setOpenPkg(null);
     setHourlyMap({});
+    setSelectedScheduleKey(null);
+    setScheduleState({
+      rows: [],
+      yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
+      loading: false,
+    });
   }, [anchor?.anchor_label]);
+
+  useEffect(() => {
+    if (!open || !anchor) return;
+    setScheduleState((state) => ({ ...state, loading: true }));
+    fetchAnchorSchedule(filter, anchor.anchor_label)
+      .then((data) => setScheduleState({ ...data, loading: false }))
+      .catch(() =>
+        setScheduleState({
+          rows: [],
+          yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
+          loading: false,
+        }),
+      );
+  }, [open, anchor, filter]);
+
+  useEffect(() => {
+    if (scheduleState.loading) return;
+    setSelectedScheduleKey((current) => {
+      if (current && scheduleState.rows.some((row) => scheduleKey(row) === current)) {
+        return current;
+      }
+      return scheduleState.rows[0] ? scheduleKey(scheduleState.rows[0]) : null;
+    });
+  }, [scheduleState.rows, scheduleState.loading]);
 
   // 单包主播：打开抽屉自动展开唯一包
   useEffect(() => {
@@ -115,18 +159,30 @@ export function AnchorDetailDrawer({
         <div className="border-b border-border bg-gradient-to-b from-primary/[0.06] to-white px-6 py-4">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div
-                className={`flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-semibold text-white shadow-sm ${
-                  isKuaishou
-                    ? "bg-gradient-to-br from-[#ffedd5] to-[#ff7d00]"
-                    : "bg-gradient-to-br from-[#d1e9ff] to-[#1677ff]"
-                }`}
-              >
-                {avatarChar(label)}
-              </div>
-              <div>
-                <div className="text-[18px] font-semibold text-foreground">{label}</div>
-                <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted-foreground">
+              {anchor.avatar ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={anchor.avatar}
+                  alt={anchor.account_name ?? label}
+                  className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold text-white shadow-sm ${
+                    isKuaishou
+                      ? "bg-gradient-to-br from-[#ffedd5] to-[#ff7d00]"
+                      : "bg-gradient-to-br from-[#d1e9ff] to-[#1677ff]"
+                  }`}
+                >
+                  {avatarChar(label)}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="truncate text-[18px] font-semibold text-foreground">
+                  {anchor.account_name ?? label}
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground">
                   {anchor.platforms.map((p) => {
                     const douyin = p.includes("抖音");
                     const ks = p.includes("快手");
@@ -145,6 +201,14 @@ export function AnchorDetailDrawer({
                       </span>
                     );
                   })}
+                  {anchor.platform_account_id && (
+                    <span className="tabular-nums">{anchor.platform_account_id}</span>
+                  )}
+                  {anchor.anchor_label && (
+                    <span className="rounded bg-purple-50 px-1.5 py-px text-[10.5px] text-purple-700">
+                      {anchor.anchor_label}
+                    </span>
+                  )}
                   <span>{anchor.account_count} 个投放包</span>
                   <span className="text-muted-foreground/40">·</span>
                   <span>
@@ -206,6 +270,12 @@ export function AnchorDetailDrawer({
 
         {/* CONTENT */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
+          <ScheduleTimelineSection
+            state={scheduleState}
+            selectedKey={selectedScheduleKey}
+            onSelect={(row) => setSelectedScheduleKey(scheduleKey(row))}
+          />
+
           <div className="mb-3 flex items-center justify-between text-[12px] text-muted-foreground">
             <span>
               <span className="font-medium text-foreground/90">
@@ -319,6 +389,443 @@ export function AnchorDetailDrawer({
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function parseHour(t: string): number {
+  return Number.parseInt(t.split(":")[0] ?? "0", 10);
+}
+
+function scheduleKey(row: ScheduleRow): string {
+  return `${row.date}:${row.account_id}:${row.anchor_user_id}:${row.time_slot[0]}-${row.time_slot[1]}`;
+}
+
+function schedulePosition(slot: [string, string], axisEnd: number) {
+  const start = parseHour(slot[0]);
+  let end = parseHour(slot[1]);
+  if (end < start) end += 24;
+  return {
+    left: (start / axisEnd) * 100,
+    width: ((end - start) / axisEnd) * 100,
+    start,
+    end,
+  };
+}
+
+function sumScheduleYesterday(
+  state: ScheduleYesterdayHourly,
+  accountId: string,
+  startHour: number,
+  endHour: number,
+) {
+  const byHour = state.byAccount[accountId];
+  if (!byHour) return null;
+  let cost = 0;
+  let acts = 0;
+  let payment = 0;
+  let hasData = false;
+  for (let hour = startHour; hour < endHour; hour++) {
+    const cell = byHour[hour % 24];
+    if (!cell) continue;
+    cost += cell.cost;
+    acts += cell.acts;
+    payment += cell.payment;
+    hasData = true;
+  }
+  return hasData ? { cost, acts, payment } : null;
+}
+
+function sumRowsYesterday(state: ScheduleYesterdayHourly, rows: ScheduleRow[]) {
+  let cost = 0;
+  let acts = 0;
+  let payment = 0;
+  let hasData = false;
+  for (const row of rows) {
+    const start = parseHour(row.time_slot[0]);
+    let end = parseHour(row.time_slot[1]);
+    if (end < start) end += 24;
+    const prev = sumScheduleYesterday(state, row.account_id, start, end);
+    if (!prev) continue;
+    cost += prev.cost;
+    acts += prev.acts;
+    payment += prev.payment;
+    hasData = true;
+  }
+  return hasData ? { cost, acts, payment } : null;
+}
+
+function sumScheduleRows(rows: ScheduleRow[]) {
+  const cost = rows.reduce((sum, row) => sum + row.personal_cost, 0);
+  const acts = rows.reduce((sum, row) => sum + row.personal_acts, 0);
+  const payment = rows.reduce((sum, row) => sum + row.personal_payment, 0);
+  return {
+    cost,
+    acts,
+    payment,
+    cpa: acts > 0 ? cost / acts : null,
+  };
+}
+
+function pctDelta(cur: number, prev: number | null | undefined) {
+  if (prev == null || prev === 0) return null;
+  const pct = ((cur - prev) / prev) * 100;
+  if (Math.abs(pct) < 0.5) return { text: "持平", up: null as boolean | null };
+  return { text: `${pct > 0 ? "↑" : "↓"} ${Math.abs(pct).toFixed(0)}%`, up: pct > 0 };
+}
+
+function fmtPrice(n: number | null): string {
+  if (n == null) return "—";
+  return `¥${n.toFixed(0)}`;
+}
+
+function fmtSlot(slot: [string, string]): string {
+  return `${slot[0]} - ${slot[1]}`;
+}
+
+function ScheduleTimelineSection({
+  state,
+  selectedKey,
+  onSelect,
+}: {
+  state: ScheduleState;
+  selectedKey: string | null;
+  onSelect: (row: ScheduleRow) => void;
+}) {
+  if (state.loading) {
+    return (
+      <section className="mb-4 rounded-lg border border-border bg-white p-4 text-center text-[12px] text-muted-foreground">
+        加载主播 × 投放时段...
+      </section>
+    );
+  }
+
+  if (state.rows.length === 0) {
+    return (
+      <section className="mb-4 rounded-lg border border-border bg-white p-4">
+        <div className="text-[12px] font-medium text-foreground">主播 × 投放时段</div>
+        <div className="mt-2 text-[12px] text-muted-foreground">
+          当前主播在选定范围内暂无可归因排班时段。
+        </div>
+      </section>
+    );
+  }
+
+  const groups = new Map<
+    string,
+    {
+      date: string;
+      accountId: string;
+      accountName: string;
+      placementLabel: string | null;
+      rows: ScheduleRow[];
+      cost: number;
+      acts: number;
+      payment: number;
+      axisEnd: number;
+    }
+  >();
+
+  for (const row of state.rows) {
+    const key = `${row.date}:${row.account_id}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        date: row.date,
+        accountId: row.account_id,
+        accountName: row.account_name,
+        placementLabel: row.placement_label,
+        rows: [],
+        cost: 0,
+        acts: 0,
+        payment: 0,
+        axisEnd: 24,
+      };
+      groups.set(key, group);
+    }
+    group.rows.push(row);
+    group.cost += row.personal_cost;
+    group.acts += row.personal_acts;
+    group.payment += row.personal_payment;
+    const start = parseHour(row.time_slot[0]);
+    let end = parseHour(row.time_slot[1]);
+    if (end < start) end += 24;
+    group.axisEnd = Math.max(group.axisEnd, end);
+  }
+
+  const list = [...groups.values()].sort((a, b) => {
+    if (a.date !== b.date) return a.date > b.date ? -1 : 1;
+    return b.cost - a.cost;
+  });
+  const selectedRow = selectedKey
+    ? (state.rows.find((row) => scheduleKey(row) === selectedKey) ?? state.rows[0] ?? null)
+    : (state.rows[0] ?? null);
+
+  return (
+    <section className="mb-4 rounded-lg border border-border bg-white">
+      <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
+        <div>
+          <div className="text-[12px] font-medium text-foreground">主播 × 投放时段</div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">
+            {state.rows.length} 班次 · {list.length} 个账号日期组合
+          </div>
+        </div>
+      </div>
+      <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-3">
+          {list.map((group) => (
+            <div
+              key={`${group.date}:${group.accountId}`}
+              className="rounded-md border border-border/70"
+            >
+              <div className="flex flex-wrap items-center gap-3 border-b border-border/60 px-3 py-2">
+                <span className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                  {group.placementLabel ?? "无标签"}
+                </span>
+                <span className="font-medium text-[12.5px] text-foreground">
+                  {group.accountName}
+                </span>
+                <span className="text-[11px] text-muted-foreground">{group.date}</span>
+                <div className="ml-auto flex gap-4 text-[11px] tabular-nums text-muted-foreground">
+                  <span>
+                    消耗 <strong className="text-foreground">{fmtMoney(group.cost)}</strong>
+                  </span>
+                  <span>
+                    激活 <strong className="text-foreground">{group.acts}</strong>
+                  </span>
+                  <span>
+                    CPA{" "}
+                    <strong className="text-foreground">
+                      {group.acts > 0 ? `¥${(group.cost / group.acts).toFixed(0)}` : "—"}
+                    </strong>
+                  </span>
+                  <span>
+                    付费 <strong className="text-foreground">{fmtMoney(group.payment)}</strong>
+                  </span>
+                </div>
+              </div>
+              <div className="px-3 pb-3 pt-2">
+                <div className="relative h-4 text-[10px] tabular-nums text-muted-foreground/60">
+                  {[0, 3, 6, 9, 12, 15, 18, 21, group.axisEnd].map((hour, index, arr) => {
+                    if (index > 0 && hour === arr[index - 1]) return null;
+                    return (
+                      <span
+                        key={hour}
+                        className="absolute top-0 -translate-x-1/2"
+                        style={{ left: `${(hour / group.axisEnd) * 100}%` }}
+                      >
+                        {hour > 24 ? `${hour - 24}+1` : hour}
+                      </span>
+                    );
+                  })}
+                </div>
+                <div className="relative h-[112px] rounded-md border border-slate-100 bg-slate-50/50">
+                  {[3, 6, 9, 12, 15, 18, 21, 24].map((hour) => (
+                    <div
+                      key={hour}
+                      className="pointer-events-none absolute inset-y-0 border-l border-dashed border-slate-100"
+                      style={{ left: `${(hour / group.axisEnd) * 100}%` }}
+                    />
+                  ))}
+                  {group.rows.map((row) => {
+                    const pos = schedulePosition(row.time_slot, group.axisEnd);
+                    const isSelected = selectedKey === scheduleKey(row);
+                    return (
+                      <button
+                        key={scheduleKey(row)}
+                        type="button"
+                        onClick={() => onSelect(row)}
+                        className={`absolute inset-y-3 flex flex-col overflow-hidden rounded-md border-l-[3px] border-blue-500 bg-blue-50/90 px-3 py-3 text-left transition hover:shadow-md ${
+                          isSelected ? "ring-2 ring-primary shadow-md" : ""
+                        }`}
+                        style={{ left: `${pos.left}%`, width: `calc(${pos.width}% - 2px)` }}
+                        title={`${row.anchor_name ?? "未命名"} · ${fmtSlot(row.time_slot)} · 消耗 ${fmtMoney(row.personal_cost)} · 激活 ${row.personal_acts} · CPA ${fmtPrice(row.personal_unit_price)} · 付费 ${fmtMoney(row.personal_payment)}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-[13px] font-semibold leading-4 text-blue-700">
+                            {row.anchor_name ?? "未命名"}
+                          </div>
+                          <div className="mt-1 truncate text-[11px] tabular-nums text-muted-foreground">
+                            {fmtSlot(row.time_slot)}
+                          </div>
+                        </div>
+                        <div className="mt-4 min-w-0">
+                          <span className="block truncate whitespace-nowrap text-[16px] font-semibold tabular-nums leading-none text-slate-900">
+                            {fmtMoney(row.personal_cost)}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <ScheduleDetailPanel
+          row={selectedRow}
+          rows={state.rows}
+          yesterdayHourly={state.yesterdayHourly}
+        />
+      </div>
+    </section>
+  );
+}
+
+function ScheduleDetailPanel({
+  row,
+  rows,
+  yesterdayHourly,
+}: {
+  row: ScheduleRow | null;
+  rows: ScheduleRow[];
+  yesterdayHourly: ScheduleYesterdayHourly;
+}) {
+  if (!row) {
+    return (
+      <aside className="rounded-lg border border-border bg-white p-4 text-[12px] text-muted-foreground xl:sticky xl:top-3">
+        点击左侧时段查看投放详情。
+      </aside>
+    );
+  }
+
+  const start = parseHour(row.time_slot[0]);
+  let end = parseHour(row.time_slot[1]);
+  if (end < start) end += 24;
+  const prev = sumScheduleYesterday(yesterdayHourly, row.account_id, start, end);
+  const cpaPrev = prev && prev.acts > 0 ? prev.cost / prev.acts : null;
+  const anchorRows = rows.filter(
+    (item) =>
+      item.account_id === row.account_id &&
+      item.date === row.date &&
+      item.anchor_user_id === row.anchor_user_id,
+  );
+  const anchorSummary = sumScheduleRows(anchorRows);
+  const anchorPrev = sumRowsYesterday(yesterdayHourly, anchorRows);
+  const anchorCpaPrev =
+    anchorPrev && anchorPrev.acts > 0 ? anchorPrev.cost / anchorPrev.acts : null;
+
+  return (
+    <aside className="h-fit overflow-hidden rounded-lg border border-border bg-white shadow-sm xl:sticky xl:top-3">
+      <div className="border-b border-border/70 px-4 py-3">
+        <div className="text-[12px] font-semibold text-foreground">投放详情</div>
+        <div className="mt-2 flex min-w-0 items-center gap-2">
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+            {row.placement_label ?? "无标签"}
+          </span>
+          <span className="truncate text-[14px] font-semibold text-slate-900">
+            {row.anchor_name ?? "未命名"}
+          </span>
+        </div>
+        <div className="mt-1 truncate text-[11px] text-muted-foreground">{row.account_name}</div>
+        <div className="mt-1 truncate text-[10.5px] tabular-nums text-muted-foreground/70">
+          ID: {row.account_id}
+        </div>
+      </div>
+
+      <div className="space-y-3 p-4">
+        <div className="grid grid-cols-2 gap-3 text-[11px]">
+          <div>
+            <div className="text-muted-foreground">时间</div>
+            <div className="mt-1 text-[14px] font-semibold tabular-nums text-slate-900">
+              {fmtSlot(row.time_slot)}
+            </div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">日期</div>
+            <div className="mt-1 text-[13px] font-medium tabular-nums text-slate-900">
+              {row.date}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-2 text-[11px] font-medium text-slate-700">当前时段</div>
+          <div className="grid grid-cols-2 gap-2">
+            <DetailMetric
+              label="消耗"
+              value={fmtMoney(row.personal_cost)}
+              delta={pctDelta(row.personal_cost, prev?.cost)}
+            />
+            <DetailMetric
+              label="激活"
+              value={String(row.personal_acts)}
+              delta={pctDelta(row.personal_acts, prev?.acts)}
+            />
+            <DetailMetric
+              label="CPA"
+              value={fmtPrice(row.personal_unit_price)}
+              delta={pctDelta(row.personal_unit_price ?? 0, cpaPrev)}
+            />
+            <DetailMetric
+              label="付费"
+              value={fmtMoney(row.personal_payment)}
+              delta={pctDelta(row.personal_payment, prev?.payment)}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-md border border-primary/20 bg-primary/[0.04] px-3 py-2.5">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-medium text-slate-700">当前主播汇总</span>
+            <span className="text-[10px] text-muted-foreground">{anchorRows.length} 班次</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <DetailMetric
+              label="消耗"
+              value={fmtMoney(anchorSummary.cost)}
+              delta={pctDelta(anchorSummary.cost, anchorPrev?.cost)}
+            />
+            <DetailMetric
+              label="激活"
+              value={String(anchorSummary.acts)}
+              delta={pctDelta(anchorSummary.acts, anchorPrev?.acts)}
+            />
+            <DetailMetric
+              label="CPA"
+              value={fmtPrice(anchorSummary.cpa)}
+              delta={pctDelta(anchorSummary.cpa ?? 0, anchorCpaPrev)}
+            />
+            <DetailMetric
+              label="付费"
+              value={fmtMoney(anchorSummary.payment)}
+              delta={pctDelta(anchorSummary.payment, anchorPrev?.payment)}
+            />
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function DetailMetric({
+  label,
+  value,
+  delta,
+}: {
+  label: string;
+  value: string;
+  delta: { text: string; up: boolean | null } | null;
+}) {
+  return (
+    <div className="rounded-md border border-border/70 bg-white px-3 py-2">
+      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className="mt-1 flex items-baseline gap-1.5">
+        <span className="text-[15px] font-semibold tabular-nums text-slate-900">{value}</span>
+        {delta && (
+          <span
+            className={
+              delta.up === null
+                ? "text-[10px] text-muted-foreground"
+                : delta.up
+                  ? "text-[10px] text-[var(--change-up)]"
+                  : "text-[10px] text-[var(--change-down)]"
+            }
+          >
+            {delta.text}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 

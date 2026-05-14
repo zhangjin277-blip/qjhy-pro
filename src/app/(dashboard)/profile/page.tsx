@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db/client";
 import { dingtalk_user } from "@/db/schema";
+import { resolveDingtalkIdentityByAuthUserId } from "@/lib/auth/dingtalk-identity";
 import { resolvePermission } from "@/modules/permissions/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { headers } from "next/headers";
@@ -51,13 +52,10 @@ export default async function ProfilePage() {
     );
   }
 
-  // 钉钉登录用户：unionid → dingtalk_user.user_id
-  const [dingUser] = await db
-    .select()
-    .from(dingtalk_user)
-    .where(eq(dingtalk_user.unionid, session.user.id));
+  // 钉钉登录用户：auth_user.id → auth_account.unionId → 本企业 dingtalk_user.user_id
+  const identity = await resolveDingtalkIdentityByAuthUserId(session.user.id);
 
-  if (!dingUser) {
+  if (identity.kind !== "ok") {
     return (
       <div className="min-w-0 max-w-full space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
         <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
@@ -71,7 +69,7 @@ export default async function ProfilePage() {
             <CardContent className="text-sm">
               <p>当前用户尚未同步到组织架构表。</p>
               <p className="mt-2 text-muted-foreground">
-                UnionID: <code>{session.user.id}</code>
+                UnionID: <code>{identity.dingtalkUnionId ?? "-"}</code>
               </p>
               <p className="mt-2 text-muted-foreground">
                 钉钉同步每天凌晨 02:00 自动跑。如需立即生效，请联系管理员手动触发。
@@ -82,6 +80,12 @@ export default async function ProfilePage() {
       </div>
     );
   }
+
+  const [dingUser] = await db
+    .select()
+    .from(dingtalk_user)
+    .where(eq(dingtalk_user.user_id, identity.dingtalkUserId));
+  if (!dingUser) redirect("/login");
 
   const perms: Record<ModuleKey, ResolvedPermission> = {} as Record<ModuleKey, ResolvedPermission>;
   for (const m of MODULE_KEYS) {

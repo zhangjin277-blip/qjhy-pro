@@ -24,7 +24,7 @@ export const dingtalk_dept = pgTable(
  * 钉钉人员（权威源，定时同步，本地只读）。
  *
  * - user_id: 钉钉 userid（同企业内唯一）
- * - unionid: 钉钉 unionid（跨企业唯一，OAuth 时用这个关联到 auth_user.id）
+ * - unionid: 钉钉 unionid（跨企业唯一，OAuth 时通过 auth_account.account_id 关联）
  * - title: 钉钉里的"职位/岗位"字符串（对应 spec 里的 position）
  * - dept_ids: 钉钉允许多部门，存数组
  * - active: 是否在职

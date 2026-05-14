@@ -1,5 +1,4 @@
 import type { KpiSummary } from "@/modules/placement/server";
-import { KpiGrid, type KpiItem } from "@/components/patterns/kpi-grid";
 
 interface KpiBarProps {
   data: KpiSummary;
@@ -31,7 +30,7 @@ function Footer({ cur, prev, meta }: { cur: number; prev: number; meta: string }
 }
 
 export function KpiBar({ data }: KpiBarProps) {
-  const items: KpiItem[] = [
+  const items = [
     {
       key: "cost",
       label: "消耗",
@@ -64,5 +63,21 @@ export function KpiBar({ data }: KpiBarProps) {
     },
   ];
 
-  return <KpiGrid items={items} />;
+  return (
+    <div className="rounded-lg border border-border bg-card px-4 py-2.5 shadow-sm">
+      <div className="grid min-w-0 grid-cols-2 divide-y divide-border/60 md:grid-cols-4 md:divide-x md:divide-y-0">
+        {items.map((it, index) => (
+          <div key={it.key} className={index === 0 ? "py-1 pr-4" : "px-4 py-1"}>
+            <div className="flex min-w-0 items-baseline gap-2">
+              <span className="shrink-0 text-xs text-muted-foreground">{it.label}</span>
+              <span className="truncate text-[22px] font-semibold leading-none tracking-tight text-slate-900 tabular-nums">
+                {it.value}
+              </span>
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">{it.footer}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }

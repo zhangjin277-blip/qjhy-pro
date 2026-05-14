@@ -56,6 +56,7 @@ export const douyinConfig: PlatformConfig<DouyinColKey, AnchorListRow> = {
   label: "抖音",
   rowKey: "anchor_id",
   apiEndpoint: "/api/anchors",
+  compareEndpoint: "/api/anchors/compare",
 
   allColumns: ALL_COLUMNS as ColumnDef<DouyinColKey>[],
   pinnedColumns: PINNED_COLUMNS as ColumnDef<DouyinColKey>[],

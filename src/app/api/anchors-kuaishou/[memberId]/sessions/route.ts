@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { listKuaishouLiveSessions, queryKuaishouMemberSummary } from "@/modules/anchors/server";
 
 /**
@@ -11,8 +10,13 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ memberId: string }> },
 ): Promise<NextResponse> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const currentUser = await getCurrentDingtalkUser();
+  if (currentUser.kind === "unauth") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (currentUser.kind === "user_not_synced") {
+    return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
+  }
 
   const { memberId } = await ctx.params;
   const sp = req.nextUrl.searchParams;

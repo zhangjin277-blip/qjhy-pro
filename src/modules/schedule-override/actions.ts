@@ -2,6 +2,7 @@
 import { db } from "@/db/client";
 import { schedule_override } from "@/db/schema/schedule-override";
 import { auth } from "@/lib/auth";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
 import { markDirtyByAccountDate, runAttributionJob } from "@/modules/placement-attribution/server";
@@ -11,6 +12,8 @@ import { revalidatePath } from "next/cache";
 export async function createOverride(input: unknown) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) throw new Error("UNAUTHORIZED");
+  const currentUser = await getCurrentDingtalkUser();
+  if (currentUser.kind !== "ok") throw new Error("AUTH_USER_NOT_SYNCED");
 
   const parsed = overrideInputSchema.parse(input);
 
@@ -33,6 +36,8 @@ export async function createOverride(input: unknown) {
 export async function deleteOverride(id: string) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) throw new Error("UNAUTHORIZED");
+  const currentUser = await getCurrentDingtalkUser();
+  if (currentUser.kind !== "ok") throw new Error("AUTH_USER_NOT_SYNCED");
 
   const [removed] = await db
     .delete(schedule_override)

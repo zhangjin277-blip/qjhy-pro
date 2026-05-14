@@ -9,4 +9,5 @@ export const AnchorListFiltersSchema = z.object({
   broker_ids: z.array(z.string()).optional(),
   health_min: z.number().int().min(0).max(100).optional(),
   search: z.string().optional(),
+  fields: z.array(z.string()).optional(),
 });

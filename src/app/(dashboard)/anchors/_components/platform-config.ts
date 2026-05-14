@@ -66,6 +66,8 @@ export interface PlatformConfig<TKey extends string, TRow> {
 
   /** API URL — fetch(`${apiEndpoint}?...`) */
   apiEndpoint: string;
+  /** 可选：row-level 同比单独后台加载，避免阻塞首屏 */
+  compareEndpoint?: string;
 
   /** 全量列定义（含 pinned） */
   allColumns: ColumnDef<TKey>[];

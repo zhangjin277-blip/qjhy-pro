@@ -3,8 +3,6 @@ import { redirect } from "next/navigation";
 import {
   queryDatasetCounts,
   querySummaryExt,
-  querySchedule,
-  queryScheduleYesterdayHourly,
   queryTrend,
   queryAnchorLabels,
   queryKpiSummary,
@@ -16,9 +14,7 @@ import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import { DatasetTabs } from "./_components/dataset-tabs";
-import { ViewModeToggle } from "./_components/view-mode-toggle";
 import { SummaryTable } from "./_components/summary-table";
-import { ScheduleTable } from "./_components/schedule-table";
 import { TrendChartWrapper } from "./_components/trend-chart-wrapper";
 import { FilterBar } from "./_components/filter-bar";
 import { CsvExportButton } from "./_components/csv-export-button";
@@ -52,7 +48,6 @@ export default async function PlacementsPage({
 
   const sp = await searchParams;
   const filter = { ...resolveFilter(sp), scope };
-  const view = filter.view === "schedule" ? "schedule" : "summary";
 
   const [counts, anchorLabels, kpi] = await Promise.all([
     queryDatasetCounts(filter),
@@ -68,32 +63,6 @@ export default async function PlacementsPage({
   }
 
   async function buildViewData() {
-    if (view === "schedule") {
-      const [rows, yesterdayHourly] = await Promise.all([
-        querySchedule(filter),
-        queryScheduleYesterdayHourly(filter),
-      ]);
-      const csvRows = rows as unknown as Record<string, unknown>[];
-      const csvColumns: CsvCol[] = [
-        { key: "date", label: "日期" },
-        { key: "account_name", label: "账号" },
-        { key: "anchor_name", label: "主播" },
-        { key: "total_cost", label: "累计消耗" },
-        { key: "personal_cost", label: "个人消耗" },
-        { key: "total_acts", label: "累计激活" },
-        { key: "personal_acts", label: "个人激活" },
-      ];
-      const csvFilename = `投放-主播投放-${filter.date_from}_${filter.date_to}.csv`;
-      const tableContent = (
-        <ScheduleTable
-          rows={rows}
-          yesterdayHourly={yesterdayHourly.byAccount}
-          yesterdayCutoffHour={yesterdayHourly.cutoffHour}
-        />
-      );
-      return { tableContent, csvRows, csvColumns, csvFilename };
-    }
-    // summary (default)
     const [rows, subAccounts] = await Promise.all([
       querySummaryExt(filter),
       querySubAccountsAll(filter),
@@ -136,14 +105,10 @@ export default async function PlacementsPage({
         }
       />
 
-      {/* dataset tabs + view mode（在 KPI 之前，跟主播明细的预设标签同位置） */}
+      {/* dataset tabs（在 KPI 之前，跟主播明细的预设标签同位置） */}
       <PresetToolbar label="预设:">
         <Suspense fallback={null}>
           <DatasetTabs counts={counts} />
-        </Suspense>
-        <PresetToolbar.Divider />
-        <Suspense fallback={null}>
-          <ViewModeToggle current={view} />
         </Suspense>
       </PresetToolbar>
 

@@ -1,12 +1,14 @@
 import {
   bigint,
   boolean,
+  date,
   index,
   integer,
   jsonb,
   numeric,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
@@ -407,5 +409,52 @@ export const session_minigame_convert = pgTable(
   (t) => ({
     idx_anchor_date: index("idx_session_mg_anchor_date").on(t.anchor_id, t.date),
     idx_date: index("idx_session_mg_date").on(t.date),
+  }),
+);
+
+/**
+ * 抖音主播视频作品「每日快照」。
+ * 来源：union.bytedance.com /ark/api/uanchor/.../video/video_list/cagvd5rc77u5ih4edc6g
+ * 频率：每天 12:00 全量拉一次（仅"线下运营"组带的主播，约 56 个）
+ * 窗口：滑动近 30 天（按 publishTime 筛）
+ *
+ * 设计要点：
+ * - 主键 (item_id, snapshot_date) — 同一视频每天一行，可追溯私密状态变更
+ * - 查询时取每个 item_id 最新 snapshot_date 行 → is_secret=0 即"有效视频"
+ * - norm 字段（是否符合规范）当前在主播详情入口拿不到真值（始终 "-"），仍保留
+ */
+export const douyin_video_snapshot = pgTable(
+  "douyin_video_snapshot",
+  {
+    item_id: text("item_id").notNull(), // 视频 ID（itemID）
+    snapshot_date: date("snapshot_date").notNull(), // 拉取日
+
+    anchor_id: text("anchor_id").notNull(),
+    publish_time: timestamp("publish_time", { withTimezone: true }).notNull(),
+    is_secret: smallint("is_secret").notNull(), // 0=公开 1=私密
+
+    title: text("title"),
+    cover_url: text("cover_url"),
+    play_count: integer("play_count"),
+    recommend_play_count: integer("recommend_play_count"),
+    like_count: integer("like_count"),
+    comment_count: integer("comment_count"),
+    share_count: integer("share_count"),
+    new_follow_count: integer("new_follow_count"),
+    norm: text("norm"), // "是否符合规范"，当前接口固定返回 "-"
+
+    raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.item_id, t.snapshot_date] }),
+    idx_anchor_publish: index("idx_dy_video_anchor_publish").on(t.anchor_id, t.publish_time),
+    idx_anchor_publish_item_snapshot: index("idx_dy_video_anchor_publish_item_snapshot").on(
+      t.anchor_id,
+      t.publish_time,
+      t.item_id,
+      t.snapshot_date,
+    ),
+    idx_snapshot_date: index("idx_dy_video_snapshot_date").on(t.snapshot_date),
   }),
 );
