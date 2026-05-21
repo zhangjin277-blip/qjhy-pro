@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
+import { requireAdmin } from "@/lib/admin-guard";
+import { AppError } from "@/lib/errors";
 import { db } from "@/db/client";
 import { kuaishou_member } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -16,18 +17,19 @@ const VALID_PRODUCTS = new Set([
 /**
  * PATCH /api/anchors-kuaishou/[memberId]
  * Body: { manual_product: string | null }
- * 设置或清除手动覆盖的项目分类。
+ * 设置或清除手动覆盖的项目分类（admin only：改的是全局分类规则）。
  */
 export async function PATCH(
   req: NextRequest,
   ctx: { params: Promise<{ memberId: string }> },
 ): Promise<NextResponse> {
-  const currentUser = await getCurrentDingtalkUser();
-  if (currentUser.kind === "unauth") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (currentUser.kind === "user_not_synced") {
-    return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
+  try {
+    await requireAdmin();
+  } catch (err) {
+    if (err instanceof AppError) {
+      return NextResponse.json({ error: err.code }, { status: err.httpStatus });
+    }
+    throw err;
   }
 
   const { memberId } = await ctx.params;

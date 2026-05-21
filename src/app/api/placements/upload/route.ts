@@ -9,6 +9,7 @@ import {
   type DetectResult,
 } from "@/modules/placement/server";
 import { runAttributionJob } from "@/modules/placement-attribution/server";
+import { resolvePermission } from "@/modules/permissions/server";
 import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -18,8 +19,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
   const currentUser = await getCurrentDingtalkUser();
+  if (currentUser.kind === "unauth") {
+    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
   if (currentUser.kind === "user_not_synced") {
     return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
+  }
+
+  // 写权限校验：placement.can_edit；emergency 绕过（应急操作）
+  if (!currentUser.isEmergency) {
+    const perm = await resolvePermission(currentUser.dingtalkUserId, "placement");
+    if (!perm.can_edit) {
+      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    }
   }
 
   const formData = await req.formData();
