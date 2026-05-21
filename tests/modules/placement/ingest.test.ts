@@ -57,7 +57,8 @@ describe("ingestRows", () => {
     expect(rows.at(0)?.attribution_dirty).toBe(true);
   });
 
-  it("账号未匹配 placement_label → rows_skipped + error_log 含「未找到」", async () => {
+  it("账号未匹配 placement_label → 自动建 stub live_account 并 ingest", async () => {
+    const stubName = `不存在的账号-${Date.now()}`;
     const input: IngestInput = {
       source: "excel-upload",
       dataset_id: TEST_DATASET,
@@ -65,7 +66,7 @@ describe("ingestRows", () => {
       uploaded_by: null,
       rows: [
         {
-          account_name: "不存在的账号-xxx",
+          account_name: stubName,
           date: "2026-05-06",
           hour: 19,
           cost_yuan: 100,
@@ -80,15 +81,20 @@ describe("ingestRows", () => {
     };
 
     const batch = await ingestRows(input);
-    expect(batch.rows_skipped).toBe(1);
-    const errorLog = batch.error_log;
-    expect(errorLog).toBeDefined();
-    expect(Array.isArray(errorLog) && errorLog.length).toBeGreaterThanOrEqual(1);
-    const firstError = Array.isArray(errorLog) ? errorLog.at(0) : null;
-    expect(firstError?.reason).toMatch(/未找到/);
+    // 现行行为：未匹配账号自动建 stub live_account，不再 skip
+    expect(batch.status).toBe("completed");
+    expect(batch.rows_inserted).toBe(1);
+    expect(batch.rows_skipped).toBe(0);
+    const stub = await db
+      .select()
+      .from(live_account)
+      .where(sql`${live_account.placement_label} = ${stubName}`);
+    expect(stub).toHaveLength(1);
+    const raw = stub.at(0)?.raw as { _stub?: boolean } | null;
+    expect(raw?._stub).toBe(true);
   });
 
-  it("重复 (date,hour,dataset,account) → UPDATE + rows_updated=1 + attribution_dirty=true", async () => {
+  it("重复 (date,hour,dataset,account) → DELETE+INSERT 重算，最终金额为最新值", async () => {
     const accs = await db
       .select()
       .from(live_account)
@@ -120,11 +126,13 @@ describe("ingestRows", () => {
 
     await ingestRows(makeInput(100));
     const second = await ingestRows(makeInput(200));
-    expect(second.rows_updated).toBe(1);
-    expect(second.rows_inserted).toBe(0);
+    // excel-upload 路径每次重算都先 DELETE 再 INSERT，rows_updated 永远 0
+    expect(second.rows_updated).toBe(0);
+    expect(second.rows_inserted).toBeGreaterThanOrEqual(1);
 
     const rows = await db.select().from(placement_row);
     expect(rows).toHaveLength(1);
+    // cumulative_raw 用 GREATEST 把 (h=19) 累计覆盖为 200；单点序列差分回写 placement_row=200
     expect(Number(rows.at(0)?.cost_yuan)).toBe(200);
     expect(rows.at(0)?.attribution_dirty).toBe(true);
   });

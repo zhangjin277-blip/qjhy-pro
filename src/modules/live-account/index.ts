@@ -1,5 +1,4 @@
 export type { LiveAccount, AccountWithRelations } from "./types";
-export type { MigrationReport } from "./migration";
 export {
   Platform,
   Product,

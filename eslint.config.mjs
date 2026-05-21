@@ -6,7 +6,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import nextPlugin from "@next/eslint-plugin-next";
 
 export default tseslint.config(
-  { ignores: [".next", "node_modules", "dist", "src/db/migrations"] },
+  { ignores: [".next", "node_modules", "dist", "src/db/migrations", ".claude/worktrees/**"] },
   {
     files: ["**/*.cjs"],
     languageOptions: {
