@@ -3,6 +3,8 @@ import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import {
   ingestRows,
   parseXlsx,
+  parseOmniXlsx,
+  isOmniFormat,
   detectDatasetFromRows,
   type DetectResult,
 } from "@/modules/placement/server";
@@ -32,7 +34,9 @@ export async function POST(req: NextRequest) {
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
-  const parsed = parseXlsx(buf, file.name);
+  // 新 Omni 格式（捕鱼大作战 / 途游休闲捕鱼）vs 老百应导出（电玩捕鱼 / URP）
+  const useOmni = isOmniFormat(buf);
+  const parsed = useOmni ? parseOmniXlsx(buf, file.name) : parseXlsx(buf, file.name);
 
   // dataset_id="auto" 时按主播标签投票推断
   let datasetId = datasetIdInput;

@@ -7,7 +7,7 @@ import { registerCrawlerHandlers } from "./jobs/handlers/register";
 import { enqueue, JOB_NAMES, stopBoss } from "@/modules/crawler/server";
 import { closeBrowser } from "@/lib/puppeteer";
 import { runCronAttributionSweep } from "@/modules/placement-attribution/server";
-import { syncLegacyCsPlacement } from "./jobs/sync-legacy-cs-placement";
+// import { syncLegacyCsPlacement } from "./jobs/sync-legacy-cs-placement"; // Phase 2.4 已停
 
 // Phase 1: 钉钉同步
 registerJob({
@@ -59,13 +59,11 @@ registerJob({
   },
 });
 
-// Phase 2.4: 老中台（miracle-pro-cs SQLite）→ 本中台捕鱼投放增量同步（每小时整点）
-// 读 /app/legacy.sqlite 最近 7 天 product_buyu 行，upsert 到 placement_row。
-registerJob({
-  name: "sync-legacy-cs-placement",
-  schedule: "5 * * * *",
-  task: syncLegacyCsPlacement,
-});
+// Phase 2.4 已停：捕鱼 / UE4 改走 Omni 钉钉推送的 Excel 手动上传（新格式累计快照）。
+// 老中台 SQLite 同步关闭，避免覆盖新表格 ingest 的数据。
+// URP 还是百应导出走老 xlsx-adapter。
+// import { syncLegacyCsPlacement } from "./jobs/sync-legacy-cs-placement";
+// registerJob({ name: "sync-legacy-cs-placement", schedule: "5 * * * *", task: syncLegacyCsPlacement });
 
 // 抖音视频快照（每天 12:00）：仅"线下运营"组带的主播，近 30 天滑动窗口
 registerJob({

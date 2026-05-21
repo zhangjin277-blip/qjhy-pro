@@ -268,7 +268,13 @@ export async function fetchAllUsers(): Promise<DingtalkUser[]> {
   const depts = await fetchAllDepartments();
   const userMap = new Map<string, DingtalkUser>();
 
-  for (const dept of depts) {
+  // 根部门 dept_id=1 不在 fetchAllDepartments() 返回里（listsub(1) 只返子部门）。
+  // 直接挂在企业根、未归任何子部门的员工只能从这里拉到，否则会漏。
+  // 用 (root) 占位，不写回 dingtalk_dept 表。
+  const ROOT_DEPT = { dept_id: 1, name: "（根部门）" };
+  const allDepts = [ROOT_DEPT, ...depts];
+
+  for (const dept of allDepts) {
     const users = await fetchUsersInDepartment(dept.dept_id);
     for (const u of users) {
       const existing = userMap.get(u.userid);

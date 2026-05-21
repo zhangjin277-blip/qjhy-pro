@@ -9,6 +9,7 @@ import type {
 import { CoreKpiSection, type TimePreset } from "./core-kpi-section";
 import { BreakdownSection, type BreakdownClick } from "./breakdown-section";
 import { DashboardDrawer, type DrawerOpenPayload } from "./dashboard-drawer";
+import { BuyuSection } from "./buyu-section";
 
 /**
  * 把 TimePreset 翻译成 [date_from, date_to] 区间。
@@ -147,6 +148,7 @@ export function DashboardBoard(): React.JSX.Element {
         onMetricChange={setMetric}
         onCellClick={handleCellClick}
       />
+      <BuyuSection dateFrom={range.from} dateTo={range.to} />
       {error ? (
         <div className="rounded-md bg-[#fff2f2] border border-[#ffd6d6] text-[#f53f3f] px-4 py-3 text-[13px]">
           数据加载失败：{error}

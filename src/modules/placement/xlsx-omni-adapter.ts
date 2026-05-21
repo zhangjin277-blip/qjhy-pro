@@ -1,0 +1,146 @@
+import * as XLSX from "xlsx";
+import type { ParseResult, ParsedRow } from "./xlsx-adapter";
+
+/**
+ * Omni 钉钉机器人推送的 Excel 解析器（新格式，累计快照）。
+ *
+ * 格式：
+ *   r1: "推送时间：YYYY-MM-DD HH:MM:SS"
+ *   r2: (空)
+ *   r3: 表头 [账户备注, 消耗, 新增, 新增成本, 首日付费, 昨日同刻消耗, 消耗环比]
+ *   r4+: 数据行
+ *
+ * 跟老百应导出的区别：
+ * - 没有日期/小时列 → 从 r1 推送时间提取
+ * - 数据是当日 0:00 累计到推送时刻的累计值（不是小时增量）
+ * - 弃用 3 列：新增成本（cpa 系统算）/ 昨日同刻消耗（不存）/ 消耗环比（按区间算）
+ *
+ * 入库流程依赖现有 ingest.ts 的 excel-upload 路径（写 placement_cumulative_raw
+ * 再重算 placement_row），跨次上传天然做差分。
+ */
+const COL_ACCOUNT = "账户备注";
+const COL_COST = "消耗";
+const COL_ACTIVATIONS = "新增";
+const COL_PAYMENT = "首日付费";
+
+/** 识别是否 Omni 推送格式（cell A1 是 "推送时间：..."） */
+export function isOmniFormat(buffer: Buffer | ArrayBuffer): boolean {
+  try {
+    const wb = XLSX.read(buffer, { type: "buffer" });
+    const sheetName = wb.SheetNames[0];
+    if (!sheetName) return false;
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) return false;
+    const a1 = sheet["A1"]?.v;
+    return typeof a1 === "string" && a1.includes("推送时间");
+  } catch {
+    return false;
+  }
+}
+
+/** 从 "推送时间：2026-05-20 17:40:36" 解析出 date + hour（北京时间，直接取小时数） */
+function parsePushTime(text: string): { date: string; hour: number } | null {
+  // 兼容全角/半角冒号、变体空白
+  const m = text.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const [, y, mo, d, h] = m;
+  return {
+    date: `${y}-${mo}-${d}`,
+    hour: Math.min(23, Math.max(0, Number(h))),
+  };
+}
+
+function toNumber(v: unknown): number {
+  if (v === null || v === undefined || v === "") return 0;
+  if (typeof v === "number") return v;
+  const s = String(v).trim().replace(/,/g, "");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function parseOmniXlsx(buffer: Buffer | ArrayBuffer, filename: string): ParseResult {
+  const errors: { row?: unknown; reason: string }[] = [];
+  const wb = XLSX.read(buffer, { type: "buffer" });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) {
+    return {
+      rows: [],
+      errors: [{ reason: "Excel 文件无 sheet" }],
+      date_range_from: null,
+      date_range_to: null,
+    };
+  }
+  const sheet = wb.Sheets[sheetName];
+  if (!sheet) {
+    return {
+      rows: [],
+      errors: [{ reason: "Excel 文件 sheet 读取失败" }],
+      date_range_from: null,
+      date_range_to: null,
+    };
+  }
+
+  // 推送时间从 A1 cell 取
+  const a1 = sheet["A1"]?.v;
+  if (typeof a1 !== "string") {
+    return {
+      rows: [],
+      errors: [{ reason: `Omni 格式但 A1 不是字符串：${String(a1)}` }],
+      date_range_from: null,
+      date_range_to: null,
+    };
+  }
+  const pushedAt = parsePushTime(a1);
+  if (!pushedAt) {
+    return {
+      rows: [],
+      errors: [{ reason: `推送时间格式不识别：${a1}` }],
+      date_range_from: null,
+      date_range_to: null,
+    };
+  }
+
+  // header 在第 3 行（index=2），数据从第 4 行开始
+  // 用 sheet_to_json + range=2 跳过前两行（A1 标题行 + 空行）
+  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+    range: 2,
+    defval: null,
+  });
+
+  const rows: ParsedRow[] = [];
+  for (const row of rawRows) {
+    // 跳过完全空行
+    if (Object.values(row).every((v) => v === null || v === undefined || String(v).trim() === "")) {
+      continue;
+    }
+
+    const accountRaw = row[COL_ACCOUNT];
+    if (!accountRaw) {
+      errors.push({ row, reason: "缺少账户备注列" });
+      continue;
+    }
+    const accountName = String(accountRaw).trim();
+    if (!accountName || accountName === "--" || accountName === "-") continue;
+
+    rows.push({
+      account_name: accountName,
+      // 一个 placement_label 对应一个 live_account（unique），subaccount 用同名占位
+      subaccount_name: accountName,
+      date: pushedAt.date,
+      hour: pushedAt.hour,
+      cost_yuan: toNumber(row[COL_COST]),
+      activations: Math.round(toNumber(row[COL_ACTIVATIONS])),
+      payment_yuan: toNumber(row[COL_PAYMENT]),
+      start_download: 0, // Omni 不提供
+      finish_download: 0,
+      raw: { ...row, _pushed_at: a1, _source_filename: filename },
+    });
+  }
+
+  return {
+    rows,
+    errors,
+    date_range_from: pushedAt.date,
+    date_range_to: pushedAt.date,
+  };
+}
