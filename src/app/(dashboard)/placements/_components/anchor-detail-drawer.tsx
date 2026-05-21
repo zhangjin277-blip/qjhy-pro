@@ -932,8 +932,11 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
                         className="border-t border-border/50 transition-colors hover:bg-muted/40"
                       >
                         <td className="px-3 py-1.5 font-mono whitespace-nowrap text-muted-foreground">
-                          {r.hour.toString().padStart(2, "0")}:00 —{" "}
-                          {((r.hour + 1) % 24).toString().padStart(2, "0")}:00
+                          {/* 区间 = (上一行 hour, 当前 hour]，即 [prev+1:00 .. hour+1:00) */}
+                          {((r.prev_hour == null ? 0 : r.prev_hour + 1) % 24)
+                            .toString()
+                            .padStart(2, "0")}
+                          :00 — {((r.hour + 1) % 24).toString().padStart(2, "0")}:00
                         </td>
                         <td className="px-3 py-1.5 text-foreground/90">{fmtMoney(r.cost)}</td>
                         <td className="px-3 py-1.5 text-muted-foreground">

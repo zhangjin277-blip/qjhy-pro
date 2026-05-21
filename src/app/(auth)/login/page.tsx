@@ -1,19 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { authClient } from "@/lib/auth/auth-client";
 
-export default function LoginPage() {
+function LoginInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // next 必须以 / 开头（白名单 — 防 open redirect 攻击）
+  const rawNext = searchParams.get("next");
+  const next =
+    rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard";
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [dingtalkLoading, setDingtalkLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const autoTriggered = useRef(false);
 
   async function handleEmergencyLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -32,7 +38,7 @@ export default function LoginPage() {
         setError("应急密码错误");
         return;
       }
-      router.push("/dashboard");
+      router.push(next);
     } catch {
       setError("登录失败");
     } finally {
@@ -48,8 +54,8 @@ export default function LoginPage() {
       // 钉钉授权后回调到 /api/auth/oauth2/callback/dingtalk，better-auth 处理后跳到 callbackURL。
       const result = await authClient.signIn.oauth2({
         providerId: "dingtalk",
-        callbackURL: "/dashboard",
-        errorCallbackURL: "/login",
+        callbackURL: next,
+        errorCallbackURL: rawNext ? `/login?next=${encodeURIComponent(rawNext)}` : "/login",
       });
       // 正常情况下浏览器已被重定向，到这里说明返回了 url 但未自动跳。
       if (result?.error) {
@@ -61,6 +67,15 @@ export default function LoginPage() {
       setDingtalkLoading(false);
     }
   }
+
+  // 钉钉扫码进 /checkin 场景：URL 带 next 参数，自动触发钉钉 OAuth，免手动点
+  useEffect(() => {
+    if (rawNext && !autoTriggered.current) {
+      autoTriggered.current = true;
+      void handleDingtalkLogin();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawNext]);
 
   return (
     <main className="bg-muted/30 flex min-h-screen items-center justify-center">
@@ -107,5 +122,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <LoginInner />
+    </Suspense>
   );
 }

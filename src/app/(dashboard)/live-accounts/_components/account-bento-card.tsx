@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import type { AccountWithRelations } from "@/modules/live-account";
 import { PlatformBadge } from "./platform-badge";
 import { ScheduleTimeline, type ScheduleBinding } from "./schedule-timeline";
 import { AnchorMiniList } from "./anchor-mini-list";
+import { CheckinQrDialog } from "./checkin-qr-dialog";
 
 interface BindingLite {
   id: string;
@@ -24,6 +26,7 @@ interface AccountBentoCardProps {
 
 export function AccountBentoCard({ account, bindings, avatarUrl, onEdit }: AccountBentoCardProps) {
   const isLiving = account.live_status === "living";
+  const [qrOpen, setQrOpen] = useState(false);
 
   const scheduleBindings: ScheduleBinding[] = bindings.map((b) => ({
     dingtalk_user_id: b.dingtalk_user_id,
@@ -33,10 +36,28 @@ export function AccountBentoCard({ account, bindings, avatarUrl, onEdit }: Accou
 
   return (
     <div
-      className="grid cursor-pointer rounded-[14px] border border-slate-100 bg-white p-[18px] pb-4 shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-md"
+      className="relative grid cursor-pointer rounded-[14px] border border-slate-100 bg-white p-[18px] pb-4 shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-md"
       style={{ gridTemplateColumns: "1.4fr 1fr", gap: "18px" }}
       onClick={() => onEdit?.(account)}
     >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setQrOpen(true);
+        }}
+        className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-md text-[14px] text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        title="打卡二维码"
+        aria-label="打卡二维码"
+      >
+        ▦
+      </button>
+      <CheckinQrDialog
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        accountId={account.id}
+        label={account.placement_label ?? account.account_name}
+      />
       {/* Left */}
       <div className="flex flex-col gap-3">
         {/* Card head */}

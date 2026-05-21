@@ -950,6 +950,13 @@ export async function querySubAccountsAll(filter: BoardFilter): Promise<SubAccou
 export interface AccountHourlyRow {
   date: string;
   hour: number;
+  /**
+   * 同一日内上一行的 hour。第一行 null。
+   * UI 渲染区间用：start = prev_hour == null ? 0 : prev_hour + 1, end = hour + 1
+   * 比如：[null, 10] → 0:00-11:00（首次上传含 0 点开始到 11 点的累计）
+   *      [10, 15] → 11:00-16:00（中间漏传，5 小时累计算到 15 这行）
+   */
+  prev_hour: number | null;
   cost: number;
   activations: number;
   payment: number;
@@ -960,23 +967,30 @@ export async function queryAccountHourly(
   accountId: string,
 ): Promise<AccountHourlyRow[]> {
   const result = (await db.execute(sql`
+    WITH agg AS (
+      SELECT
+        p.date::text                    AS date,
+        p.hour                          AS hour,
+        SUM(p.cost_yuan)::float         AS cost,
+        SUM(p.activations)::int         AS activations,
+        SUM(p.payment_yuan)::float      AS payment
+      FROM placement_row p
+      WHERE p.live_account_id = ${accountId}
+        AND p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
+      ${datasetClause(filter.dataset_ids)}
+      ${scopeClause(filter.scope)}
+      GROUP BY p.date, p.hour
+    )
     SELECT
-      p.date::text                    AS date,
-      p.hour                          AS hour,
-      SUM(p.cost_yuan)::float         AS cost,
-      SUM(p.activations)::int         AS activations,
-      SUM(p.payment_yuan)::float      AS payment
-    FROM placement_row p
-    WHERE p.live_account_id = ${accountId}
-      AND p.date BETWEEN ${filter.date_from} AND ${filter.date_to}
-    ${datasetClause(filter.dataset_ids)}
-    ${scopeClause(filter.scope)}
-    GROUP BY p.date, p.hour
-    ORDER BY p.date DESC, p.hour ASC
-  `)) as unknown as AccountHourlyRow[];
+      date, hour, cost, activations, payment,
+      LAG(hour) OVER (PARTITION BY date ORDER BY hour) AS prev_hour
+    FROM agg
+    ORDER BY date DESC, hour ASC
+  `)) as unknown as (AccountHourlyRow & { prev_hour: number | null })[];
   return result.map((r) => ({
     date: r.date,
     hour: Number(r.hour),
+    prev_hour: r.prev_hour == null ? null : Number(r.prev_hour),
     cost: Number(r.cost),
     activations: Number(r.activations),
     payment: Number(r.payment),

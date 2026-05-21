@@ -38,15 +38,31 @@ export function isOmniFormat(buffer: Buffer | ArrayBuffer): boolean {
   }
 }
 
-/** 从 "推送时间：2026-05-20 17:40:36" 解析出 date + hour（北京时间，直接取小时数） */
+/**
+ * 从 "推送时间：2026-05-20 17:40:36" 解析出 date + hour。
+ *
+ * hour 归属规则（让 Omni 同小时多次推送覆盖到同一行 + 跨小时前 18 分钟归前一小时）：
+ *   HH:00 ~ HH:18 → hour = HH-1 （新小时刚开始 ≤18 分钟，算前一小时收尾累计）
+ *   HH:19 ~ HH:59 → hour = HH   （已进入 HH 这小时 19 分钟以上，归当前小时）
+ *
+ * Omni 默认每 20 分钟推一次（HH:01 / HH:21 / HH:41），按此规则：
+ *   13:21 → hour=13
+ *   13:41 → hour=13（覆盖 13:21）
+ *   14:01 → hour=13（min<19，归 14-1=13，继续覆盖；表示 13 点这小时完整 1h 结束的累计）
+ *   14:21 → hour=14（新一行）
+ *
+ * 边界：HH=0 且 min<19 → hour=0 不减（避免跨日 hour=-1）。
+ */
 function parsePushTime(text: string): { date: string; hour: number } | null {
-  // 兼容全角/半角冒号、变体空白
   const m = text.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})/);
   if (!m) return null;
-  const [, y, mo, d, h] = m;
+  const [, y, mo, d, h, mm] = m;
+  const pushedH = Math.min(23, Math.max(0, Number(h)));
+  const pushedM = Number(mm);
+  const hour = pushedM < 19 ? (pushedH === 0 ? 0 : pushedH - 1) : pushedH;
   return {
     date: `${y}-${mo}-${d}`,
-    hour: Math.min(23, Math.max(0, Number(h))),
+    hour,
   };
 }
 

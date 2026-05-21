@@ -13,6 +13,7 @@ export * from "./kuaishou-member";
 export * from "./live-account";
 export * from "./live-anchor";
 export * from "./live-room";
+export * from "./live-session-log";
 export * from "./permissions";
 export * from "./placements";
 export * from "./schedule-override";

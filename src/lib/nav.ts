@@ -73,6 +73,7 @@ export const NAV: NavItem[] = [
       { key: "live-anchors", label: "主播档案", href: "/live-anchors" },
       { key: "live-today", label: "今日排班", href: "/live-accounts/schedule-today" },
       { key: "live-schedule", label: "默认排班", href: "/live-accounts/schedule-overview" },
+      { key: "live-checkin", label: "开播记录", href: "/live-accounts/checkin-history" },
     ],
   },
   {

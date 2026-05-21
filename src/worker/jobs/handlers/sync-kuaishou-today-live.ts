@@ -118,6 +118,17 @@ export async function syncKuaishouTodayLiveSessionsHandler(): Promise<SyncResult
       else updated++;
     }
 
+    // 主播打卡兜底（暂禁用）：today-live API 偶尔不返回实际在播主播（数据延迟/未签约），
+    // 用"不在 today-live → 离线"判断会误关。等数据源稳定后再开。
+    // try {
+    //   const { autoCloseOfflineSessions } = await import("@/modules/checkin/server");
+    //   const livingIds = list.map((r) => String(r.memberId));
+    //   const closedCount = await autoCloseOfflineSessions(livingIds);
+    //   if (closedCount > 0) console.log(`[today-live] auto-closed ${closedCount} offline sessions`);
+    // } catch (err) {
+    //   console.error("[today-live] auto-close offline sessions failed:", err);
+    // }
+
     const summary: SyncResult = {
       total: list.length,
       inserted,
