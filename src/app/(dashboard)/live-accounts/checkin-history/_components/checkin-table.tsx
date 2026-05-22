@@ -32,6 +32,23 @@ function fmtYuan(cents: number | null): string {
   return yuan.toFixed(2);
 }
 
+function fmtMoney(yuan: number | null): string {
+  if (yuan == null) return "—";
+  if (yuan === 0) return "0";
+  if (yuan >= 10000) return `${(yuan / 10000).toFixed(2)}万`;
+  return yuan.toFixed(2);
+}
+
+function fmtInt(n: number | null): string {
+  if (n == null) return "—";
+  return Math.round(n).toLocaleString("zh-CN");
+}
+
+function fmtPrice(num: number | null, denom: number | null): string {
+  if (num == null || denom == null || denom <= 0) return "—";
+  return (num / denom).toFixed(2);
+}
+
 function statusBadge(s: CheckinDaySession): { text: string; cls: string } {
   if (s.status === "in_progress") return { text: "进行中", cls: "bg-blue-100 text-blue-800" };
   if (s.status === "ended") return { text: "正常下播", cls: "bg-emerald-100 text-emerald-800" };
@@ -102,7 +119,7 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
         </span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-[12.5px] min-w-[1000px]">
+        <table className="w-full text-[12.5px] min-w-[1400px]">
           <thead className="bg-slate-50 text-[11.5px] font-semibold text-slate-600 tracking-normal">
             <tr>
               <th className="px-4 py-3 text-left">主播</th>
@@ -112,6 +129,11 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
               <th className="px-4 py-3 text-left whitespace-nowrap">结束</th>
               <th className="px-4 py-3 text-left whitespace-nowrap">时长</th>
               <th className="px-4 py-3 text-right whitespace-nowrap min-w-[90px]">礼物(元)</th>
+              <th className="px-4 py-3 text-right whitespace-nowrap min-w-[88px]">消耗(元)</th>
+              <th className="px-4 py-3 text-right whitespace-nowrap min-w-[72px]">激活</th>
+              <th className="px-4 py-3 text-right whitespace-nowrap min-w-[80px]">激活单价</th>
+              <th className="px-4 py-3 text-right whitespace-nowrap min-w-[88px]">付费(元)</th>
+              <th className="px-4 py-3 text-right whitespace-nowrap min-w-[72px]">ARPU</th>
               <th className="px-6 py-3 text-left whitespace-nowrap min-w-[100px]">状态</th>
               {canForceEnd && <th className="px-4 py-3 text-right whitespace-nowrap">操作</th>}
             </tr>
@@ -119,7 +141,10 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
           <tbody>
             {flat.length === 0 ? (
               <tr>
-                <td colSpan={canForceEnd ? 9 : 8} className="px-3 py-6 text-center text-slate-400">
+                <td
+                  colSpan={canForceEnd ? 14 : 13}
+                  className="px-3 py-6 text-center text-slate-400"
+                >
                   暂无记录
                 </td>
               </tr>
@@ -150,6 +175,21 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
                     </td>
                     <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-emerald-700 min-w-[90px]">
                       {fmtYuan(r.session.income_cents)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[88px]">
+                      {fmtMoney(r.session.cost_yuan)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[72px]">
+                      {fmtInt(r.session.activations)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[80px]">
+                      {fmtPrice(r.session.cost_yuan, r.session.activations)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[88px]">
+                      {fmtMoney(r.session.payment_yuan)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[72px]">
+                      {fmtPrice(r.session.payment_yuan, r.session.activations)}
                     </td>
                     <td className="px-6 py-3 min-w-[100px]">
                       <span
