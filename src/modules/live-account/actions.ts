@@ -1,15 +1,60 @@
 "use server";
 import { db } from "@/db/client";
-import { live_account, placement_row, schedule_override } from "@/db/schema";
+import { dingtalk_user, live_account, placement_row, schedule_override } from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
 import { requireAdmin } from "@/lib/admin-guard";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
+import { getManagedDeptIds, resolvePermission } from "@/modules/permissions/server";
 import { AppError } from "@/lib/errors";
-import { eq, count } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { UpsertAccountInput, DeleteAccountInput } from "./schema";
+
+/**
+ * 检查当前用户对某账号是否可写：
+ * - emergency / admin → 直接 true
+ * - can_edit === false → false（连权限位都没）
+ * - scope=all → true；scope=team → 看 target agent 是否在 team；scope=self → 看 target agent = userId
+ * - delegated 非空 → target agent ∈ delegated
+ * - 新建场景（targetAgent=undefined）→ 只看 can_edit
+ */
+async function canWriteAccount(
+  userId: string,
+  isEmergency: boolean,
+  targetAgent: string | null | undefined,
+): Promise<boolean> {
+  if (isEmergency) return true;
+  const perm = await resolvePermission(userId, "live_account");
+  if (!perm.can_edit) return false;
+
+  // 新建账号：只校验 can_edit（还不存在的账号没 scope 可比）
+  if (targetAgent === undefined) return true;
+
+  if (perm.delegatedUserIds && perm.delegatedUserIds.length > 0) {
+    return targetAgent !== null && perm.delegatedUserIds.includes(targetAgent);
+  }
+  if (perm.scope === "all") return true;
+  if (perm.scope === "self") return targetAgent === userId;
+  if (perm.scope === "team") {
+    if (!targetAgent) return false;
+    const deptIds = await getManagedDeptIds(userId);
+    if (deptIds.length === 0) return false;
+    const literal = deptIds.map((d) => `'${d.replace(/'/g, "''")}'`).join(",");
+    const [hit] = await db
+      .select({ user_id: dingtalk_user.user_id })
+      .from(dingtalk_user)
+      .where(
+        sql`${dingtalk_user.user_id} = ${targetAgent} AND ${dingtalk_user.dept_ids} ?| ARRAY[${sql.raw(literal)}]::text[]`,
+      );
+    return !!hit;
+  }
+  return false;
+}
 
 export async function upsertAccount(input: unknown) {
   const data = UpsertAccountInput.parse(input);
-  const { userId } = await requireAdmin();
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind !== "ok") throw new AppError("AUTH_FORBIDDEN", "未登录或未同步钉钉身份", 403);
+  const userId = ctx.dingtalkUserId;
 
   const id = data.id ?? crypto.randomUUID();
   const isUpdate = Boolean(data.id);
@@ -19,6 +64,25 @@ export async function upsertAccount(input: unknown) {
     const rows = await db.select().from(live_account).where(eq(live_account.id, id));
     before = rows[0] ?? null;
     if (!before) throw new AppError("LIVE_ACCOUNT_NOT_FOUND", "直播账号不存在", 404);
+  }
+
+  // 权限：新建查 can_edit；更新查 can_edit + 目标账号在 scope 内
+  const targetAgent: string | null | undefined = isUpdate
+    ? (before?.agent_dingtalk_user_id ?? null)
+    : undefined;
+  const canWrite = await canWriteAccount(userId, ctx.isEmergency, targetAgent);
+  if (!canWrite) {
+    throw new AppError("AUTH_FORBIDDEN", "无权编辑该直播账号", 403);
+  }
+  // 若修改 agent 字段 → 新 agent 也要在 scope 内（防止把账号转给 scope 外）
+  if (isUpdate && data.agent_dingtalk_user_id !== undefined) {
+    const newAgent = data.agent_dingtalk_user_id ?? null;
+    if (newAgent !== targetAgent) {
+      const canMoveTo = await canWriteAccount(userId, ctx.isEmergency, newAgent);
+      if (!canMoveTo) {
+        throw new AppError("AUTH_FORBIDDEN", "无权把账号转给 scope 外的运营", 403);
+      }
+    }
   }
 
   const values = {

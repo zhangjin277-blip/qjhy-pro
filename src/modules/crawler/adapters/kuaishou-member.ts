@@ -171,6 +171,12 @@ export interface MappedMember {
 export function mapKuaishouMember(
   raw: KuaishouMemberRaw,
   dingtalkUserByName: Map<string, string>,
+  /**
+   * broker_user_mapping 表的 broker_name → dingtalk_user_id（admin 手动配置的别名）。
+   * 用于覆盖那些不在钉钉里的"运营代号"（如外包代号"李子玥"实际是陈家乐）。
+   * 命中 alias 优先于 name 匹配。
+   */
+  brokerAliasByName: Map<string, string> = new Map<string, string>(),
 ): MappedMember {
   const accountName = raw.memberName || raw.userName;
   const product = inferProductFromName(accountName);
@@ -178,7 +184,11 @@ export function mapKuaishouMember(
   let agentId: string | null = null;
   const brokerName = raw.brokerName?.trim() ?? "";
   if (brokerName) {
-    agentId = dingtalkUserByName.get(brokerName) ?? null;
+    // 1. admin 手动配的 broker alias 优先
+    agentId = brokerAliasByName.get(brokerName) ?? null;
+    // 2. 钉钉员工 name 直接匹配
+    if (!agentId) agentId = dingtalkUserByName.get(brokerName) ?? null;
+    // 3. 标准化后再匹配钉钉
     if (!agentId) {
       const normalized = normalizePersonName(brokerName);
       if (normalized) agentId = dingtalkUserByName.get(normalized) ?? null;
