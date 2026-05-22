@@ -375,3 +375,133 @@ export async function autoCloseOfflineSessions(
   }
   return toClose.length;
 }
+
+/**
+ * 强制下播：admin / dept_leader 可以把 in_progress 的 session 强制 end。
+ * 写 audit_log（action=LIVE_SESSION_FORCE_END）。
+ */
+export interface ForceEndSessionResult {
+  session_id: string;
+  duration_seconds: number;
+}
+
+export class ForceEndPermissionDenied extends Error {
+  constructor() {
+    super("FORCE_END_PERMISSION_DENIED");
+    this.name = "ForceEndPermissionDenied";
+  }
+}
+
+/** 该 user 在任意 session 上是否有强制下播权限（emergency / 个人白名单 / 任何 dept_leader） */
+export async function canForceEndAnySession(
+  operatorDingtalkUserId: string,
+  isEmergency: boolean,
+): Promise<boolean> {
+  if (isEmergency) return true;
+  if (ANCHOR_USER_IDS_ALLOW.includes(operatorDingtalkUserId)) return true;
+  const { dept_leader } = await import("@/db/schema");
+  const [row] = await db
+    .select({ dept_id: dept_leader.dept_id })
+    .from(dept_leader)
+    .where(eq(dept_leader.user_id, operatorDingtalkUserId))
+    .limit(1);
+  return !!row;
+}
+
+/** 具体某个 session 上是否有强制下播权限（dept_leader 管辖主播所在部门） */
+async function canForceEndSession(
+  sessionId: string,
+  operatorDingtalkUserId: string,
+  isEmergency: boolean,
+): Promise<boolean> {
+  if (isEmergency) return true;
+  if (ANCHOR_USER_IDS_ALLOW.includes(operatorDingtalkUserId)) return true;
+
+  const [row] = await db
+    .select({ dept_ids: dingtalk_user.dept_ids })
+    .from(live_session_log)
+    .innerJoin(dingtalk_user, eq(dingtalk_user.user_id, live_session_log.anchor_dingtalk_user_id))
+    .where(eq(live_session_log.id, sessionId))
+    .limit(1);
+  if (!row) return false;
+  const anchorDepts = (row.dept_ids ?? []) as string[];
+
+  const { dept_leader } = await import("@/db/schema");
+  const myDepts = await db
+    .select({ dept_id: dept_leader.dept_id })
+    .from(dept_leader)
+    .where(eq(dept_leader.user_id, operatorDingtalkUserId));
+  const myDeptSet = new Set(myDepts.map((r) => r.dept_id));
+  return anchorDepts.some((d) => myDeptSet.has(d));
+}
+
+export async function forceEndSession(args: {
+  sessionId: string;
+  operatorDingtalkUserId: string;
+  isEmergency: boolean;
+  reason?: string | null;
+}): Promise<ForceEndSessionResult> {
+  const { sessionId, operatorDingtalkUserId, isEmergency, reason } = args;
+
+  const allowed = await canForceEndSession(sessionId, operatorDingtalkUserId, isEmergency);
+  if (!allowed) throw new ForceEndPermissionDenied();
+
+  const result = await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({
+        id: live_session_log.id,
+        anchor_dingtalk_user_id: live_session_log.anchor_dingtalk_user_id,
+        live_account_id: live_session_log.live_account_id,
+        status: live_session_log.status,
+        start_at: live_session_log.start_at,
+        raw: live_session_log.raw,
+      })
+      .from(live_session_log)
+      .where(eq(live_session_log.id, sessionId));
+    if (!existing) throw new Error("SESSION_NOT_FOUND");
+    if (existing.status !== "in_progress") throw new Error("SESSION_NOT_IN_PROGRESS");
+
+    const now = new Date();
+    const duration = Math.floor((now.getTime() - existing.start_at.getTime()) / 1000);
+    const prevRaw = (existing.raw ?? {}) as Record<string, unknown>;
+    await tx
+      .update(live_session_log)
+      .set({
+        end_at: now,
+        duration_seconds: duration,
+        status: "ended",
+        closed_by: "admin_force",
+        updated_at: now,
+        raw: {
+          ...prevRaw,
+          force_ended_by: operatorDingtalkUserId,
+          force_ended_reason: reason ?? null,
+          force_ended_at: now.toISOString(),
+        },
+      })
+      .where(eq(live_session_log.id, sessionId));
+
+    return {
+      session_id: sessionId,
+      duration_seconds: duration,
+      anchor_dingtalk_user_id: existing.anchor_dingtalk_user_id,
+      live_account_id: existing.live_account_id,
+    };
+  });
+
+  const { writeAuditLog } = await import("@/lib/audit/log");
+  await writeAuditLog({
+    user_id: operatorDingtalkUserId,
+    action: "LIVE_SESSION_FORCE_END",
+    target_type: "live_session_log",
+    target_id: sessionId,
+    after: {
+      anchor_dingtalk_user_id: result.anchor_dingtalk_user_id,
+      live_account_id: result.live_account_id,
+      duration_seconds: result.duration_seconds,
+      reason: reason ?? null,
+    },
+  });
+
+  return { session_id: result.session_id, duration_seconds: result.duration_seconds };
+}

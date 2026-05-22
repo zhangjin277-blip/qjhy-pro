@@ -10,6 +10,7 @@ export * from "./dingtalk";
 export * from "./daily-schedule";
 export * from "./invite-codes";
 export * from "./kuaishou-live-session";
+export * from "./kuaishou-live-trend";
 export * from "./kuaishou-member";
 export * from "./live-account";
 export * from "./live-anchor";

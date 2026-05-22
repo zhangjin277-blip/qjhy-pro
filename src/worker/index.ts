@@ -58,6 +58,17 @@ registerJob({
   },
 });
 
+// 快手 666 trend 接口拉一场分时累计（1 min/点，整场全部历史）。
+// 5 min 跑一次足够（每次同房间多次 UPSERT 自动去重），写 kuaishou_live_trend。
+// singletonKey 防重叠。
+registerJob({
+  name: "sync-kuaishou-live-snapshot",
+  schedule: "*/5 * * * *",
+  task: async () => {
+    await enqueue(JOB_NAMES.SYNC_KUAISHOU_LIVE_SNAPSHOT, {}, { singletonKey: "ks-trend-sync" });
+  },
+});
+
 // 抖音视频快照（每天 12:00）：仅"线下运营"组带的主播，近 30 天滑动窗口
 registerJob({
   name: "fetch-video",

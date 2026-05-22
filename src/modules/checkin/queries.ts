@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/db/client";
-import { and, asc, eq, gte, lt, or } from "drizzle-orm";
+import { and, asc, eq, gte, lt, or, sql } from "drizzle-orm";
 import { live_session_log, live_account, dingtalk_user } from "@/db/schema";
 
 export interface CheckinDaySession {
@@ -12,6 +12,8 @@ export interface CheckinDaySession {
   status: string;
   closed_by: string | null;
   duration_seconds: number | null;
+  /** 该 session 时间窗内按 ks baseinfo snapshot 算的礼物流水（分）。null = 没有 snapshot 数据 */
+  income_cents: number | null;
 }
 
 export interface CheckinDayAccount {
@@ -80,6 +82,39 @@ export async function getCheckinDay(date: string, product?: string): Promise<Che
       asc(live_session_log.start_at),
     );
 
+  // 一次性算所有 session 的 ks 礼物流水（口径 = SUM_VALID_INCOME 直播流水）
+  //   按 (live_account.platform_account_id = member_id) + 时间窗匹配 trend 表
+  //   per_stream = MAX(income) - MIN(income) GROUP BY live_stream_id_str（处理换场重置）
+  const sessionIds = rows.map((r) => r.session_id);
+  const incomeBySession = new Map<string, number>();
+  if (sessionIds.length > 0) {
+    const incomeRows = await db.execute<{ session_id: string; income_cents: string }>(sql`
+      WITH per_stream AS (
+        SELECT
+          l.id AS session_id,
+          t.live_stream_id_str,
+          MAX(t.valid_income_cents) - MIN(t.valid_income_cents) AS diff_cents
+        FROM live_session_log l
+        JOIN live_account la ON la.id = l.live_account_id
+        JOIN kuaishou_live_trend t
+          ON t.member_id = la.platform_account_id
+         AND t.ts >= l.start_at
+         AND t.ts <= COALESCE(l.end_at, now())
+        WHERE l.id IN (${sql.join(
+          sessionIds.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})
+        GROUP BY l.id, t.live_stream_id_str
+      )
+      SELECT session_id::text, SUM(diff_cents)::text AS income_cents
+      FROM per_stream
+      GROUP BY session_id
+    `);
+    for (const r of incomeRows) {
+      incomeBySession.set(r.session_id, Number(r.income_cents));
+    }
+  }
+
   // 按 account 聚合
   const map = new Map<string, CheckinDayAccount>();
   for (const r of rows) {
@@ -105,6 +140,7 @@ export async function getCheckinDay(date: string, product?: string): Promise<Che
       status: r.status,
       closed_by: r.closed_by,
       duration_seconds: r.duration_seconds,
+      income_cents: incomeBySession.get(r.session_id) ?? null,
     });
   }
 

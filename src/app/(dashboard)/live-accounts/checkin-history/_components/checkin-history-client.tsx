@@ -10,6 +10,7 @@ interface Props {
   initialData: CheckinDayResult;
   initialDate: string;
   initialProduct: string;
+  canForceEnd: boolean;
 }
 
 const PRODUCTS = [
@@ -23,6 +24,7 @@ export function CheckinHistoryClient({
   initialData,
   initialDate,
   initialProduct,
+  canForceEnd,
 }: Props): React.JSX.Element {
   const [date, setDate] = useState(initialDate);
   const [product, setProduct] = useState(initialProduct);
@@ -71,13 +73,13 @@ export function CheckinHistoryClient({
     const rows: string[][] = [
       [
         "产品",
-        "账号(投放标签)",
-        "账号名",
+        "账号",
         "平台",
         "主播",
         "开始时间",
         "结束时间",
         "时长(min)",
+        "礼物流水(元)",
         "状态",
         "关闭方式",
       ],
@@ -86,13 +88,13 @@ export function CheckinHistoryClient({
       for (const s of acc.sessions) {
         rows.push([
           acc.product,
-          acc.placement_label ?? "",
           acc.account_name,
           acc.platform,
           s.anchor_name,
           new Date(s.start_at).toLocaleString("zh-CN"),
           s.end_at ? new Date(s.end_at).toLocaleString("zh-CN") : "",
           s.duration_seconds != null ? Math.round(s.duration_seconds / 60).toString() : "",
+          s.income_cents != null ? (s.income_cents / 100).toFixed(2) : "",
           s.status,
           s.closed_by ?? "",
         ]);
@@ -161,7 +163,11 @@ export function CheckinHistoryClient({
       ) : (
         <>
           <CheckinGantt data={data} />
-          <CheckinTable data={data} />
+          <CheckinTable
+            data={data}
+            canForceEnd={canForceEnd}
+            onChanged={() => refresh(date, product)}
+          />
         </>
       )}
     </div>

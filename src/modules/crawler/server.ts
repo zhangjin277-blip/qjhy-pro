@@ -70,5 +70,12 @@ export {
   fetchKuaishouTodayLiveSessions,
   type KuaishouTodayLiveRaw,
 } from "./adapters/kuaishou-today-live";
+export {
+  fetchKuaishouLiveList,
+  fetchKuaishouLiveTrend,
+  type KuaishouLiveListRow,
+  type KuaishouTrendPoint,
+  type KuaishouTrendBundle,
+} from "./adapters/kuaishou-live-baseinfo";
 export { fetchVideoListForAnchor, type VideoSnapshotRow } from "./adapters/video-list";
 export { resolveOfflineOpAnchors, type OfflineOpAnchor } from "./offline-op-anchors";
