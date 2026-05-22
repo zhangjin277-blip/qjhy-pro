@@ -124,6 +124,13 @@ export async function upsertOverrideBatch(input: unknown): Promise<{ ok: true; c
     .from(auth_permission_override)
     .where(eq(auth_permission_override.user_id, data.user_id));
 
+  // 委托视图：调用方传了显式值（含 null/空数组 = 清除）才参与 write set
+  const delegatedExplicit = data.delegated_user_ids !== undefined;
+  const delegatedValue =
+    Array.isArray(data.delegated_user_ids) && data.delegated_user_ids.length > 0
+      ? data.delegated_user_ids
+      : null;
+
   let count = 0;
   for (const entry of data.entries) {
     if (entry.scope === null) {
@@ -149,6 +156,7 @@ export async function upsertOverrideBatch(input: unknown): Promise<{ ok: true; c
         can_admin: entry.can_admin ?? null,
         reason: data.reason,
         expires_at: null,
+        delegated_user_ids: delegatedExplicit ? delegatedValue : null,
         created_by: opUser,
       })
       .onConflictDoUpdate({
@@ -162,6 +170,7 @@ export async function upsertOverrideBatch(input: unknown): Promise<{ ok: true; c
           ...(entry.can_edit !== undefined && { can_edit: entry.can_edit }),
           ...(entry.can_export !== undefined && { can_export: entry.can_export }),
           ...(entry.can_admin !== undefined && { can_admin: entry.can_admin }),
+          ...(delegatedExplicit && { delegated_user_ids: delegatedValue }),
         },
       });
     count++;

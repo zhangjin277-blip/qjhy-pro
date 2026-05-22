@@ -26,6 +26,7 @@ import {
 } from "@/modules/permissions";
 import { toast } from "sonner";
 import { Crown, X as XIcon } from "lucide-react";
+import { UserDeptTreePicker } from "./user-dept-tree-picker";
 
 interface UserDetail {
   user_id: string;
@@ -45,6 +46,8 @@ interface UserDetail {
     reason: string | null;
   }[];
   managedDepts: { dept_id: string; name: string; alias: string | null }[];
+  /** 委托视图：该用户当前 override 行里挂的 delegated 员工集合（并集） */
+  delegated_users: { user_id: string; name: string }[];
 }
 
 interface UserListRow {
@@ -127,6 +130,9 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
   const [deptFilter, setDeptFilter] = useState("");
   const [deptBusy, setDeptBusy] = useState(false);
 
+  // 委托视图：picker 选中的员工 user_id 数组
+  const [delegatedUserIds, setDelegatedUserIds] = useState<string[]>([]);
+
   useEffect(() => {
     fetch(`/api/admin/users/${userId}`)
       .then((r) => r.json())
@@ -140,6 +146,7 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
         }
         setWorking(init);
         setWorkingPosition(d.effective_position);
+        setDelegatedUserIds((d.delegated_users ?? []).map((u) => u.user_id));
       });
   }, [userId]);
 
@@ -202,6 +209,16 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
     }
   }
 
+  const initialDelegatedKey = useMemo(() => {
+    if (!detail) return "";
+    return [...detail.delegated_users.map((u) => u.user_id)].sort().join(",");
+  }, [detail]);
+  const currentDelegatedKey = useMemo(
+    () => [...delegatedUserIds].sort().join(","),
+    [delegatedUserIds],
+  );
+  const delegatedDirty = initialDelegatedKey !== currentDelegatedKey;
+
   const dirty = useMemo(() => {
     if (!detail) return false;
     for (const m of MODULE_KEYS) {
@@ -210,8 +227,9 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
       if (working[m] !== initial) return true;
     }
     if (workingPosition !== detail.effective_position) return true;
+    if (delegatedDirty) return true;
     return false;
-  }, [detail, working, workingPosition]);
+  }, [detail, working, workingPosition, delegatedDirty]);
 
   const positionDirty = useMemo(() => {
     if (!detail) return false;
@@ -253,7 +271,7 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
           reason: reason.trim(),
         });
       }
-      // 2. 写板块权限 override
+      // 2. 写板块权限 override（含委托视图）
       const entries = MODULE_KEYS.map((m) => ({
         module: m,
         scope: working[m] === "default" ? null : (working[m] as Scope),
@@ -262,6 +280,8 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
         user_id: userId,
         reason: reason.trim(),
         entries,
+        // delegated 显式传：空数组表示清空；非空表示设置
+        delegated_user_ids: delegatedUserIds,
       });
       toast.success("权限保存成功");
       onClose?.();
@@ -330,6 +350,17 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
             管理部门
             {detail.managedDepts.length > 0 && (
               <span className="ml-1 text-[11px] text-amber-600">·{detail.managedDepts.length}</span>
+            )}
+          </a>
+          <a href="#delegated" className="block px-3 py-2 hover:bg-accent">
+            <span
+              className={`inline-block w-2 h-2 rounded-full mr-2 align-middle ${
+                delegatedUserIds.length > 0 ? "bg-sky-500" : "bg-muted-foreground/30"
+              }`}
+            />
+            委托视图
+            {delegatedUserIds.length > 0 && (
+              <span className="ml-1 text-[11px] text-sky-600">·{delegatedUserIds.length}</span>
             )}
           </a>
 
@@ -585,6 +616,23 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
                 </table>
               </div>
             </details>
+          </section>
+
+          {/* 委托视图 */}
+          <section id="delegated" className="space-y-2 scroll-mt-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold">委托视图</h3>
+              <span className="text-muted-foreground text-xs">
+                （可选 · 直接以选中员工的「self」视角看主播 / 账号 / 投放数据；覆盖各板块 scope）
+              </span>
+            </div>
+            <div className="rounded-xl border bg-card p-3">
+              <UserDeptTreePicker
+                selectedUserIds={delegatedUserIds}
+                onChange={setDelegatedUserIds}
+                excludeUserIds={[userId]}
+              />
+            </div>
           </section>
 
           {/* 复用 */}

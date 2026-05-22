@@ -84,6 +84,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
     };
   });
 
+  // 委托视图：取所有 override 行中 delegated_user_ids 的并集
+  // （actions 写入时保证同一用户各 module 同步，但保险起见用并集容错）
+  const delegatedSet = new Set<string>();
+  for (const row of overrideRows) {
+    const arr = row.delegated_user_ids as string[] | null;
+    if (Array.isArray(arr)) arr.forEach((id) => delegatedSet.add(id));
+  }
+  const delegatedUserIds = [...delegatedSet];
+
+  // 附带 delegated 员工的姓名（UI 渲染 chip 用）
+  const delegatedUsers =
+    delegatedUserIds.length > 0
+      ? await db
+          .select({ user_id: dingtalk_user.user_id, name: dingtalk_user.name })
+          .from(dingtalk_user)
+          .where(inArray(dingtalk_user.user_id, delegatedUserIds))
+      : [];
+
   return NextResponse.json({
     user_id: user.user_id,
     name: user.name,
@@ -95,5 +113,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
     permissions: targetPermissions,
     overrides: overrideRows,
     managedDepts: enrichedManagedDepts,
+    delegated_users: delegatedUsers,
   });
 }

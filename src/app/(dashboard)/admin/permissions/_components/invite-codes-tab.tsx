@@ -20,6 +20,7 @@ import {
   type InviteCodeRow,
   type InviteCodePermSpec,
 } from "@/modules/invite-codes";
+import { UserDeptTreePicker } from "./user-dept-tree-picker";
 
 interface PermState {
   enabled: boolean;
@@ -85,12 +86,7 @@ export function InviteCodesTab() {
   const [accountExpiresPreset, setAccountExpiresPreset] = useState("never");
   const [note, setNote] = useState("");
   // 委托视图：选员工 = 注册账号将代他们的 self 视角看数据
-  const [delegatedUsers, setDelegatedUsers] = useState<{ user_id: string; name: string }[]>([]);
-  const [employeeSearch, setEmployeeSearch] = useState("");
-  const [employeeList, setEmployeeList] = useState<
-    { user_id: string; name: string; title: string | null }[]
-  >([]);
-  const [empListLoading, setEmpListLoading] = useState(false);
+  const [delegatedUserIds, setDelegatedUserIds] = useState<string[]>([]);
 
   async function reload() {
     setLoading(true);
@@ -106,57 +102,13 @@ export function InviteCodesTab() {
     void reload();
   }, []);
 
-  // 邀请码对话框打开时拉员工列表（active 钉钉员工，去掉外部用户）
-  useEffect(() => {
-    if (!dialogOpen) return;
-    if (employeeList.length > 0) return;
-    setEmpListLoading(true);
-    fetch("/api/admin/users")
-      .then(
-        (r) =>
-          r.json() as Promise<{ users: { user_id: string; name: string; title: string | null }[] }>,
-      )
-      .then((data) => {
-        // 排除外部用户（ext_ 前缀）
-        setEmployeeList(data.users.filter((u) => !u.user_id.startsWith("ext_")));
-      })
-      .catch(() => undefined)
-      .finally(() => setEmpListLoading(false));
-  }, [dialogOpen, employeeList.length]);
-
-  const filteredEmployees = (() => {
-    const q = employeeSearch.trim();
-    if (!q) return [];
-    const lower = q.toLowerCase();
-    const selectedIds = new Set(delegatedUsers.map((u) => u.user_id));
-    return employeeList
-      .filter((u) => !selectedIds.has(u.user_id))
-      .filter(
-        (u) =>
-          u.name.toLowerCase().includes(lower) ||
-          u.user_id.toLowerCase().includes(lower) ||
-          (u.title ?? "").toLowerCase().includes(lower),
-      )
-      .slice(0, 8);
-  })();
-
-  function addDelegatedUser(u: { user_id: string; name: string }) {
-    setDelegatedUsers([...delegatedUsers, { user_id: u.user_id, name: u.name }]);
-    setEmployeeSearch("");
-  }
-
-  function removeDelegatedUser(userId: string) {
-    setDelegatedUsers(delegatedUsers.filter((u) => u.user_id !== userId));
-  }
-
   function resetForm() {
     setPerms(emptyPerms());
     setMaxUses(1);
     setExpiresPreset("7d");
     setAccountExpiresPreset("never");
     setNote("");
-    setDelegatedUsers([]);
-    setEmployeeSearch("");
+    setDelegatedUserIds([]);
     setError(null);
   }
 
@@ -187,7 +139,7 @@ export function InviteCodesTab() {
           expires_at: expiresPresetToISO(expiresPreset),
           account_expire_at: expiresPresetToISO(accountExpiresPreset),
           note: note.trim() || null,
-          delegated_user_ids: delegatedUsers.map((u) => u.user_id),
+          delegated_user_ids: delegatedUserIds,
         });
         const url = `${window.location.origin}/register?code=${res.code}`;
         setJustCreated({ display: res.displayCode, url });
@@ -466,57 +418,16 @@ export function InviteCodesTab() {
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="delegated-search">
+              <Label>
                 委托视图（可选）
                 <span className="text-muted-foreground ml-1 text-xs font-normal">
                   选员工 = 注册账号将"代他们"看主播/账号/投放数据，覆盖上面的 scope
                 </span>
               </Label>
-              {delegatedUsers.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pb-1">
-                  {delegatedUsers.map((u) => (
-                    <span
-                      key={u.user_id}
-                      className="inline-flex items-center gap-1 rounded border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs text-sky-700"
-                    >
-                      {u.name}
-                      <button
-                        type="button"
-                        onClick={() => removeDelegatedUser(u.user_id)}
-                        className="text-sky-500 hover:text-sky-700"
-                        aria-label={`移除 ${u.name}`}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="relative">
-                <Input
-                  id="delegated-search"
-                  value={employeeSearch}
-                  onChange={(e) => setEmployeeSearch(e.target.value)}
-                  placeholder={empListLoading ? "员工列表加载中…" : "搜索员工姓名 / userid / 岗位"}
-                  autoComplete="off"
-                  disabled={empListLoading}
-                />
-                {filteredEmployees.length > 0 && (
-                  <div className="border-input bg-popover absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border shadow-md">
-                    {filteredEmployees.map((u) => (
-                      <button
-                        type="button"
-                        key={u.user_id}
-                        onClick={() => addDelegatedUser(u)}
-                        className="hover:bg-accent flex w-full items-center justify-between px-2.5 py-1.5 text-left text-xs"
-                      >
-                        <span>{u.name}</span>
-                        <span className="text-muted-foreground">{u.title ?? "—"}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <UserDeptTreePicker
+                selectedUserIds={delegatedUserIds}
+                onChange={setDelegatedUserIds}
+              />
             </div>
 
             <div className="space-y-1">
