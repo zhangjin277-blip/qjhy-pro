@@ -7,5 +7,11 @@
  *
  * 现行 ESLint zone 已放行 `server.ts` 与 `index.ts`。
  */
-export { resolvePermission, mergePermissions, scopeAtLeast, MAX_SCOPE } from "./resolve";
+export {
+  resolvePermission,
+  resolveVisibleModules,
+  mergePermissions,
+  scopeAtLeast,
+  MAX_SCOPE,
+} from "./resolve";
 export { buildScopeWhereClause, getManagedDeptIds, type ScopeWhereClause } from "./scope";

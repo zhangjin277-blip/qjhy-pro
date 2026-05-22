@@ -8,7 +8,7 @@ import {
   role_default_permission,
   user_position_override,
 } from "@/db/schema";
-import type { ModuleKey } from "./modules";
+import { MODULE_KEYS, type ModuleKey } from "./modules";
 import type { Permission, PermissionSource, ResolvedPermission, Scope } from "./types";
 
 const SCOPE_RANK: Record<Scope, number> = {
@@ -178,4 +178,19 @@ export async function resolvePermission(
   }
 
   return { ...merged, delegatedUserIds, sources };
+}
+
+/**
+ * 一次性算出某用户在 sidebar 上可见的 module 集合。
+ * 可见 = scope !== "none" 或 can_admin === true。
+ */
+export async function resolveVisibleModules(userId: string): Promise<Set<ModuleKey>> {
+  const perms = await Promise.all(MODULE_KEYS.map((m) => resolvePermission(userId, m)));
+  const visible = new Set<ModuleKey>();
+  MODULE_KEYS.forEach((m, i) => {
+    const p = perms[i];
+    if (!p) return;
+    if (p.scope !== "none" || p.can_admin) visible.add(m);
+  });
+  return visible;
 }

@@ -3,15 +3,25 @@
 import { useState, type ReactNode } from "react";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import type { ModuleKey } from "@/modules/permissions";
 
 interface ShellProps {
   defaultCollapsed: boolean;
   userName: string;
   userTitle: string | null;
+  visibleModules: ModuleKey[];
+  bypassPerms: boolean;
   children: ReactNode;
 }
 
-export function DashboardShell({ defaultCollapsed, userName, userTitle, children }: ShellProps) {
+export function DashboardShell({
+  defaultCollapsed,
+  userName,
+  userTitle,
+  visibleModules,
+  bypassPerms,
+  children,
+}: ShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   return (
     <div
@@ -25,6 +35,8 @@ export function DashboardShell({ defaultCollapsed, userName, userTitle, children
         defaultCollapsed={defaultCollapsed}
         mobileOpen={mobileOpen}
         onMobileClose={() => setMobileOpen(false)}
+        visibleModules={visibleModules}
+        bypassPerms={bypassPerms}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* TopBar 浮在 main card 外面：头像 + 退出 在右上 */}

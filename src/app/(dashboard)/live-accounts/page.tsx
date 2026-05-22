@@ -155,10 +155,10 @@ export default async function LiveAccountsPage({
     overridesByAccount[o.account_id]!.push(o);
   }
 
-  // Compute per-product counts
+  // Compute per-product counts（按当前用户 scope 算计数）
   const productCounts: Record<string, number> = {};
   for (const p of PRODUCTS) {
-    const list = await listAccounts({ product: p });
+    const list = await listAccounts({ product: p }, dingtalkUserId, isEmergency);
     productCounts[p] = list.length;
   }
 
