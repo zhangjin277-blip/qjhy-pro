@@ -8,7 +8,7 @@ import type {
   ScheduleRow,
   ScheduleYesterdayHourly,
 } from "@/modules/placement/server";
-import { fetchAccountHourly, fetchAnchorSchedule } from "../actions";
+import { fetchAccountHourly, fetchAnchorSchedule, fetchAnchorCheckin } from "../actions";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 
 interface AnchorDetailDrawerProps {
@@ -67,6 +67,11 @@ export function AnchorDetailDrawer({
     yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
     loading: false,
   });
+  const [checkinState, setCheckinState] = useState<ScheduleState>({
+    rows: [],
+    yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
+    loading: false,
+  });
 
   // 切换主播时重置内部状态
   useEffect(() => {
@@ -74,6 +79,11 @@ export function AnchorDetailDrawer({
     setHourlyMap({});
     setSelectedScheduleKey(null);
     setScheduleState({
+      rows: [],
+      yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
+      loading: false,
+    });
+    setCheckinState({
       rows: [],
       yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
       loading: false,
@@ -92,17 +102,43 @@ export function AnchorDetailDrawer({
           loading: false,
         }),
       );
+
+    // 同步拉一份"按开播记录"归因
+    setCheckinState((state) => ({ ...state, loading: true }));
+    fetchAnchorCheckin(filter, anchor.anchor_label)
+      .then((rows) =>
+        setCheckinState({
+          rows,
+          yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
+          loading: false,
+        }),
+      )
+      .catch(() =>
+        setCheckinState({
+          rows: [],
+          yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
+          loading: false,
+        }),
+      );
   }, [open, anchor, filter]);
 
   useEffect(() => {
-    if (scheduleState.loading) return;
+    if (scheduleState.loading || checkinState.loading) return;
     setSelectedScheduleKey((current) => {
-      if (current && scheduleState.rows.some((row) => scheduleKey(row) === current)) {
+      // selectedKey 形如 `${subKey}|${scheduleKey(row)}` — 检查是否还在任一 section
+      if (
+        current &&
+        (scheduleState.rows.some((r) => `schedule|${scheduleKey(r)}` === current) ||
+          checkinState.rows.some((r) => `checkin|${scheduleKey(r)}` === current))
+      ) {
         return current;
       }
-      return scheduleState.rows[0] ? scheduleKey(scheduleState.rows[0]) : null;
+      // 默认选第一个非空 section 的第一行
+      if (scheduleState.rows[0]) return `schedule|${scheduleKey(scheduleState.rows[0])}`;
+      if (checkinState.rows[0]) return `checkin|${scheduleKey(checkinState.rows[0])}`;
+      return null;
     });
-  }, [scheduleState.rows, scheduleState.loading]);
+  }, [scheduleState.rows, scheduleState.loading, checkinState.rows, checkinState.loading]);
 
   // 单包主播：打开抽屉自动展开唯一包
   useEffect(() => {
@@ -271,9 +307,24 @@ export function AnchorDetailDrawer({
         {/* CONTENT */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <ScheduleTimelineSection
-            state={scheduleState}
+            title="主播 × 投放时段（排班 + 开播打卡 双视图）"
+            countLabel="时段"
             selectedKey={selectedScheduleKey}
-            onSelect={(row) => setSelectedScheduleKey(scheduleKey(row))}
+            onSelect={(key) => setSelectedScheduleKey(key)}
+            sections={[
+              {
+                key: "schedule",
+                title: "按排班归因",
+                emptyText: "暂无可归因排班时段",
+                state: scheduleState,
+              },
+              {
+                key: "checkin",
+                title: "按开播打卡归因",
+                emptyText: "暂无开播打卡记录",
+                state: checkinState,
+              },
+            ]}
           />
 
           <div className="mb-3 flex items-center justify-between text-[12px] text-muted-foreground">
@@ -482,189 +533,268 @@ function fmtSlot(slot: [string, string]): string {
   return `${slot[0]} - ${slot[1]}`;
 }
 
+interface TimelineSubSection {
+  key: string; // 唯一前缀，防 selectedKey 跨 section 冲突
+  title: string;
+  emptyText: string;
+  state: ScheduleState;
+}
+
 function ScheduleTimelineSection({
-  state,
+  sections,
   selectedKey,
   onSelect,
+  title,
+  countLabel,
 }: {
-  state: ScheduleState;
+  sections: TimelineSubSection[];
   selectedKey: string | null;
-  onSelect: (row: ScheduleRow) => void;
+  onSelect: (key: string, row: ScheduleRow) => void;
+  title: string;
+  countLabel: string;
 }) {
-  if (state.loading) {
+  // 整体 loading：所有 subSection 都还在 loading
+  const allLoading = sections.every((s) => s.state.loading);
+  if (allLoading) {
     return (
       <section className="mb-4 rounded-lg border border-border bg-white p-4 text-center text-[12px] text-muted-foreground">
-        加载主播 × 投放时段...
+        加载 {title}...
       </section>
     );
   }
 
-  if (state.rows.length === 0) {
+  // 解析每个 sub 的分组结果 + 累计
+  const subResults = sections.map((sub) => {
+    const groups = new Map<
+      string,
+      {
+        date: string;
+        accountId: string;
+        accountName: string;
+        placementLabel: string | null;
+        rows: ScheduleRow[];
+        cost: number;
+        acts: number;
+        payment: number;
+        axisEnd: number;
+      }
+    >();
+    for (const row of sub.state.rows) {
+      const key = `${row.date}:${row.account_id}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          date: row.date,
+          accountId: row.account_id,
+          accountName: row.account_name,
+          placementLabel: row.placement_label,
+          rows: [],
+          cost: 0,
+          acts: 0,
+          payment: 0,
+          axisEnd: 24,
+        };
+        groups.set(key, group);
+      }
+      group.rows.push(row);
+      group.cost += row.personal_cost;
+      group.acts += row.personal_acts;
+      group.payment += row.personal_payment;
+      const start = parseHour(row.time_slot[0]);
+      let end = parseHour(row.time_slot[1]);
+      if (end < start) end += 24;
+      group.axisEnd = Math.max(group.axisEnd, end);
+    }
+    const list = [...groups.values()].sort((a, b) => {
+      if (a.date !== b.date) return a.date > b.date ? -1 : 1;
+      return b.cost - a.cost;
+    });
+    return { sub, list };
+  });
+
+  // 找当前选中 row：所有 sections 里查 selectedKey 包含 sub.key 前缀
+  let selectedRow: ScheduleRow | null = null;
+  let selectedSubRows: ScheduleRow[] = [];
+  let selectedYesterday: ScheduleYesterdayHourly = { byAccount: {}, cutoffHour: 24 };
+  for (const sub of sections) {
+    const found = sub.state.rows.find((row) => `${sub.key}|${scheduleKey(row)}` === selectedKey);
+    if (found) {
+      selectedRow = found;
+      selectedSubRows = sub.state.rows;
+      selectedYesterday = sub.state.yesterdayHourly;
+      break;
+    }
+  }
+  // 默认选第一个非空 section 的第一行
+  if (!selectedRow) {
+    for (const sub of sections) {
+      if (sub.state.rows[0]) {
+        selectedRow = sub.state.rows[0];
+        selectedSubRows = sub.state.rows;
+        selectedYesterday = sub.state.yesterdayHourly;
+        break;
+      }
+    }
+  }
+
+  const totalRows = sections.reduce((sum, s) => sum + s.state.rows.length, 0);
+  const totalGroups = subResults.reduce((sum, r) => sum + r.list.length, 0);
+
+  if (totalRows === 0) {
     return (
       <section className="mb-4 rounded-lg border border-border bg-white p-4">
-        <div className="text-[12px] font-medium text-foreground">主播 × 投放时段</div>
+        <div className="text-[12px] font-medium text-foreground">{title}</div>
         <div className="mt-2 text-[12px] text-muted-foreground">
-          当前主播在选定范围内暂无可归因排班时段。
+          {sections[0]?.emptyText ?? "暂无数据"}
         </div>
       </section>
     );
   }
-
-  const groups = new Map<
-    string,
-    {
-      date: string;
-      accountId: string;
-      accountName: string;
-      placementLabel: string | null;
-      rows: ScheduleRow[];
-      cost: number;
-      acts: number;
-      payment: number;
-      axisEnd: number;
-    }
-  >();
-
-  for (const row of state.rows) {
-    const key = `${row.date}:${row.account_id}`;
-    let group = groups.get(key);
-    if (!group) {
-      group = {
-        date: row.date,
-        accountId: row.account_id,
-        accountName: row.account_name,
-        placementLabel: row.placement_label,
-        rows: [],
-        cost: 0,
-        acts: 0,
-        payment: 0,
-        axisEnd: 24,
-      };
-      groups.set(key, group);
-    }
-    group.rows.push(row);
-    group.cost += row.personal_cost;
-    group.acts += row.personal_acts;
-    group.payment += row.personal_payment;
-    const start = parseHour(row.time_slot[0]);
-    let end = parseHour(row.time_slot[1]);
-    if (end < start) end += 24;
-    group.axisEnd = Math.max(group.axisEnd, end);
-  }
-
-  const list = [...groups.values()].sort((a, b) => {
-    if (a.date !== b.date) return a.date > b.date ? -1 : 1;
-    return b.cost - a.cost;
-  });
-  const selectedRow = selectedKey
-    ? (state.rows.find((row) => scheduleKey(row) === selectedKey) ?? state.rows[0] ?? null)
-    : (state.rows[0] ?? null);
 
   return (
     <section className="mb-4 rounded-lg border border-border bg-white">
       <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
         <div>
-          <div className="text-[12px] font-medium text-foreground">主播 × 投放时段</div>
+          <div className="text-[12px] font-medium text-foreground">{title}</div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">
-            {state.rows.length} 班次 · {list.length} 个账号日期组合
+            {totalRows} {countLabel} · {totalGroups} 个账号日期组合
           </div>
         </div>
       </div>
       <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="min-w-0 space-y-3">
-          {list.map((group) => (
-            <div
-              key={`${group.date}:${group.accountId}`}
-              className="rounded-md border border-border/70"
-            >
-              <div className="flex flex-wrap items-center gap-3 border-b border-border/60 px-3 py-2">
-                <span className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                  {group.placementLabel ?? "无标签"}
-                </span>
-                <span className="font-medium text-[12.5px] text-foreground">
-                  {group.accountName}
-                </span>
-                <span className="text-[11px] text-muted-foreground">{group.date}</span>
-                <div className="ml-auto flex gap-4 text-[11px] tabular-nums text-muted-foreground">
-                  <span>
-                    消耗 <strong className="text-foreground">{fmtMoney(group.cost)}</strong>
+        <div className="min-w-0 space-y-5">
+          {subResults.map(({ sub, list }, subIdx) => (
+            <div key={sub.key} className="space-y-3">
+              {sections.length > 1 && (
+                <div className="flex items-center gap-2 border-b border-border/40 pb-1">
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10.5px] font-medium ${
+                      subIdx === 0 ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"
+                    }`}
+                  >
+                    {sub.title}
                   </span>
-                  <span>
-                    激活 <strong className="text-foreground">{group.acts}</strong>
-                  </span>
-                  <span>
-                    CPA{" "}
-                    <strong className="text-foreground">
-                      {group.acts > 0 ? `¥${(group.cost / group.acts).toFixed(0)}` : "—"}
-                    </strong>
-                  </span>
-                  <span>
-                    付费 <strong className="text-foreground">{fmtMoney(group.payment)}</strong>
+                  <span className="text-[11px] text-muted-foreground">
+                    {sub.state.rows.length} 条
                   </span>
                 </div>
-              </div>
-              <div className="px-3 pb-3 pt-2">
-                <div className="relative h-4 text-[10px] tabular-nums text-muted-foreground/60">
-                  {[0, 3, 6, 9, 12, 15, 18, 21, group.axisEnd].map((hour, index, arr) => {
-                    if (index > 0 && hour === arr[index - 1]) return null;
-                    return (
-                      <span
-                        key={hour}
-                        className="absolute top-0 -translate-x-1/2"
-                        style={{ left: `${(hour / group.axisEnd) * 100}%` }}
-                      >
-                        {hour > 24 ? `${hour - 24}+1` : hour}
+              )}
+              {sub.state.loading ? (
+                <div className="rounded-md border border-dashed border-border/60 p-3 text-center text-[11.5px] text-muted-foreground">
+                  加载中...
+                </div>
+              ) : sub.state.rows.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border/60 p-3 text-center text-[11.5px] text-muted-foreground">
+                  {sub.emptyText}
+                </div>
+              ) : (
+                list.map((group) => (
+                  <div
+                    key={`${sub.key}:${group.date}:${group.accountId}`}
+                    className="rounded-md border border-border/70"
+                  >
+                    <div className="flex flex-wrap items-center gap-3 border-b border-border/60 px-3 py-2">
+                      <span className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                        {group.placementLabel ?? "无标签"}
                       </span>
-                    );
-                  })}
-                </div>
-                <div className="relative h-[112px] rounded-md border border-slate-100 bg-slate-50/50">
-                  {[3, 6, 9, 12, 15, 18, 21, 24].map((hour) => (
-                    <div
-                      key={hour}
-                      className="pointer-events-none absolute inset-y-0 border-l border-dashed border-slate-100"
-                      style={{ left: `${(hour / group.axisEnd) * 100}%` }}
-                    />
-                  ))}
-                  {group.rows.map((row) => {
-                    const pos = schedulePosition(row.time_slot, group.axisEnd);
-                    const isSelected = selectedKey === scheduleKey(row);
-                    return (
-                      <button
-                        key={scheduleKey(row)}
-                        type="button"
-                        onClick={() => onSelect(row)}
-                        className={`absolute inset-y-3 flex flex-col overflow-hidden rounded-md border-l-[3px] border-blue-500 bg-blue-50/90 px-3 py-3 text-left transition hover:shadow-md ${
-                          isSelected ? "ring-2 ring-primary shadow-md" : ""
-                        }`}
-                        style={{ left: `${pos.left}%`, width: `calc(${pos.width}% - 2px)` }}
-                        title={`${row.anchor_name ?? "未命名"} · ${fmtSlot(row.time_slot)} · 消耗 ${fmtMoney(row.personal_cost)} · 激活 ${row.personal_acts} · CPA ${fmtPrice(row.personal_unit_price)} · 付费 ${fmtMoney(row.personal_payment)}`}
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-[13px] font-semibold leading-4 text-blue-700">
-                            {row.anchor_name ?? "未命名"}
-                          </div>
-                          <div className="mt-1 truncate text-[11px] tabular-nums text-muted-foreground">
-                            {fmtSlot(row.time_slot)}
-                          </div>
-                        </div>
-                        <div className="mt-4 min-w-0">
-                          <span className="block truncate whitespace-nowrap text-[16px] font-semibold tabular-nums leading-none text-slate-900">
-                            {fmtMoney(row.personal_cost)}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                      <span className="font-medium text-[12.5px] text-foreground">
+                        {group.accountName}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">{group.date}</span>
+                      <div className="ml-auto flex gap-4 text-[11px] tabular-nums text-muted-foreground">
+                        <span>
+                          消耗 <strong className="text-foreground">{fmtMoney(group.cost)}</strong>
+                        </span>
+                        <span>
+                          激活 <strong className="text-foreground">{group.acts}</strong>
+                        </span>
+                        <span>
+                          CPA{" "}
+                          <strong className="text-foreground">
+                            {group.acts > 0 ? `¥${(group.cost / group.acts).toFixed(0)}` : "—"}
+                          </strong>
+                        </span>
+                        <span>
+                          付费{" "}
+                          <strong className="text-foreground">{fmtMoney(group.payment)}</strong>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="px-3 pb-3 pt-2">
+                      <div className="relative h-4 text-[10px] tabular-nums text-muted-foreground/60">
+                        {[0, 3, 6, 9, 12, 15, 18, 21, group.axisEnd].map((hour, index, arr) => {
+                          if (index > 0 && hour === arr[index - 1]) return null;
+                          return (
+                            <span
+                              key={hour}
+                              className="absolute top-0 -translate-x-1/2"
+                              style={{ left: `${(hour / group.axisEnd) * 100}%` }}
+                            >
+                              {hour > 24 ? `${hour - 24}+1` : hour}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <div className="relative h-[112px] rounded-md border border-slate-100 bg-slate-50/50">
+                        {[3, 6, 9, 12, 15, 18, 21, 24].map((hour) => (
+                          <div
+                            key={hour}
+                            className="pointer-events-none absolute inset-y-0 border-l border-dashed border-slate-100"
+                            style={{ left: `${(hour / group.axisEnd) * 100}%` }}
+                          />
+                        ))}
+                        {group.rows.map((row) => {
+                          const pos = schedulePosition(row.time_slot, group.axisEnd);
+                          const fullKey = `${sub.key}|${scheduleKey(row)}`;
+                          const isSelected = selectedKey === fullKey;
+                          const palette =
+                            subIdx === 0
+                              ? "border-blue-500 bg-blue-50/90 text-blue-700"
+                              : "border-emerald-500 bg-emerald-50/90 text-emerald-700";
+                          return (
+                            <button
+                              key={fullKey}
+                              type="button"
+                              onClick={() => onSelect(fullKey, row)}
+                              className={`absolute inset-y-3 flex flex-col overflow-hidden rounded-md border-l-[3px] ${palette.split(" ").slice(0, 2).join(" ")} px-3 py-3 text-left transition hover:shadow-md ${
+                                isSelected ? "ring-2 ring-primary shadow-md" : ""
+                              }`}
+                              style={{
+                                left: `${pos.left}%`,
+                                width: `calc(${pos.width}% - 2px)`,
+                              }}
+                              title={`${row.anchor_name ?? "未命名"} · ${fmtSlot(row.time_slot)} · 消耗 ${fmtMoney(row.personal_cost)} · 激活 ${row.personal_acts} · CPA ${fmtPrice(row.personal_unit_price)} · 付费 ${fmtMoney(row.personal_payment)}`}
+                            >
+                              <div className="min-w-0">
+                                <div
+                                  className={`truncate text-[13px] font-semibold leading-4 ${palette.split(" ")[2] ?? ""}`}
+                                >
+                                  {row.anchor_name ?? "未命名"}
+                                </div>
+                                <div className="mt-1 truncate text-[11px] tabular-nums text-muted-foreground">
+                                  {fmtSlot(row.time_slot)}
+                                </div>
+                              </div>
+                              <div className="mt-4 min-w-0">
+                                <span className="block truncate whitespace-nowrap text-[16px] font-semibold tabular-nums leading-none text-slate-900">
+                                  {fmtMoney(row.personal_cost)}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           ))}
         </div>
         <ScheduleDetailPanel
           row={selectedRow}
-          rows={state.rows}
-          yesterdayHourly={state.yesterdayHourly}
+          rows={selectedSubRows}
+          yesterdayHourly={selectedYesterday}
         />
       </div>
     </section>
@@ -932,8 +1062,11 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
                         className="border-t border-border/50 transition-colors hover:bg-muted/40"
                       >
                         <td className="px-3 py-1.5 font-mono whitespace-nowrap text-muted-foreground">
-                          {r.hour.toString().padStart(2, "0")}:00 —{" "}
-                          {((r.hour + 1) % 24).toString().padStart(2, "0")}:00
+                          {/* 区间 = (上一行 hour, 当前 hour]，即 [prev+1:00 .. hour+1:00) */}
+                          {((r.prev_hour == null ? 0 : r.prev_hour + 1) % 24)
+                            .toString()
+                            .padStart(2, "0")}
+                          :00 — {((r.hour + 1) % 24).toString().padStart(2, "0")}:00
                         </td>
                         <td className="px-3 py-1.5 text-foreground/90">{fmtMoney(r.cost)}</td>
                         <td className="px-3 py-1.5 text-muted-foreground">

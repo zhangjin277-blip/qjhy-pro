@@ -7,7 +7,7 @@ export * from "./incremental";
 export * from "./xlsx-adapter";
 export { parseOmniXlsx, isOmniFormat } from "./xlsx-omni-adapter";
 export { ingestRows, type IngestInput, type IngestRow } from "./ingest";
-export { listBatches, getBatchDetail } from "./batch-queries";
+export { listBatches, getBatchDetail, getBatchRows, type BatchRow } from "./batch-queries";
 export {
   queryByAccount,
   queryByAnchor,
@@ -17,6 +17,7 @@ export {
   querySummary,
   querySummaryExt,
   querySchedule,
+  queryAnchorCheckin,
   queryTrend,
   queryAnchorLabels,
   queryKpiSummary,

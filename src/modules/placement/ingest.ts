@@ -171,12 +171,16 @@ export async function ingestRows(input: IngestInput) {
               placement_cumulative_raw.live_account_id,
               placement_cumulative_raw.subaccount_name,
             ],
+            // Omni 累计快照单调递增：用 GREATEST 取最大值，避免乱序上传倒退。
+            // 比如先上传 17:00 推送（hour=16，累计 X1），再上传 16:40 推送（同 hour=16，
+            // 累计 X2 < X1），如果直接覆盖会让 hour=16 累计变小 → 差分错乱。
+            // GREATEST 保留更新更"晚时刻"的累计（同 hour 多次推送以最大累计为准）。
             set: {
-              cost_yuan: String(r.cost_yuan),
-              activations: r.activations,
-              payment_yuan: String(r.payment_yuan),
-              start_download: r.start_download,
-              finish_download: r.finish_download,
+              cost_yuan: sql`GREATEST(${placement_cumulative_raw.cost_yuan}, ${String(r.cost_yuan)}::numeric)`,
+              activations: sql`GREATEST(${placement_cumulative_raw.activations}, ${r.activations})`,
+              payment_yuan: sql`GREATEST(${placement_cumulative_raw.payment_yuan}, ${String(r.payment_yuan)}::numeric)`,
+              start_download: sql`GREATEST(${placement_cumulative_raw.start_download}, ${r.start_download})`,
+              finish_download: sql`GREATEST(${placement_cumulative_raw.finish_download}, ${r.finish_download})`,
               raw: r.raw,
               import_batch_id: batch.id,
               updated_at: sql`now()`,

@@ -19,7 +19,8 @@ interface Props {
   bindings: Binding[];
 }
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
+// 0..32 表示当天 0-23 + 次日 0-8（覆盖跨夜班）
+const HOURS = Array.from({ length: 33 }, (_, i) => i);
 
 const COLOR_PALETTE = [
   "bg-blue-100 text-blue-800",
@@ -61,18 +62,18 @@ export function ScheduleMatrix({ accounts, bindings }: Props) {
 
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-      <table className="w-full text-xs">
+      <table className="w-auto text-xs">
         <thead className="sticky top-0 bg-slate-50">
           <tr>
-            <th className="border-r border-slate-200 px-3 py-2 text-left font-medium text-slate-600">
+            <th className="w-[220px] border-r border-slate-200 px-3 py-2 text-left font-medium text-slate-600">
               账号
             </th>
             {HOURS.map((h) => (
               <th
                 key={h}
-                className="w-9 border-r border-slate-200 py-2 font-mono text-[10px] text-slate-500"
+                className={`w-9 border-r border-slate-200 py-2 font-mono text-[10px] ${h >= 24 ? "text-slate-400 bg-slate-50/60" : "text-slate-500"}`}
               >
-                {h}
+                {h < 24 ? h : `${h - 24}+1`}
               </th>
             ))}
           </tr>
@@ -82,7 +83,7 @@ export function ScheduleMatrix({ accounts, bindings }: Props) {
             <>
               <tr key={`g-${product}`}>
                 <td
-                  colSpan={25}
+                  colSpan={HOURS.length + 1}
                   className="border-y border-slate-100 bg-slate-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500"
                 >
                   {product} · {accs.length}
@@ -109,13 +110,16 @@ export function ScheduleMatrix({ accounts, bindings }: Props) {
                       </div>
                     </td>
                     {HOURS.map((h) => {
-                      const onDuty = accBindings.find((b) => hourMatchesTimeSlots(b.time_slots, h));
+                      // h ≥ 24 表示次日，命中判定取 h%24
+                      const onDuty = accBindings.find((b) =>
+                        hourMatchesTimeSlots(b.time_slots, h % 24),
+                      );
                       const name = onDuty?.anchor_name ?? null;
                       const colorCls = name ? (anchorColorMap.get(name) ?? "bg-slate-100") : "";
                       return (
                         <td
                           key={h}
-                          className={`border-r border-slate-100 text-center text-[10px] ${colorCls}`}
+                          className={`border-r border-slate-100 text-center text-[10px] ${colorCls} ${h >= 24 ? "bg-opacity-50" : ""}`}
                           title={name ?? ""}
                           style={{ height: 28 }}
                         >

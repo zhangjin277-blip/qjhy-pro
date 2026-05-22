@@ -32,6 +32,16 @@ export const auth = betterAuth({
   }),
   secret: env.AUTH_SECRET,
   baseURL: env.NEXT_PUBLIC_APP_URL,
+  // 内网/外网多地址访问场景：NAS 内网 IP / 域名都要进白名单。
+  // env 没配 TRUSTED_ORIGINS 时 fallback 到默认 baseURL。
+  trustedOrigins: [
+    env.NEXT_PUBLIC_APP_URL,
+    "http://172.16.39.61:3000",
+    "http://localhost:3000",
+    ...(process.env.TRUSTED_ORIGINS?.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) ?? []),
+  ],
   emailAndPassword: {
     enabled: true, // 应急后门
     autoSignIn: true,

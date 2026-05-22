@@ -2,6 +2,7 @@
 import {
   queryAccountHourly,
   querySchedule,
+  queryAnchorCheckin,
   queryScheduleYesterdayHourly,
   deleteBatchAndRecompute,
   resolvePlacementScope,
@@ -44,6 +45,19 @@ export async function fetchAnchorSchedule(
     queryScheduleYesterdayHourly(nextFilter),
   ]);
   return { rows, yesterdayHourly };
+}
+
+export async function fetchAnchorCheckin(
+  filter: BoardFilter,
+  anchorLabel: string | null,
+): Promise<ScheduleRow[]> {
+  if (!anchorLabel) return [];
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind !== "ok") return [];
+  const scope = await resolvePlacementScope(ctx.dingtalkUserId, ctx.isEmergency);
+  if (scope.kind === "reject") return [];
+  const nextFilter = { ...filter, scope, anchor_label: anchorLabel };
+  return queryAnchorCheckin(nextFilter, anchorLabel);
 }
 
 export async function deleteBatchAction(batchId: string): Promise<DeleteBatchResult> {

@@ -59,6 +59,17 @@ registerJob({
   },
 });
 
+// 快手 666 trend 接口拉一场分时累计（1 min/点，整场全部历史）。
+// 5 min 跑一次足够（每次同房间多次 UPSERT 自动去重），写 kuaishou_live_trend。
+// singletonKey 防重叠。
+registerJob({
+  name: "sync-kuaishou-live-snapshot",
+  schedule: "*/5 * * * *",
+  task: async () => {
+    await enqueue(JOB_NAMES.SYNC_KUAISHOU_LIVE_SNAPSHOT, {}, { singletonKey: "ks-trend-sync" });
+  },
+});
+
 // Phase 2.4 已停：捕鱼 / UE4 改走 Omni 钉钉推送的 Excel 手动上传（新格式累计快照）。
 // 老中台 SQLite 同步关闭，避免覆盖新表格 ingest 的数据。
 // URP 还是百应导出走老 xlsx-adapter。

@@ -9,6 +9,7 @@ import { fetchSessionMgHandler } from "./fetch-session-mg";
 import { syncKuaishouMembersHandler } from "./sync-kuaishou-members";
 import { syncKuaishouHistoryLiveSessionsHandler } from "./sync-kuaishou-history-live";
 import { syncKuaishouTodayLiveSessionsHandler } from "./sync-kuaishou-today-live";
+import { syncKuaishouLiveSnapshotHandler } from "./sync-kuaishou-live-snapshot";
 import { fetchVideoHandler } from "./fetch-video";
 import type PgBoss from "pg-boss";
 
@@ -91,6 +92,11 @@ export async function registerCrawlerHandlers(): Promise<void> {
     if (job === undefined) return undefined;
     return await wrap(() => syncKuaishouTodayLiveSessionsHandler());
   });
+  await boss.work(JOB_NAMES.SYNC_KUAISHOU_LIVE_SNAPSHOT, { batchSize: 1 }, async (jobs) => {
+    const job = jobs.at(0);
+    if (job === undefined) return undefined;
+    return await wrap(() => syncKuaishouLiveSnapshotHandler());
+  });
   await boss.work(JOB_NAMES.FETCH_VIDEO, { batchSize: 1 }, runFirst(fetchVideoHandler));
-  console.log("[crawler] all 11 handlers registered");
+  console.log("[crawler] all 12 handlers registered");
 }
