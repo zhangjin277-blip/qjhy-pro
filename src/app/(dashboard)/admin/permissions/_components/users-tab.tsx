@@ -67,6 +67,12 @@ function deptTooltip(node: { name: string; alias: string | null; note: string | 
 
 const ROOT_PARENT_ID = "1";
 
+/**
+ * 虚拟分组：邀请码注册的外部用户没有钉钉 dept_ids，
+ * 用这个虚拟根节点把它们集中展示。
+ */
+const EXTERNAL_DEPT_ID = "__external__";
+
 const SCOPE_LABEL: Record<Scope, string> = {
   none: "无",
   self: "仅自己",
@@ -124,7 +130,24 @@ function buildDeptTree(depts: DeptRow[], users: UserRow[]): DeptNode[] {
     });
   }
 
+  // 外部用户（dept_ids 为空 / user_id 以 ext_ 开头）集中到虚拟节点
+  const externalNode: DeptNode = {
+    dept_id: EXTERNAL_DEPT_ID,
+    name: "外部用户（邀请码注册）",
+    alias: null,
+    note: "通过邀请码注册的非钉钉用户，权限走个人 override",
+    parent_id: null,
+    children: [],
+    users: [],
+    totalUsers: 0,
+  };
+
   for (const u of users) {
+    const isExternal = u.user_id.startsWith("ext_") || u.dept_ids.length === 0;
+    if (isExternal) {
+      externalNode.users.push(u);
+      continue;
+    }
     const matchedDeptId = u.dept_ids.find((id) => nodeMap.has(id));
     if (matchedDeptId) {
       const target = nodeMap.get(matchedDeptId);
@@ -142,6 +165,11 @@ function buildDeptTree(depts: DeptRow[], users: UserRow[]): DeptNode[] {
     } else {
       roots.push(node);
     }
+  }
+
+  // 有外部用户时挂到最后（不参与字母排序）
+  if (externalNode.users.length > 0) {
+    roots.push(externalNode);
   }
 
   function computeTotal(node: DeptNode): number {

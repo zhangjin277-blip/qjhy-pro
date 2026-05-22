@@ -15,13 +15,19 @@ function LoginInner() {
   const rawNext = searchParams.get("next");
   const next =
     rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard";
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [dingtalkLoading, setDingtalkLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autoTriggered = useRef(false);
 
-  async function handleEmergencyLogin(e: React.FormEvent) {
+  /**
+   * 邮箱+密码登录。覆盖两类账号：
+   * - 外部用户（邀请码注册）：用注册时填的邮箱+密码
+   * - 应急后门 emergency@qjhy.local + EMERGENCY_LOGIN_PASSWORD
+   */
+  async function handleEmailLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -29,13 +35,10 @@ function LoginInner() {
       const res = await fetch("/api/auth/sign-in/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "emergency@qjhy.local",
-          password,
-        }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
       if (!res.ok) {
-        setError("应急密码错误");
+        setError("邮箱或密码不正确");
         return;
       }
       router.push(next);
@@ -82,7 +85,7 @@ function LoginInner() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>QJHY-Pro 登录</CardTitle>
-          <CardDescription>使用钉钉或应急账号登录</CardDescription>
+          <CardDescription>钉钉员工 / 外部邀请码账号</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button onClick={handleDingtalkLogin} disabled={dingtalkLoading} className="w-full">
@@ -94,36 +97,44 @@ function LoginInner() {
               <span className="w-full border-t" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card text-muted-foreground px-2">应急通道</span>
+              <span className="bg-card text-muted-foreground px-2">邮箱登录</span>
             </div>
           </div>
 
-          <form onSubmit={handleEmergencyLogin} className="space-y-3">
+          <form onSubmit={handleEmailLogin} className="space-y-3">
             <div className="space-y-2">
-              <Label htmlFor="emergency-password">应急密码</Label>
+              <Label htmlFor="email">邮箱</Label>
               <Input
-                id="emergency-password"
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">密码</Label>
+              <Input
+                id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="EMERGENCY_LOGIN_PASSWORD"
+                autoComplete="current-password"
                 required
               />
             </div>
             {error && <p className="text-destructive text-sm">{error}</p>}
             <Button type="submit" disabled={loading} variant="outline" className="w-full">
-              {loading ? "登录中..." : "应急登录"}
+              {loading ? "登录中..." : "邮箱登录"}
             </Button>
           </form>
 
           <p className="text-muted-foreground text-center text-xs">
-            应急登录会触发钉钉机器人通知。
-          </p>
-
-          <p className="text-muted-foreground text-center text-xs">
-            外部合作伙伴？
+            外部合作伙伴有邀请码？
             <a href="/register" className="text-primary ml-1 hover:underline">
-              使用邀请码注册
+              点此注册
             </a>
           </p>
         </CardContent>
