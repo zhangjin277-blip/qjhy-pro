@@ -18,6 +18,7 @@ export interface InviteCodeRow {
   account_expire_at: string | null; // ISO
   revoked_at: string | null;
   note: string | null;
+  delegated_user_ids: string[] | null;
   created_by: string | null;
   created_by_name: string | null;
   created_at: string;

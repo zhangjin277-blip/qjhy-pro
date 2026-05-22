@@ -32,6 +32,12 @@ export const auth_invite_code = pgTable(
     expires_at: timestamp("expires_at"),
     account_expire_at: timestamp("account_expire_at"),
     revoked_at: timestamp("revoked_at"),
+    /**
+     * 委托视图：注册成功后，写入每个 module 的 override.delegated_user_ids。
+     * 效果 = "代这些员工的 self 视角"，覆盖该 module 的 scope。
+     * null/空 → 不启用委托，按原 scope 走。
+     */
+    delegated_user_ids: jsonb("delegated_user_ids").$type<string[] | null>(),
     note: text("note"),
     created_by: text("created_by").references(() => dingtalk_user.user_id, {
       onDelete: "set null",

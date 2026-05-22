@@ -31,12 +31,25 @@ export async function listAnchors(
   filters: AnchorListFilters,
 ): Promise<AnchorListRow[]> {
   const perm = await resolvePermission(userId, "anchors");
-  if (perm.scope === "none") return [];
+  if (perm.scope === "none" && !perm.delegatedUserIds) return [];
 
   const where: ReturnType<typeof eq>[] = [];
 
   // ── scope 过滤 ─────────────────────────────────────────────────────────
-  if (perm.scope === "self") {
+  // 委托视图：通过 delegated 员工的 broker 集合过滤（self 视角的多人并集）
+  if (perm.delegatedUserIds && perm.delegatedUserIds.length > 0) {
+    const delegatedBrokers = await db
+      .select({ broker_id: broker_user_mapping.broker_id })
+      .from(broker_user_mapping)
+      .where(inArray(broker_user_mapping.dingtalk_user_id, perm.delegatedUserIds));
+    if (delegatedBrokers.length === 0) return [];
+    where.push(
+      inArray(
+        anchor_profile.broker_id,
+        delegatedBrokers.map((m) => m.broker_id),
+      ),
+    );
+  } else if (perm.scope === "self") {
     const myBroker = await db
       .select({ broker_id: broker_user_mapping.broker_id })
       .from(broker_user_mapping)

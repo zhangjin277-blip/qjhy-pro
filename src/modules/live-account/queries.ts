@@ -30,8 +30,12 @@ export async function listAccounts(
   // ── 权限 scope 过滤 ──────────────────────────────────────────────────
   if (!emergencyMode && userId) {
     const perm = await resolvePermission(userId, "live_account");
-    if (perm.scope === "none") return [];
-    if (perm.scope === "self") {
+    // 委托视图：以 delegated 员工的并集做 agent 过滤
+    if (perm.delegatedUserIds && perm.delegatedUserIds.length > 0) {
+      conditions.push(inArray(live_account.agent_dingtalk_user_id, perm.delegatedUserIds));
+    } else if (perm.scope === "none") {
+      return [];
+    } else if (perm.scope === "self") {
       conditions.push(eq(live_account.agent_dingtalk_user_id, userId));
     } else if (perm.scope === "team") {
       const deptIds = await getManagedDeptIds(userId);

@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  jsonb,
   pgTable,
   primaryKey,
   serial,
@@ -88,6 +89,11 @@ export const auth_permission_override = pgTable(
     can_admin: boolean("can_admin"),
     reason: text("reason").notNull(),
     expires_at: timestamp("expires_at"),
+    /**
+     * 委托视图：非空时直接以这些员工的 self 视角（agent IN (...)）覆盖 scope。
+     * 邀请码注册时从 auth_invite_code.delegated_user_ids 拷过来。
+     */
+    delegated_user_ids: jsonb("delegated_user_ids").$type<string[] | null>(),
     created_by: text("created_by"),
     created_at: timestamp("created_at").notNull().defaultNow(),
   },

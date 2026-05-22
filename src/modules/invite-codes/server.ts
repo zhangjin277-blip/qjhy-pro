@@ -62,6 +62,7 @@ export async function generateInviteCode(input: {
   expires_at: Date | null;
   account_expire_at: Date | null;
   note: string | null;
+  delegated_user_ids: string[] | null;
   created_by: string;
 }): Promise<{ code: string }> {
   const code = await nextUniqueCode();
@@ -72,6 +73,7 @@ export async function generateInviteCode(input: {
     used_count: 0,
     expires_at: input.expires_at,
     account_expire_at: input.account_expire_at,
+    delegated_user_ids: input.delegated_user_ids,
     note: input.note,
     created_by: input.created_by,
   });
@@ -112,6 +114,7 @@ export async function listInviteCodes(): Promise<InviteCodeRow[]> {
       account_expire_at: auth_invite_code.account_expire_at,
       revoked_at: auth_invite_code.revoked_at,
       note: auth_invite_code.note,
+      delegated_user_ids: auth_invite_code.delegated_user_ids,
       created_by: auth_invite_code.created_by,
       created_at: auth_invite_code.created_at,
       created_by_name: dingtalk_user.name,
@@ -129,6 +132,7 @@ export async function listInviteCodes(): Promise<InviteCodeRow[]> {
     account_expire_at: r.account_expire_at?.toISOString() ?? null,
     revoked_at: r.revoked_at?.toISOString() ?? null,
     note: r.note,
+    delegated_user_ids: r.delegated_user_ids ?? null,
     created_by: r.created_by,
     created_by_name: r.created_by_name,
     created_at: r.created_at.toISOString(),
@@ -217,6 +221,12 @@ export async function consumeInviteCodeAndCreateUser(input: {
     });
 
     // 写权限 override：邀请码 perms 数组每行一条
+    // delegated_user_ids 顶层字段拷到每条 override（所有 module 共享同一组委托）
+    const delegatedIds =
+      Array.isArray(row.delegated_user_ids) && row.delegated_user_ids.length > 0
+        ? (row.delegated_user_ids as string[])
+        : null;
+
     if ((row.perms as InviteCodePermSpec[]).length > 0) {
       await tx.insert(auth_permission_override).values(
         (row.perms as InviteCodePermSpec[]).map((p) => ({
@@ -228,6 +238,7 @@ export async function consumeInviteCodeAndCreateUser(input: {
           can_admin: p.can_admin,
           reason: `邀请码注册：${normalized}`,
           expires_at: row.account_expire_at,
+          delegated_user_ids: delegatedIds,
           created_by: row.created_by,
         })),
       );

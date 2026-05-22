@@ -33,6 +33,7 @@ const NULL_PERMISSION: Permission = {
   can_edit: false,
   can_export: false,
   can_admin: false,
+  delegatedUserIds: null,
 };
 
 /**
@@ -155,6 +156,11 @@ export async function resolvePermission(
 
   const merged = mergePermissions(role, isDeptLeader, override);
 
+  // 委托视图：override.delegated_user_ids 非空数组才生效；直接挂到结果上，不参与 scope MAX
+  const delegatedRaw = overrideRow?.delegated_user_ids as string[] | null | undefined;
+  const delegatedUserIds =
+    Array.isArray(delegatedRaw) && delegatedRaw.length > 0 ? delegatedRaw : null;
+
   // 4. 构造来源说明
   const sources: PermissionSource[] = [{ kind: "default", position }];
   if (isDeptLeader) {
@@ -167,6 +173,9 @@ export async function resolvePermission(
       expires_at: overrideRow.expires_at,
     });
   }
+  if (delegatedUserIds) {
+    sources.push({ kind: "delegated", userIds: delegatedUserIds });
+  }
 
-  return { ...merged, sources };
+  return { ...merged, delegatedUserIds, sources };
 }

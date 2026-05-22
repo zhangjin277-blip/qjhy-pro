@@ -26,12 +26,16 @@ export async function generateInviteCodeAction(input: unknown): Promise<{
     throw new AppError("INVITE_EXPIRES_IN_PAST", "过期时间必须晚于现在", 400);
   }
 
+  const delegatedIds =
+    data.delegated_user_ids && data.delegated_user_ids.length > 0 ? data.delegated_user_ids : null;
+
   const { code } = await generateInviteCode({
     perms: data.perms,
     max_uses: data.max_uses,
     expires_at: data.expires_at ? new Date(data.expires_at) : null,
     account_expire_at: data.account_expire_at ? new Date(data.account_expire_at) : null,
     note: data.note ?? null,
+    delegated_user_ids: delegatedIds,
     created_by: opUser,
   });
 
@@ -45,6 +49,7 @@ export async function generateInviteCodeAction(input: unknown): Promise<{
       max_uses: data.max_uses,
       expires_at: data.expires_at ?? null,
       account_expire_at: data.account_expire_at ?? null,
+      delegated_user_ids: delegatedIds,
       note: data.note ?? null,
     },
   });

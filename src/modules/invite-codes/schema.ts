@@ -17,6 +17,11 @@ export const GenerateInviteCodeInput = z.object({
   /** 注册出来的账号本身有效期 ISO；null 表示永久账号 */
   account_expire_at: z.string().datetime().nullable().optional(),
   note: z.string().max(200).nullable().optional(),
+  /**
+   * 委托视图：指定一组员工 user_id，注册账号将"代他们的 self 视角"看数据。
+   * 空数组/未传 = 不启用委托，按 perms 里的 scope 走。
+   */
+  delegated_user_ids: z.array(z.string()).optional(),
 });
 
 export const RevokeInviteCodeInput = z.object({

@@ -30,6 +30,15 @@ export type DashboardScope =
  */
 export async function resolveDashboardScope(userId: string): Promise<DashboardScope> {
   const perm = await resolvePermission(userId, "dashboard");
+  // 委托视图：delegated 员工的 broker 并集
+  if (perm.delegatedUserIds && perm.delegatedUserIds.length > 0) {
+    const rows = await db
+      .select({ broker_id: broker_user_mapping.broker_id })
+      .from(broker_user_mapping)
+      .where(inArray(broker_user_mapping.dingtalk_user_id, perm.delegatedUserIds));
+    if (rows.length === 0) return { kind: "reject" };
+    return { kind: "broker_ids", ids: rows.map((r) => r.broker_id) };
+  }
   if (perm.scope === "all") return { kind: "all" };
   if (perm.scope === "none") return { kind: "reject" };
 
