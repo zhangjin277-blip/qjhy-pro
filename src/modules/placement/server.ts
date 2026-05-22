@@ -17,6 +17,7 @@ export {
   querySummary,
   querySummaryExt,
   querySchedule,
+  queryAnchorCheckin,
   queryTrend,
   queryAnchorLabels,
   queryKpiSummary,

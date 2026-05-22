@@ -642,6 +642,110 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
   return rows;
 }
 
+/**
+ * 按"开播记录"归因（live_session_log）算同样的 ScheduleRow 结构。
+ *
+ * 跟 querySchedule 的差别：
+ *   querySchedule         → 按主播默认排班 + override + daily_segment 归因
+ *   queryAnchorCheckin    → 按主播扫码开播打卡（live_session_log）的实际时段归因
+ *
+ * 每个 in_progress / ended session = 一行 ScheduleRow。
+ * personal_cost = total_cost = SUM(placement_row.cost) WHERE 该小时中点 ∈ session [start_at, end_at]
+ * （同账号同时刻只允许一个 in_progress，所以每小时唯一归属一个主播）
+ *
+ * 跨日 session 暂只算到 start_at 那天（next-day 部分先忽略；MVP 简化）。
+ */
+export async function queryAnchorCheckin(
+  filter: BoardFilter,
+  anchorLabel: string,
+): Promise<ScheduleRow[]> {
+  const result = await db.execute(sql`
+    WITH sess AS (
+      SELECT
+        l.id,
+        l.live_account_id AS account_id,
+        l.anchor_dingtalk_user_id,
+        l.start_at,
+        COALESCE(l.end_at, now()) AS end_at,
+        a.account_name,
+        a.placement_label,
+        du.name AS anchor_name
+      FROM live_session_log l
+      JOIN live_account a ON a.id = l.live_account_id
+      LEFT JOIN dingtalk_user du ON du.user_id = l.anchor_dingtalk_user_id
+      WHERE a.placement_label = ${anchorLabel}
+        AND l.start_at::date >= ${filter.date_from}::date
+        AND l.start_at::date <= ${filter.date_to}::date
+    ),
+    agg AS (
+      SELECT
+        s.id AS sid,
+        SUM(p.cost_yuan)::float       AS personal_cost,
+        SUM(p.activations)::int       AS personal_acts,
+        SUM(p.payment_yuan)::float    AS personal_payment
+      FROM sess s
+      LEFT JOIN placement_row p
+        ON p.live_account_id = s.account_id
+       AND (p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes')::timestamptz >= s.start_at
+       AND (p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes')::timestamptz < s.end_at
+        ${datasetClause(filter.dataset_ids)}
+      GROUP BY s.id
+    )
+    SELECT
+      s.start_at::date::text                AS date,
+      to_char(s.start_at, 'HH24:MI')        AS slot_start,
+      to_char(s.end_at, 'HH24:MI')          AS slot_end,
+      s.account_id::text                    AS account_id,
+      s.account_name,
+      s.placement_label,
+      s.anchor_dingtalk_user_id::text       AS anchor_user_id,
+      s.anchor_name,
+      COALESCE(agg.personal_cost, 0)::float    AS personal_cost,
+      COALESCE(agg.personal_acts, 0)::int      AS personal_acts,
+      COALESCE(agg.personal_payment, 0)::float AS personal_payment
+    FROM sess s
+    LEFT JOIN agg ON agg.sid = s.id
+    ORDER BY s.start_at DESC
+  `);
+
+  interface Raw {
+    date: string;
+    slot_start: string;
+    slot_end: string;
+    account_id: string;
+    account_name: string;
+    placement_label: string | null;
+    anchor_user_id: string;
+    anchor_name: string | null;
+    personal_cost: number;
+    personal_acts: number;
+    personal_payment: number;
+  }
+  return (result as unknown as Raw[]).map((r) => {
+    const cost = Number(r.personal_cost);
+    const acts = Number(r.personal_acts);
+    const payment = Number(r.personal_payment);
+    return {
+      date: r.date,
+      time_slot: [r.slot_start, r.slot_end] as [string, string],
+      account_id: r.account_id,
+      account_name: r.account_name,
+      placement_label: r.placement_label,
+      anchor_user_id: r.anchor_user_id,
+      anchor_name: r.anchor_name,
+      // 开播归因下整段都归一个主播，total ≡ personal
+      total_cost: cost,
+      personal_cost: cost,
+      total_acts: acts,
+      personal_acts: acts,
+      total_unit_price: acts > 0 ? cost / acts : null,
+      personal_unit_price: acts > 0 ? cost / acts : null,
+      total_payment: payment,
+      personal_payment: payment,
+    };
+  });
+}
+
 export interface TrendPoint {
   anchor: string;
   date: string;
