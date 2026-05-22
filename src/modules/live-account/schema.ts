@@ -54,6 +54,8 @@ export type UpsertAccountInput = z.infer<typeof UpsertAccountInput>;
 
 export const DeleteAccountInput = z.object({
   id: z.string().min(1),
+  /** 强制删除：连同关联的 placement_row 一起删；admin 显式确认才传 */
+  force: z.boolean().optional(),
 });
 
 export const ListAccountsInput = z.object({

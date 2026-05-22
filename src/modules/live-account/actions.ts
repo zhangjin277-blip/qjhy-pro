@@ -125,35 +125,62 @@ export async function upsertAccount(input: unknown) {
   return result;
 }
 
-export async function deleteAccount(input: unknown) {
-  const { id } = DeleteAccountInput.parse(input);
-  const { userId } = await requireAdmin();
+/**
+ * 删除直播账号。
+ *
+ * 业务错误用 `return { ok: false, error }` 而非 throw —
+ * Next.js production 会把 server-side throw 包装成 generic "Server Components
+ * render" 错误并吞掉具体 message，导致前端无法显示业务原因。
+ *
+ * 有 placement_row 关联时默认拒绝；force=true 时连同 placement_row 一起删
+ * （admin 显式二次确认后）。
+ */
+export type DeleteAccountResult =
+  | { ok: true; deletedPlacementCount: number }
+  | { ok: false; error: string; placementCount?: number; canForce?: boolean };
+
+export async function deleteAccount(input: unknown): Promise<DeleteAccountResult> {
+  const { id, force } = DeleteAccountInput.parse(input);
+  let userId: string;
+  try {
+    ({ userId } = await requireAdmin());
+  } catch (e) {
+    return { ok: false, error: e instanceof AppError ? e.message : "需要管理员权限" };
+  }
 
   const [before] = await db.select().from(live_account).where(eq(live_account.id, id));
-  if (!before) throw new AppError("LIVE_ACCOUNT_NOT_FOUND", "直播账号不存在", 404);
+  if (!before) return { ok: false, error: "直播账号不存在" };
 
   const [placementCount] = await db
     .select({ n: count() })
     .from(placement_row)
     .where(eq(placement_row.live_account_id, id));
-  if (placementCount && placementCount.n > 0) {
-    throw new AppError(
-      "LIVE_ACCOUNT_HAS_PLACEMENTS",
-      `该账号有 ${placementCount.n} 条投放历史数据，无法删除。请先在投放页清理或迁移这些数据。`,
-      409,
-    );
+  const pCount = placementCount?.n ?? 0;
+
+  if (pCount > 0 && !force) {
+    return {
+      ok: false,
+      error: `该账号有 ${pCount} 条投放历史数据。点「强制删除」可一并删除（不可恢复）。`,
+      placementCount: pCount,
+      canForce: true,
+    };
   }
 
+  // force=true 或无 placement：连同关联删干净
+  if (pCount > 0) {
+    await db.delete(placement_row).where(eq(placement_row.live_account_id, id));
+  }
   await db.delete(schedule_override).where(eq(schedule_override.account_id, id));
   await db.delete(live_account).where(eq(live_account.id, id));
 
   await writeAuditLog({
     user_id: userId,
-    action: "LIVE_ACCOUNT_DELETED",
+    action: force ? "LIVE_ACCOUNT_FORCE_DELETED" : "LIVE_ACCOUNT_DELETED",
     target_type: "live_account",
     target_id: id,
     before,
+    after: { placement_rows_deleted: pCount, force: !!force },
   });
 
-  return { ok: true } as const;
+  return { ok: true, deletedPlacementCount: pCount };
 }
