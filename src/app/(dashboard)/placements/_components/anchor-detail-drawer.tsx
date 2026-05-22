@@ -972,6 +972,8 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
 
   // 默认只展开第一日（最近的日期）
   const [openDates, setOpenDates] = useState<Set<string>>(() => new Set(dates.slice(0, 1)));
+  // 视图模式：delta（增量）/ cumulative（累计）
+  const [viewMode, setViewMode] = useState<"delta" | "cumulative">("delta");
 
   if (dates.length === 0) {
     return (
@@ -992,11 +994,55 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
 
   return (
     <div className="space-y-2">
+      {/* 视图切换 */}
+      <div className="flex items-center justify-end gap-1 text-[11px]">
+        <span className="mr-1 text-muted-foreground/70">视图</span>
+        <div className="inline-flex overflow-hidden rounded-md border border-border bg-white">
+          <button
+            type="button"
+            onClick={() => setViewMode("delta")}
+            className={`px-2.5 py-1 transition-colors ${
+              viewMode === "delta"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted/60"
+            }`}
+          >
+            增量
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("cumulative")}
+            className={`px-2.5 py-1 transition-colors ${
+              viewMode === "cumulative"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted/60"
+            }`}
+          >
+            累计
+          </button>
+        </div>
+      </div>
       {dates.map((d) => {
-        const day = (byDate.get(d) ?? []).slice().sort((a, b) => b.hour - a.hour);
-        const dCost = day.reduce((s, r) => s + r.cost, 0);
-        const dActs = day.reduce((s, r) => s + r.activations, 0);
-        const dPay = day.reduce((s, r) => s + r.payment, 0);
+        // 原始增量行：先按 hour 升序，方便算累计
+        const raw = (byDate.get(d) ?? []).slice().sort((a, b) => a.hour - b.hour);
+        // 累计模式：在升序基础上滚动求和
+        let cumCost = 0;
+        let cumActs = 0;
+        let cumPay = 0;
+        const asc = raw.map((r) => {
+          cumCost += r.cost;
+          cumActs += r.activations;
+          cumPay += r.payment;
+          return viewMode === "cumulative"
+            ? { ...r, cost: cumCost, activations: cumActs, payment: cumPay }
+            : r;
+        });
+        // 表格显示按 hour 倒序
+        const day = asc.slice().sort((a, b) => b.hour - a.hour);
+        // 全天合计（始终用原始增量算，与视图模式无关）
+        const dCost = raw.reduce((s, r) => s + r.cost, 0);
+        const dActs = raw.reduce((s, r) => s + r.activations, 0);
+        const dPay = raw.reduce((s, r) => s + r.payment, 0);
         const dCpa = dActs > 0 ? dCost / dActs : null;
         const dArpu = dActs > 0 ? dPay / dActs : null;
         const isDayOpen = openDates.has(d);
@@ -1062,11 +1108,13 @@ function DayHourTables({ rows }: { rows: AccountHourlyRow[] }) {
                         className="border-t border-border/50 transition-colors hover:bg-muted/40"
                       >
                         <td className="px-3 py-1.5 font-mono whitespace-nowrap text-muted-foreground">
-                          {/* 区间 = (上一行 hour, 当前 hour]，即 [prev+1:00 .. hour+1:00) */}
-                          {((r.prev_hour == null ? 0 : r.prev_hour + 1) % 24)
-                            .toString()
-                            .padStart(2, "0")}
-                          :00 — {((r.hour + 1) % 24).toString().padStart(2, "0")}:00
+                          {viewMode === "cumulative"
+                            ? `截至 ${((r.hour + 1) % 24).toString().padStart(2, "0")}:00`
+                            : `${((r.prev_hour == null ? 0 : r.prev_hour + 1) % 24)
+                                .toString()
+                                .padStart(2, "0")}:00 — ${((r.hour + 1) % 24)
+                                .toString()
+                                .padStart(2, "0")}:00`}
                         </td>
                         <td className="px-3 py-1.5 text-foreground/90">{fmtMoney(r.cost)}</td>
                         <td className="px-3 py-1.5 text-muted-foreground">
