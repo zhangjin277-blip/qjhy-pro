@@ -42,9 +42,16 @@ export const dingtalk_user = pgTable(
     active: boolean("active").notNull().default(true),
     raw: jsonb("raw").notNull(),
     synced_at: timestamp("synced_at").notNull().defaultNow(),
+    // 邀请码注册的外部用户也写进此表（user_id 用 "ext_<uuid>"），
+    // is_external=true 时不会被 sync-dingtalk job 覆盖/删除。
+    // auth_user_id 反查 better-auth user（钉钉用户该字段为 null）。
+    is_external: boolean("is_external").notNull().default(false),
+    auth_user_id: text("auth_user_id"),
   },
   (t) => ({
     idx_unionid: index("idx_dingtalk_user_unionid").on(t.unionid),
     idx_active: index("idx_dingtalk_user_active").on(t.active),
+    idx_external: index("idx_dingtalk_user_external").on(t.is_external),
+    idx_auth_user: index("idx_dingtalk_user_auth_user").on(t.auth_user_id),
   }),
 );

@@ -1,6 +1,9 @@
 import "server-only";
 import { headers } from "next/headers";
+import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { db } from "@/db/client";
+import { auth_user, dingtalk_user } from "@/db/schema";
 import { resolveDingtalkIdentityByAuthUserId } from "./dingtalk-identity";
 
 /**
@@ -28,8 +31,29 @@ export async function getCurrentDingtalkUser(): Promise<
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return { kind: "unauth" };
 
-  const isEmergency = session.user.email === "emergency@qjhy.local";
-  if (isEmergency) {
+  // 重新查 auth_user 拿最新的 isActive / expireAt / isExternal
+  // （session.user 是签发时快照，禁用/过期需要实时校验）
+  const [user] = await db
+    .select({
+      id: auth_user.id,
+      email: auth_user.email,
+      isExternal: auth_user.isExternal,
+      isActive: auth_user.isActive,
+      expireAt: auth_user.expireAt,
+    })
+    .from(auth_user)
+    .where(eq(auth_user.id, session.user.id));
+
+  if (!user) return { kind: "unauth" };
+
+  // 账号已禁用 / 过期 → 一律按未登录处理
+  if (!user.isActive) return { kind: "unauth" };
+  if (user.expireAt && user.expireAt.getTime() < Date.now()) {
+    return { kind: "unauth" };
+  }
+
+  // emergency 应急后门
+  if (user.email === "emergency@qjhy.local") {
     return {
       kind: "ok",
       dingtalkUserId: session.user.id,
@@ -38,6 +62,22 @@ export async function getCurrentDingtalkUser(): Promise<
     };
   }
 
+  // 邀请码注册的外部用户：通过 dingtalk_user.auth_user_id 反查 ext_<uuid>
+  if (user.isExternal) {
+    const [ext] = await db
+      .select({ user_id: dingtalk_user.user_id })
+      .from(dingtalk_user)
+      .where(eq(dingtalk_user.auth_user_id, session.user.id));
+    if (!ext) return { kind: "user_not_synced", dingtalkUnionId: null };
+    return {
+      kind: "ok",
+      dingtalkUserId: ext.user_id,
+      dingtalkUnionId: null,
+      isEmergency: false,
+    };
+  }
+
+  // 钉钉 OAuth 用户：走原路径
   const identity = await resolveDingtalkIdentityByAuthUserId(session.user.id);
   if (identity.kind !== "ok") {
     return { kind: "user_not_synced", dingtalkUnionId: identity.dingtalkUnionId };

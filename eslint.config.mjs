@@ -184,6 +184,17 @@ export default tseslint.config(
               from: "./src/modules/placement-attribution/!(server).ts",
               message: "placement-attribution 是纯 server-only 模块，只允许 import server.ts。详见 CONTRIBUTING.md 第 10.2 节。",
             },
+            {
+              target: [
+                "./src/app/**",
+                "./src/components/**",
+                "./src/lib/**",
+                "./src/worker/**",
+                "./src/modules/!(invite-codes)/**",
+              ],
+              from: "./src/modules/invite-codes/!(index|server).ts",
+              message: "跨模块只允许 import 对方的 index.ts。详见 CONTRIBUTING.md 第 10.2 节。",
+            },
           ],
         },
       ],

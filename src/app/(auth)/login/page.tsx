@@ -119,6 +119,13 @@ function LoginInner() {
           <p className="text-muted-foreground text-center text-xs">
             应急登录会触发钉钉机器人通知。
           </p>
+
+          <p className="text-muted-foreground text-center text-xs">
+            外部合作伙伴？
+            <a href="/register" className="text-primary ml-1 hover:underline">
+              使用邀请码注册
+            </a>
+          </p>
         </CardContent>
       </Card>
     </main>

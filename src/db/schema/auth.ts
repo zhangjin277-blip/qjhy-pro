@@ -13,6 +13,12 @@ export const auth_user = pgTable("auth_user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  // 邀请码注册的外部用户标记。钉钉登录的 auth_user 该字段为 false。
+  isExternal: boolean("is_external").notNull().default(false),
+  // 外部用户账号有效期；null=永久。过期后 session 校验会拒。
+  expireAt: timestamp("expire_at"),
+  // admin 一键禁用。false 时直接拒绝任何登录态。
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
