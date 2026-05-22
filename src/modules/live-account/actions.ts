@@ -1,6 +1,16 @@
 "use server";
 import { db } from "@/db/client";
-import { dingtalk_user, live_account, placement_row, schedule_override } from "@/db/schema";
+import {
+  account_anchor_default,
+  daily_schedule_day,
+  daily_schedule_segment,
+  dingtalk_user,
+  live_account,
+  live_session_log,
+  placement_cumulative_raw,
+  placement_row,
+  schedule_override,
+} from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
@@ -166,11 +176,19 @@ export async function deleteAccount(input: unknown): Promise<DeleteAccountResult
     };
   }
 
-  // force=true 或无 placement：连同关联删干净
-  if (pCount > 0) {
-    await db.delete(placement_row).where(eq(placement_row.live_account_id, id));
-  }
+  // force=true 或无 placement：清所有 FK 关联表再删 account
+  // FK 引用清单（pg_constraint 查得）：
+  //   placement_row / placement_cumulative_raw（投放）
+  //   schedule_override / daily_schedule_segment / daily_schedule_day（排班）
+  //   account_anchor_default（主播绑定）
+  //   live_session_log（开播记录）
+  await db.delete(placement_row).where(eq(placement_row.live_account_id, id));
+  await db.delete(placement_cumulative_raw).where(eq(placement_cumulative_raw.live_account_id, id));
   await db.delete(schedule_override).where(eq(schedule_override.account_id, id));
+  await db.delete(daily_schedule_segment).where(eq(daily_schedule_segment.account_id, id));
+  await db.delete(daily_schedule_day).where(eq(daily_schedule_day.account_id, id));
+  await db.delete(account_anchor_default).where(eq(account_anchor_default.account_id, id));
+  await db.delete(live_session_log).where(eq(live_session_log.live_account_id, id));
   await db.delete(live_account).where(eq(live_account.id, id));
 
   await writeAuditLog({
