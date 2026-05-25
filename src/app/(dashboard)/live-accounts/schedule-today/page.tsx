@@ -4,6 +4,8 @@ import { daily_schedule_day, daily_schedule_segment } from "@/db/schema/daily-sc
 import { and, eq, inArray } from "drizzle-orm";
 import { listAccounts } from "@/modules/live-account/server";
 import { listBindings } from "@/modules/live-anchor";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
+import { redirect } from "next/navigation";
 import { TodayGantt } from "./_components/today-gantt";
 
 function isoDate(d: Date): string {
@@ -50,9 +52,18 @@ export default async function ScheduleTodayPage({
   const weekday = isoWeekday(date);
   const product = sp.product ?? "all"; // 默认全部产品；?product=捕鱼大作战 切单产品
 
+  // 权限：按 live_account scope 过滤账号
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind === "unauth") redirect("/login");
+  if (ctx.kind === "user_not_synced") redirect("/login");
+
   const [accounts, allBindings, candidates] = await Promise.all([
     // 仅快手账号（业务上抖音不在今日排班里）
-    listAccounts(product === "all" ? { platform: "快手" } : { platform: "快手", product }),
+    listAccounts(
+      product === "all" ? { platform: "快手" } : { platform: "快手", product },
+      ctx.dingtalkUserId,
+      ctx.isEmergency,
+    ),
     listBindings({}),
     db
       .select({

@@ -94,12 +94,25 @@ export function CheckinHistoryClient({
         "结束时间",
         "时长(min)",
         "礼物流水(元)",
+        "消耗(元)",
+        "激活",
+        "激活单价",
+        "付费(元)",
+        "ARPU",
         "状态",
         "关闭方式",
       ],
     ];
     for (const acc of filteredData.accounts) {
       for (const s of acc.sessions) {
+        const cpa =
+          s.cost_yuan != null && s.activations != null && s.activations > 0
+            ? (s.cost_yuan / s.activations).toFixed(2)
+            : "";
+        const arpu =
+          s.payment_yuan != null && s.activations != null && s.activations > 0
+            ? (s.payment_yuan / s.activations).toFixed(2)
+            : "";
         rows.push([
           acc.product,
           acc.account_name,
@@ -109,6 +122,11 @@ export function CheckinHistoryClient({
           s.end_at ? new Date(s.end_at).toLocaleString("zh-CN") : "",
           s.duration_seconds != null ? Math.round(s.duration_seconds / 60).toString() : "",
           s.income_cents != null ? (s.income_cents / 100).toFixed(2) : "",
+          s.cost_yuan != null ? s.cost_yuan.toFixed(2) : "",
+          s.activations != null ? Math.round(s.activations).toString() : "",
+          cpa,
+          s.payment_yuan != null ? s.payment_yuan.toFixed(2) : "",
+          arpu,
           s.status,
           s.closed_by ?? "",
         ]);

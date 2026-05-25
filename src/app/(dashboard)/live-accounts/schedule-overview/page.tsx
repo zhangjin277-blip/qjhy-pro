@@ -1,5 +1,7 @@
 import { listAccounts } from "@/modules/live-account/server";
 import { listBindings } from "@/modules/live-anchor";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
+import { redirect } from "next/navigation";
 import { ScheduleMatrix } from "./_components/schedule-matrix";
 
 export default async function ScheduleOverviewPage({
@@ -10,8 +12,12 @@ export default async function ScheduleOverviewPage({
   const sp = await searchParams;
   const product = sp.product;
 
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind === "unauth") redirect("/login");
+  if (ctx.kind === "user_not_synced") redirect("/login");
+
   const [accounts, allBindings] = await Promise.all([
-    listAccounts(product ? { product } : {}),
+    listAccounts(product ? { product } : {}, ctx.dingtalkUserId, ctx.isEmergency),
     listBindings({}),
   ]);
 

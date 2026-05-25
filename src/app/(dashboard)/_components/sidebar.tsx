@@ -5,15 +5,30 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronsLeft, ChevronsRight, Radio, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { NAV, findActiveSectionKey, isHrefActive } from "@/lib/nav";
+import { filterNavByVisibility, findActiveSectionKey, isHrefActive, type NavItem } from "@/lib/nav";
+import type { ModuleKey } from "@/modules/permissions";
 
 interface SidebarProps {
   defaultCollapsed: boolean;
   mobileOpen: boolean;
   onMobileClose: () => void;
+  /** server 端算好的可见 module key 数组（plain string，可跨 server→client） */
+  visibleModules: ModuleKey[];
+  /** emergency 全开 */
+  bypassPerms: boolean;
 }
 
-export function Sidebar({ defaultCollapsed, mobileOpen, onMobileClose }: SidebarProps) {
+export function Sidebar({
+  defaultCollapsed,
+  mobileOpen,
+  onMobileClose,
+  visibleModules,
+  bypassPerms,
+}: SidebarProps) {
+  const nav: NavItem[] = useMemo(
+    () => filterNavByVisibility(new Set(visibleModules), bypassPerms),
+    [visibleModules, bypassPerms],
+  );
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
@@ -62,6 +77,7 @@ export function Sidebar({ defaultCollapsed, mobileOpen, onMobileClose }: Sidebar
         )}
       >
         <SidebarInner
+          nav={nav}
           showLabels={!collapsed}
           openSections={openSections}
           toggleSection={toggleSection}
@@ -88,6 +104,7 @@ export function Sidebar({ defaultCollapsed, mobileOpen, onMobileClose }: Sidebar
               <X className="h-4 w-4" />
             </button>
             <SidebarInner
+              nav={nav}
               showLabels
               openSections={openSections}
               toggleSection={toggleSection}
@@ -104,6 +121,7 @@ export function Sidebar({ defaultCollapsed, mobileOpen, onMobileClose }: Sidebar
 }
 
 interface SidebarInnerProps {
+  nav: NavItem[];
   showLabels: boolean;
   openSections: Set<string>;
   toggleSection: (key: string) => void;
@@ -114,6 +132,7 @@ interface SidebarInnerProps {
 }
 
 function SidebarInner({
+  nav,
   showLabels,
   openSections,
   toggleSection,
@@ -141,7 +160,7 @@ function SidebarInner({
 
       {/* 导航 */}
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
-        {NAV.map((sec) => {
+        {nav.map((sec) => {
           const Icon = sec.icon;
 
           if (sec.single) {

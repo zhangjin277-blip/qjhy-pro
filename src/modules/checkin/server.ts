@@ -328,17 +328,57 @@ export async function endSession(
 }
 
 /**
- * 强制下播（运营 admin 行为）：
+ * 自动下播兜底：跟 sync-kuaishou-today-live 的实时直播数据比对。
+ * 调用时机：worker 跑完快手 today-live 同步后。
  *
- * 授权规则：
- *  1. emergency 后门 → 允许
- *  2. 白名单 ANCHOR_USER_IDS_ALLOW（含张锦） → 允许
- *  3. dept_leader：自己管的部门 ∩ 主播部门 非空 → 允许
- *  4. 其它 → 拒绝
- *
- * closed_by = "admin_force"
- * raw 里写 operator + reason
- * 同步写 audit_log（action=LIVE_SESSION_FORCE_END）
+ * @param livingPlatformAccountIds 当前在播的 platform_account_id 列表（来自 today-live）
+ * @returns 被关闭的 session 数
+ */
+export async function autoCloseOfflineSessions(
+  livingPlatformAccountIds: string[],
+): Promise<number> {
+  // 拿所有 in_progress sessions + 对应账号的 platform_account_id
+  const inProgress = await db
+    .select({
+      session_id: live_session_log.id,
+      live_account_id: live_session_log.live_account_id,
+      platform_account_id: live_account.platform_account_id,
+      start_at: live_session_log.start_at,
+    })
+    .from(live_session_log)
+    .innerJoin(live_account, eq(live_account.id, live_session_log.live_account_id))
+    .where(eq(live_session_log.status, "in_progress"));
+
+  const livingSet = new Set(livingPlatformAccountIds);
+  const toClose = inProgress.filter((s) => {
+    // platform_account_id 缺失的账号 → 跳过（无法判断）
+    if (!s.platform_account_id) return false;
+    return !livingSet.has(s.platform_account_id);
+  });
+  if (toClose.length === 0) return 0;
+
+  const now = new Date();
+  for (const s of toClose) {
+    const duration = Math.floor((now.getTime() - s.start_at.getTime()) / 1000);
+    // 不太短：5 分钟内的 in_progress 不算（避免刚开播被误关）
+    if (duration < 300) continue;
+    await db
+      .update(live_session_log)
+      .set({
+        end_at: now,
+        duration_seconds: duration,
+        status: "auto_closed_by_offline",
+        closed_by: "system_offline",
+        updated_at: now,
+      })
+      .where(eq(live_session_log.id, s.session_id));
+  }
+  return toClose.length;
+}
+
+/**
+ * 强制下播：admin / dept_leader 可以把 in_progress 的 session 强制 end。
+ * 写 audit_log（action=LIVE_SESSION_FORCE_END）。
  */
 export interface ForceEndSessionResult {
   session_id: string;
@@ -352,6 +392,7 @@ export class ForceEndPermissionDenied extends Error {
   }
 }
 
+/** 该 user 在任意 session 上是否有强制下播权限（emergency / 个人白名单 / 任何 dept_leader） */
 export async function canForceEndAnySession(
   operatorDingtalkUserId: string,
   isEmergency: boolean,
@@ -367,6 +408,7 @@ export async function canForceEndAnySession(
   return !!row;
 }
 
+/** 具体某个 session 上是否有强制下播权限（dept_leader 管辖主播所在部门） */
 async function canForceEndSession(
   sessionId: string,
   operatorDingtalkUserId: string,
@@ -375,7 +417,6 @@ async function canForceEndSession(
   if (isEmergency) return true;
   if (ANCHOR_USER_IDS_ALLOW.includes(operatorDingtalkUserId)) return true;
 
-  // 拿 session 对应主播的 dept_ids
   const [row] = await db
     .select({ dept_ids: dingtalk_user.dept_ids })
     .from(live_session_log)
@@ -448,7 +489,6 @@ export async function forceEndSession(args: {
     };
   });
 
-  // 审计（不抛异常）
   const { writeAuditLog } = await import("@/lib/audit/log");
   await writeAuditLog({
     user_id: operatorDingtalkUserId,
@@ -464,53 +504,4 @@ export async function forceEndSession(args: {
   });
 
   return { session_id: result.session_id, duration_seconds: result.duration_seconds };
-}
-
-/**
- * 自动下播兜底：跟 sync-kuaishou-today-live 的实时直播数据比对。
- * 调用时机：worker 跑完快手 today-live 同步后。
- *
- * @param livingPlatformAccountIds 当前在播的 platform_account_id 列表（来自 today-live）
- * @returns 被关闭的 session 数
- */
-export async function autoCloseOfflineSessions(
-  livingPlatformAccountIds: string[],
-): Promise<number> {
-  // 拿所有 in_progress sessions + 对应账号的 platform_account_id
-  const inProgress = await db
-    .select({
-      session_id: live_session_log.id,
-      live_account_id: live_session_log.live_account_id,
-      platform_account_id: live_account.platform_account_id,
-      start_at: live_session_log.start_at,
-    })
-    .from(live_session_log)
-    .innerJoin(live_account, eq(live_account.id, live_session_log.live_account_id))
-    .where(eq(live_session_log.status, "in_progress"));
-
-  const livingSet = new Set(livingPlatformAccountIds);
-  const toClose = inProgress.filter((s) => {
-    // platform_account_id 缺失的账号 → 跳过（无法判断）
-    if (!s.platform_account_id) return false;
-    return !livingSet.has(s.platform_account_id);
-  });
-  if (toClose.length === 0) return 0;
-
-  const now = new Date();
-  for (const s of toClose) {
-    const duration = Math.floor((now.getTime() - s.start_at.getTime()) / 1000);
-    // 不太短：5 分钟内的 in_progress 不算（避免刚开播被误关）
-    if (duration < 300) continue;
-    await db
-      .update(live_session_log)
-      .set({
-        end_at: now,
-        duration_seconds: duration,
-        status: "auto_closed_by_offline",
-        closed_by: "system_offline",
-        updated_at: now,
-      })
-      .where(eq(live_session_log.id, s.session_id));
-  }
-  return toClose.length;
 }

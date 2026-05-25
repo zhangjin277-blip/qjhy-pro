@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { CheckinState } from "@/modules/checkin/server";
 
 interface Props {
@@ -35,24 +35,7 @@ export function CheckinClient({ initialState, liveAccountId }: Props): React.JSX
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
 
-  // 每秒更新累计时长
-  useEffect(() => {
-    if (!state.current) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-    // 只依赖 state.current 是否存在；state.current 的内层属性不影响 interval 行为
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.current]);
-
-  // 每 5 秒拉一次最新状态（接班时 A 的页面尽快感知到被关）
-  useEffect(() => {
-    const t = setInterval(refresh, 5000);
-    return () => clearInterval(t);
-    // refresh 不会变（同一组件实例），不放 deps 避免重复 interval
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveAccountId]);
-
-  async function refresh(): Promise<void> {
+  const refresh = useCallback(async (): Promise<void> => {
     try {
       const res = await fetch(`/api/checkin/${liveAccountId}`, { cache: "no-store" });
       if (res.ok) {
@@ -62,7 +45,22 @@ export function CheckinClient({ initialState, liveAccountId }: Props): React.JSX
     } catch {
       // ignore
     }
-  }
+  }, [liveAccountId]);
+
+  const hasCurrent = state.current !== null;
+
+  // 每秒更新累计时长
+  useEffect(() => {
+    if (!hasCurrent) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [hasCurrent]);
+
+  // 每 5 秒拉一次最新状态（接班时 A 的页面尽快感知到被关）
+  useEffect(() => {
+    const t = setInterval(refresh, 5000);
+    return () => clearInterval(t);
+  }, [refresh]);
 
   async function handleStart(): Promise<void> {
     setBusy(true);

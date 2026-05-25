@@ -60,6 +60,10 @@ export async function resolvePlacementScope(
 ): Promise<PlacementScope> {
   if (emergencyMode) return { kind: "all" };
   const perm = await resolvePermission(userId, "placement");
+  // 委托视图：直接以这些员工的并集做过滤，绕过 scope
+  if (perm.delegatedUserIds && perm.delegatedUserIds.length > 0) {
+    return { kind: "user_ids", ids: perm.delegatedUserIds };
+  }
   if (perm.scope === "none") return { kind: "reject" };
   if (perm.scope === "all") return { kind: "all" };
   if (perm.scope === "self") return { kind: "user_ids", ids: [userId] };

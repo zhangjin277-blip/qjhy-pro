@@ -402,18 +402,31 @@ export function AccountEditDrawer({
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = (force = false) => {
     if (!account) return;
-    if (
-      !confirm(
-        `确认删除账号「${account.account_name}」？\n该操作不可撤销，关联的排班/绑定也会一并清理。`,
-      )
-    )
-      return;
+    const confirmMsg = force
+      ? `⚠️ 强制删除「${account.account_name}」？\n会一并删除所有关联的投放数据，不可恢复。`
+      : `确认删除账号「${account.account_name}」？\n该操作不可撤销，关联的排班/绑定也会一并清理。`;
+    if (!confirm(confirmMsg)) return;
     setError(null);
     startTransition(async () => {
       try {
-        await deleteAccount({ id: account.id });
+        const r = await deleteAccount({ id: account.id, force });
+        if (!r.ok) {
+          // 有 placement 数据但允许强制：弹二次确认让 admin 决定
+          if (r.canForce && !force) {
+            if (
+              confirm(
+                `${r.error}\n\n确认要连同 ${r.placementCount} 条投放数据一起删除吗？此操作不可恢复。`,
+              )
+            ) {
+              handleDelete(true);
+              return;
+            }
+          }
+          setError(r.error);
+          return;
+        }
         onOpenChange(false);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "删除失败，请重试";
@@ -734,7 +747,7 @@ export function AccountEditDrawer({
                 {isEdit && (
                   <button
                     className="rounded-[5px] border border-red-200 px-4 py-2 text-[13px] text-red-600 hover:bg-red-50 disabled:opacity-60"
-                    onClick={handleDelete}
+                    onClick={() => handleDelete()}
                     disabled={isPending}
                   >
                     删除账号

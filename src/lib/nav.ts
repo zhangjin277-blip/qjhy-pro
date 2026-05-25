@@ -8,12 +8,15 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import type { ModuleKey } from "@/modules/permissions";
 
 export interface NavLeaf {
   key: string;
   label: string;
   href: string;
   disabled?: boolean;
+  /** 此 leaf 属于哪个权限 module；未填表示无需权限（如「我的」），始终可见 */
+  module?: ModuleKey;
 }
 
 export type NavItem =
@@ -23,6 +26,7 @@ export type NavItem =
       icon: LucideIcon;
       single: true;
       href: string;
+      module?: ModuleKey;
     }
   | {
       key: string;
@@ -39,13 +43,14 @@ export const NAV: NavItem[] = [
     icon: Home,
     single: true,
     href: "/dashboard",
+    module: "dashboard",
   },
   {
     key: "anchor",
     label: "主播管理",
     icon: Users,
     children: [
-      { key: "anchor-detail", label: "主播明细", href: "/anchors" },
+      { key: "anchor-detail", label: "主播明细", href: "/anchors", module: "anchors" },
       { key: "anchor-list", label: "主播列表", href: "/anchors/list", disabled: true },
       { key: "anchor-recruit", label: "主播招募", href: "/anchors/recruit", disabled: true },
       { key: "anchor-profile", label: "主播档案", href: "/anchors/profile", disabled: true },
@@ -57,8 +62,8 @@ export const NAV: NavItem[] = [
     label: "直播数据",
     icon: BarChart3,
     children: [
-      { key: "data-board", label: "业务看板", href: "/dashboard" },
-      { key: "data-placement", label: "投放数据", href: "/placements" },
+      { key: "data-board", label: "业务看板", href: "/dashboard", module: "dashboard" },
+      { key: "data-placement", label: "投放数据", href: "/placements", module: "placement" },
       { key: "data-realtime", label: "实时数据", href: "/live/realtime", disabled: true },
       { key: "data-daily", label: "主播日报", href: "/live/daily", disabled: true },
       { key: "data-rank", label: "排行榜", href: "/live/rank", disabled: true },
@@ -69,11 +74,26 @@ export const NAV: NavItem[] = [
     label: "直播管理",
     icon: MonitorPlay,
     children: [
-      { key: "live-accounts", label: "直播账号", href: "/live-accounts" },
-      { key: "live-anchors", label: "主播档案", href: "/live-anchors" },
-      { key: "live-today", label: "今日排班", href: "/live-accounts/schedule-today" },
-      { key: "live-schedule", label: "默认排班", href: "/live-accounts/schedule-overview" },
-      { key: "live-checkin", label: "开播记录", href: "/live-accounts/checkin-history" },
+      { key: "live-accounts", label: "直播账号", href: "/live-accounts", module: "live_account" },
+      { key: "live-anchors", label: "主播档案", href: "/live-anchors", module: "live_anchor" },
+      {
+        key: "live-today",
+        label: "今日排班",
+        href: "/live-accounts/schedule-today",
+        module: "live_account",
+      },
+      {
+        key: "live-schedule",
+        label: "默认排班",
+        href: "/live-accounts/schedule-overview",
+        module: "live_account",
+      },
+      {
+        key: "live-checkin",
+        label: "开播记录",
+        href: "/live-accounts/checkin-history",
+        module: "live_account",
+      },
     ],
   },
   {
@@ -92,11 +112,16 @@ export const NAV: NavItem[] = [
     label: "系统管理",
     icon: Shield,
     children: [
-      { key: "sys-permission", label: "用户与权限", href: "/admin/permissions" },
-      { key: "sys-brokers", label: "经纪人映射", href: "/admin/brokers" },
+      {
+        key: "sys-permission",
+        label: "用户与权限",
+        href: "/admin/permissions",
+        module: "permissions",
+      },
+      { key: "sys-brokers", label: "经纪人映射", href: "/admin/brokers", module: "permissions" },
       { key: "sys-dept", label: "部门架构", href: "/admin/depts", disabled: true },
       { key: "sys-alias", label: "字段别名", href: "/admin/aliases", disabled: true },
-      { key: "sys-crawler", label: "采集监控", href: "/admin/crawler" },
+      { key: "sys-crawler", label: "采集监控", href: "/admin/crawler", module: "crawler" },
     ],
   },
   {
@@ -107,6 +132,27 @@ export const NAV: NavItem[] = [
     href: "/profile",
   },
 ];
+
+/**
+ * 按 visible modules 过滤 NAV。
+ * - leaf 没 module → 始终可见（如「我的」）
+ * - leaf 有 module 但不在 visible 里 → 隐藏
+ * - section 所有 children 都不可见 → 整个 section 隐藏
+ * - bypass=true（emergency / 应急）→ 不过滤
+ */
+export function filterNavByVisibility(visible: Set<ModuleKey>, bypass = false): NavItem[] {
+  if (bypass) return NAV;
+  const result: NavItem[] = [];
+  for (const item of NAV) {
+    if (item.single) {
+      if (!item.module || visible.has(item.module)) result.push(item);
+      continue;
+    }
+    const children = item.children.filter((c) => !c.module || visible.has(c.module));
+    if (children.length > 0) result.push({ ...item, children });
+  }
+  return result;
+}
 
 /** 当前 pathname 是否激活某个 href */
 export function isHrefActive(href: string, pathname: string): boolean {

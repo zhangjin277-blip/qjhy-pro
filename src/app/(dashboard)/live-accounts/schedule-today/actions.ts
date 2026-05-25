@@ -7,6 +7,7 @@ import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { headers } from "next/headers";
 import { and, eq, inArray } from "drizzle-orm";
 import { markDirtyByAccountDate, runAttributionJob } from "@/modules/placement-attribution/server";
+import { resolvePermission } from "@/modules/permissions/server";
 import { revalidatePath } from "next/cache";
 
 interface SaveOverrideInput {
@@ -54,11 +55,26 @@ function rowSlot(row: { start_hour: number; end_hour: number }): [string, string
   ];
 }
 
-async function requireUserId() {
+/**
+ * 校验当前用户具备 live_account 模块写权限。
+ *
+ * - 未登录 → throw "UNAUTHORIZED"
+ * - 已登录但钉钉未同步 → throw "AUTH_USER_NOT_SYNCED"
+ * - emergency 后门 → 直接通过（admin 通道）
+ * - 否则要求 resolvePermission(uid, "live_account").can_edit === true
+ *
+ * 返回 auth_user.id（用于 created_by 落库）。
+ */
+async function requireScheduleWrite() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) throw new Error("UNAUTHORIZED");
   const currentUser = await getCurrentDingtalkUser();
   if (currentUser.kind !== "ok") throw new Error("AUTH_USER_NOT_SYNCED");
+
+  if (!currentUser.isEmergency) {
+    const perm = await resolvePermission(currentUser.dingtalkUserId, "live_account");
+    if (!perm.can_edit) throw new Error("FORBIDDEN");
+  }
   return session.user.id;
 }
 
@@ -144,7 +160,7 @@ async function deleteSegmentBySlot(
 }
 
 export async function saveTodayOverride(input: SaveOverrideInput) {
-  const userId = await requireUserId();
+  const userId = await requireScheduleWrite();
 
   await ensureDayInitialized(input.account_id, input.date, userId);
   await db
@@ -166,7 +182,7 @@ export async function replaceTodaySegment(
     from_time_slot: [string, string];
   },
 ) {
-  const userId = await requireUserId();
+  const userId = await requireScheduleWrite();
   const nextSlot = input.time_slots[0];
   if (!nextSlot) throw new Error("MISSING_SLOT");
 
@@ -201,7 +217,7 @@ export async function resizeTodaySegment(
     from_time_slot: [string, string];
   },
 ) {
-  const userId = await requireUserId();
+  const userId = await requireScheduleWrite();
   const nextSlot = input.time_slots[0];
   if (!nextSlot) throw new Error("MISSING_SLOT");
 
@@ -227,7 +243,7 @@ export async function resizeTodaySegment(
 }
 
 export async function appendTodayOverrideSlot(input: SaveOverrideInput) {
-  const userId = await requireUserId();
+  const userId = await requireScheduleWrite();
   const slot = input.time_slots[0];
   if (!slot) throw new Error("MISSING_SLOT");
 
@@ -246,7 +262,7 @@ export async function appendTodayOverrideSlot(input: SaveOverrideInput) {
  * 用于"账号今日不播"的场景，仅当天清干净。
  */
 export async function removeAccountFromToday(account_id: string, date: string) {
-  await requireUserId();
+  await requireScheduleWrite();
   await db
     .delete(daily_schedule_segment)
     .where(
@@ -259,7 +275,7 @@ export async function removeAccountFromToday(account_id: string, date: string) {
 }
 
 export async function clearOneOverride(segment_id: string) {
-  await requireUserId();
+  await requireScheduleWrite();
 
   const [removed] = await db
     .delete(daily_schedule_segment)
@@ -270,7 +286,7 @@ export async function clearOneOverride(segment_id: string) {
 }
 
 export async function copyYesterdayOverrides(today: string) {
-  const userId = await requireUserId();
+  const userId = await requireScheduleWrite();
   const yesterday = new Date(today + "T12:00:00Z");
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
   const yesterdayStr = yesterday.toISOString().slice(0, 10);
@@ -313,7 +329,7 @@ export async function copyYesterdayOverrides(today: string) {
 }
 
 export async function replaceAccountDateSchedule(input: ScheduleSnapshotInput) {
-  const userId = await requireUserId();
+  const userId = await requireScheduleWrite();
 
   await ensureDayInitialized(input.account_id, input.date, userId);
   await db
@@ -348,32 +364,31 @@ export async function replaceAccountDateSchedule(input: ScheduleSnapshotInput) {
 }
 
 export async function clearAllTodayOverrides(date: string, accountIds?: string[]) {
-  const userId = await requireUserId();
+  const userId = await requireScheduleWrite();
 
+  // 强制要求 accountIds 非空——禁止"清全公司当天 segments"的全表 DELETE 路径。
+  // 调用方必须显式传入可见账号集合（页面已根据 scope 过滤）。
   const visibleAccountIds = accountIds ? [...new Set(accountIds)] : [];
-  if (visibleAccountIds.length > 0)
-    await ensureManyDaysInitialized(visibleAccountIds, date, userId);
+  if (visibleAccountIds.length === 0) {
+    throw new Error("MISSING_ACCOUNT_IDS");
+  }
+
+  await ensureManyDaysInitialized(visibleAccountIds, date, userId);
 
   const removed = await db
     .delete(daily_schedule_segment)
     .where(
-      visibleAccountIds.length > 0
-        ? and(
-            eq(daily_schedule_segment.date, date),
-            inArray(daily_schedule_segment.account_id, visibleAccountIds),
-          )
-        : eq(daily_schedule_segment.date, date),
+      and(
+        eq(daily_schedule_segment.date, date),
+        inArray(daily_schedule_segment.account_id, visibleAccountIds),
+      ),
     )
     .returning();
 
-  const affectedAccountIds =
-    visibleAccountIds.length > 0
-      ? visibleAccountIds
-      : [...new Set(removed.map((row) => row.account_id))];
-  for (const accountId of affectedAccountIds) {
+  for (const accountId of visibleAccountIds) {
     await markDirtyByAccountDate(accountId, date);
   }
-  if (affectedAccountIds.length > 0) await runAttributionJob({ max_rows: 500 });
+  await runAttributionJob({ max_rows: 500 });
 
   revalidatePath("/live-accounts/schedule-today");
   revalidatePath("/placements");

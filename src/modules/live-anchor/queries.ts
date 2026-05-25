@@ -28,8 +28,12 @@ export async function listAnchors(
 
   if (!emergencyMode && userId) {
     const perm = await resolvePermission(userId, "live_anchor");
-    if (perm.scope === "none") return [];
-    if (perm.scope === "self") {
+    // 委托视图：看 delegated 员工本人的 live_anchor 档案
+    if (perm.delegatedUserIds && perm.delegatedUserIds.length > 0) {
+      conditions.push(inArray(live_anchor.dingtalk_user_id, perm.delegatedUserIds));
+    } else if (perm.scope === "none") {
+      return [];
+    } else if (perm.scope === "self") {
       conditions.push(eq(live_anchor.dingtalk_user_id, userId));
     } else if (perm.scope === "team") {
       const deptIds = await getManagedDeptIds(userId);

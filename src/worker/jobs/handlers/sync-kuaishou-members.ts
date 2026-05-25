@@ -1,5 +1,6 @@
 import { db } from "@/db/client";
-import { kuaishou_member, dingtalk_user } from "@/db/schema";
+import { kuaishou_member, dingtalk_user, broker_user_mapping } from "@/db/schema";
+import { isNotNull } from "drizzle-orm";
 import { openKuaishouPage, CookieExpiredError } from "@/lib/puppeteer";
 import {
   getActiveCookies,
@@ -41,13 +42,27 @@ export async function syncKuaishouMembersHandler(): Promise<SyncResult> {
       }
     }
 
+    // broker_user_mapping: admin 手动配的"外部代号 → 钉钉员工"别名（含抖音自动同步的）
+    // 优先级高于 nameMap，解决李子玥/张昕哲/枯树发芽这类非钉钉运营名
+    const aliasRows = await db
+      .select({
+        broker_name: broker_user_mapping.broker_name,
+        uid: broker_user_mapping.dingtalk_user_id,
+      })
+      .from(broker_user_mapping)
+      .where(isNotNull(broker_user_mapping.dingtalk_user_id));
+    const aliasMap = new Map<string, string>();
+    for (const r of aliasRows) {
+      if (r.uid) aliasMap.set(r.broker_name, r.uid);
+    }
+
     let inserted = 0;
     let updated = 0;
     let brokerUnmatched = 0;
     let productInferred = 0;
 
     for (const raw of rawMembers) {
-      const mapped = mapKuaishouMember(raw, nameMap);
+      const mapped = mapKuaishouMember(raw, nameMap, aliasMap);
       if (mapped.product) productInferred++;
       if (!mapped.agent_dingtalk_user_id && mapped.raw_payload.broker_name_raw) {
         brokerUnmatched++;

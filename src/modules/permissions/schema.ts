@@ -55,6 +55,13 @@ export const UpsertOverrideBatchInput = z.object({
       }),
     )
     .min(1),
+  /**
+   * 委托视图：用户级别共享一组，写入每个 scope !== null 的 override 行。
+   * - undefined / 不传：不动 delegated_user_ids（保留原值）
+   * - null / 空数组：清除委托
+   * - 非空数组：所有 module 行用同一组
+   */
+  delegated_user_ids: z.array(z.string()).nullable().optional(),
 });
 export type UpsertOverrideBatchInput = z.infer<typeof UpsertOverrideBatchInput>;
 

@@ -8,7 +8,7 @@ import {
   role_default_permission,
   user_position_override,
 } from "@/db/schema";
-import type { ModuleKey } from "./modules";
+import { MODULE_KEYS, type ModuleKey } from "./modules";
 import type { Permission, PermissionSource, ResolvedPermission, Scope } from "./types";
 
 const SCOPE_RANK: Record<Scope, number> = {
@@ -33,6 +33,7 @@ const NULL_PERMISSION: Permission = {
   can_edit: false,
   can_export: false,
   can_admin: false,
+  delegatedUserIds: null,
 };
 
 /**
@@ -155,6 +156,11 @@ export async function resolvePermission(
 
   const merged = mergePermissions(role, isDeptLeader, override);
 
+  // 委托视图：override.delegated_user_ids 非空数组才生效；直接挂到结果上，不参与 scope MAX
+  const delegatedRaw = overrideRow?.delegated_user_ids as string[] | null | undefined;
+  const delegatedUserIds =
+    Array.isArray(delegatedRaw) && delegatedRaw.length > 0 ? delegatedRaw : null;
+
   // 4. 构造来源说明
   const sources: PermissionSource[] = [{ kind: "default", position }];
   if (isDeptLeader) {
@@ -167,6 +173,24 @@ export async function resolvePermission(
       expires_at: overrideRow.expires_at,
     });
   }
+  if (delegatedUserIds) {
+    sources.push({ kind: "delegated", userIds: delegatedUserIds });
+  }
 
-  return { ...merged, sources };
+  return { ...merged, delegatedUserIds, sources };
+}
+
+/**
+ * 一次性算出某用户在 sidebar 上可见的 module 集合。
+ * 可见 = scope !== "none" 或 can_admin === true。
+ */
+export async function resolveVisibleModules(userId: string): Promise<Set<ModuleKey>> {
+  const perms = await Promise.all(MODULE_KEYS.map((m) => resolvePermission(userId, m)));
+  const visible = new Set<ModuleKey>();
+  MODULE_KEYS.forEach((m, i) => {
+    const p = perms[i];
+    if (!p) return;
+    if (p.scope !== "none" || p.can_admin) visible.add(m);
+  });
+  return visible;
 }
