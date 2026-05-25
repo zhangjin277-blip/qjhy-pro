@@ -28,8 +28,22 @@ export function CheckinHistoryClient({
 }: Props): React.JSX.Element {
   const [date, setDate] = useState(initialDate);
   const [product, setProduct] = useState(initialProduct);
+  const [accountQuery, setAccountQuery] = useState("");
   const [data, setData] = useState<CheckinDayResult>(initialData);
   const [isPending, startTransition] = useTransition();
+
+  const filteredData = useMemo<CheckinDayResult>(() => {
+    const q = accountQuery.trim().toLowerCase();
+    if (!q) return data;
+    return {
+      ...data,
+      accounts: data.accounts.filter((a) => {
+        if (a.account_name.toLowerCase().includes(q)) return true;
+        if (a.placement_label && a.placement_label.toLowerCase().includes(q)) return true;
+        return false;
+      }),
+    };
+  }, [data, accountQuery]);
 
   function refresh(d: string, p: string): void {
     startTransition(async () => {
@@ -52,7 +66,7 @@ export function CheckinHistoryClient({
     let totalSeconds = 0;
     let inProgress = 0;
     const anchorSet = new Set<string>();
-    for (const acc of data.accounts) {
+    for (const acc of filteredData.accounts) {
       for (const s of acc.sessions) {
         totalSessions++;
         if (s.status === "in_progress") inProgress++;
@@ -65,9 +79,9 @@ export function CheckinHistoryClient({
       totalHours: (totalSeconds / 3600).toFixed(1),
       inProgress,
       anchorCount: anchorSet.size,
-      accountCount: data.accounts.length,
+      accountCount: filteredData.accounts.length,
     };
-  }, [data]);
+  }, [filteredData]);
 
   function downloadCsv(): void {
     const rows: string[][] = [
@@ -84,7 +98,7 @@ export function CheckinHistoryClient({
         "关闭方式",
       ],
     ];
-    for (const acc of data.accounts) {
+    for (const acc of filteredData.accounts) {
       for (const s of acc.sessions) {
         rows.push([
           acc.product,
@@ -139,6 +153,25 @@ export function CheckinHistoryClient({
             ))}
           </select>
         </label>
+        <label className="flex items-center gap-2 text-[12.5px] text-slate-600">
+          账号
+          <input
+            type="search"
+            value={accountQuery}
+            onChange={(e) => setAccountQuery(e.target.value)}
+            placeholder="搜索账号名 / 投放标签"
+            className="w-44 rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          {accountQuery && (
+            <button
+              type="button"
+              onClick={() => setAccountQuery("")}
+              className="text-[11px] text-slate-400 hover:text-slate-600"
+            >
+              清除
+            </button>
+          )}
+        </label>
         <span className="text-[11.5px] text-slate-400">
           {isPending
             ? "加载中..."
@@ -156,15 +189,15 @@ export function CheckinHistoryClient({
       </div>
 
       {/* Gantt */}
-      {data.accounts.length === 0 ? (
+      {filteredData.accounts.length === 0 ? (
         <div className="rounded-lg border border-slate-200 bg-white p-10 text-center text-[13px] text-slate-400">
-          当日暂无开播记录
+          {accountQuery ? `没有匹配「${accountQuery}」的账号` : "当日暂无开播记录"}
         </div>
       ) : (
         <>
-          <CheckinGantt data={data} />
+          <CheckinGantt data={filteredData} />
           <CheckinTable
-            data={data}
+            data={filteredData}
             canForceEnd={canForceEnd}
             onChanged={() => refresh(date, product)}
           />

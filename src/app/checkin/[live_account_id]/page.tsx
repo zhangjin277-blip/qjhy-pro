@@ -6,13 +6,29 @@ import { CheckinClient } from "./_components/checkin-client";
 
 export const dynamic = "force-dynamic";
 
+/** Tailwind v4 要求 Safari 16.4+；老 iOS 跳到 vanilla HTML 简版避免白屏 */
+function isOldIosSafari(ua: string): boolean {
+  const m = ua.match(/(?:iPhone|iPad|iPod).*OS (\d+)_(\d+)/);
+  if (!m || !m[1] || !m[2]) return false;
+  const major = parseInt(m[1], 10);
+  const minor = parseInt(m[2], 10);
+  if (major > 16) return false;
+  if (major < 16) return true;
+  return minor < 4;
+}
+
 export default async function CheckinPage({
   params,
 }: {
   params: Promise<{ live_account_id: string }>;
 }): Promise<React.JSX.Element> {
   const { live_account_id } = await params;
-  const session = await auth.api.getSession({ headers: await headers() });
+  const hdrs = await headers();
+  const ua = hdrs.get("user-agent") ?? "";
+  if (isOldIosSafari(ua)) {
+    redirect(`/checkin/${live_account_id}/simple`);
+  }
+  const session = await auth.api.getSession({ headers: hdrs });
   if (!session) {
     redirect(`/login?next=${encodeURIComponent(`/checkin/${live_account_id}`)}`);
   }
