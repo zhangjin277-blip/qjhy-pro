@@ -1,0 +1,3 @@
+-- Schema catch-up: represents the state after hand-written migrations 0008–0048.
+-- This file contains no SQL statements; it exists solely to anchor the drizzle-kit
+-- snapshot chain so that 0049_add_product_config generates a clean diff.

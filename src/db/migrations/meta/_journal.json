@@ -57,6 +57,20 @@
       "when": 1777724456243,
       "tag": "0007_icy_ultimatum",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1779708181525,
+      "tag": "0008_schema_catch_up",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779708182525,
+      "tag": "0049_add_product_config",
+      "breakpoints": true
     }
   ]
 }
