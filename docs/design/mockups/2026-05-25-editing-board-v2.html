@@ -1,0 +1,1044 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>剪辑工作流跟进 · 看板 v2（带收纳 + 批量派单）</title>
+    <style>
+      :root {
+        --blue-50: #e8f4ff;
+        --blue-100: #d1e9ff;
+        --blue-500: #1677ff;
+        --blue-600: #0958d9;
+        --slate-50: #f8fafc;
+        --slate-100: #f1f5f9;
+        --slate-200: #e2e8f0;
+        --slate-300: #cbd5e1;
+        --slate-400: #94a3b8;
+        --slate-500: #64748b;
+        --slate-600: #475569;
+        --slate-700: #334155;
+        --slate-800: #1e293b;
+        --green-50: #ecfdf5;
+        --green-500: #10b981;
+        --amber-50: #fffbeb;
+        --amber-500: #f59e0b;
+        --amber-600: #d97706;
+        --red-500: #ef4444;
+        --purple-500: #a855f7;
+        --gold-500: #d4a853;
+        --cyan-500: #06b6d4;
+
+        --bg-page: #eef2ff;
+        --bg-elevated: rgba(255, 255, 255, 0.92);
+        --bg-workspace: rgba(246, 247, 255, 0.88);
+        --border-subtle: rgba(226, 232, 240, 0.5);
+        --border-default: var(--slate-200);
+        --selection-primary: #5270ff;
+        --selection-bg: #eef3ff;
+        --selection-border: rgba(82, 112, 255, 0.34);
+        --selection-ring: rgba(82, 112, 255, 0.18);
+        --text-primary: var(--slate-800);
+        --text-secondary: var(--slate-500);
+        --text-muted: var(--slate-400);
+
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+
+        --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+        --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.1);
+        --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.12);
+
+        --font-sans:
+          "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont,
+          "Segoe UI", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body {
+        font-family: var(--font-sans);
+        background: linear-gradient(180deg, #eaf0ff 0%, #f1f2ff 50%, #eef1ff 100%);
+        color: var(--text-primary);
+        font-size: 14px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+      }
+
+      /* ===== page ===== */
+      .page {
+        max-width: 1840px;
+        margin: 0 auto;
+        padding: 24px 28px 80px;
+      }
+      .page-title {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin-bottom: 4px;
+      }
+      .page-subtitle {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+      }
+
+      /* ===== toolbar ===== */
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        margin-bottom: 16px;
+        backdrop-filter: blur(8px);
+        flex-wrap: wrap;
+      }
+      .seg-tabs {
+        display: inline-flex;
+        background: var(--slate-100);
+        border-radius: var(--radius-md);
+        padding: 2px;
+      }
+      .seg-tabs button {
+        font: inherit;
+        border: 0;
+        background: transparent;
+        padding: 6px 14px;
+        border-radius: 5px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 150ms ease;
+      }
+      .seg-tabs button.active {
+        background: white;
+        color: var(--blue-600);
+        box-shadow: var(--shadow-card);
+        font-weight: 500;
+      }
+      .filter {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        font-size: 13px;
+        color: var(--text-primary);
+        background: white;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: all 150ms ease;
+      }
+      .filter:hover { border-color: var(--blue-500); color: var(--blue-600); }
+      .filter .label { color: var(--text-muted); margin-right: 2px; }
+      .filter.active { border-color: var(--blue-500); color: var(--blue-600); background: var(--blue-50); }
+      .filter .caret { font-size: 9px; color: var(--text-muted); }
+      .toolbar .sep { width: 1px; height: 20px; background: var(--border-default); margin: 0 4px; }
+      .toolbar .spacer { flex: 1; }
+      .btn-primary {
+        font: inherit;
+        border: 0;
+        background: var(--blue-500);
+        color: white;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 7px 14px;
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        transition: all 150ms ease;
+      }
+      .btn-primary:hover { background: var(--blue-600); box-shadow: 0 4px 12px rgba(22,119,255,0.25); }
+      .btn-primary .plus { font-size: 16px; line-height: 1; font-weight: 400; }
+      .btn-ghost {
+        font: inherit;
+        border: 1px solid var(--border-default);
+        background: white;
+        color: var(--text-primary);
+        font-size: 13px;
+        padding: 6px 12px;
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: all 150ms ease;
+      }
+      .btn-ghost:hover { border-color: var(--blue-500); color: var(--blue-600); }
+
+      /* ===== workspace ===== */
+      .workspace {
+        background: var(--bg-workspace);
+        border: 2px solid rgba(255, 255, 255, 0.98);
+        border-radius: 20px;
+        box-shadow:
+          0 0 0 1px rgba(210, 220, 245, 0.42),
+          inset 0 1px 0 rgba(255, 255, 255, 1),
+          0 24px 68px -40px rgba(40, 55, 120, 0.42);
+        backdrop-filter: blur(18px);
+        padding: 18px;
+      }
+
+      .board {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 14px;
+      }
+
+      /* ===== column ===== */
+      .col {
+        background: rgba(248, 250, 255, 0.7);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        min-height: 620px;
+        padding: 14px 10px;
+        display: flex;
+        flex-direction: column;
+      }
+      .col-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        padding: 0 6px;
+      }
+      .col-head .name { font-size: 14px; font-weight: 600; }
+      .col-head .count {
+        font-size: 12px; font-weight: 600;
+        background: var(--blue-50); color: var(--blue-600);
+        padding: 1px 8px; border-radius: 999px;
+        font-variant-numeric: tabular-nums;
+      }
+      .col-head .dot { width: 8px; height: 8px; border-radius: 999px; }
+      .dot-uploaded { background: var(--blue-500); }
+      .dot-editing  { background: var(--amber-500); }
+      .dot-review   { background: var(--purple-500); }
+      .dot-ready    { background: var(--cyan-500); }
+      .dot-published { background: var(--green-500); }
+
+      /* ===== group head ===== */
+      .group {
+        margin-bottom: 8px;
+      }
+      .group-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        cursor: pointer;
+        border-radius: 4px;
+        margin-bottom: 4px;
+      }
+      .group-head:hover { background: var(--selection-bg); color: var(--blue-600); }
+      .group-head .triangle {
+        font-size: 9px;
+        color: var(--text-muted);
+        transition: transform 150ms ease;
+      }
+      .group.collapsed .triangle { transform: rotate(-90deg); }
+      .group-head .group-count {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+      .group.collapsed .group-body { display: none; }
+
+      .group .more-link {
+        display: block;
+        padding: 6px 8px;
+        font-size: 11px;
+        color: var(--blue-600);
+        text-align: center;
+        cursor: pointer;
+        border-radius: 4px;
+        margin-top: 2px;
+      }
+      .group .more-link:hover { background: var(--selection-bg); }
+
+      /* ===== card ===== */
+      .card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 12px;
+        margin-bottom: 8px;
+        box-shadow: var(--shadow-card);
+        position: relative;
+        cursor: pointer;
+        transition: all 150ms ease;
+      }
+      .card:hover {
+        box-shadow: var(--shadow-card-hover);
+        border-color: var(--selection-ring);
+        transform: translateY(-1px);
+      }
+      .card.selected {
+        border-color: var(--selection-primary);
+        box-shadow: 0 0 0 2px var(--selection-ring), var(--shadow-card-hover);
+        background: var(--selection-bg);
+      }
+      .card .checkbox {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        border: 1.5px solid var(--slate-300);
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 150ms ease;
+      }
+      .card:hover .checkbox,
+      .card.selected .checkbox,
+      body.has-selection .card .checkbox { opacity: 1; }
+      .card.selected .checkbox {
+        background: var(--selection-primary);
+        border-color: var(--selection-primary);
+      }
+      .card .checkbox::after {
+        content: '✓';
+        font-size: 11px;
+        color: white;
+        opacity: 0;
+        font-weight: 700;
+        line-height: 1;
+      }
+      .card.selected .checkbox::after { opacity: 1; }
+
+      .card-body {
+        padding-left: 24px;
+      }
+      .card .title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+      }
+      .card .meta-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 4px;
+        flex-wrap: wrap;
+      }
+      .card .tag {
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        background: var(--slate-100);
+        color: var(--slate-600);
+      }
+      .card .tag-fish    { background: #e0f2fe; color: #075985; }
+      .card .tag-ddz     { background: #fef3c7; color: #92400e; }
+      .card .tag-sg      { background: #f3e8ff; color: #6b21a8; }
+      .card .tag-mj      { background: #ecfdf5; color: #047857; }
+      .card .tag-arcade  { background: #fee2e2; color: #991b1b; }
+      .card .tag-leisure { background: #cffafe; color: #155e75; }
+      .card .divider {
+        border-top: 1px dashed var(--border-default);
+        margin: 10px 0 8px;
+      }
+      .card .editor-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+      .card .editor {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .card .avatar {
+        width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--blue-500), var(--selection-primary));
+        color: white;
+        font-size: 10px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .card .editor-name {
+        color: var(--text-primary);
+        font-weight: 500;
+      }
+      .card .editor.unassigned .avatar {
+        background: var(--slate-200);
+        color: var(--slate-500);
+      }
+      .card .editor.unassigned .editor-name { color: var(--text-muted); font-weight: 400; }
+      .card .dwell { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+      .card .dwell.warn { color: var(--amber-600); font-weight: 500; }
+      .card .dwell.danger { color: var(--red-500); font-weight: 600; }
+      .card .date { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+      /* ===== 显示更早 footer ===== */
+      .show-more-footer {
+        text-align: center;
+        padding: 14px 0 6px;
+        margin-top: 8px;
+      }
+      .show-more-footer button {
+        font: inherit;
+        border: 1px dashed var(--border-default);
+        background: white;
+        color: var(--text-secondary);
+        font-size: 12px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 150ms ease;
+      }
+      .show-more-footer button:hover {
+        border-color: var(--blue-500);
+        border-style: solid;
+        color: var(--blue-600);
+      }
+
+      /* ===== floating action bar ===== */
+      .action-bar {
+        position: fixed;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--slate-800);
+        color: white;
+        padding: 10px 18px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        box-shadow: var(--shadow-float);
+        z-index: 100;
+      }
+      .action-bar .count-chip {
+        font-size: 13px;
+        background: rgba(255,255,255,0.18);
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+      }
+      .action-bar .ab-label { font-size: 13px; color: rgba(255,255,255,0.85); }
+      .action-bar .ab-select {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255,255,255,0.12);
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .action-bar .ab-select:hover { background: rgba(255,255,255,0.2); }
+      .action-bar .ab-select .caret { font-size: 9px; opacity: 0.7; }
+      .action-bar .ab-btn {
+        font: inherit;
+        border: 0;
+        background: var(--blue-500);
+        color: white;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 6px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .action-bar .ab-btn:hover { background: var(--blue-600); }
+      .action-bar .ab-btn.danger { background: transparent; border: 1px solid rgba(255,100,100,0.5); color: #ff8a8a; }
+      .action-bar .ab-btn.danger:hover { background: rgba(255,100,100,0.15); }
+      .action-bar .ab-btn.ghost { background: transparent; color: rgba(255,255,255,0.7); padding: 6px 8px; }
+      .action-bar .ab-btn.ghost:hover { color: white; }
+      .action-bar .ab-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.15); }
+
+      .legend {
+        margin-top: 16px;
+        padding: 10px 14px;
+        background: white;
+        border: 1px dashed var(--border-default);
+        border-radius: 8px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        line-height: 1.7;
+      }
+      .legend b { color: var(--text-primary); }
+      .legend .kbd {
+        display: inline-block;
+        padding: 1px 5px;
+        font-family: var(--font-mono, monospace);
+        font-size: 11px;
+        background: var(--slate-100);
+        border: 1px solid var(--border-default);
+        border-radius: 3px;
+        margin: 0 2px;
+      }
+    </style>
+  </head>
+  <body class="has-selection">
+    <div class="page">
+      <h1 class="page-title">剪辑工作流跟进 · 看板 v2</h1>
+      <p class="page-subtitle">
+        基于变体 A · 加上收纳 4 件套（时间窗 / 日期折叠 / 筛选条 / +N 更多）· 加批量派单浮动栏
+      </p>
+
+      <!-- ===== Toolbar ===== -->
+      <div class="toolbar">
+        <div class="seg-tabs">
+          <button class="active">看板</button>
+          <button>表格</button>
+        </div>
+        <div class="sep"></div>
+        <div class="filter"><span class="label">产品</span>全部 <span class="caret">▼</span></div>
+        <div class="filter"><span class="label">主播</span>全部 <span class="caret">▼</span></div>
+        <div class="filter"><span class="label">剪辑师</span>全部 <span class="caret">▼</span></div>
+        <div class="filter active"><span class="label">日期</span>近 7 天 <span class="caret">▼</span></div>
+        <div class="spacer"></div>
+        <button class="btn-ghost">剪辑师管理</button>
+        <button class="btn-primary"><span class="plus">+</span>新建任务</button>
+      </div>
+
+      <!-- ===== Workspace ===== -->
+      <div class="workspace">
+        <div class="board">
+
+          <!-- ===== 待剪辑（最满，演示分组 + +N 更多 + 选中状态） ===== -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-uploaded"></span>
+              <span class="name">待剪辑</span>
+              <span class="count">28</span>
+            </div>
+
+            <div class="group">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>今天 · 05-25</span><span class="group-count">12</span>
+              </div>
+              <div class="group-body">
+                <div class="card selected">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">途游捕鱼-小柒</div>
+                    <div class="meta-row">
+                      <span>主播 小柒</span>
+                      <span class="tag tag-fish">捕鱼大作战</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor unassigned"><span class="avatar">?</span><span class="editor-name">待派单</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 2h</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card selected">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">斗地主王哥</div>
+                    <div class="meta-row">
+                      <span>主播 王哥</span>
+                      <span class="tag tag-ddz">途游斗地主</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor unassigned"><span class="avatar">?</span><span class="editor-name">待派单</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 3h</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card selected">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">富豪麻将-大胖</div>
+                    <div class="meta-row">
+                      <span>主播 大胖</span>
+                      <span class="tag tag-mj">富豪麻将</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor unassigned"><span class="avatar">?</span><span class="editor-name">待派单</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 4h</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">三国冰河-阿默</div>
+                    <div class="meta-row">
+                      <span>主播 阿默</span>
+                      <span class="tag tag-sg">三国:冰河时代</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor unassigned"><span class="avatar">?</span><span class="editor-name">待派单</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 5h</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">电玩捕鱼-哲哥</div>
+                    <div class="meta-row">
+                      <span>主播 哲哥</span>
+                      <span class="tag tag-arcade">电玩捕鱼</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor unassigned"><span class="avatar">?</span><span class="editor-name">待派单</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 6h</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">休闲捕鱼-肉肉</div>
+                    <div class="meta-row">
+                      <span>主播 肉肉</span>
+                      <span class="tag tag-leisure">途游休闲捕鱼</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor unassigned"><span class="avatar">?</span><span class="editor-name">待派单</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 7h</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="more-link">+ 查看其余 6 条（今天）</div>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>昨天 · 05-24</span><span class="group-count">9</span>
+              </div>
+              <div class="group-body">
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">途游捕鱼-小柒</div>
+                    <div class="meta-row">
+                      <span>主播 小柒</span>
+                      <span class="tag tag-fish">捕鱼大作战</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor unassigned"><span class="avatar">?</span><span class="editor-name">待派单</span></div>
+                      <div><span class="date">05-24</span><span class="dwell warn"> · 1d</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">斗地主王哥</div>
+                    <div class="meta-row">
+                      <span>主播 王哥</span>
+                      <span class="tag tag-ddz">途游斗地主</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor unassigned"><span class="avatar">?</span><span class="editor-name">待派单</span></div>
+                      <div><span class="date">05-24</span><span class="dwell warn"> · 1d</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="more-link">+ 查看其余 7 条（昨天）</div>
+              </div>
+            </div>
+
+            <div class="group collapsed">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>前天 · 05-23</span><span class="group-count">5</span>
+              </div>
+              <div class="group-body"></div>
+            </div>
+
+            <div class="group collapsed">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>更早</span><span class="group-count">2</span>
+              </div>
+              <div class="group-body"></div>
+            </div>
+
+            <div class="show-more-footer">
+              <button>显示近 30 天</button>
+            </div>
+          </div>
+
+          <!-- ===== 剪辑中 ===== -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-editing"></span>
+              <span class="name">剪辑中</span>
+              <span class="count">11</span>
+            </div>
+
+            <div class="group">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>今天 · 05-25</span><span class="group-count">4</span>
+              </div>
+              <div class="group-body">
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">途游捕鱼-小柒</div>
+                    <div class="meta-row"><span>主播 小柒</span><span class="tag tag-fish">捕鱼大作战</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">林</span><span class="editor-name">林涛</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 3h</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">斗地主王哥</div>
+                    <div class="meta-row"><span>主播 王哥</span><span class="tag tag-ddz">途游斗地主</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">周</span><span class="editor-name">周婷</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 5h</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">富豪麻将-大胖</div>
+                    <div class="meta-row"><span>主播 大胖</span><span class="tag tag-mj">富豪麻将</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">陈</span><span class="editor-name">陈嘉</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 6h</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">三国冰河-阿默</div>
+                    <div class="meta-row"><span>主播 阿默</span><span class="tag tag-sg">三国:冰河时代</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">张</span><span class="editor-name">张志远</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 7h</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>昨天 · 05-24</span><span class="group-count">5</span>
+              </div>
+              <div class="group-body">
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">休闲捕鱼-肉肉</div>
+                    <div class="meta-row"><span>主播 肉肉</span><span class="tag tag-leisure">途游休闲捕鱼</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">陈</span><span class="editor-name">陈嘉</span></div>
+                      <div><span class="date">05-24</span><span class="dwell warn"> · 1d</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">电玩捕鱼-哲哥</div>
+                    <div class="meta-row"><span>主播 哲哥</span><span class="tag tag-arcade">电玩捕鱼</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">王</span><span class="editor-name">王芸</span></div>
+                      <div><span class="date">05-24</span><span class="dwell warn"> · 1d</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="more-link">+ 查看其余 3 条（昨天）</div>
+              </div>
+            </div>
+
+            <div class="group collapsed">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>前天 · 05-23</span><span class="group-count">2</span>
+              </div>
+              <div class="group-body"></div>
+            </div>
+          </div>
+
+          <!-- ===== 审核 ===== -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-review"></span>
+              <span class="name">审核</span>
+              <span class="count">6</span>
+            </div>
+            <div class="group">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>今天 · 05-25</span><span class="group-count">2</span>
+              </div>
+              <div class="group-body">
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">途游捕鱼-小柒</div>
+                    <div class="meta-row"><span>主播 小柒</span><span class="tag tag-fish">捕鱼大作战</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">林</span><span class="editor-name">林涛</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 30m</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">斗地主王哥</div>
+                    <div class="meta-row"><span>主播 王哥</span><span class="tag tag-ddz">途游斗地主</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">周</span><span class="editor-name">周婷</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 2h</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="group">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>昨天 · 05-24</span><span class="group-count">3</span>
+              </div>
+              <div class="group-body">
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">富豪麻将-大胖</div>
+                    <div class="meta-row"><span>主播 大胖</span><span class="tag tag-mj">富豪麻将</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">陈</span><span class="editor-name">陈嘉</span></div>
+                      <div><span class="date">05-24</span><span class="dwell"> · 8h</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">三国冰河-阿默</div>
+                    <div class="meta-row"><span>主播 阿默</span><span class="tag tag-sg">三国:冰河时代</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">王</span><span class="editor-name">王芸</span></div>
+                      <div><span class="date">05-24</span><span class="dwell warn"> · 1d</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="more-link">+ 查看其余 1 条（昨天）</div>
+              </div>
+            </div>
+            <div class="group collapsed">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>前天 · 05-23</span><span class="group-count">1</span>
+              </div>
+              <div class="group-body"></div>
+            </div>
+          </div>
+
+          <!-- ===== 待发布 ===== -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-ready"></span>
+              <span class="name">待发布</span>
+              <span class="count">4</span>
+            </div>
+            <div class="group">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>今天 · 05-25</span><span class="group-count">1</span>
+              </div>
+              <div class="group-body">
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">电玩捕鱼-哲哥</div>
+                    <div class="meta-row"><span>主播 哲哥</span><span class="tag tag-arcade">电玩捕鱼</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">陈</span><span class="editor-name">陈嘉</span></div>
+                      <div><span class="date">05-25</span><span class="dwell"> · 4h</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="group">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>昨天 · 05-24</span><span class="group-count">2</span>
+              </div>
+              <div class="group-body">
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">富豪麻将-大胖</div>
+                    <div class="meta-row"><span>主播 大胖</span><span class="tag tag-mj">富豪麻将</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">张</span><span class="editor-name">张志远</span></div>
+                      <div><span class="date">05-24</span><span class="dwell"> · 1d</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">途游捕鱼-小柒</div>
+                    <div class="meta-row"><span>主播 小柒</span><span class="tag tag-fish">捕鱼大作战</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">林</span><span class="editor-name">林涛</span></div>
+                      <div><span class="date">05-24</span><span class="dwell"> · 1d</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="group collapsed">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>前天 · 05-23</span><span class="group-count">1</span>
+              </div>
+              <div class="group-body"></div>
+            </div>
+          </div>
+
+          <!-- ===== 已发布（默认近 3 天）===== -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-published"></span>
+              <span class="name">已发布</span>
+              <span class="count">15</span>
+            </div>
+            <div class="group">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>今天 · 05-25</span><span class="group-count">2</span>
+              </div>
+              <div class="group-body">
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">三国冰河-阿默</div>
+                    <div class="meta-row"><span>主播 阿默</span><span class="tag tag-sg">三国:冰河时代</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">王</span><span class="editor-name">王芸</span></div>
+                      <div><span class="date">05-25</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">休闲捕鱼-肉肉</div>
+                    <div class="meta-row"><span>主播 肉肉</span><span class="tag tag-leisure">途游休闲捕鱼</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">陈</span><span class="editor-name">陈嘉</span></div>
+                      <div><span class="date">05-25</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="group">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>昨天 · 05-24</span><span class="group-count">5</span>
+              </div>
+              <div class="group-body">
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">途游捕鱼-小柒</div>
+                    <div class="meta-row"><span>主播 小柒</span><span class="tag tag-fish">捕鱼大作战</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">林</span><span class="editor-name">林涛</span></div>
+                      <div><span class="date">05-24</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="checkbox"></div>
+                  <div class="card-body">
+                    <div class="title">斗地主王哥</div>
+                    <div class="meta-row"><span>主播 王哥</span><span class="tag tag-ddz">途游斗地主</span></div>
+                    <div class="divider"></div>
+                    <div class="editor-row">
+                      <div class="editor"><span class="avatar">周</span><span class="editor-name">周婷</span></div>
+                      <div><span class="date">05-24</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="more-link">+ 查看其余 3 条（昨天）</div>
+              </div>
+            </div>
+            <div class="group collapsed">
+              <div class="group-head">
+                <span class="triangle">▼</span><span>前天 · 05-23</span><span class="group-count">8</span>
+              </div>
+              <div class="group-body"></div>
+            </div>
+            <div class="show-more-footer">
+              <button>显示更早（去表格视图）</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ===== 浮动操作栏（演示：选中 3 条时的状态）===== -->
+      <div class="action-bar">
+        <span class="count-chip">已选 3 条</span>
+        <span class="ab-sep"></span>
+        <span class="ab-label">派给</span>
+        <span class="ab-select">林涛 <span class="caret">▼</span></span>
+        <button class="ab-btn">确认派单</button>
+        <span class="ab-sep"></span>
+        <button class="ab-btn danger">批量删除</button>
+        <span class="ab-sep"></span>
+        <button class="ab-btn ghost">取消选择</button>
+      </div>
+
+      <div class="legend">
+        <b>看板收纳 4 件套</b>：
+        ① <b>时间窗</b>：默认未完成 7 天 + 已发布 3 天，顶部「显示近 30 天 / 去表格」可放宽。
+        ② <b>日期折叠分组</b>：每列内按 今天 / 昨天 / 前天 / 更早 分组，前两组默认展开。
+        ③ <b>筛选条</b>：产品 / 主播 / 剪辑师 / 日期 ── 顶部 active 的「日期 · 近 7 天」蓝色高亮即为当前生效。
+        ④ <b>+N 更多</b>：单分组 >6 条时只展示前 6，「+ 查看其余 N 条」点击展开。
+        <br>
+        <b>批量派单</b>：卡片左上角 hover 出现 <span class="kbd">✓</span> checkbox，选中后变蓝、底部出现深色浮动栏（含派单下拉 / 批量删除 / 取消）。当前演示选中 3 条 + 派给林涛。
+        <br>
+        <b>视觉</b>：白卡 + Ant 蓝 + 磨砂浮卡延续 QJHY-Pro 设计 token；停留时长 1d 黄色、2d+ 红色。
+      </div>
+    </div>
+  </body>
+</html>

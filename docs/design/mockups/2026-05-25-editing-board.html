@@ -1,0 +1,1386 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>剪辑工作流跟进 · 看板变体 A / B / C</title>
+    <style>
+      /* ===== QJHY-Pro design tokens (mirror of globals.css) ===== */
+      :root {
+        --blue-50: #e8f4ff;
+        --blue-100: #d1e9ff;
+        --blue-500: #1677ff;
+        --blue-600: #0958d9;
+        --slate-50: #f8fafc;
+        --slate-100: #f1f5f9;
+        --slate-200: #e2e8f0;
+        --slate-300: #cbd5e1;
+        --slate-400: #94a3b8;
+        --slate-500: #64748b;
+        --slate-600: #475569;
+        --slate-700: #334155;
+        --slate-800: #1e293b;
+        --green-50: #ecfdf5;
+        --green-500: #10b981;
+        --green-600: #059669;
+        --amber-50: #fffbeb;
+        --amber-500: #f59e0b;
+        --amber-600: #d97706;
+        --red-50: #fef2f2;
+        --red-500: #ef4444;
+        --purple-50: #faf5ff;
+        --purple-500: #a855f7;
+        --gold-500: #d4a853;
+        --indigo-50: #eef2ff;
+        --indigo-500: #6366f1;
+        --orange-500: #f97316;
+        --cyan-500: #06b6d4;
+
+        --bg-page: #eef2ff;
+        --bg-elevated: rgba(255, 255, 255, 0.92);
+        --bg-workspace: rgba(246, 247, 255, 0.88);
+        --border-subtle: rgba(226, 232, 240, 0.5);
+        --border-default: var(--slate-200);
+        --selection-primary: #5270ff;
+        --selection-bg: #eef3ff;
+        --selection-ring: rgba(82, 112, 255, 0.18);
+
+        --text-primary: var(--slate-800);
+        --text-secondary: var(--slate-500);
+        --text-muted: var(--slate-400);
+
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+
+        --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+        --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.1);
+
+        --font-sans:
+          "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont,
+          "Segoe UI", system-ui, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        font-family: var(--font-sans);
+        background: linear-gradient(180deg, #eaf0ff 0%, #f1f2ff 50%, #eef1ff 100%);
+        color: var(--text-primary);
+        font-size: 14px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+      }
+
+      /* ===== page chrome ===== */
+      .page {
+        max-width: 1840px;
+        margin: 0 auto;
+        padding: 32px 28px 80px;
+      }
+      .page-title {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin-bottom: 4px;
+      }
+      .page-subtitle {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 28px;
+      }
+      .variant-header {
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        margin: 40px 0 14px;
+        padding-bottom: 12px;
+        border-bottom: 1px dashed var(--border-default);
+      }
+      .variant-header h2 {
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .variant-header .meta {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .variant-header .badge {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--blue-50);
+        color: var(--blue-600);
+        font-weight: 600;
+      }
+
+      /* ===== shared workspace shell ===== */
+      .workspace {
+        background: var(--bg-workspace);
+        border: 2px solid rgba(255, 255, 255, 0.98);
+        border-radius: 20px;
+        box-shadow:
+          0 0 0 1px rgba(210, 220, 245, 0.42),
+          inset 0 1px 0 rgba(255, 255, 255, 1),
+          0 24px 68px -40px rgba(40, 55, 120, 0.42);
+        backdrop-filter: blur(18px);
+        padding: 20px;
+      }
+
+      .board {
+        display: grid;
+        gap: 14px;
+      }
+      .board.a {
+        grid-template-columns: repeat(5, 1fr);
+      }
+      .board.b {
+        grid-template-columns: repeat(5, 1fr);
+      }
+      .board.c {
+        grid-template-columns: 1.4fr 1.4fr 1fr 1fr 1fr;
+      }
+
+      /* ===== column ===== */
+      .col {
+        background: rgba(248, 250, 255, 0.7);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        min-height: 480px;
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+      }
+      .col-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        padding: 0 4px;
+      }
+      .col-head .name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      .col-head .count {
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--blue-50);
+        color: var(--blue-600);
+        padding: 1px 8px;
+        border-radius: 999px;
+        font-variant-numeric: tabular-nums;
+      }
+      .col-head .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+      }
+      .dot-uploaded { background: var(--blue-500); }
+      .dot-editing  { background: var(--amber-500); }
+      .dot-review   { background: var(--purple-500); }
+      .dot-ready    { background: var(--cyan-500); }
+      .dot-published { background: var(--green-500); }
+
+      /* ===== Variant A · Trello 经典卡片 ===== */
+      .a .card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 12px;
+        margin-bottom: 10px;
+        box-shadow: var(--shadow-card);
+        transition: all 150ms ease;
+        cursor: pointer;
+      }
+      .a .card:hover {
+        box-shadow: var(--shadow-card-hover);
+        border-color: var(--selection-ring);
+        transform: translateY(-1px);
+      }
+      .a .card .title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+      }
+      .a .card .meta-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 4px;
+      }
+      .a .card .meta-row .tag {
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: var(--slate-100);
+        color: var(--slate-600);
+        font-size: 11px;
+      }
+      .a .card .tag-fish    { background: #e0f2fe; color: #075985; }
+      .a .card .tag-ddz     { background: #fef3c7; color: #92400e; }
+      .a .card .tag-sg      { background: #f3e8ff; color: #6b21a8; }
+      .a .card .tag-mj      { background: #ecfdf5; color: #047857; }
+      .a .card .tag-arcade  { background: #fee2e2; color: #991b1b; }
+      .a .card .tag-leisure { background: #cffafe; color: #155e75; }
+      .a .card .divider {
+        border-top: 1px dashed var(--border-default);
+        margin: 10px 0 8px;
+      }
+      .a .card .editor-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+      .a .card .editor {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .a .card .avatar {
+        width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--blue-500), var(--selection-primary));
+        color: white;
+        font-size: 10px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        letter-spacing: 0;
+      }
+      .a .card .editor-name {
+        color: var(--text-primary);
+        font-weight: 500;
+      }
+      .a .card .editor.unassigned .avatar {
+        background: var(--slate-200);
+        color: var(--slate-500);
+      }
+      .a .card .editor.unassigned .editor-name {
+        color: var(--text-muted);
+      }
+      .a .card .dwell {
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .a .card .dwell.warn { color: var(--amber-600); font-weight: 500; }
+      .a .card .date {
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ===== Variant B · 高密度紧凑列表 ===== */
+      .b .col {
+        padding: 14px 8px 14px 8px;
+      }
+      .b .group-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px 4px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .b .group-head .triangle {
+        font-size: 9px;
+        color: var(--text-muted);
+      }
+      .b .group-head .group-count {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+      .b .row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px;
+        padding: 7px 8px;
+        font-size: 13px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: background 100ms ease;
+        align-items: center;
+      }
+      .b .row:hover {
+        background: var(--selection-bg);
+        box-shadow: inset 0 0 0 1px var(--selection-ring);
+      }
+      .b .row .main {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .b .row .row-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .b .row .sub {
+        font-size: 11px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .b .row .sub .editor-tag {
+        color: var(--blue-600);
+        font-weight: 500;
+      }
+      .b .row .sub .editor-tag.unassigned {
+        color: var(--text-muted);
+        font-weight: 400;
+      }
+      .b .row .dwell {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .b .row .dwell.warn { color: var(--amber-600); font-weight: 500; }
+      .b .row .dwell.danger { color: var(--red-500); font-weight: 600; }
+
+      /* ===== Variant C · 大卡 Dashboard ===== */
+      .c .card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        margin-bottom: 12px;
+        box-shadow: var(--shadow-card);
+        display: grid;
+        grid-template-columns: 6px 1fr;
+        overflow: hidden;
+        cursor: pointer;
+        transition: all 150ms ease;
+      }
+      .c .card:hover {
+        box-shadow: var(--shadow-card-hover);
+        transform: translateY(-1px);
+      }
+      .c .card .stripe {
+        height: 100%;
+      }
+      .c .card .stripe-fish    { background: var(--blue-500); }
+      .c .card .stripe-ddz     { background: var(--gold-500); }
+      .c .card .stripe-sg      { background: var(--purple-500); }
+      .c .card .stripe-mj      { background: var(--green-500); }
+      .c .card .stripe-arcade  { background: var(--red-500); }
+      .c .card .stripe-leisure { background: var(--cyan-500); }
+
+      .c .card .body {
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .c .card .head-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .c .card .title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-primary);
+        line-height: 1.3;
+      }
+      .c .card .product-tag {
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: var(--slate-100);
+        color: var(--slate-600);
+        white-space: nowrap;
+      }
+      .c .card .product-tag.tag-fish    { background: #e0f2fe; color: #075985; }
+      .c .card .product-tag.tag-ddz     { background: #fef3c7; color: #92400e; }
+      .c .card .product-tag.tag-sg      { background: #f3e8ff; color: #6b21a8; }
+      .c .card .product-tag.tag-mj      { background: #ecfdf5; color: #047857; }
+      .c .card .product-tag.tag-arcade  { background: #fee2e2; color: #991b1b; }
+      .c .card .product-tag.tag-leisure { background: #cffafe; color: #155e75; }
+
+      .c .card .anchor-line {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .c .card .anchor-line strong {
+        color: var(--text-primary);
+        font-weight: 500;
+      }
+      .c .card .meta-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 4px;
+      }
+      .c .card .editor {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+      }
+      .c .card .avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--blue-500), var(--selection-primary));
+        color: white;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .c .card .editor.unassigned .avatar {
+        background: var(--slate-200);
+        color: var(--slate-500);
+      }
+      .c .card .editor.unassigned .editor-name {
+        color: var(--text-muted);
+      }
+      .c .card .dwell-block {
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+      }
+      .c .card .dwell-block .dwell-num {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.02em;
+      }
+      .c .card .dwell-block .dwell-num.warn { color: var(--amber-600); }
+      .c .card .dwell-block .dwell-num.danger { color: var(--red-500); }
+      .c .card .dwell-block .dwell-label {
+        font-size: 10px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .c .card .date-line {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .note {
+        font-size: 12px;
+        color: var(--text-muted);
+        padding: 8px 12px;
+        background: #fff;
+        border: 1px dashed var(--border-default);
+        border-radius: 8px;
+        margin-top: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1 class="page-title">剪辑工作流跟进 · 看板视图 · 3 个变体并排对照</h1>
+      <p class="page-subtitle">
+        5 状态：待剪辑 / 剪辑中 / 审核 / 待发布 / 已发布 · 卡片信息：账号 · 产品分类 · 主播 · 剪辑师 · 素材日期 · 停留时长 ·
+        遵循 QJHY-Pro design tokens（Ant 蓝 #1677ff · PingFang SC · 磨砂浮卡）
+      </p>
+
+      <!-- ====================================================== -->
+      <!-- Variant A · 标准 Trello 卡片                            -->
+      <!-- ====================================================== -->
+      <div class="variant-header">
+        <span class="badge">A</span>
+        <h2>标准 Trello 卡片</h2>
+        <span class="meta">中等密度 · 一屏 ~10 张卡 · 无脑首选 · 最稳</span>
+      </div>
+      <div class="workspace">
+        <div class="board a">
+          <!-- 待剪辑 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-uploaded"></span>
+              <span class="name">待剪辑</span>
+              <span class="count">5</span>
+            </div>
+            <div class="card">
+              <div class="title">途游捕鱼-小柒</div>
+              <div class="meta-row">
+                <span>主播 小柒</span>
+                <span class="tag tag-fish">捕鱼大作战</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor unassigned">
+                  <span class="avatar">?</span>
+                  <span class="editor-name">待派单</span>
+                </div>
+                <div>
+                  <span class="date">05-24</span>
+                  <span class="dwell"> · 2h</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">斗地主王哥</div>
+              <div class="meta-row">
+                <span>主播 王哥</span>
+                <span class="tag tag-ddz">途游斗地主</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor unassigned">
+                  <span class="avatar">?</span>
+                  <span class="editor-name">待派单</span>
+                </div>
+                <div>
+                  <span class="date">05-24</span>
+                  <span class="dwell"> · 4h</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">富豪麻将-大胖</div>
+              <div class="meta-row">
+                <span>主播 大胖</span>
+                <span class="tag tag-mj">富豪麻将</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor unassigned">
+                  <span class="avatar">?</span>
+                  <span class="editor-name">待派单</span>
+                </div>
+                <div>
+                  <span class="date">05-23</span>
+                  <span class="dwell warn"> · 1d</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">三国冰河-阿默</div>
+              <div class="meta-row">
+                <span>主播 阿默</span>
+                <span class="tag tag-sg">三国:冰河时代</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor unassigned">
+                  <span class="avatar">?</span>
+                  <span class="editor-name">待派单</span>
+                </div>
+                <div>
+                  <span class="date">05-23</span>
+                  <span class="dwell warn"> · 1d</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">电玩捕鱼-哲哥</div>
+              <div class="meta-row">
+                <span>主播 哲哥</span>
+                <span class="tag tag-arcade">电玩捕鱼</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor unassigned">
+                  <span class="avatar">?</span>
+                  <span class="editor-name">待派单</span>
+                </div>
+                <div>
+                  <span class="date">05-22</span>
+                  <span class="dwell warn"> · 2d</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 剪辑中 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-editing"></span>
+              <span class="name">剪辑中</span>
+              <span class="count">4</span>
+            </div>
+            <div class="card">
+              <div class="title">途游捕鱼-小柒</div>
+              <div class="meta-row">
+                <span>主播 小柒</span>
+                <span class="tag tag-fish">捕鱼大作战</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">林</span>
+                  <span class="editor-name">林涛</span>
+                </div>
+                <div>
+                  <span class="date">05-24</span>
+                  <span class="dwell"> · 3h</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">斗地主王哥</div>
+              <div class="meta-row">
+                <span>主播 王哥</span>
+                <span class="tag tag-ddz">途游斗地主</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">周</span>
+                  <span class="editor-name">周婷</span>
+                </div>
+                <div>
+                  <span class="date">05-24</span>
+                  <span class="dwell"> · 5h</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">休闲捕鱼-肉肉</div>
+              <div class="meta-row">
+                <span>主播 肉肉</span>
+                <span class="tag tag-leisure">途游休闲捕鱼</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">陈</span>
+                  <span class="editor-name">陈嘉</span>
+                </div>
+                <div>
+                  <span class="date">05-23</span>
+                  <span class="dwell warn"> · 1d</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">富豪麻将-大胖</div>
+              <div class="meta-row">
+                <span>主播 大胖</span>
+                <span class="tag tag-mj">富豪麻将</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">张</span>
+                  <span class="editor-name">张志远</span>
+                </div>
+                <div>
+                  <span class="date">05-23</span>
+                  <span class="dwell warn"> · 1d</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 审核 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-review"></span>
+              <span class="name">审核</span>
+              <span class="count">3</span>
+            </div>
+            <div class="card">
+              <div class="title">途游捕鱼-小柒</div>
+              <div class="meta-row">
+                <span>主播 小柒</span>
+                <span class="tag tag-fish">捕鱼大作战</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">林</span>
+                  <span class="editor-name">林涛</span>
+                </div>
+                <div>
+                  <span class="date">05-24</span>
+                  <span class="dwell"> · 30m</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">斗地主王哥</div>
+              <div class="meta-row">
+                <span>主播 王哥</span>
+                <span class="tag tag-ddz">途游斗地主</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">周</span>
+                  <span class="editor-name">周婷</span>
+                </div>
+                <div>
+                  <span class="date">05-23</span>
+                  <span class="dwell"> · 8h</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">三国冰河-阿默</div>
+              <div class="meta-row">
+                <span>主播 阿默</span>
+                <span class="tag tag-sg">三国:冰河时代</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">王</span>
+                  <span class="editor-name">王芸</span>
+                </div>
+                <div>
+                  <span class="date">05-22</span>
+                  <span class="dwell warn"> · 2d</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 待发布 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-ready"></span>
+              <span class="name">待发布</span>
+              <span class="count">2</span>
+            </div>
+            <div class="card">
+              <div class="title">电玩捕鱼-哲哥</div>
+              <div class="meta-row">
+                <span>主播 哲哥</span>
+                <span class="tag tag-arcade">电玩捕鱼</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">陈</span>
+                  <span class="editor-name">陈嘉</span>
+                </div>
+                <div>
+                  <span class="date">05-23</span>
+                  <span class="dwell"> · 4h</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">富豪麻将-大胖</div>
+              <div class="meta-row">
+                <span>主播 大胖</span>
+                <span class="tag tag-mj">富豪麻将</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">张</span>
+                  <span class="editor-name">张志远</span>
+                </div>
+                <div>
+                  <span class="date">05-22</span>
+                  <span class="dwell"> · 1d</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 已发布 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-published"></span>
+              <span class="name">已发布</span>
+              <span class="count">8</span>
+            </div>
+            <div class="card">
+              <div class="title">途游捕鱼-小柒</div>
+              <div class="meta-row">
+                <span>主播 小柒</span>
+                <span class="tag tag-fish">捕鱼大作战</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">林</span>
+                  <span class="editor-name">林涛</span>
+                </div>
+                <div>
+                  <span class="date">05-23</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">斗地主王哥</div>
+              <div class="meta-row">
+                <span>主播 王哥</span>
+                <span class="tag tag-ddz">途游斗地主</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">周</span>
+                  <span class="editor-name">周婷</span>
+                </div>
+                <div>
+                  <span class="date">05-22</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="title">三国冰河-阿默</div>
+              <div class="meta-row">
+                <span>主播 阿默</span>
+                <span class="tag tag-sg">三国:冰河时代</span>
+              </div>
+              <div class="divider"></div>
+              <div class="editor-row">
+                <div class="editor">
+                  <span class="avatar">王</span>
+                  <span class="editor-name">王芸</span>
+                </div>
+                <div>
+                  <span class="date">05-21</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====================================================== -->
+      <!-- Variant B · 高密度紧凑列表                              -->
+      <!-- ====================================================== -->
+      <div class="variant-header">
+        <span class="badge">B</span>
+        <h2>高密度紧凑列表</h2>
+        <span class="meta">Linear/Height 风 · 一屏 30+ 行 · 按日期折叠分组 · 重度运营 power user 友好</span>
+      </div>
+      <div class="workspace">
+        <div class="board b">
+          <!-- 待剪辑 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-uploaded"></span>
+              <span class="name">待剪辑</span>
+              <span class="count">5</span>
+            </div>
+            <div class="group-head">
+              <span class="triangle">▼</span><span>05-24 今天</span><span class="group-count">3</span>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">途游捕鱼-小柒</div>
+                <div class="sub">捕鱼大作战 · 小柒 · <span class="editor-tag unassigned">待派单</span></div>
+              </div>
+              <div class="dwell">2h</div>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">斗地主王哥</div>
+                <div class="sub">途游斗地主 · 王哥 · <span class="editor-tag unassigned">待派单</span></div>
+              </div>
+              <div class="dwell">4h</div>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">富豪麻将-大胖</div>
+                <div class="sub">富豪麻将 · 大胖 · <span class="editor-tag unassigned">待派单</span></div>
+              </div>
+              <div class="dwell">5h</div>
+            </div>
+            <div class="group-head">
+              <span class="triangle">▼</span><span>05-23 昨天</span><span class="group-count">2</span>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">三国冰河-阿默</div>
+                <div class="sub">三国:冰河时代 · 阿默 · <span class="editor-tag unassigned">待派单</span></div>
+              </div>
+              <div class="dwell warn">1d</div>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">电玩捕鱼-哲哥</div>
+                <div class="sub">电玩捕鱼 · 哲哥 · <span class="editor-tag unassigned">待派单</span></div>
+              </div>
+              <div class="dwell danger">2d</div>
+            </div>
+          </div>
+          <!-- 剪辑中 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-editing"></span>
+              <span class="name">剪辑中</span>
+              <span class="count">4</span>
+            </div>
+            <div class="group-head">
+              <span class="triangle">▼</span><span>05-24 今天</span><span class="group-count">2</span>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">途游捕鱼-小柒</div>
+                <div class="sub">捕鱼大作战 · 小柒 · <span class="editor-tag">林涛</span></div>
+              </div>
+              <div class="dwell">3h</div>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">斗地主王哥</div>
+                <div class="sub">途游斗地主 · 王哥 · <span class="editor-tag">周婷</span></div>
+              </div>
+              <div class="dwell">5h</div>
+            </div>
+            <div class="group-head">
+              <span class="triangle">▼</span><span>05-23 昨天</span><span class="group-count">2</span>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">休闲捕鱼-肉肉</div>
+                <div class="sub">途游休闲捕鱼 · 肉肉 · <span class="editor-tag">陈嘉</span></div>
+              </div>
+              <div class="dwell warn">1d</div>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">富豪麻将-大胖</div>
+                <div class="sub">富豪麻将 · 大胖 · <span class="editor-tag">张志远</span></div>
+              </div>
+              <div class="dwell warn">1d</div>
+            </div>
+          </div>
+          <!-- 审核 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-review"></span>
+              <span class="name">审核</span>
+              <span class="count">3</span>
+            </div>
+            <div class="group-head">
+              <span class="triangle">▼</span><span>05-24 今天</span><span class="group-count">1</span>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">途游捕鱼-小柒</div>
+                <div class="sub">捕鱼大作战 · <span class="editor-tag">林涛</span></div>
+              </div>
+              <div class="dwell">30m</div>
+            </div>
+            <div class="group-head">
+              <span class="triangle">▼</span><span>05-23 昨天</span><span class="group-count">1</span>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">斗地主王哥</div>
+                <div class="sub">途游斗地主 · <span class="editor-tag">周婷</span></div>
+              </div>
+              <div class="dwell">8h</div>
+            </div>
+            <div class="group-head">
+              <span class="triangle">▼</span><span>05-22 前天</span><span class="group-count">1</span>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">三国冰河-阿默</div>
+                <div class="sub">三国:冰河时代 · <span class="editor-tag">王芸</span></div>
+              </div>
+              <div class="dwell warn">2d</div>
+            </div>
+          </div>
+          <!-- 待发布 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-ready"></span>
+              <span class="name">待发布</span>
+              <span class="count">2</span>
+            </div>
+            <div class="group-head">
+              <span class="triangle">▼</span><span>05-23 昨天</span><span class="group-count">1</span>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">电玩捕鱼-哲哥</div>
+                <div class="sub">电玩捕鱼 · <span class="editor-tag">陈嘉</span></div>
+              </div>
+              <div class="dwell">4h</div>
+            </div>
+            <div class="group-head">
+              <span class="triangle">▼</span><span>05-22 前天</span><span class="group-count">1</span>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">富豪麻将-大胖</div>
+                <div class="sub">富豪麻将 · <span class="editor-tag">张志远</span></div>
+              </div>
+              <div class="dwell">1d</div>
+            </div>
+          </div>
+          <!-- 已发布 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-published"></span>
+              <span class="name">已发布</span>
+              <span class="count">8</span>
+            </div>
+            <div class="group-head">
+              <span class="triangle">▼</span><span>05-23 昨天</span><span class="group-count">3</span>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">途游捕鱼-小柒</div>
+                <div class="sub">捕鱼大作战 · <span class="editor-tag">林涛</span></div>
+              </div>
+              <div class="dwell">—</div>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">斗地主王哥</div>
+                <div class="sub">途游斗地主 · <span class="editor-tag">周婷</span></div>
+              </div>
+              <div class="dwell">—</div>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">三国冰河-阿默</div>
+                <div class="sub">三国:冰河时代 · <span class="editor-tag">王芸</span></div>
+              </div>
+              <div class="dwell">—</div>
+            </div>
+            <div class="group-head">
+              <span class="triangle">▼</span><span>05-22 前天</span><span class="group-count">2</span>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">富豪麻将-大胖</div>
+                <div class="sub">富豪麻将 · <span class="editor-tag">张志远</span></div>
+              </div>
+              <div class="dwell">—</div>
+            </div>
+            <div class="row">
+              <div class="main">
+                <div class="row-title">电玩捕鱼-哲哥</div>
+                <div class="sub">电玩捕鱼 · <span class="editor-tag">陈嘉</span></div>
+              </div>
+              <div class="dwell">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====================================================== -->
+      <!-- Variant C · 大卡 Dashboard                              -->
+      <!-- ====================================================== -->
+      <div class="variant-header">
+        <span class="badge">C</span>
+        <h2>大卡 Dashboard（产品色带 + 突出停留时长）</h2>
+        <span class="meta">少而精 · 每列宽窄按业务重心分配 · 左侧 6px 产品分类色带 · 老板/团队负责人巡场视角</span>
+      </div>
+      <div class="workspace">
+        <div class="board c">
+          <!-- 待剪辑 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-uploaded"></span>
+              <span class="name">待剪辑</span>
+              <span class="count">5</span>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-fish"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">途游捕鱼-小柒</div>
+                  <span class="product-tag tag-fish">捕鱼大作战</span>
+                </div>
+                <div class="anchor-line">主播 <strong>小柒</strong></div>
+                <div class="meta-row">
+                  <div class="editor unassigned">
+                    <span class="avatar">?</span>
+                    <span class="editor-name">待派单</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num">2h</span>
+                    <span class="dwell-label">停留</span>
+                  </div>
+                </div>
+                <div class="date-line">素材 05-24</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-ddz"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">斗地主王哥</div>
+                  <span class="product-tag tag-ddz">途游斗地主</span>
+                </div>
+                <div class="anchor-line">主播 <strong>王哥</strong></div>
+                <div class="meta-row">
+                  <div class="editor unassigned">
+                    <span class="avatar">?</span>
+                    <span class="editor-name">待派单</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num warn">1d</span>
+                    <span class="dwell-label">停留</span>
+                  </div>
+                </div>
+                <div class="date-line">素材 05-23</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-arcade"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">电玩捕鱼-哲哥</div>
+                  <span class="product-tag tag-arcade">电玩捕鱼</span>
+                </div>
+                <div class="anchor-line">主播 <strong>哲哥</strong></div>
+                <div class="meta-row">
+                  <div class="editor unassigned">
+                    <span class="avatar">?</span>
+                    <span class="editor-name">待派单</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num danger">2d</span>
+                    <span class="dwell-label">停留</span>
+                  </div>
+                </div>
+                <div class="date-line">素材 05-22</div>
+              </div>
+            </div>
+          </div>
+          <!-- 剪辑中 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-editing"></span>
+              <span class="name">剪辑中</span>
+              <span class="count">4</span>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-fish"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">途游捕鱼-小柒</div>
+                  <span class="product-tag tag-fish">捕鱼大作战</span>
+                </div>
+                <div class="anchor-line">主播 <strong>小柒</strong></div>
+                <div class="meta-row">
+                  <div class="editor">
+                    <span class="avatar">林</span>
+                    <span class="editor-name">林涛</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num">3h</span>
+                    <span class="dwell-label">停留</span>
+                  </div>
+                </div>
+                <div class="date-line">素材 05-24</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-leisure"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">休闲捕鱼-肉肉</div>
+                  <span class="product-tag tag-leisure">途游休闲捕鱼</span>
+                </div>
+                <div class="anchor-line">主播 <strong>肉肉</strong></div>
+                <div class="meta-row">
+                  <div class="editor">
+                    <span class="avatar">陈</span>
+                    <span class="editor-name">陈嘉</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num warn">1d</span>
+                    <span class="dwell-label">停留</span>
+                  </div>
+                </div>
+                <div class="date-line">素材 05-23</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-mj"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">富豪麻将-大胖</div>
+                  <span class="product-tag tag-mj">富豪麻将</span>
+                </div>
+                <div class="anchor-line">主播 <strong>大胖</strong></div>
+                <div class="meta-row">
+                  <div class="editor">
+                    <span class="avatar">张</span>
+                    <span class="editor-name">张志远</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num warn">1d</span>
+                    <span class="dwell-label">停留</span>
+                  </div>
+                </div>
+                <div class="date-line">素材 05-23</div>
+              </div>
+            </div>
+          </div>
+          <!-- 审核 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-review"></span>
+              <span class="name">审核</span>
+              <span class="count">3</span>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-fish"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">途游捕鱼-小柒</div>
+                  <span class="product-tag tag-fish">捕鱼</span>
+                </div>
+                <div class="meta-row">
+                  <div class="editor">
+                    <span class="avatar">林</span>
+                    <span class="editor-name">林涛</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num">30m</span>
+                    <span class="dwell-label">停留</span>
+                  </div>
+                </div>
+                <div class="date-line">素材 05-24</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-sg"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">三国冰河-阿默</div>
+                  <span class="product-tag tag-sg">三国冰河</span>
+                </div>
+                <div class="meta-row">
+                  <div class="editor">
+                    <span class="avatar">王</span>
+                    <span class="editor-name">王芸</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num warn">2d</span>
+                    <span class="dwell-label">停留</span>
+                  </div>
+                </div>
+                <div class="date-line">素材 05-22</div>
+              </div>
+            </div>
+          </div>
+          <!-- 待发布 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-ready"></span>
+              <span class="name">待发布</span>
+              <span class="count">2</span>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-arcade"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">电玩捕鱼-哲哥</div>
+                  <span class="product-tag tag-arcade">电玩</span>
+                </div>
+                <div class="meta-row">
+                  <div class="editor">
+                    <span class="avatar">陈</span>
+                    <span class="editor-name">陈嘉</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num">4h</span>
+                    <span class="dwell-label">停留</span>
+                  </div>
+                </div>
+                <div class="date-line">审核 05-23</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-mj"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">富豪麻将-大胖</div>
+                  <span class="product-tag tag-mj">麻将</span>
+                </div>
+                <div class="meta-row">
+                  <div class="editor">
+                    <span class="avatar">张</span>
+                    <span class="editor-name">张志远</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num">1d</span>
+                    <span class="dwell-label">停留</span>
+                  </div>
+                </div>
+                <div class="date-line">审核 05-22</div>
+              </div>
+            </div>
+          </div>
+          <!-- 已发布 -->
+          <div class="col">
+            <div class="col-head">
+              <span class="dot dot-published"></span>
+              <span class="name">已发布</span>
+              <span class="count">8</span>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-fish"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">途游捕鱼-小柒</div>
+                  <span class="product-tag tag-fish">捕鱼</span>
+                </div>
+                <div class="meta-row">
+                  <div class="editor">
+                    <span class="avatar">林</span>
+                    <span class="editor-name">林涛</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num" style="font-size:11px;color:var(--text-muted)">已绑视频</span>
+                  </div>
+                </div>
+                <div class="date-line">发布 05-23</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="stripe stripe-ddz"></div>
+              <div class="body">
+                <div class="head-row">
+                  <div class="title">斗地主王哥</div>
+                  <span class="product-tag tag-ddz">斗地主</span>
+                </div>
+                <div class="meta-row">
+                  <div class="editor">
+                    <span class="avatar">周</span>
+                    <span class="editor-name">周婷</span>
+                  </div>
+                  <div class="dwell-block">
+                    <span class="dwell-num" style="font-size:11px;color:var(--text-muted)">已绑视频</span>
+                  </div>
+                </div>
+                <div class="date-line">发布 05-22</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        三个变体共享同一组 mock 数据（5 列 / 24 个任务的子集 / 同样的账号 · 主播 · 剪辑师），唯一不同的是
+        <b>信息密度 + 视觉风格</b>。停留时长黄色 = 1d、红色 = 2d+（仅示意，实际阈值随业务调）。卡片 hover
+        交互在浏览器里可体验（蓝色 ring + 浮起）。
+      </div>
+    </div>
+  </body>
+</html>
