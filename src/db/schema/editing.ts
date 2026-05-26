@@ -54,6 +54,7 @@ export const editing_task = pgTable(
     edited_uploaded_at: timestamp("edited_uploaded_at", { withTimezone: true }),
     reviewed_by_user_id: text("reviewed_by_user_id").references(() => dingtalk_user.user_id),
     reviewed_at: timestamp("reviewed_at", { withTimezone: true }),
+    review_watch_seconds: integer("review_watch_seconds").notNull().default(0),
     published_by_user_id: text("published_by_user_id").references(() => dingtalk_user.user_id),
     published_at: timestamp("published_at", { withTimezone: true }),
     cover_image: text("cover_image"),

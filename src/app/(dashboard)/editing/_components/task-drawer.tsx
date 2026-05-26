@@ -23,7 +23,13 @@ interface Props {
 
 export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
   const [data, setData] = useState<{ task: TaskDetail | null; events: TaskEvent[] } | null>(null);
-  const [preview, setPreview] = useState<{ src: string; fileName: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    src: string;
+    fileName: string;
+    kind: "source" | "edited";
+  } | null>(null);
+  // 本次抽屉打开期间累计的成品观看秒数（审核时提交）
+  const [editedWatchSec, setEditedWatchSec] = useState(0);
 
   useEffect(() => {
     loadTaskDetail(taskId).then(setData);
@@ -119,7 +125,7 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
                 names={task.sourceFileNames}
                 taskId={task.id}
                 kind="source"
-                onPreview={(src, fileName) => setPreview({ src, fileName })}
+                onPreview={(src, fileName) => setPreview({ src, fileName, kind: "source" })}
               />
             )}
           </section>
@@ -132,8 +138,27 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
                 names={task.editedFileNames}
                 taskId={task.id}
                 kind="edited"
-                onPreview={(src, fileName) => setPreview({ src, fileName })}
+                onPreview={(src, fileName) => setPreview({ src, fileName, kind: "edited" })}
               />
+              {task.status === "review" && (
+                <p className="mt-2 text-xs text-slate-400">
+                  本次审核成品累计观看
+                  <b className="ml-1 text-slate-700">{editedWatchSec}</b>
+                  <span className="ml-0.5">秒</span>
+                  {task.reviewWatchSeconds > 0 && (
+                    <span className="ml-2 text-slate-300">
+                      · 历史累计 {task.reviewWatchSeconds} 秒
+                    </span>
+                  )}
+                </p>
+              )}
+              {task.status !== "review" && task.reviewWatchSeconds > 0 && (
+                <p className="mt-2 text-xs text-slate-400">
+                  审核成品累计观看
+                  <b className="ml-1 text-slate-700">{task.reviewWatchSeconds}</b>
+                  <span className="ml-0.5">秒</span>
+                </p>
+              )}
             </section>
           )}
 
@@ -183,35 +208,25 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
             </section>
           )}
 
-          {(task.reviewedAt || task.publishedAt) && (
+          {task.publishedAt && (
             <section className="mb-6 space-y-2 text-sm">
-              <SectionTitle>审核 / 发布</SectionTitle>
-              {task.reviewedAt && (
-                <>
-                  <Row label="审核人">{task.reviewedByName ?? "—"}</Row>
-                  <Row label="审核时间">{new Date(task.reviewedAt).toLocaleString("zh-CN")}</Row>
-                </>
-              )}
-              {task.publishedAt && (
-                <>
-                  <Row label="发布人">{task.publishedByName ?? "—"}</Row>
-                  <Row label="发布时间">{new Date(task.publishedAt).toLocaleString("zh-CN")}</Row>
-                  <Row label="抖音视频">
-                    {task.videoId ? (
-                      <a
-                        href={`https://www.douyin.com/video/${task.videoId}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-blue-600 hover:underline"
-                      >
-                        {task.videoId}
-                      </a>
-                    ) : (
-                      <span className="text-slate-400">未绑定</span>
-                    )}
-                  </Row>
-                </>
-              )}
+              <SectionTitle>发布信息</SectionTitle>
+              <Row label="发布人">{task.publishedByName ?? "—"}</Row>
+              <Row label="发布时间">{new Date(task.publishedAt).toLocaleString("zh-CN")}</Row>
+              <Row label="抖音视频">
+                {task.videoId ? (
+                  <a
+                    href={`https://www.douyin.com/video/${task.videoId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    {task.videoId}
+                  </a>
+                ) : (
+                  <span className="text-slate-400">未绑定</span>
+                )}
+              </Row>
             </section>
           )}
 
@@ -251,7 +266,7 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
                 onClick={async () => {
                   if (!confirm("审核通过？")) return;
                   try {
-                    await reviewApprove({ taskId: task.id });
+                    await reviewApprove({ taskId: task.id, watchSeconds: editedWatchSec });
                     toast.success("审核通过");
                     onClose();
                     location.reload();
@@ -263,7 +278,7 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
               >
                 审核通过
               </button>
-              <ReviewRejectDialog taskId={task.id} onDone={onClose} />
+              <ReviewRejectDialog taskId={task.id} watchSeconds={editedWatchSec} onDone={onClose} />
             </>
           )}
           {task.status === "ready" && (
@@ -299,6 +314,11 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
           src={preview.src}
           fileName={preview.fileName}
           onClose={() => setPreview(null)}
+          onWatched={
+            preview.kind === "edited" && task.status === "review"
+              ? (sec) => setEditedWatchSec((s) => s + sec)
+              : undefined
+          }
         />
       )}
     </>

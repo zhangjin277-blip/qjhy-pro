@@ -32,6 +32,7 @@ export interface TaskDetail extends BoardCard {
   editedUploadedAt: string | null;
   reviewedByName: string | null;
   reviewedAt: string | null;
+  reviewWatchSeconds: number;
   publishedByName: string | null;
   videoId: string | null;
   sourceRemark: string | null;

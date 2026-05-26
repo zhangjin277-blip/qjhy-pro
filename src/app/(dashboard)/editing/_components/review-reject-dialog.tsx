@@ -5,10 +5,11 @@ import { toast } from "sonner";
 
 interface Props {
   taskId: number;
+  watchSeconds?: number;
   onDone?: () => void;
 }
 
-export function ReviewRejectDialog({ taskId, onDone }: Props) {
+export function ReviewRejectDialog({ taskId, watchSeconds, onDone }: Props) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
 
@@ -37,7 +38,7 @@ export function ReviewRejectDialog({ taskId, onDone }: Props) {
           disabled={!reason.trim()}
           onClick={async () => {
             try {
-              await reviewReject({ taskId, reason: reason.trim() });
+              await reviewReject({ taskId, reason: reason.trim(), watchSeconds });
               toast.success("已回退");
               onDone?.();
               location.reload();

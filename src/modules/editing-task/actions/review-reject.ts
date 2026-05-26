@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/db/client";
 import { editing_task } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/page-auth";
 import { writeEvent } from "../event-writer";
 import { assertTransition } from "../state-machine";
@@ -17,13 +17,21 @@ export async function reviewReject(input: unknown): Promise<{ ok: true }> {
   if (!t) throw new Error("task not found");
   assertTransition(t.status, "editing");
 
-  await db.update(editing_task).set({ status: "editing" }).where(eq(editing_task.id, data.taskId));
+  await db
+    .update(editing_task)
+    .set({
+      status: "editing",
+      ...(data.watchSeconds && data.watchSeconds > 0
+        ? { review_watch_seconds: sql`${editing_task.review_watch_seconds} + ${data.watchSeconds}` }
+        : {}),
+    })
+    .where(eq(editing_task.id, data.taskId));
   // 注意：审核回退保留 editor_user_id（让原剪辑师继续改）
   await writeEvent({
     taskId: data.taskId,
     eventType: "review_rejected",
     actorUserId: userId,
-    payload: { reason: data.reason },
+    payload: { reason: data.reason, watch_seconds: data.watchSeconds ?? 0 },
   });
   return { ok: true };
 }

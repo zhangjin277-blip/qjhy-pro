@@ -24,6 +24,7 @@ export const AssignEditorInput = z.object({
 export const ReviewRejectInput = z.object({
   taskId: z.number().int().positive(),
   reason: z.string().min(1).max(500),
+  watchSeconds: z.number().int().nonnegative().optional(),
 });
 
 export const MarkPublishedInput = z.object({

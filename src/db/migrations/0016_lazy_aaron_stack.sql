@@ -1,0 +1,1 @@
+ALTER TABLE "editing_task" ADD COLUMN "review_watch_seconds" integer DEFAULT 0 NOT NULL;
