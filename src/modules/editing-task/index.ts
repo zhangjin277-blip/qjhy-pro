@@ -15,3 +15,6 @@ export {
   DeleteTaskInput,
   BoardFilterInput,
 } from "./schema";
+
+export { createTask } from "./actions/create-task";
+export { uploadSource } from "./actions/upload-source";
