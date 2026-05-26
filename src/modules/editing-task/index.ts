@@ -33,3 +33,4 @@ export { toggleDisqualified } from "./actions/toggle-disqualified";
 export { setPriority } from "./actions/set-priority";
 export { uploadCover } from "./actions/upload-cover";
 export { deleteCover } from "./actions/delete-cover";
+export { claimTask } from "./actions/claim-task";

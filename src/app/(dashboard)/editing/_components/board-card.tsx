@@ -23,6 +23,14 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
 
   return (
     <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(
+          "application/x-editing-task",
+          JSON.stringify({ id: card.id, status: card.status }),
+        );
+        e.dataTransfer.effectAllowed = "move";
+      }}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("[data-checkbox]")) return;
         onOpenDrawer(card.id);

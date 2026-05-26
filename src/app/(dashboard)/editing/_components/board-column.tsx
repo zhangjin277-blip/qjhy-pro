@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import type { BoardCard, EditingTaskStatus } from "@/modules/editing-task";
 import { Group } from "./board-group";
 import { groupBoardCards } from "../_lib/group-by-date";
@@ -12,6 +13,11 @@ interface Props {
   onSelect: (id: number) => void;
   onOpenDrawer: (id: number) => void;
   editors: { userId: string; name: string }[];
+  onDropToColumn?: (
+    taskId: number,
+    fromStatus: EditingTaskStatus,
+    toStatus: EditingTaskStatus,
+  ) => void;
 }
 
 export function Column({
@@ -23,12 +29,42 @@ export function Column({
   onSelect,
   onOpenDrawer,
   editors,
+  onDropToColumn,
 }: Props) {
   const field = status === "published" ? "publishedAt" : "enteredStatusAt";
   const groups = groupBoardCards(cards, field);
+  const [dragOver, setDragOver] = useState(false);
 
   return (
-    <div className="flex min-h-[620px] flex-col rounded-xl border border-border-subtle bg-slate-50/70 p-3">
+    <div
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("application/x-editing-task")) {
+          e.preventDefault();
+          setDragOver(true);
+        }
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const data = e.dataTransfer.getData("application/x-editing-task");
+        if (!data) return;
+        try {
+          const parsed = JSON.parse(data) as {
+            id: number;
+            status: EditingTaskStatus;
+          };
+          onDropToColumn?.(parsed.id, parsed.status, status);
+        } catch {
+          // ignore malformed drag data
+        }
+      }}
+      className={`flex min-h-[620px] flex-col rounded-xl border p-3 transition-colors ${
+        dragOver
+          ? "border-blue-500 ring-2 ring-blue-200 bg-blue-50/40"
+          : "border-border-subtle bg-slate-50/70"
+      }`}
+    >
       <div className="mb-3 flex items-center gap-2 px-1.5">
         <span className={`h-2 w-2 rounded-full ${dotColorClass}`} />
         <span className="text-sm font-semibold">{label}</span>
