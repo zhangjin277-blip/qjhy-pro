@@ -7,6 +7,7 @@ export const CreateTaskInput = z.object({
   sourceRemark: z.string().max(500).optional().nullable(),
   priority: z.enum(["normal", "urgent"]).optional(),
   urgentReason: z.string().max(200).optional().nullable(),
+  force: z.boolean().optional(), // true 表示强制创建（已确认跳过重复检查）
 });
 
 export const UploadSourceInput = z.object({

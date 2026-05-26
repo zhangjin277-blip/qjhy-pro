@@ -135,12 +135,15 @@ describe("editing task lifecycle (integration)", () => {
     mockOperator();
 
     // 1) createTask → status=uploaded
-    const { taskId } = await createTask({
+    const createResult = await createTask({
       liveAccountId: TEST_ACCOUNT_ID,
       anchorId: null,
       materialDate: "2026-05-25",
       sourceRemark: "素材备注",
+      force: true,
     });
+    expect("taskId" in createResult).toBe(true);
+    const { taskId } = createResult as { taskId: number };
 
     let t = await fetchTask(taskId);
     expect(t.status).toBe("uploaded");
@@ -225,12 +228,14 @@ describe("editing task lifecycle (integration)", () => {
   it("state machine: published → reviewApprove 应抛 illegal transition", async () => {
     mockOperator();
 
-    const { taskId } = await createTask({
+    const r1 = await createTask({
       liveAccountId: TEST_ACCOUNT_ID,
       anchorId: null,
       materialDate: "2026-05-25",
       sourceRemark: null,
+      force: true,
     });
+    const { taskId } = r1 as { taskId: number };
 
     // 强制置为 published（跳过正常流程）
     await db.update(editing_task).set({ status: "published" }).where(eq(editing_task.id, taskId));
@@ -241,12 +246,14 @@ describe("editing task lifecycle (integration)", () => {
   it("delete guard: published task 不可被删除（skipped=1, deleted=0）", async () => {
     mockOperator();
 
-    const { taskId } = await createTask({
+    const r2 = await createTask({
       liveAccountId: TEST_ACCOUNT_ID,
       anchorId: null,
       materialDate: "2026-05-25",
       sourceRemark: null,
+      force: true,
     });
+    const { taskId } = r2 as { taskId: number };
 
     // 强制置为 published
     await db.update(editing_task).set({ status: "published" }).where(eq(editing_task.id, taskId));

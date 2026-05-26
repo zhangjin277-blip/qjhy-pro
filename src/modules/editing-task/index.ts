@@ -20,6 +20,7 @@ export {
 } from "./schema";
 
 export { createTask } from "./actions/create-task";
+export type { CreateTaskResult } from "./actions/create-task";
 export { uploadSource } from "./actions/upload-source";
 export { assignEditor } from "./actions/assign-editor";
 export { uploadEdited } from "./actions/upload-edited";

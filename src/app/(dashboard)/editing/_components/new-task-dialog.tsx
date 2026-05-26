@@ -5,6 +5,8 @@ import { searchLiveAccounts, type AccountSearchResult } from "../actions";
 import type { ProductOption } from "@/modules/product-config";
 import { toast } from "sonner";
 
+type DuplicateInfo = { id: number; status: string; createdAt: string }[];
+
 interface Props {
   onClose: () => void;
   products: ProductOption[];
@@ -23,10 +25,21 @@ export function NewTaskDialog({ onClose }: Props) {
   const [urgentReason, setUrgentReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [duplicates, setDuplicates] = useState<DuplicateInfo | null>(null);
 
-  async function submit() {
-    if (!selected || files.length === 0) return;
-    setSubmitting(true);
+  async function uploadFileToTask(taskId: number, f: File): Promise<void> {
+    const fd = new FormData();
+    fd.append("taskId", String(taskId));
+    fd.append("file", f);
+    const res = await fetch("/api/editing/upload-source", { method: "POST", body: fd });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error((j as { error?: string }).error ?? "素材上传失败");
+    }
+  }
+
+  async function doCreate(force: boolean): Promise<void> {
+    if (!selected) return;
     let succeeded = 0;
     let failed = 0;
 
@@ -35,22 +48,24 @@ export function NewTaskDialog({ onClose }: Props) {
       let idx = 0;
       for (const f of files) {
         try {
-          const { taskId } = await createTask({
+          const result = await createTask({
             liveAccountId: selected.id,
             anchorId: anchorId || null,
             materialDate,
             sourceRemark: remark.trim() || null,
             priority,
             urgentReason: priority === "urgent" ? urgentReason.trim() || null : null,
+            force: force || idx > 0, // 第一条后续都强制，避免重复弹窗
           });
-          const fd = new FormData();
-          fd.append("taskId", String(taskId));
-          fd.append("file", f);
-          const res = await fetch("/api/editing/upload-source", { method: "POST", body: fd });
-          if (!res.ok) {
-            const j = await res.json().catch(() => ({}));
-            throw new Error((j as { error?: string }).error ?? "素材上传失败");
+
+          if (!("taskId" in result)) {
+            // 第一条才可能触发 duplicate（idx > 0 都是 force=true）
+            setDuplicates(result.existing);
+            setSubmitting(false);
+            return;
           }
+
+          await uploadFileToTask(result.taskId, f);
           succeeded++;
         } catch (err) {
           failed++;
@@ -60,26 +75,29 @@ export function NewTaskDialog({ onClose }: Props) {
         setProgress({ done: idx, total: files.length });
       }
     } else {
-      // merged mode
+      // merged mode: 1 个任务，所有文件上传到它
       try {
-        const { taskId } = await createTask({
+        const result = await createTask({
           liveAccountId: selected.id,
           anchorId: anchorId || null,
           materialDate,
           sourceRemark: remark.trim() || null,
+          priority,
+          urgentReason: priority === "urgent" ? urgentReason.trim() || null : null,
+          force,
         });
+
+        if (!("taskId" in result)) {
+          setDuplicates(result.existing);
+          setSubmitting(false);
+          return;
+        }
+
         setProgress({ done: 0, total: files.length });
         let idx = 0;
         for (const f of files) {
           try {
-            const fd = new FormData();
-            fd.append("taskId", String(taskId));
-            fd.append("file", f);
-            const res = await fetch("/api/editing/upload-source", { method: "POST", body: fd });
-            if (!res.ok) {
-              const j = await res.json().catch(() => ({}));
-              throw new Error((j as { error?: string }).error ?? "素材上传失败");
-            }
+            await uploadFileToTask(result.taskId, f);
             succeeded++;
           } catch (err) {
             failed++;
@@ -104,6 +122,23 @@ export function NewTaskDialog({ onClose }: Props) {
     }
   }
 
+  async function submit() {
+    if (!selected || files.length === 0) return;
+    setSubmitting(true);
+    setDuplicates(null);
+    await doCreate(false);
+  }
+
+  function handleDuplicateConfirm() {
+    setDuplicates(null);
+    setSubmitting(true);
+    void doCreate(true);
+  }
+
+  function handleDuplicateCancel() {
+    setDuplicates(null);
+  }
+
   const buttonLabel =
     submitting && progress
       ? `上传 ${progress.done}/${progress.total} ...`
@@ -113,6 +148,46 @@ export function NewTaskDialog({ onClose }: Props) {
 
   return (
     <>
+      {/* 重复任务确认弹窗 */}
+      {duplicates && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" />
+          <div className="relative z-10 w-[400px] rounded-xl bg-white p-6 shadow-2xl">
+            <h3 className="mb-2 text-base font-semibold text-amber-600">检测到重复任务</h3>
+            <p className="mb-3 text-sm text-slate-600">
+              以下任务与本次提交的账号 + 主播 + 素材日期完全相同：
+            </p>
+            <ul className="mb-4 space-y-1 rounded bg-amber-50 px-3 py-2">
+              {duplicates.map((e) => (
+                <li key={e.id} className="text-sm text-slate-700">
+                  · task #{e.id}{" "}
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                    {e.status}
+                  </span>{" "}
+                  <span className="text-xs text-slate-400">
+                    {new Date(e.createdAt).toLocaleDateString("zh-CN")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mb-4 text-sm text-slate-600">仍要继续创建吗？</p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={handleDuplicateCancel}
+                className="rounded border border-border px-4 py-2 text-sm hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDuplicateConfirm}
+                className="rounded bg-amber-500 px-4 py-2 text-sm text-white hover:bg-amber-600"
+              >
+                仍要创建
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
       <div className="fixed left-1/2 top-1/2 z-50 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-2xl">
         <header className="mb-4 flex items-center justify-between">
