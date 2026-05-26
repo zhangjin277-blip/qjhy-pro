@@ -1,7 +1,7 @@
 "use client";
 import type { BoardCard, EditingTaskStatus } from "@/modules/editing-task";
 import { Group } from "./board-group";
-import { groupByDate } from "../_lib/group-by-date";
+import { groupBoardCards } from "../_lib/group-by-date";
 
 interface Props {
   status: EditingTaskStatus;
@@ -25,7 +25,7 @@ export function Column({
   editors,
 }: Props) {
   const field = status === "published" ? "publishedAt" : "enteredStatusAt";
-  const groups = groupByDate(cards, field);
+  const groups = groupBoardCards(cards, field);
 
   return (
     <div className="flex min-h-[620px] flex-col rounded-xl border border-border-subtle bg-slate-50/70 p-3">
@@ -42,6 +42,7 @@ export function Column({
           label={g.label}
           cards={g.cards}
           defaultOpen={g.defaultOpen}
+          variant={g.variant}
           selectedIds={selectedIds}
           onSelect={onSelect}
           onOpenDrawer={onOpenDrawer}

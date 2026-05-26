@@ -7,6 +7,7 @@ interface Props {
   label: string;
   cards: BoardCard[];
   defaultOpen: boolean;
+  variant?: "urgent" | "disqualified" | "default";
   selectedIds: Set<number>;
   onSelect: (id: number) => void;
   onOpenDrawer: (id: number) => void;
@@ -19,6 +20,7 @@ export function Group({
   label,
   cards,
   defaultOpen,
+  variant,
   selectedIds,
   onSelect,
   onOpenDrawer,
@@ -29,11 +31,16 @@ export function Group({
   const visible = expanded ? cards : cards.slice(0, MAX_VISIBLE);
   const remaining = cards.length - visible.length;
 
+  const isSpecial = variant === "urgent" || variant === "disqualified";
+  const headClass = isSpecial
+    ? "text-red-600 hover:text-red-700"
+    : "text-slate-400 hover:text-blue-600";
+
   return (
     <div className="mb-2">
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:bg-[var(--selection-bg)] hover:text-blue-600"
+        className={`flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-[11px] font-semibold uppercase tracking-wider hover:bg-[var(--selection-bg)] ${headClass}`}
       >
         <span className={`text-[9px] transition-transform ${open ? "" : "-rotate-90"}`}>▼</span>
         <span>{label}</span>

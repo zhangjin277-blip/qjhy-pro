@@ -4,6 +4,36 @@ export interface DateGroup {
   label: string;
   cards: BoardCard[];
   defaultOpen: boolean;
+  variant?: "urgent" | "disqualified" | "default";
+}
+
+export function groupBoardCards(
+  cards: BoardCard[],
+  dateField: "enteredStatusAt" | "publishedAt" | "materialDate",
+): DateGroup[] {
+  const urgent: BoardCard[] = [];
+  const disqualified: BoardCard[] = [];
+  const rest: BoardCard[] = [];
+
+  for (const c of cards) {
+    if (c.priority === "urgent") urgent.push(c);
+    else if (c.isDisqualified) disqualified.push(c);
+    else rest.push(c);
+  }
+
+  const groups: DateGroup[] = [];
+  if (urgent.length > 0)
+    groups.push({ label: "🔴 紧急任务", cards: urgent, defaultOpen: true, variant: "urgent" });
+  if (disqualified.length > 0)
+    groups.push({
+      label: "❌ 不合格素材",
+      cards: disqualified,
+      defaultOpen: true,
+      variant: "disqualified",
+    });
+
+  groups.push(...groupByDate(rest, dateField).map((g) => ({ ...g, variant: "default" as const })));
+  return groups;
 }
 
 export function groupByDate(
