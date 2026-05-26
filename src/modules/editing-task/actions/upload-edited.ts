@@ -8,6 +8,7 @@ import { writeEvent } from "../event-writer";
 import { buildEditedPath, writeFile as nasWriteFile } from "@/modules/editing-storage/server";
 import { z } from "zod";
 import { assertTransition } from "../state-machine";
+import { notifyUrgentEditedUploaded } from "../notify";
 
 const Input = z.object({
   taskId: z.number().int().positive(),
@@ -27,6 +28,7 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
       material_date: editing_task.material_date,
       live_account_id: editing_task.live_account_id,
       status: editing_task.status,
+      priority: editing_task.priority,
       editor_user_id: editing_task.editor_user_id,
       product: live_account.product,
       edited_files: editing_task.edited_files,
@@ -70,6 +72,11 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
         status: "review",
       })
       .where(eq(editing_task.id, task.id));
+
+    // 紧急任务：fire-and-forget 钉钉通知，不阻塞主流程
+    if (task.priority === "urgent") {
+      notifyUrgentEditedUploaded(task.id).catch((e: unknown) => void e);
+    }
   } else {
     // Append: status already review, keep it
     await db

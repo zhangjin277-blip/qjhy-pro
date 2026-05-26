@@ -5,6 +5,7 @@ import { editing_task } from "@/db/schema";
 import { requireUser } from "@/lib/auth/page-auth";
 import { writeEvent } from "../event-writer";
 import { CreateTaskInput } from "../schema";
+import { notifyUrgentTaskCreated } from "../notify";
 
 export type CreateTaskResult =
   | { taskId: number }
@@ -79,6 +80,11 @@ export async function createTask(input: unknown): Promise<CreateTaskResult> {
       urgent_reason: data.priority === "urgent" ? (data.urgentReason ?? null) : null,
     },
   });
+
+  // 紧急任务：fire-and-forget 钉钉通知，不阻塞主流程
+  if (data.priority === "urgent") {
+    notifyUrgentTaskCreated(row.id, data.urgentReason ?? null).catch((e: unknown) => void e);
+  }
 
   return { taskId: row.id };
 }

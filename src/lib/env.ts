@@ -6,6 +6,7 @@ const envSchema = z.object({
   DINGTALK_APP_SECRET: z.string().default(""),
   DINGTALK_CORP_ID: z.string().default(""),
   DINGTALK_BOT_WEBHOOK: z.string().url().or(z.literal("")).default(""),
+  EDITING_DINGTALK_WEBHOOK: z.string().url().or(z.literal("")).default(""),
   AUTH_SECRET: z.string().min(16, "AUTH_SECRET must be at least 16 chars"),
   EMERGENCY_LOGIN_PASSWORD: z
     .string()
