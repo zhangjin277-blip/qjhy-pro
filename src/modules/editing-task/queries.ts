@@ -8,9 +8,21 @@ import {
   dingtalk_user,
   product_config,
 } from "@/db/schema";
-import type { BoardCard, TaskDetail, TaskEvent } from "./types";
+import type { BoardCard, TaskDetail, TaskEvent, GanttRow, MonthlyProductShare } from "./types";
 import type { EditingTaskStatus } from "@/db/schema";
-import { and, asc, desc, eq, gte, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export interface BoardFilter {
@@ -303,4 +315,194 @@ export async function listEvents(taskId: number): Promise<TaskEvent[]> {
     payload: r.payload as Record<string, unknown>,
     createdAt: r.created_at.toISOString(),
   }));
+}
+
+// ---- 甘特图 / 完成统计 ----
+
+/**
+ * 按周查询剪辑完成情况（publisher_at 时区转换为 Asia/Shanghai 日期）。
+ * 按剪辑师 × 日期 × 产品聚合，返回 GanttRow[]。
+ */
+export async function queryWeeklyGantt(args: {
+  weekStart: string; // YYYY-MM-DD（周一）
+  weekEnd: string; // YYYY-MM-DD（周日）
+  whereClause?: SQL;
+}): Promise<GanttRow[]> {
+  const filters: (SQL | undefined)[] = [
+    args.whereClause,
+    eq(editing_task.status, "published"),
+    isNotNull(editing_task.editor_user_id),
+    isNotNull(editing_task.published_at),
+    isNull(editing_task.deleted_at),
+    gte(
+      sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`${args.weekStart}::date`,
+    ),
+    lte(
+      sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`${args.weekEnd}::date`,
+    ),
+  ];
+
+  const rows = await db
+    .select({
+      editor_user_id: editing_task.editor_user_id,
+      editor_name: dingtalk_user.name,
+      product: live_account.product,
+      published_date: sql<string>`((${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date)::text`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(editing_task)
+    .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
+    .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
+    .where(and(...(filters.filter(Boolean) as SQL[])))
+    .groupBy(
+      editing_task.editor_user_id,
+      dingtalk_user.name,
+      live_account.product,
+      sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+    );
+
+  // 按 editor 聚合成 GanttRow[]
+  const editorMap = new Map<
+    string,
+    {
+      editorUserId: string;
+      editorName: string;
+      dailyMap: Map<string, number>;
+      productMap: Map<string, Map<string, number>>;
+    }
+  >();
+
+  for (const r of rows) {
+    if (!r.editor_user_id) continue;
+    const uid = r.editor_user_id;
+    const date = r.published_date;
+    const product = r.product ?? "未分类";
+    const count = r.count;
+
+    if (!editorMap.has(uid)) {
+      editorMap.set(uid, {
+        editorUserId: uid,
+        editorName: r.editor_name ?? "(未知)",
+        dailyMap: new Map(),
+        productMap: new Map(),
+      });
+    }
+    const entry = editorMap.get(uid);
+    if (!entry) continue;
+    entry.dailyMap.set(date, (entry.dailyMap.get(date) ?? 0) + count);
+    if (!entry.productMap.has(product)) {
+      entry.productMap.set(product, new Map());
+    }
+    const pd = entry.productMap.get(product);
+    if (!pd) continue;
+    pd.set(date, (pd.get(date) ?? 0) + count);
+  }
+
+  return Array.from(editorMap.values())
+    .map((entry) => {
+      const daily = Array.from(entry.dailyMap.entries()).map(([date, count]) => ({
+        date,
+        count,
+      }));
+      const total = daily.reduce((s, x) => s + x.count, 0);
+      const products = Array.from(entry.productMap.entries()).map(([product, dateMap]) => {
+        const pDaily = Array.from(dateMap.entries()).map(([date, count]) => ({ date, count }));
+        const pTotal = pDaily.reduce((s, x) => s + x.count, 0);
+        return { product, total: pTotal, daily: pDaily };
+      });
+      return {
+        editorUserId: entry.editorUserId,
+        editorName: entry.editorName,
+        total,
+        daily,
+        products,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+}
+
+/**
+ * 本月产品占比查询。
+ * 按剪辑师 × 产品聚合，计算每个产品占该剪辑师本月完成总量的比例。
+ */
+export async function queryMonthlyProductShare(args: {
+  monthStart: string; // YYYY-MM-01
+  monthEnd: string; // YYYY-MM-{last day}
+  whereClause?: SQL;
+}): Promise<MonthlyProductShare[]> {
+  const filters: (SQL | undefined)[] = [
+    args.whereClause,
+    eq(editing_task.status, "published"),
+    isNotNull(editing_task.editor_user_id),
+    isNotNull(editing_task.published_at),
+    isNull(editing_task.deleted_at),
+    gte(
+      sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`${args.monthStart}::date`,
+    ),
+    lte(
+      sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`${args.monthEnd}::date`,
+    ),
+  ];
+
+  const rows = await db
+    .select({
+      editor_user_id: editing_task.editor_user_id,
+      editor_name: dingtalk_user.name,
+      product: live_account.product,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(editing_task)
+    .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
+    .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
+    .where(and(...(filters.filter(Boolean) as SQL[])))
+    .groupBy(editing_task.editor_user_id, dingtalk_user.name, live_account.product);
+
+  // 按 editor 聚合
+  const editorMap = new Map<
+    string,
+    {
+      editorUserId: string;
+      editorName: string;
+      byProduct: Map<string, number>;
+    }
+  >();
+
+  for (const r of rows) {
+    if (!r.editor_user_id) continue;
+    const uid = r.editor_user_id;
+    const product = r.product ?? "未分类";
+    if (!editorMap.has(uid)) {
+      editorMap.set(uid, {
+        editorUserId: uid,
+        editorName: r.editor_name ?? "(未知)",
+        byProduct: new Map(),
+      });
+    }
+    const entry = editorMap.get(uid);
+    if (!entry) continue;
+    entry.byProduct.set(product, (entry.byProduct.get(product) ?? 0) + r.count);
+  }
+
+  return Array.from(editorMap.values())
+    .map((entry) => {
+      const byProductArr = Array.from(entry.byProduct.entries()).map(([product, count]) => ({
+        product,
+        count,
+      }));
+      const total = byProductArr.reduce((s, x) => s + x.count, 0);
+      const byProduct = byProductArr
+        .map((x) => ({ ...x, share: total > 0 ? x.count / total : 0 }))
+        .sort((a, b) => b.count - a.count);
+      return {
+        editorUserId: entry.editorUserId,
+        editorName: entry.editorName,
+        total,
+        byProduct,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
 }

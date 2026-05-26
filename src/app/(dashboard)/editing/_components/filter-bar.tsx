@@ -39,6 +39,12 @@ export function FilterBar({ products, editors, onNewTask }: FilterBarProps) {
         >
           表格
         </button>
+        <button
+          onClick={() => router.push("/editing/gantt")}
+          className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
+        >
+          统计
+        </button>
       </div>
 
       <div className="h-5 w-px bg-border" />

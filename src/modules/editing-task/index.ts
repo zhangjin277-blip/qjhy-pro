@@ -5,6 +5,10 @@ export type {
   BoardCard,
   TaskDetail,
   TaskEvent,
+  GanttCell,
+  GanttProductBreakdown,
+  GanttRow,
+  MonthlyProductShare,
 } from "./types";
 
 export {

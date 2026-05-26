@@ -54,3 +54,31 @@ export interface TaskEvent {
   payload: Record<string, unknown>;
   createdAt: string;
 }
+
+// ---- Gantt / 完成统计 ----
+
+export interface GanttCell {
+  date: string; // YYYY-MM-DD
+  count: number;
+}
+
+export interface GanttProductBreakdown {
+  product: string;
+  total: number;
+  daily: GanttCell[];
+}
+
+export interface GanttRow {
+  editorUserId: string;
+  editorName: string;
+  total: number;
+  daily: GanttCell[]; // 每天合计
+  products: GanttProductBreakdown[]; // 按产品拆
+}
+
+export interface MonthlyProductShare {
+  editorUserId: string;
+  editorName: string;
+  total: number;
+  byProduct: { product: string; count: number; share: number }[]; // share = 0-1
+}

@@ -109,6 +109,12 @@ export const NAV: NavItem[] = [
         href: "/editing/table",
         module: "editing_workflow",
       },
+      {
+        key: "editing-gantt",
+        label: "完成统计",
+        href: "/editing/gantt",
+        module: "editing_workflow",
+      },
     ],
   },
   {
