@@ -1,10 +1,13 @@
 "use client";
+import type { EditorOption } from "@/modules/editing-editor";
 
-export function TaskDrawer(_: {
+interface Props {
   taskId: number;
   onClose: () => void;
-  editors: { userId: string; name: string }[];
+  editors: EditorOption[];
   permissions: { canEdit: boolean; isAdmin: boolean };
-}) {
+}
+
+export function TaskDrawer(_: Props) {
   return null;
 }

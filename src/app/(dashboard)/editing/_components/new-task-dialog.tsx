@@ -1,6 +1,11 @@
 "use client";
 import type { ProductOption } from "@/modules/product-config";
 
-export function NewTaskDialog(_: { onClose: () => void; products: ProductOption[] }) {
+interface Props {
+  onClose: () => void;
+  products: ProductOption[];
+}
+
+export function NewTaskDialog(_: Props) {
   return null;
 }
