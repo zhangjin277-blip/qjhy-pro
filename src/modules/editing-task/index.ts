@@ -18,3 +18,4 @@ export {
 
 export { createTask } from "./actions/create-task";
 export { uploadSource } from "./actions/upload-source";
+export { assignEditor } from "./actions/assign-editor";
