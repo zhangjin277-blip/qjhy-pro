@@ -2,6 +2,7 @@ import {
   BarChart3,
   Home,
   MonitorPlay,
+  Scissors,
   Settings2,
   Shield,
   UserCircle2,
@@ -93,6 +94,20 @@ export const NAV: NavItem[] = [
         label: "开播记录",
         href: "/live-accounts/checkin-history",
         module: "live_account",
+      },
+    ],
+  },
+  {
+    key: "editing",
+    label: "剪辑管理",
+    icon: Scissors,
+    children: [
+      { key: "editing-board", label: "剪辑看板", href: "/editing", module: "editing_workflow" },
+      {
+        key: "editing-table",
+        label: "任务列表",
+        href: "/editing/table",
+        module: "editing_workflow",
       },
     ],
   },
