@@ -1,8 +1,8 @@
 "use server";
 import { getTask, listEvents } from "@/modules/editing-task/server";
 import { db } from "@/db/client";
-import { live_account, account_anchor_default, anchor_profile } from "@/db/schema";
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { live_account } from "@/db/schema";
+import { asc, sql } from "drizzle-orm";
 
 export async function loadTaskDetail(taskId: number) {
   const [task, events] = await Promise.all([getTask(taskId), listEvents(taskId)]);
@@ -34,28 +34,33 @@ export async function searchLiveAccounts(query: string): Promise<AccountSearchRe
 
   const accountIds = accounts.map((a) => a.id);
 
-  // account_anchor_default uses account_id + dingtalk_user_id.
-  // editing_task.anchor_id references anchor_profile.anchor_id (Douyin anchor ID).
-  // Bridge: anchor_profile.dingtalk_user_id links the two.
-  const defaults = await db
-    .select({
-      account_id: account_anchor_default.account_id,
-      anchor_id: anchor_profile.anchor_id,
-      anchor_name: anchor_profile.nick_name,
-    })
-    .from(account_anchor_default)
-    .leftJoin(
-      anchor_profile,
-      eq(anchor_profile.dingtalk_user_id, account_anchor_default.dingtalk_user_id),
-    )
-    .where(inArray(account_anchor_default.account_id, accountIds));
+  // 主播候选 = 最近 3 天该账号开播记录里出现过的主播（去重）
+  // 桥接：live_session_log.anchor_dingtalk_user_id → anchor_profile.dingtalk_user_id → anchor_id + nick_name
+  const recentRows = await db.execute<{
+    account_id: string;
+    anchor_id: string;
+    anchor_name: string | null;
+  }>(sql`
+    SELECT DISTINCT
+      sl.live_account_id AS account_id,
+      ap.anchor_id,
+      ap.nick_name AS anchor_name
+    FROM live_session_log sl
+    JOIN anchor_profile ap ON ap.dingtalk_user_id = sl.anchor_dingtalk_user_id
+    WHERE sl.live_account_id = ANY(${accountIds})
+      AND sl.start_at >= NOW() - INTERVAL '3 days'
+      AND sl.anchor_dingtalk_user_id IS NOT NULL
+  `);
 
   const byAccount = new Map<string, { anchorId: string; name: string }[]>();
-  for (const d of defaults) {
-    if (!d.anchor_id) continue;
-    const arr = byAccount.get(d.account_id) ?? [];
-    arr.push({ anchorId: d.anchor_id, name: d.anchor_name ?? "(未命名)" });
-    byAccount.set(d.account_id, arr);
+  for (const r of recentRows as unknown as Iterable<{
+    account_id: string;
+    anchor_id: string;
+    anchor_name: string | null;
+  }>) {
+    const arr = byAccount.get(r.account_id) ?? [];
+    arr.push({ anchorId: r.anchor_id, name: r.anchor_name ?? "(未命名)" });
+    byAccount.set(r.account_id, arr);
   }
 
   return accounts.map((a) => ({
