@@ -1,4 +1,5 @@
 "use server";
+import { createHash } from "node:crypto";
 import { db } from "@/db/client";
 import { editing_task, live_account } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -30,6 +31,7 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
       product: live_account.product,
       edited_files: editing_task.edited_files,
       edited_file_names: editing_task.edited_file_names,
+      edited_file_hashes: editing_task.edited_file_hashes,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
@@ -44,6 +46,8 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
   if (!NAS) throw new Error("EDITING_NAS_PATH not configured");
 
   const buf = Buffer.from(await file.arrayBuffer());
+  const md5 = createHash("md5").update(buf).digest("hex");
+
   const materialDateStr = task.material_date.toISOString().slice(0, 10);
   const relPath = buildEditedPath({
     taskId: task.id,
@@ -61,6 +65,7 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
       .set({
         edited_files: [relPath],
         edited_file_names: [data.fileName],
+        edited_file_hashes: [md5],
         edited_uploaded_at: new Date(),
         status: "review",
       })
@@ -72,6 +77,7 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
       .set({
         edited_files: [...(task.edited_files ?? []), relPath],
         edited_file_names: [...(task.edited_file_names ?? []), data.fileName],
+        edited_file_hashes: [...(task.edited_file_hashes ?? []), md5],
         edited_uploaded_at: new Date(),
       })
       .where(eq(editing_task.id, task.id));

@@ -1,7 +1,8 @@
 "use server";
+import { createHash } from "node:crypto";
 import { db } from "@/db/client";
 import { editing_task, live_account } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/page-auth";
 import { writeEvent } from "../event-writer";
 import { buildSourcePath, writeFile as nasWriteFile } from "@/modules/editing-storage/server";
@@ -23,6 +24,7 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
       product: live_account.product,
       source_files: editing_task.source_files,
       source_file_names: editing_task.source_file_names,
+      source_file_hashes: editing_task.source_file_hashes,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
@@ -35,20 +37,68 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
   if (!NAS) throw new Error("EDITING_NAS_PATH not configured");
 
   const buf = Buffer.from(await file.arrayBuffer());
-  const materialDateStr = task.material_date.toISOString().slice(0, 10);
-  const relPath = buildSourcePath({
-    taskId: task.id,
-    product: task.product ?? "未分类",
-    materialDate: materialDateStr,
-    originalName: data.fileName,
-  });
-  await nasWriteFile(NAS, relPath, buf);
+  const md5 = createHash("md5").update(buf).digest("hex");
+
+  // Check if this MD5 already exists in any task's source_file_hashes
+  const dupRows = await db
+    .select({
+      id: editing_task.id,
+      source_files: editing_task.source_files,
+      source_file_hashes: editing_task.source_file_hashes,
+    })
+    .from(editing_task)
+    .where(sql`${editing_task.source_file_hashes} @> ${JSON.stringify([md5])}::jsonb`);
+
+  let relPath: string;
+
+  if (dupRows.length > 0 && dupRows[0] !== undefined) {
+    // Found existing file with same MD5 — reuse path (no write needed)
+    const oldTask = dupRows[0];
+    const idx = (oldTask.source_file_hashes ?? []).indexOf(md5);
+    relPath =
+      (oldTask.source_files ?? [])[idx] ??
+      buildSourcePath({
+        taskId: task.id,
+        product: task.product ?? "未分类",
+        materialDate: task.material_date.toISOString().slice(0, 10),
+        originalName: data.fileName,
+      });
+
+    // Mark current task as duplicate (if different task)
+    if (oldTask.id !== task.id) {
+      await db
+        .update(editing_task)
+        .set({
+          is_duplicate: true,
+          duplicate_of: oldTask.id,
+        })
+        .where(eq(editing_task.id, task.id));
+
+      await writeEvent({
+        taskId: task.id,
+        eventType: "duplicate_detected",
+        actorUserId: userId,
+        payload: { duplicate_of: oldTask.id, md5 },
+      });
+    }
+  } else {
+    // New file — write to NAS
+    const materialDateStr = task.material_date.toISOString().slice(0, 10);
+    relPath = buildSourcePath({
+      taskId: task.id,
+      product: task.product ?? "未分类",
+      materialDate: materialDateStr,
+      originalName: data.fileName,
+    });
+    await nasWriteFile(NAS, relPath, buf);
+  }
 
   await db
     .update(editing_task)
     .set({
       source_files: [...(task.source_files ?? []), relPath],
       source_file_names: [...(task.source_file_names ?? []), data.fileName],
+      source_file_hashes: [...(task.source_file_hashes ?? []), md5],
       source_uploaded_at: new Date(),
     })
     .where(eq(editing_task.id, task.id));

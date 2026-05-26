@@ -80,6 +80,14 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
               ❌ 不合格
             </span>
           )}
+          {card.isDuplicate && (
+            <span
+              className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500"
+              title="重复素材"
+            >
+              ♻️ 重复
+            </span>
+          )}
         </div>
         <div className="mt-2 flex items-center justify-between border-t border-dashed border-border-default pt-2 text-xs">
           {card.editorName ? (

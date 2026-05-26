@@ -53,6 +53,7 @@ export async function listForBoard(args: BoardFilter): Promise<BoardCard[]> {
       is_disqualified: editing_task.is_disqualified,
       disqualified_reason: editing_task.disqualified_reason,
       priority: editing_task.priority,
+      is_duplicate: editing_task.is_duplicate,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
@@ -90,6 +91,7 @@ function toBoardCard(r: {
   is_disqualified: boolean;
   disqualified_reason: string | null;
   priority: string;
+  is_duplicate: boolean;
 }): BoardCard {
   const enteredAt = pickEnteredStatusAt(r);
   return {
@@ -111,6 +113,7 @@ function toBoardCard(r: {
     priority: (r.priority === "urgent"
       ? "urgent"
       : "normal") as import("./types").EditingTaskPriority,
+    isDuplicate: r.is_duplicate,
   };
 }
 
@@ -169,8 +172,10 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
       cover_image: editing_task.cover_image,
       source_files: editing_task.source_files,
       source_file_names: editing_task.source_file_names,
+      source_file_hashes: editing_task.source_file_hashes,
       edited_files: editing_task.edited_files,
       edited_file_names: editing_task.edited_file_names,
+      edited_file_hashes: editing_task.edited_file_hashes,
       reviewed_by_name: reviewer.name,
       published_by_name: publisher.name,
       video_id: editing_task.video_id,
@@ -182,6 +187,8 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
       disqualified_by_name: disqualifier.name,
       priority: editing_task.priority,
       urgent_reason: editing_task.urgent_reason,
+      is_duplicate: editing_task.is_duplicate,
+      duplicate_of: editing_task.duplicate_of,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
@@ -201,9 +208,11 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
     ...card,
     sourceFiles: r.source_files,
     sourceFileNames: r.source_file_names,
+    sourceFileHashes: r.source_file_hashes,
     sourceUploadedAt: r.source_uploaded_at?.toISOString() ?? null,
     editedFiles: r.edited_files,
     editedFileNames: r.edited_file_names,
+    editedFileHashes: r.edited_file_hashes,
     editedUploadedAt: r.edited_uploaded_at?.toISOString() ?? null,
     reviewedByName: r.reviewed_by_name,
     reviewedAt: r.reviewed_at?.toISOString() ?? null,
@@ -216,6 +225,7 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
     disqualifiedAt: r.disqualified_at?.toISOString() ?? null,
     urgentReason: r.urgent_reason ?? null,
     coverImage: r.cover_image ?? null,
+    duplicateOf: r.duplicate_of ?? null,
   };
 }
 
@@ -255,6 +265,7 @@ export async function listForTable(args: TableFilter): Promise<BoardCard[]> {
       is_disqualified: editing_task.is_disqualified,
       disqualified_reason: editing_task.disqualified_reason,
       priority: editing_task.priority,
+      is_duplicate: editing_task.is_duplicate,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))

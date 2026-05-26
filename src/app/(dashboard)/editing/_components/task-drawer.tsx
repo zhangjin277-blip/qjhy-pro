@@ -84,6 +84,13 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
               <span className="text-slate-500">正常</span>
             )}
           </Row>
+          {task.duplicateOf && (
+            <Row label="重复关联">
+              <a href={`?task=${task.duplicateOf}`} className="text-blue-600 hover:underline">
+                task #{task.duplicateOf}
+              </a>
+            </Row>
+          )}
         </section>
 
         {task.isDisqualified && (
@@ -368,6 +375,8 @@ function formatEvent(e: TaskEvent): string {
       return "取消不合格标记";
     case "priority_changed":
       return `优先级 ${p.from === "urgent" ? "🔴 紧急" : "正常"} → ${p.to === "urgent" ? "🔴 紧急" : "正常"}${p.urgent_reason ? `：${p.urgent_reason}` : ""}`;
+    case "duplicate_detected":
+      return `检测到重复素材（同 MD5 已在 task #${p.duplicate_of}）`;
     default:
       return e.eventType;
   }

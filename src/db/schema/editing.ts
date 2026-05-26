@@ -69,6 +69,10 @@ export const editing_task = pgTable(
       () => dingtalk_user.user_id,
     ),
     disqualified_at: timestamp("disqualified_at", { withTimezone: true }),
+    source_file_hashes: jsonb("source_file_hashes").$type<string[]>().notNull().default([]),
+    edited_file_hashes: jsonb("edited_file_hashes").$type<string[]>().notNull().default([]),
+    is_duplicate: boolean("is_duplicate").notNull().default(false),
+    duplicate_of: bigint("duplicate_of", { mode: "number" }),
   },
   (t) => ({
     idx_status_date: index("idx_editing_task_status_date").on(t.status, t.material_date),
@@ -94,6 +98,7 @@ export const EDITING_EVENT_TYPES = [
   "disqualified",
   "disqualified_undone",
   "priority_changed",
+  "duplicate_detected",
 ] as const;
 export type EditingEventType = (typeof EDITING_EVENT_TYPES)[number];
 

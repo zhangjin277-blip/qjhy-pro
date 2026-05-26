@@ -20,6 +20,7 @@ export interface BoardCard {
   isDisqualified: boolean;
   disqualifiedReason: string | null;
   priority: EditingTaskPriority;
+  isDuplicate: boolean;
 }
 
 export interface TaskDetail extends BoardCard {
@@ -40,6 +41,9 @@ export interface TaskDetail extends BoardCard {
   disqualifiedAt: string | null;
   urgentReason: string | null;
   coverImage: string | null;
+  duplicateOf: number | null;
+  sourceFileHashes: string[];
+  editedFileHashes: string[];
 }
 
 export interface TaskEvent {
