@@ -4,7 +4,6 @@ import {
   editing_task,
   editing_task_event,
   live_account,
-  anchor_profile,
   dingtalk_user,
   product_config,
 } from "@/db/schema";
@@ -765,42 +764,11 @@ export async function queryFishCoverageToday(): Promise<FishCoverage> {
   const nameMap = new Map(userRows.map((u) => [u.user_id, u.name]));
 
   // 5) 拼 items
-  //    匹配逻辑：task.anchor_id 是 anchor_profile.anchor_id（抖音 anchor_id），
-  //    排班里存的是 dingtalk_user_id。两者不一定相同。
-  //    先按 live_account_id 宽松匹配（同账号任意任务算上传），再尝试 anchor_profile.dingtalk_user_id 精确匹配。
-  //    若 anchor_profile 有 dingtalk_user_id 关联，则精确匹配；否则 live_account_id 宽松匹配。
-  const anchorProfileRows =
-    userIds.length > 0
-      ? await db
-          .select({
-            anchor_id: anchor_profile.anchor_id,
-            dingtalk_user_id: anchor_profile.dingtalk_user_id,
-          })
-          .from(anchor_profile)
-          .where(inArray(anchor_profile.dingtalk_user_id, userIds))
-      : [];
-  // dingtalk_user_id → anchor_id (可能多对多，取第一个)
-  const dtToAnchorId = new Map<string, string>();
-  for (const ap of anchorProfileRows) {
-    if (ap.dingtalk_user_id && !dtToAnchorId.has(ap.dingtalk_user_id)) {
-      dtToAnchorId.set(ap.dingtalk_user_id, ap.anchor_id);
-    }
-  }
-
+  //    匹配逻辑：task.anchor_id 现存 dingtalk_user_id（去 FK 后），直接和排班 dingtalk_user_id 对等比较
   const items: FishCoverageItem[] = scheduled.map((s) => {
-    const anchorProfileId = dtToAnchorId.get(s.dingtalk_user_id);
-
-    let task: (typeof uploadedTasks)[0] | undefined;
-    if (anchorProfileId) {
-      // 精确：同账号 + 同主播
-      task = uploadedTasks.find(
-        (t) => t.live_account_id === s.account_id && t.anchor_id === anchorProfileId,
-      );
-    }
-    if (!task) {
-      // 宽松：同账号 + 任意主播（兜底，任务可能没填 anchor_id）
-      task = uploadedTasks.find((t) => t.live_account_id === s.account_id);
-    }
+    const task = uploadedTasks.find(
+      (t) => t.live_account_id === s.account_id && t.anchor_id === s.dingtalk_user_id,
+    );
 
     return {
       liveAccountId: s.account_id,
