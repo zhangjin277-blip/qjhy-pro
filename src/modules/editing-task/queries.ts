@@ -8,7 +8,16 @@ import {
   dingtalk_user,
   product_config,
 } from "@/db/schema";
-import type { BoardCard, TaskDetail, TaskEvent, GanttRow, MonthlyProductShare } from "./types";
+import type {
+  BoardCard,
+  TaskDetail,
+  TaskEvent,
+  GanttRow,
+  MonthlyProductShare,
+  StatusCounts,
+  EditorMonthlyStat,
+  AnchorMonthlyStat,
+} from "./types";
 import type { EditingTaskStatus } from "@/db/schema";
 import {
   and,
@@ -504,5 +513,162 @@ export async function queryMonthlyProductShare(args: {
         byProduct,
       };
     })
+    .sort((a, b) => b.total - a.total);
+}
+
+// ---- 统计视图聚合 ----
+
+/**
+ * 当前各状态任务数（不受月份过滤，实时数量）。
+ */
+export async function queryStatusCounts(args: { whereClause?: SQL }): Promise<StatusCounts> {
+  const rows = await db
+    .select({
+      status: editing_task.status,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(editing_task)
+    .where(and(args.whereClause, isNull(editing_task.deleted_at)))
+    .groupBy(editing_task.status);
+
+  const result: StatusCounts = { uploaded: 0, editing: 0, review: 0, ready: 0, published: 0 };
+  for (const r of rows) {
+    if (r.status in result) (result as unknown as Record<string, number>)[r.status] = r.count;
+  }
+  return result;
+}
+
+/**
+ * 剪辑师月度统计：完成数 + 被回退数 + 回退率。
+ */
+export async function queryEditorMonthlyStats(args: {
+  monthStart: string;
+  monthEnd: string;
+  whereClause?: SQL;
+}): Promise<EditorMonthlyStat[]> {
+  // 完成数：本月 published 且 editor_user_id = X
+  const completedRows = await db
+    .select({
+      editor_user_id: editing_task.editor_user_id,
+      editor_name: dingtalk_user.name,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(editing_task)
+    .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
+    .where(
+      and(
+        args.whereClause,
+        eq(editing_task.status, "published"),
+        isNotNull(editing_task.editor_user_id),
+        gte(
+          sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+          sql`${args.monthStart}::date`,
+        ),
+        lte(
+          sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+          sql`${args.monthEnd}::date`,
+        ),
+        isNull(editing_task.deleted_at),
+      ),
+    )
+    .groupBy(editing_task.editor_user_id, dingtalk_user.name);
+
+  // 被回退数：本月 review_rejected 事件，按 task 当前 editor_user_id 分组
+  const rejectedRows = await db
+    .select({
+      editor_user_id: editing_task.editor_user_id,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(editing_task_event)
+    .innerJoin(editing_task, eq(editing_task.id, editing_task_event.task_id))
+    .where(
+      and(
+        args.whereClause,
+        eq(editing_task_event.event_type, "review_rejected"),
+        isNotNull(editing_task.editor_user_id),
+        gte(
+          sql`(${editing_task_event.created_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+          sql`${args.monthStart}::date`,
+        ),
+        lte(
+          sql`(${editing_task_event.created_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+          sql`${args.monthEnd}::date`,
+        ),
+        isNull(editing_task.deleted_at),
+      ),
+    )
+    .groupBy(editing_task.editor_user_id);
+
+  const rejectedMap = new Map(rejectedRows.map((r) => [r.editor_user_id ?? "", r.count]));
+
+  return completedRows
+    .filter((r): r is typeof r & { editor_user_id: string } => r.editor_user_id !== null)
+    .map((r) => {
+      const rejected = rejectedMap.get(r.editor_user_id) ?? 0;
+      return {
+        editorUserId: r.editor_user_id,
+        editorName: r.editor_name ?? "(未知)",
+        completed: r.count,
+        rejected,
+        rejectionRate: r.count > 0 ? rejected / r.count : 0,
+      };
+    })
+    .sort((a, b) => b.completed - a.completed);
+}
+
+/**
+ * 主播月度统计：按 material_date 过滤，按 anchor 聚合各状态数量。
+ */
+export async function queryAnchorMonthlyStats(args: {
+  monthStart: string;
+  monthEnd: string;
+  whereClause?: SQL;
+}): Promise<AnchorMonthlyStat[]> {
+  const rows = await db
+    .select({
+      anchor_id: editing_task.anchor_id,
+      anchor_name: anchor_profile.nick_name,
+      status: editing_task.status,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(editing_task)
+    .leftJoin(anchor_profile, eq(anchor_profile.anchor_id, editing_task.anchor_id))
+    .where(
+      and(
+        args.whereClause,
+        isNotNull(editing_task.anchor_id),
+        gte(sql`(${editing_task.material_date})::date`, sql`${args.monthStart}::date`),
+        lte(sql`(${editing_task.material_date})::date`, sql`${args.monthEnd}::date`),
+        isNull(editing_task.deleted_at),
+      ),
+    )
+    .groupBy(editing_task.anchor_id, anchor_profile.nick_name, editing_task.status);
+
+  // 按 anchor 聚合
+  const byAnchor = new Map<string, AnchorMonthlyStat>();
+  for (const r of rows) {
+    if (!r.anchor_id) continue;
+    let s = byAnchor.get(r.anchor_id);
+    if (!s) {
+      s = {
+        anchorId: r.anchor_id,
+        anchorName: r.anchor_name ?? "(未命名)",
+        total: 0,
+        uploaded: 0,
+        editing: 0,
+        review: 0,
+        ready: 0,
+        published: 0,
+        completionRate: 0,
+      };
+      byAnchor.set(r.anchor_id, s);
+    }
+    s.total += r.count;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (r.status in s) (s as any)[r.status] += r.count;
+  }
+
+  return Array.from(byAnchor.values())
+    .map((s) => ({ ...s, completionRate: s.total > 0 ? s.published / s.total : 0 }))
     .sort((a, b) => b.total - a.total);
 }

@@ -9,6 +9,9 @@ export type {
   GanttProductBreakdown,
   GanttRow,
   MonthlyProductShare,
+  StatusCounts,
+  EditorMonthlyStat,
+  AnchorMonthlyStat,
 } from "./types";
 
 export {

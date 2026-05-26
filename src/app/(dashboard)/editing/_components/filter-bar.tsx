@@ -43,6 +43,12 @@ export function FilterBar({ products, editors, onNewTask }: FilterBarProps) {
           onClick={() => router.push("/editing/gantt")}
           className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
         >
+          甘特
+        </button>
+        <button
+          onClick={() => router.push("/editing/stats")}
+          className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
+        >
           统计
         </button>
       </div>

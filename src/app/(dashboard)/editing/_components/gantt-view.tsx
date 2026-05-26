@@ -50,6 +50,30 @@ export function GanttView({
     <div className="p-4">
       {/* Top toolbar */}
       <div className="mb-4 flex items-center justify-between">
+        {/* 视图切换 */}
+        <div className="inline-flex rounded-md bg-slate-100 p-0.5">
+          <button
+            onClick={() => router.push("/editing")}
+            className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
+          >
+            看板
+          </button>
+          <button
+            onClick={() => router.push("/editing/table")}
+            className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
+          >
+            表格
+          </button>
+          <button className="rounded bg-white px-3.5 py-1.5 text-sm font-medium text-blue-600 shadow-sm">
+            甘特
+          </button>
+          <button
+            onClick={() => router.push("/editing/stats")}
+            className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
+          >
+            统计
+          </button>
+        </div>
         <div className="flex items-center gap-3 text-sm">
           <button
             onClick={() => router.push(`?week=${weekOffset - 1}`)}
@@ -75,7 +99,6 @@ export function GanttView({
             </button>
           )}
         </div>
-        <h1 className="text-base font-semibold">剪辑完成统计</h1>
       </div>
 
       {/* 周甘特表格 */}

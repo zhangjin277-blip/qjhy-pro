@@ -82,3 +82,33 @@ export interface MonthlyProductShare {
   total: number;
   byProduct: { product: string; count: number; share: number }[]; // share = 0-1
 }
+
+// ---- 统计视图 ----
+
+export interface StatusCounts {
+  uploaded: number;
+  editing: number;
+  review: number;
+  ready: number;
+  published: number;
+}
+
+export interface EditorMonthlyStat {
+  editorUserId: string;
+  editorName: string;
+  completed: number; // 本月 published 且 editor = self
+  rejected: number; // 本月 review_rejected 事件，针对 self 的任务
+  rejectionRate: number; // rejected / max(completed, 1)
+}
+
+export interface AnchorMonthlyStat {
+  anchorId: string;
+  anchorName: string;
+  total: number;
+  uploaded: number;
+  editing: number;
+  review: number;
+  ready: number;
+  published: number;
+  completionRate: number; // published / max(total, 1)
+}
