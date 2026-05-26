@@ -33,6 +33,15 @@ export function buildEditedPath(input: PathInput): string {
   );
 }
 
+export function buildCoverPath(input: PathInput): string {
+  return join(
+    "cover",
+    input.product,
+    input.materialDate,
+    `task-${input.taskId}-${safeFilename(input.originalName)}`,
+  );
+}
+
 function assertInsideNas(nasRoot: string, relPath: string): string {
   const full = resolve(nasRoot, relPath);
   const root = resolve(nasRoot);

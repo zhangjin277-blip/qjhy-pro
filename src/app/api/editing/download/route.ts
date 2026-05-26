@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const kind = req.nextUrl.searchParams.get("kind");
     const index = Number(req.nextUrl.searchParams.get("index") ?? "0");
 
-    if (!taskId || !kind || (kind !== "source" && kind !== "edited")) {
+    if (!taskId || !kind || (kind !== "source" && kind !== "edited" && kind !== "cover")) {
       return new NextResponse("Bad Request", { status: 400 });
     }
 
@@ -30,21 +30,34 @@ export async function GET(req: NextRequest) {
         source_file_names: editing_task.source_file_names,
         edited_files: editing_task.edited_files,
         edited_file_names: editing_task.edited_file_names,
+        cover_image: editing_task.cover_image,
       })
       .from(editing_task)
       .where(eq(editing_task.id, taskId));
 
     if (!task) return new NextResponse("Not Found", { status: 404 });
 
-    const files = kind === "source" ? task.source_files : task.edited_files;
-    const names = kind === "source" ? task.source_file_names : task.edited_file_names;
-    if (!files?.[index]) return new NextResponse("file not found", { status: 404 });
+    let relPath: string | undefined;
+    let filename: string;
+
+    if (kind === "cover") {
+      relPath = task.cover_image ?? undefined;
+      filename = encodeURIComponent(
+        task.cover_image ? (task.cover_image.split("/").pop() ?? "cover") : "cover",
+      );
+    } else {
+      const files = kind === "source" ? task.source_files : task.edited_files;
+      const names = kind === "source" ? task.source_file_names : task.edited_file_names;
+      relPath = files?.[index];
+      filename = encodeURIComponent(names[index] ?? "file");
+    }
+
+    if (!relPath) return new NextResponse("file not found", { status: 404 });
 
     const NAS = process.env.EDITING_NAS_PATH;
     if (!NAS) return new NextResponse("NAS not configured", { status: 500 });
 
-    const stream = getDownloadStream(NAS, files[index]);
-    const filename = encodeURIComponent(names[index] ?? "file");
+    const stream = getDownloadStream(NAS, relPath);
 
     // Convert Node Readable to Web ReadableStream
     const { Readable } = await import("node:stream");

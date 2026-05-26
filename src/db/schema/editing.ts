@@ -54,6 +54,7 @@ export const editing_task = pgTable(
     reviewed_at: timestamp("reviewed_at", { withTimezone: true }),
     published_by_user_id: text("published_by_user_id").references(() => dingtalk_user.user_id),
     published_at: timestamp("published_at", { withTimezone: true }),
+    cover_image: text("cover_image"),
     video_id: text("video_id"),
     created_by_user_id: text("created_by_user_id")
       .notNull()
@@ -84,6 +85,8 @@ export const EDITING_EVENT_TYPES = [
   "reassigned",
   "editing_reset",
   "edited_uploaded",
+  "cover_uploaded",
+  "cover_deleted",
   "review_approved",
   "review_rejected",
   "published",

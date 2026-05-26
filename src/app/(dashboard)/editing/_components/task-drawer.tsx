@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { loadTaskDetail } from "../actions";
-import { resetEditing, reviewApprove } from "@/modules/editing-task";
+import { resetEditing, reviewApprove, deleteCover } from "@/modules/editing-task";
 import type { EditorOption } from "@/modules/editing-editor";
 import type { TaskDetail, TaskEvent } from "@/modules/editing-task";
 import { ReviewRejectDialog } from "./review-reject-dialog";
@@ -121,6 +122,52 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
               taskId={task.id}
               kind="edited"
             />
+          </section>
+        )}
+
+        {(task.editedFiles.length > 0 || task.coverImage) && (
+          <section className="mb-6">
+            <SectionTitle>封面图</SectionTitle>
+            {task.coverImage ? (
+              <div className="flex items-start gap-3">
+                <Image
+                  src={`/api/editing/download?taskId=${task.id}&kind=cover`}
+                  alt="封面"
+                  width={0}
+                  height={128}
+                  unoptimized
+                  className="h-32 w-auto rounded border border-border object-cover"
+                />
+                <div className="flex flex-col gap-2 text-sm">
+                  <a
+                    href={`/api/editing/download?taskId=${task.id}&kind=cover`}
+                    download
+                    className="text-blue-600 hover:underline"
+                  >
+                    下载
+                  </a>
+                  <button
+                    onClick={async () => {
+                      if (!confirm("删除封面图？")) return;
+                      try {
+                        await deleteCover({ taskId: task.id });
+                        toast.success("已删除");
+                        location.reload();
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "删除失败");
+                      }
+                    }}
+                    className="text-left text-red-500 hover:underline"
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            ) : task.status === "editing" || task.status === "review" ? (
+              <UploadCoverButton taskId={task.id} />
+            ) : (
+              <span className="text-sm text-slate-400">无</span>
+            )}
           </section>
         )}
 
@@ -290,6 +337,10 @@ function formatEvent(e: TaskEvent): string {
       return "回退到待剪辑";
     case "edited_uploaded":
       return "上传成品";
+    case "cover_uploaded":
+      return "上传封面图";
+    case "cover_deleted":
+      return "删除封面图";
     case "review_approved":
       return "审核通过";
     case "review_rejected":
@@ -340,6 +391,37 @@ function FileList({
         </li>
       ))}
     </ul>
+  );
+}
+
+function UploadCoverButton({ taskId }: { taskId: number }) {
+  return (
+    <label className="cursor-pointer rounded border border-blue-500 bg-white px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50">
+      上传封面图
+      <input
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const fd = new FormData();
+          fd.append("taskId", String(taskId));
+          fd.append("file", file);
+          try {
+            const r = await fetch("/api/editing/upload-cover", { method: "POST", body: fd });
+            if (!r.ok) {
+              const j = await r.json().catch(() => ({}));
+              throw new Error((j as { error?: string }).error ?? "上传失败");
+            }
+            toast.success("封面图已上传");
+            location.reload();
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "上传失败");
+          }
+        }}
+      />
+    </label>
   );
 }
 

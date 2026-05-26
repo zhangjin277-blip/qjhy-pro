@@ -1,0 +1,1 @@
+ALTER TABLE "editing_task" ADD COLUMN "cover_image" text;

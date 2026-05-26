@@ -166,6 +166,7 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
       reviewed_at: editing_task.reviewed_at,
       published_at: editing_task.published_at,
       // Detail fields
+      cover_image: editing_task.cover_image,
       source_files: editing_task.source_files,
       source_file_names: editing_task.source_file_names,
       edited_files: editing_task.edited_files,
@@ -214,6 +215,7 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
     disqualifiedByName: r.disqualified_by_name ?? null,
     disqualifiedAt: r.disqualified_at?.toISOString() ?? null,
     urgentReason: r.urgent_reason ?? null,
+    coverImage: r.cover_image ?? null,
   };
 }
 

@@ -39,6 +39,7 @@ export interface TaskDetail extends BoardCard {
   disqualifiedByName: string | null;
   disqualifiedAt: string | null;
   urgentReason: string | null;
+  coverImage: string | null;
 }
 
 export interface TaskEvent {
