@@ -92,7 +92,7 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
         payload: { duplicate_of: oldTask.id, md5 },
       });
     }
-  } else if (isFishProduct(task.product) && task.room_name && task.anchor_name && task.anchor_id) {
+  } else if (isFishProduct(task.product) && task.anchor_name && task.anchor_id) {
     // 捕鱼系特殊命名：YYYYMMDD-直播间-主播-NN
     // 计算同日期 + 直播间（room_id） + 主播下已有素材总数
     const anchorId = task.anchor_id;
@@ -134,10 +134,10 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
     await nasWriteFile(NAS, relPath, buf);
   }
 
-  // 捕鱼系任务：UI / 下载文件名都用规则化的 basename（YYYYMMDD-直播间-主播-NN.ext）
+  // 捕鱼系任务（有主播）：UI / 下载文件名都用规则化的 basename
   // 普通任务：保留原文件名
   const displayName =
-    isFishProduct(task.product) && task.room_name && task.anchor_name && task.anchor_id
+    isFishProduct(task.product) && task.anchor_name && task.anchor_id
       ? (relPath.split("/").pop() ?? data.fileName)
       : data.fileName;
 

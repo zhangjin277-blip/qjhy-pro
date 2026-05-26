@@ -124,6 +124,11 @@ export function NewTaskDialog({ onClose }: Props) {
 
   async function submit() {
     if (!selected || files.length === 0) return;
+    // 捕鱼系任务强制选主播（用于文件规则化命名）
+    if (selected.product.includes("捕鱼") && !anchorId) {
+      toast.error("捕鱼系任务必须选择主播");
+      return;
+    }
     setSubmitting(true);
     setDuplicates(null);
     await doCreate(false);
@@ -244,14 +249,19 @@ export function NewTaskDialog({ onClose }: Props) {
 
           {selected && (
             <div>
-              <label className="text-sm font-medium">主播</label>
+              <label className="text-sm font-medium">
+                主播
+                {selected.product.includes("捕鱼") && <span className="ml-1 text-red-500">*</span>}
+              </label>
               <select
                 value={anchorId}
                 onChange={(e) => setAnchorId(e.target.value)}
                 disabled={selected.defaultAnchors.length === 1 && !!selected.defaultAnchors[0]}
                 className="mt-1 w-full rounded border border-border px-3 py-2 text-sm disabled:opacity-60"
               >
-                <option value="">（不指定主播）</option>
+                <option value="">
+                  {selected.product.includes("捕鱼") ? "请选择主播（必填）" : "（不指定主播）"}
+                </option>
                 {selected.defaultAnchors.map((a) => (
                   <option key={a.anchorId} value={a.anchorId}>
                     {a.name}

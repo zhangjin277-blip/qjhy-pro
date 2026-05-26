@@ -43,8 +43,8 @@ export function buildCoverPath(input: PathInput): string {
 }
 
 export interface FishPathInput extends PathInput {
-  roomName: string;
-  anchorName: string;
+  roomName: string | null; // 缺则降级（省略此段）
+  anchorName: string; // 必填
   sequenceNumber: number;
 }
 
@@ -52,11 +52,12 @@ export function buildFishSourcePath(input: FishPathInput): string {
   const dateNoSep = input.materialDate.replace(/-/g, "");
   const nn = String(input.sequenceNumber).padStart(2, "0");
   const ext = safeFilename(input.originalName).match(/\.[^.]+$/)?.[0] ?? "";
-  return join(
-    "source",
-    `${input.product}-新`,
-    `${dateNoSep}-${input.roomName}-${input.anchorName}-${nn}${ext}`,
-  );
+  // 完整：YYYYMMDD-{直播间}-{主播}-NN.ext
+  // 降级（无直播间）：YYYYMMDD-{主播}-NN.ext
+  const segments = input.roomName
+    ? [dateNoSep, input.roomName, input.anchorName, nn]
+    : [dateNoSep, input.anchorName, nn];
+  return join("source", `${input.product}-新`, `${segments.join("-")}${ext}`);
 }
 
 export function isFishProduct(product: string | null | undefined): boolean {
