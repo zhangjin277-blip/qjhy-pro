@@ -134,6 +134,12 @@ export const NAV: NavItem[] = [
         module: "permissions",
       },
       { key: "sys-brokers", label: "经纪人映射", href: "/admin/brokers", module: "permissions" },
+      {
+        key: "sys-product",
+        label: "产品分类",
+        href: "/admin/product-config",
+        module: "permissions",
+      },
       { key: "sys-dept", label: "部门架构", href: "/admin/depts", disabled: true },
       { key: "sys-alias", label: "字段别名", href: "/admin/aliases", disabled: true },
       { key: "sys-crawler", label: "采集监控", href: "/admin/crawler", module: "crawler" },
