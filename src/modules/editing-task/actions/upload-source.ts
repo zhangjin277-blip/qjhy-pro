@@ -2,7 +2,7 @@
 import { db } from "@/db/client";
 import { editing_task, live_account } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireUser } from "@/lib/auth/page-auth";
 import { writeEvent } from "../event-writer";
 import { buildSourcePath, writeFile as nasWriteFile } from "@/modules/editing-storage/server";
 import { UploadSourceInput } from "../schema";
@@ -12,7 +12,7 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
   const file = formData.get("file") as File | null;
   if (!file) throw new Error("missing file");
   const data = UploadSourceInput.parse({ taskId, fileName: file.name });
-  const { userId } = await requireAdmin();
+  const { userId } = await requireUser();
 
   const [task] = await db
     .select({

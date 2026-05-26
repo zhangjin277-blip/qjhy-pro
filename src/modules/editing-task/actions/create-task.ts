@@ -1,13 +1,13 @@
 "use server";
 import { db } from "@/db/client";
 import { editing_task } from "@/db/schema";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireUser } from "@/lib/auth/page-auth";
 import { writeEvent } from "../event-writer";
 import { CreateTaskInput } from "../schema";
 
 export async function createTask(input: unknown): Promise<{ taskId: number }> {
   const data = CreateTaskInput.parse(input);
-  const { userId } = await requireAdmin();
+  const { userId } = await requireUser();
 
   const rows = await db
     .insert(editing_task)
