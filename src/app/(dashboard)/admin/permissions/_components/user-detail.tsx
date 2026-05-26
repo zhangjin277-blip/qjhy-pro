@@ -806,5 +806,7 @@ function moduleEmoji(m: ModuleKey): string {
       return "📍";
     case "placement":
       return "💸";
+    case "editing_workflow":
+      return "✂️";
   }
 }
