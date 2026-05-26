@@ -7,7 +7,6 @@ import {
   anchor_profile,
   dingtalk_user,
   product_config,
-  daily_schedule_segment,
 } from "@/db/schema";
 import type {
   BoardCard,
@@ -686,55 +685,52 @@ export async function queryAnchorMonthlyStats(args: {
 /**
  * 查询今日「捕鱼系」账号的上传完成情况。
  *
- * 逻辑：
- * 1. 从 daily_schedule_segment 取 date=today、is_rest=false 的排班行（已含 default + override 全部来源）
- * 2. Join live_account，过滤 product ILIKE '%捕鱼%'
+ * 逻辑（基于开播记录，不再用排班）：
+ * 1. 从 live_session_log 查 start_at 在今天（Asia/Shanghai 时区）的 session
+ * 2. Join live_account 过滤 product ILIKE '%捕鱼%'
  * 3. 查今日已上传（source_uploaded_at IS NOT NULL）的 editing_task
- * 4. 以 (live_account_id, dingtalk_user_id) 为维度做完成度对比
- * 5. 同一 (account_id, dingtalk_user_id) 可能有多个时段 segment，去重后只计一个
+ * 4. 以 (live_account_id, anchor_dingtalk_user_id) 为维度做完成度对比
+ * 5. 同一 (account_id, anchor_dingtalk_user_id) 可能有多场 session，去重后只计一个
  */
 export async function queryFishCoverageToday(): Promise<FishCoverage> {
   const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
 
-  // 1) 查今日捕鱼账号的 schedule segments（不含休息段）
-  const scheduleRows = await db
-    .select({
-      account_id: daily_schedule_segment.account_id,
-      dingtalk_user_id: daily_schedule_segment.dingtalk_user_id,
-      account_name: live_account.account_name,
-      product: live_account.product,
-    })
-    .from(daily_schedule_segment)
-    .innerJoin(live_account, eq(live_account.id, daily_schedule_segment.account_id))
-    .where(
-      and(
-        eq(daily_schedule_segment.date, todayStr),
-        eq(daily_schedule_segment.is_rest, false),
-        sql`${live_account.product} ILIKE ${"%" + "捕鱼" + "%"}`,
-      ),
-    );
+  // 1) 查今日捕鱼账号的开播记录（按 Asia/Shanghai 时区切日期）
+  const sessionRows = await db.execute<{
+    account_id: string;
+    dingtalk_user_id: string;
+    account_name: string;
+    product: string;
+  }>(sql`
+    SELECT DISTINCT
+      sl.live_account_id AS account_id,
+      sl.anchor_dingtalk_user_id AS dingtalk_user_id,
+      la.account_name,
+      la.product
+    FROM live_session_log sl
+    JOIN live_account la ON la.id = sl.live_account_id
+    WHERE (sl.start_at AT TIME ZONE 'Asia/Shanghai')::date = ${todayStr}::date
+      AND la.product ILIKE ${"%" + "捕鱼" + "%"}
+      AND sl.anchor_dingtalk_user_id IS NOT NULL
+  `);
 
-  if (scheduleRows.length === 0) {
+  const scheduled: {
+    account_id: string;
+    dingtalk_user_id: string;
+    account_name: string;
+    product: string;
+  }[] = Array.from(
+    sessionRows as unknown as Iterable<{
+      account_id: string;
+      dingtalk_user_id: string;
+      account_name: string;
+      product: string;
+    }>,
+  );
+
+  if (scheduled.length === 0) {
     return { date: todayStr, total: 0, uploaded: 0, missing: 0, items: [] };
   }
-
-  // 2) 去重：同一 (account_id, dingtalk_user_id) 多时段只算一次
-  const dedupMap = new Map<
-    string,
-    { account_id: string; dingtalk_user_id: string; account_name: string; product: string }
-  >();
-  for (const r of scheduleRows) {
-    const key = `${r.account_id}::${r.dingtalk_user_id}`;
-    if (!dedupMap.has(key)) {
-      dedupMap.set(key, {
-        account_id: r.account_id,
-        dingtalk_user_id: r.dingtalk_user_id,
-        account_name: r.account_name,
-        product: r.product,
-      });
-    }
-  }
-  const scheduled = Array.from(dedupMap.values());
   const fishAccountIds = [...new Set(scheduled.map((s) => s.account_id))];
 
   // 3) 查今日已上传的捕鱼系任务
