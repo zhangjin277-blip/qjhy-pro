@@ -27,12 +27,17 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
         if ((e.target as HTMLElement).closest("[data-checkbox]")) return;
         onOpenDrawer(card.id);
       }}
-      className={`group relative mb-2 cursor-pointer rounded-xl border bg-white/92 p-3 shadow-card backdrop-blur transition hover:-translate-y-px hover:shadow-card-hover ${
+      className={`group relative mb-2 cursor-pointer overflow-hidden rounded-xl border bg-white/92 p-3 shadow-card backdrop-blur transition hover:-translate-y-px hover:shadow-card-hover ${
         selected
           ? "border-[var(--selection-primary)] bg-[var(--selection-bg)] ring-2 ring-[var(--selection-ring)]"
-          : "border-border-subtle hover:border-[var(--hover-ring)]"
+          : card.priority === "urgent"
+            ? "border-red-300 hover:border-red-400"
+            : "border-border-subtle hover:border-[var(--hover-ring)]"
       }`}
     >
+      {card.priority === "urgent" && (
+        <span className="absolute left-0 top-0 h-full w-1 rounded-l-xl bg-red-500" aria-hidden />
+      )}
       <div
         data-checkbox=""
         onClick={(e) => {
@@ -48,7 +53,14 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
         {selected && <span className="text-[12px] font-bold leading-none text-white">✓</span>}
       </div>
       <div className="pl-7">
-        <div className="mb-1.5 text-sm font-semibold text-slate-800">{card.liveAccountName}</div>
+        <div className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <span>{card.liveAccountName}</span>
+          {card.priority === "urgent" && (
+            <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+              🔴 紧急
+            </span>
+          )}
+        </div>
         <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
           {card.anchorName && <span>主播 {card.anchorName}</span>}
           <span

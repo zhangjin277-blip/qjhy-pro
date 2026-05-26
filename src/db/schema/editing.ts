@@ -28,6 +28,9 @@ export const product_config = pgTable("product_config", {
 export const EDITING_TASK_STATUS = ["uploaded", "editing", "review", "ready", "published"] as const;
 export type EditingTaskStatus = (typeof EDITING_TASK_STATUS)[number];
 
+export const EDITING_TASK_PRIORITY = ["normal", "urgent"] as const;
+export type EditingTaskPriority = (typeof EDITING_TASK_PRIORITY)[number];
+
 export const editing_task = pgTable(
   "editing_task",
   {
@@ -57,6 +60,8 @@ export const editing_task = pgTable(
       .references(() => dingtalk_user.user_id),
     created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    priority: text("priority", { enum: EDITING_TASK_PRIORITY }).notNull().default("normal"),
+    urgent_reason: text("urgent_reason"),
     is_disqualified: boolean("is_disqualified").notNull().default(false),
     disqualified_reason: text("disqualified_reason"),
     disqualified_by_user_id: text("disqualified_by_user_id").references(
@@ -85,6 +90,7 @@ export const EDITING_EVENT_TYPES = [
   "deleted",
   "disqualified",
   "disqualified_undone",
+  "priority_changed",
 ] as const;
 export type EditingEventType = (typeof EDITING_EVENT_TYPES)[number];
 

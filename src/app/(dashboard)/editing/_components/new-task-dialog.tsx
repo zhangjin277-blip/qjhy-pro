@@ -19,6 +19,8 @@ export function NewTaskDialog({ onClose }: Props) {
   const [remark, setRemark] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [mode, setMode] = useState<"independent" | "merged">("independent");
+  const [priority, setPriority] = useState<"normal" | "urgent">("normal");
+  const [urgentReason, setUrgentReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -38,6 +40,8 @@ export function NewTaskDialog({ onClose }: Props) {
             anchorId: anchorId || null,
             materialDate,
             sourceRemark: remark.trim() || null,
+            priority,
+            urgentReason: priority === "urgent" ? urgentReason.trim() || null : null,
           });
           const fd = new FormData();
           fd.append("taskId", String(taskId));
@@ -190,6 +194,37 @@ export function NewTaskDialog({ onClose }: Props) {
               onChange={(e) => setMaterialDate(e.target.value)}
               className="mt-1 w-full rounded border border-border px-3 py-2 text-sm"
             />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">优先级</label>
+            <div className="mt-1 flex gap-3">
+              <label className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="radio"
+                  checked={priority === "normal"}
+                  onChange={() => setPriority("normal")}
+                />
+                <span>正常</span>
+              </label>
+              <label className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="radio"
+                  checked={priority === "urgent"}
+                  onChange={() => setPriority("urgent")}
+                />
+                <span className="font-medium text-red-600">🔴 紧急</span>
+              </label>
+            </div>
+            {priority === "urgent" && (
+              <textarea
+                value={urgentReason}
+                onChange={(e) => setUrgentReason(e.target.value)}
+                placeholder="紧急原因（例：当晚必须发布 / 与活动联动，可选）"
+                rows={2}
+                className="mt-2 w-full rounded border border-border px-2 py-1 text-sm"
+              />
+            )}
           </div>
 
           <div>

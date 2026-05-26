@@ -1,6 +1,7 @@
 export type {
   EditingTaskStatus,
   EditingEventType,
+  EditingTaskPriority,
   BoardCard,
   TaskDetail,
   TaskEvent,
@@ -15,6 +16,7 @@ export {
   DeleteTaskInput,
   BoardFilterInput,
   ToggleDisqualifiedInput,
+  SetPriorityInput,
 } from "./schema";
 
 export { createTask } from "./actions/create-task";
@@ -27,3 +29,4 @@ export { resetEditing } from "./actions/reset-editing";
 export { markPublished } from "./actions/mark-published";
 export { deleteTask } from "./actions/delete-task";
 export { toggleDisqualified } from "./actions/toggle-disqualified";
+export { setPriority } from "./actions/set-priority";

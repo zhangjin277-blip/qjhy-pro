@@ -10,7 +10,7 @@ import {
 } from "@/db/schema";
 import type { BoardCard, TaskDetail, TaskEvent } from "./types";
 import type { EditingTaskStatus } from "@/db/schema";
-import { and, asc, desc, eq, gte, inArray, lte, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export interface BoardFilter {
@@ -52,6 +52,7 @@ export async function listForBoard(args: BoardFilter): Promise<BoardCard[]> {
       published_at: editing_task.published_at,
       is_disqualified: editing_task.is_disqualified,
       disqualified_reason: editing_task.disqualified_reason,
+      priority: editing_task.priority,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
@@ -59,7 +60,11 @@ export async function listForBoard(args: BoardFilter): Promise<BoardCard[]> {
     .leftJoin(anchor_profile, eq(anchor_profile.anchor_id, editing_task.anchor_id))
     .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
     .where(and(...(filters.filter(Boolean) as SQL[])))
-    .orderBy(desc(editing_task.material_date), desc(editing_task.id));
+    .orderBy(
+      sql`CASE WHEN ${editing_task.priority} = 'urgent' THEN 0 ELSE 1 END`,
+      desc(editing_task.material_date),
+      desc(editing_task.id),
+    );
 
   return rows.map(toBoardCard);
 }
@@ -84,6 +89,7 @@ function toBoardCard(r: {
   published_at: Date | null;
   is_disqualified: boolean;
   disqualified_reason: string | null;
+  priority: string;
 }): BoardCard {
   const enteredAt = pickEnteredStatusAt(r);
   return {
@@ -102,6 +108,9 @@ function toBoardCard(r: {
     publishedAt: r.published_at?.toISOString() ?? null,
     isDisqualified: r.is_disqualified,
     disqualifiedReason: r.disqualified_reason,
+    priority: (r.priority === "urgent"
+      ? "urgent"
+      : "normal") as import("./types").EditingTaskPriority,
   };
 }
 
@@ -170,6 +179,8 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
       disqualified_reason: editing_task.disqualified_reason,
       disqualified_at: editing_task.disqualified_at,
       disqualified_by_name: disqualifier.name,
+      priority: editing_task.priority,
+      urgent_reason: editing_task.urgent_reason,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
@@ -202,6 +213,7 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
     createdAt: r.created_at.toISOString(),
     disqualifiedByName: r.disqualified_by_name ?? null,
     disqualifiedAt: r.disqualified_at?.toISOString() ?? null,
+    urgentReason: r.urgent_reason ?? null,
   };
 }
 
@@ -240,6 +252,7 @@ export async function listForTable(args: TableFilter): Promise<BoardCard[]> {
       published_at: editing_task.published_at,
       is_disqualified: editing_task.is_disqualified,
       disqualified_reason: editing_task.disqualified_reason,
+      priority: editing_task.priority,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))

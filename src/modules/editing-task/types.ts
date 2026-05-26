@@ -1,6 +1,6 @@
-import type { EditingTaskStatus, EditingEventType } from "@/db/schema";
+import type { EditingTaskStatus, EditingEventType, EditingTaskPriority } from "@/db/schema";
 
-export type { EditingTaskStatus, EditingEventType };
+export type { EditingTaskStatus, EditingEventType, EditingTaskPriority };
 
 export interface BoardCard {
   id: number;
@@ -19,6 +19,7 @@ export interface BoardCard {
   publishedAt: string | null;
   isDisqualified: boolean;
   disqualifiedReason: string | null;
+  priority: EditingTaskPriority;
 }
 
 export interface TaskDetail extends BoardCard {
@@ -37,6 +38,7 @@ export interface TaskDetail extends BoardCard {
   createdAt: string;
   disqualifiedByName: string | null;
   disqualifiedAt: string | null;
+  urgentReason: string | null;
 }
 
 export interface TaskEvent {

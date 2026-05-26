@@ -5,6 +5,8 @@ export const CreateTaskInput = z.object({
   anchorId: z.string().optional().nullable(),
   materialDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   sourceRemark: z.string().max(500).optional().nullable(),
+  priority: z.enum(["normal", "urgent"]).optional(),
+  urgentReason: z.string().max(200).optional().nullable(),
 });
 
 export const UploadSourceInput = z.object({
@@ -37,6 +39,12 @@ export const ToggleDisqualifiedInput = z.object({
   taskId: z.number().int().positive(),
   disqualified: z.boolean(),
   reason: z.string().max(200).optional().nullable(),
+});
+
+export const SetPriorityInput = z.object({
+  taskId: z.number().int().positive(),
+  priority: z.enum(["normal", "urgent"]),
+  urgentReason: z.string().max(200).optional().nullable(),
 });
 
 export const BoardFilterInput = z.object({

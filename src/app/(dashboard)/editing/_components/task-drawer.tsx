@@ -8,6 +8,7 @@ import { ReviewRejectDialog } from "./review-reject-dialog";
 import { MarkPublishedDialog } from "./mark-published-dialog";
 import { MarkDisqualifiedDialog } from "./mark-disqualified-dialog";
 import { AssignPopover } from "./assign-popover";
+import { ChangePriorityDialog } from "./change-priority-dialog";
 import { toast } from "sonner";
 import { toggleDisqualified } from "@/modules/editing-task";
 
@@ -66,6 +67,20 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
           <Row label="产品">{task.product}</Row>
           <Row label="创建人">{task.createdByName}</Row>
           <Row label="剪辑要求">{task.sourceRemark ?? "—"}</Row>
+          <Row label="优先级">
+            {task.priority === "urgent" ? (
+              <>
+                <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-600">
+                  🔴 紧急
+                </span>
+                {task.urgentReason && (
+                  <span className="ml-2 text-xs text-slate-400">· {task.urgentReason}</span>
+                )}
+              </>
+            ) : (
+              <span className="text-slate-500">正常</span>
+            )}
+          </Row>
         </section>
 
         {task.isDisqualified && (
@@ -200,6 +215,9 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
           ) : (
             <MarkDisqualifiedDialog taskId={task.id} onDone={onClose} />
           )}
+          {task.status !== "published" && (
+            <ChangePriorityDialog taskId={task.id} currentPriority={task.priority} />
+          )}
         </footer>
       </div>
     </>
@@ -286,6 +304,8 @@ function formatEvent(e: TaskEvent): string {
       return `标记不合格${p.reason ? `：${p.reason}` : ""}`;
     case "disqualified_undone":
       return "取消不合格标记";
+    case "priority_changed":
+      return `优先级 ${p.from === "urgent" ? "🔴 紧急" : "正常"} → ${p.to === "urgent" ? "🔴 紧急" : "正常"}${p.urgent_reason ? `：${p.urgent_reason}` : ""}`;
     default:
       return e.eventType;
   }

@@ -18,6 +18,8 @@ export async function createTask(input: unknown): Promise<{ taskId: number }> {
       status: "uploaded",
       source_remark: data.sourceRemark ?? null,
       created_by_user_id: userId,
+      priority: data.priority ?? "normal",
+      urgent_reason: data.priority === "urgent" ? (data.urgentReason ?? null) : null,
     })
     .returning({ id: editing_task.id });
 
@@ -33,6 +35,8 @@ export async function createTask(input: unknown): Promise<{ taskId: number }> {
       anchor_id: data.anchorId ?? null,
       material_date: data.materialDate,
       source_remark: data.sourceRemark ?? null,
+      priority: data.priority ?? "normal",
+      urgent_reason: data.priority === "urgent" ? (data.urgentReason ?? null) : null,
     },
   });
 
