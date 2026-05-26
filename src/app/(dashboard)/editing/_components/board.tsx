@@ -33,6 +33,7 @@ interface Props {
   initialCards: BoardCard[];
   editors: EditorOption[];
   products: ProductOption[];
+  anchors: { id: string; name: string; businessLine: string }[];
   permissions: { canEdit: boolean; isAdmin: boolean };
   fishCoverage: FishCoverage;
   todaySummary: TodaySummary;
@@ -44,6 +45,7 @@ export function Board({
   initialCards,
   editors,
   products,
+  anchors,
   permissions,
   fishCoverage,
   todaySummary,
@@ -56,7 +58,12 @@ export function Board({
   return (
     <SelectionProvider>
       <ViewTabs active="board" />
-      <FilterBar products={products} editors={editors} onNewTask={() => setNewOpen(true)} />
+      <FilterBar
+        products={products}
+        editors={editors}
+        anchors={anchors}
+        onNewTask={() => setNewOpen(true)}
+      />
       <TodayStatsPanel
         summary={todaySummary}
         anchorDist={anchorDist}

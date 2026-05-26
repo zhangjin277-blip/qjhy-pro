@@ -1,7 +1,7 @@
 "use server";
 import { createHash } from "node:crypto";
 import { db } from "@/db/client";
-import { editing_task, live_account, live_room, dingtalk_user } from "@/db/schema";
+import { editing_task, live_account, live_room, dingtalk_user, live_anchor } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/page-auth";
 import { writeEvent } from "../event-writer";
@@ -32,12 +32,15 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
       source_file_names: editing_task.source_file_names,
       source_file_hashes: editing_task.source_file_hashes,
       room_name: live_room.room_no,
-      anchor_name: dingtalk_user.name,
+      anchor_name: sql<
+        string | null
+      >`COALESCE(${live_anchor.external_name}, ${dingtalk_user.name})`,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
     .leftJoin(live_room, eq(live_room.id, live_account.room_id))
     .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.anchor_id))
+    .leftJoin(live_anchor, eq(live_anchor.dingtalk_user_id, editing_task.anchor_id))
     .where(eq(editing_task.id, data.taskId));
 
   if (!task) throw new Error("task not found");

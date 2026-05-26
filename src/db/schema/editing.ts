@@ -22,6 +22,7 @@ export const product_config = pgTable("product_config", {
   product_name: text("product_name").primaryKey(), // "捕鱼大作战" / "途游斗地主" / ...
   display_short: text("display_short").notNull(), // 看板 chip 简称："捕鱼"
   accent_color: text("accent_color").notNull(), // hex，看板色带
+  category: text("category").notNull().default("其他"), // 分组：捕鱼系 / 棋牌系 / 其他
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

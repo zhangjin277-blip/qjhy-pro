@@ -66,10 +66,10 @@ services:
 
 volumes:
   qjhy_postgres_data:
-  # TODO 部署前确认 NAS 上实际共享路径，替换 device 行
+  # 与 PRO3 共用：source/edited/cover 三个根目录下用 {产品}-新/ 子目录
   editing_nas:
     driver: local
     driver_opts:
       type: nfs
       o: "addr=172.16.39.61,nolock,soft,rw"
-      device: ":/volume1/qjhy-edit"
+      device: ":/volume1/docker/miracle-pro-cs/server/uploads/editing"

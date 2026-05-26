@@ -19,7 +19,7 @@ describe("nas path helpers", () => {
       materialDate: "2026-05-25",
       originalName: "raw.mp4",
     });
-    expect(p).toBe("source/捕鱼大作战/2026-05-25/task-42-raw.mp4");
+    expect(p).toBe("source/捕鱼大作战-新/task-42-raw.mp4");
   });
   it("buildEditedPath - normal product", () => {
     const p = buildEditedPath({
@@ -28,7 +28,7 @@ describe("nas path helpers", () => {
       materialDate: "2026-05-25",
       originalName: "v1.mp4",
     });
-    expect(p).toBe("edited/途游斗地主/2026-05-25/task-42-v1.mp4");
+    expect(p).toBe("edited/途游斗地主-新/task-42-v1.mp4");
   });
   it("buildSourcePath - sanitizes filename traversal", () => {
     const p = buildSourcePath({
@@ -37,7 +37,7 @@ describe("nas path helpers", () => {
       materialDate: "2026-05-25",
       originalName: "../../etc/passwd",
     });
-    expect(p).toBe("source/捕鱼大作战/2026-05-25/task-1-passwd");
+    expect(p).toBe("source/捕鱼大作战-新/task-1-passwd");
   });
 });
 

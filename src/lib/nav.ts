@@ -99,11 +99,16 @@ export const NAV: NavItem[] = [
   },
   {
     key: "editing",
-    label: "剪辑管理",
+    label: "短视频",
     icon: Scissors,
-    single: true,
-    href: "/editing",
-    module: "editing_workflow",
+    children: [
+      {
+        key: "editing-workbench",
+        label: "剪辑工作台",
+        href: "/editing",
+        module: "editing_workflow",
+      },
+    ],
   },
   {
     key: "ops",

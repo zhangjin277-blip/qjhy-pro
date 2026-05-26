@@ -5,6 +5,8 @@ export {
   buildEditedPath,
   buildCoverPath,
   buildFishSourcePath,
+  buildFishEditedPath,
+  buildFishCoverPath,
   isFishProduct,
   writeFile,
   getDownloadStream,

@@ -324,26 +324,45 @@ export function NewTaskDialog({ onClose }: Props) {
           </div>
 
           <div>
-            <label className="text-sm font-medium">素材文件</label>
-            <input
-              type="file"
-              accept="video/*"
-              multiple
-              onChange={(e) => {
-                const picked = Array.from(e.target.files ?? []);
-                setFiles(picked);
-                // reset to independent when file count changes
-                if (picked.length < 2) setMode("independent");
-              }}
-              className="mt-1 block w-full text-sm"
-            />
-            {files.length > 0 && (
-              <p className="mt-1 text-xs text-slate-500">
-                {files.length === 1 && files[0]
-                  ? `${files[0].name} (${Math.round(files[0].size / 1024 / 1024)} MB)`
-                  : `已选 ${files.length} 个文件，合计 ${Math.round(files.reduce((s, f) => s + f.size, 0) / 1024 / 1024)} MB`}
-              </p>
-            )}
+            <div className="mb-1.5 text-sm font-semibold">
+              素材文件 <span className="text-red-500">*</span>
+            </div>
+            <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50/50 py-6 transition hover:border-blue-400 hover:bg-blue-50/30">
+              <input
+                type="file"
+                accept="video/*"
+                multiple
+                hidden
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files ?? []);
+                  setFiles(picked);
+                  if (picked.length < 2) setMode("independent");
+                }}
+              />
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-slate-400"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span className="text-sm text-slate-500">点击选择素材视频（可多选）</span>
+              {files.length > 0 && (
+                <span className="text-xs text-blue-600">
+                  {files.length === 1 && files[0]
+                    ? `${files[0].name} · ${Math.round(files[0].size / 1024 / 1024)} MB`
+                    : `已选 ${files.length} 个文件 · 合计 ${Math.round(files.reduce((s, f) => s + f.size, 0) / 1024 / 1024)} MB`}
+                </span>
+              )}
+            </label>
           </div>
 
           {files.length >= 2 && (

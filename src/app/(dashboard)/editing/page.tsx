@@ -11,6 +11,7 @@ import {
 } from "@/modules/editing-task/server";
 import { listEditors } from "@/modules/editing-editor/server";
 import { listProducts } from "@/modules/product-config/server";
+import { listAnchorOptions } from "@/modules/live-anchor/server";
 import { Board } from "./_components/board";
 
 export default async function EditingBoardPage({
@@ -34,25 +35,51 @@ export default async function EditingBoardPage({
   const perm = await resolvePermission(userId, "editing_workflow");
   const where = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
-  const today = new Date().toISOString().slice(0, 10);
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
+  const range = typeof sp.range === "string" ? sp.range : "today";
+  const customFrom = typeof sp.from === "string" ? sp.from : null;
+  const customTo = typeof sp.to === "string" ? sp.to : null;
+
+  let dateFrom: string;
+  let dateTo: string;
+  if (range === "7d") {
+    dateFrom = new Date(Date.now() - 7 * 86400000).toLocaleDateString("sv-SE", {
+      timeZone: "Asia/Shanghai",
+    });
+    dateTo = today;
+  } else if (range === "30d") {
+    dateFrom = new Date(Date.now() - 30 * 86400000).toLocaleDateString("sv-SE", {
+      timeZone: "Asia/Shanghai",
+    });
+    dateTo = today;
+  } else if (range === "custom" && customFrom && customTo) {
+    dateFrom = customFrom;
+    dateTo = customTo;
+  } else {
+    dateFrom = today;
+    dateTo = today;
+  }
 
   const productNames =
     typeof sp.products === "string" ? sp.products.split(",").filter(Boolean) : undefined;
   const editorUserIds =
     typeof sp.editors === "string" ? sp.editors.split(",").filter(Boolean) : undefined;
+  const anchorIds =
+    typeof sp.anchors === "string" ? sp.anchors.split(",").filter(Boolean) : undefined;
 
-  const [cards, editors, products, fishCoverage, summary, anchorDist, editorLoad] =
+  const [cards, editors, products, anchors, fishCoverage, summary, anchorDist, editorLoad] =
     await Promise.all([
       listForBoard({
         whereClause: where,
-        dateFrom: sevenDaysAgo,
-        dateTo: today,
+        dateFrom,
+        dateTo,
         productNames,
         editorUserIds,
+        anchorIds,
       }),
       listEditors(),
       listProducts(),
+      listAnchorOptions(),
       queryFishCoverageToday(),
       queryTodaySummary({ whereClause: where }),
       queryTodayAnchorDist({ whereClause: where }),
@@ -64,6 +91,7 @@ export default async function EditingBoardPage({
       initialCards={cards}
       editors={editors}
       products={products}
+      anchors={anchors}
       permissions={{ canEdit: perm.can_edit, isAdmin: perm.can_admin }}
       fishCoverage={fishCoverage}
       todaySummary={summary}

@@ -18,8 +18,7 @@ function safeFilename(name: string): string {
 export function buildSourcePath(input: PathInput): string {
   return join(
     "source",
-    input.product,
-    input.materialDate,
+    `${input.product}-新`,
     `task-${input.taskId}-${safeFilename(input.originalName)}`,
   );
 }
@@ -27,8 +26,7 @@ export function buildSourcePath(input: PathInput): string {
 export function buildEditedPath(input: PathInput): string {
   return join(
     "edited",
-    input.product,
-    input.materialDate,
+    `${input.product}-新`,
     `task-${input.taskId}-${safeFilename(input.originalName)}`,
   );
 }
@@ -36,8 +34,7 @@ export function buildEditedPath(input: PathInput): string {
 export function buildCoverPath(input: PathInput): string {
   return join(
     "cover",
-    input.product,
-    input.materialDate,
+    `${input.product}-新`,
     `task-${input.taskId}-${safeFilename(input.originalName)}`,
   );
 }
@@ -48,7 +45,7 @@ export interface FishPathInput extends PathInput {
   sequenceNumber: number;
 }
 
-export function buildFishSourcePath(input: FishPathInput): string {
+function buildFishPath(root: "source" | "edited" | "cover", input: FishPathInput): string {
   const dateNoSep = input.materialDate.replace(/-/g, "");
   const nn = String(input.sequenceNumber).padStart(2, "0");
   const ext = safeFilename(input.originalName).match(/\.[^.]+$/)?.[0] ?? "";
@@ -57,7 +54,19 @@ export function buildFishSourcePath(input: FishPathInput): string {
   const segments = input.roomName
     ? [dateNoSep, input.roomName, input.anchorName, nn]
     : [dateNoSep, input.anchorName, nn];
-  return join("source", `${input.product}-新`, `${segments.join("-")}${ext}`);
+  return join(root, `${input.product}-新`, `${segments.join("-")}${ext}`);
+}
+
+export function buildFishSourcePath(input: FishPathInput): string {
+  return buildFishPath("source", input);
+}
+
+export function buildFishEditedPath(input: FishPathInput): string {
+  return buildFishPath("edited", input);
+}
+
+export function buildFishCoverPath(input: FishPathInput): string {
+  return buildFishPath("cover", input);
 }
 
 export function isFishProduct(product: string | null | undefined): boolean {

@@ -97,3 +97,28 @@ export async function getAnchorById(
   const rows = await listAnchors({}, userId, emergencyMode);
   return rows.find((r) => r.dingtalk_user_id === dingtalk_user_id) ?? null;
 }
+
+/**
+ * 用于筛选下拉：所有有 live_anchor 档案的 active 主播。
+ * 不走权限过滤（剪辑筛选场景，task 本身已按 editing_workflow scope 过滤）。
+ */
+export async function listAnchorOptions(): Promise<
+  { id: string; name: string; businessLine: string }[]
+> {
+  const rows = await db
+    .select({
+      id: live_anchor.dingtalk_user_id,
+      external_name: live_anchor.external_name,
+      real_name: dingtalk_user.name,
+      business_line: live_anchor.business_line,
+    })
+    .from(live_anchor)
+    .innerJoin(dingtalk_user, eq(live_anchor.dingtalk_user_id, dingtalk_user.user_id))
+    .where(eq(dingtalk_user.active, true))
+    .orderBy(live_anchor.business_line, dingtalk_user.name);
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.external_name ?? r.real_name,
+    businessLine: r.business_line,
+  }));
+}

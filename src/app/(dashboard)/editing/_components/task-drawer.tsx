@@ -2,7 +2,12 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { loadTaskDetail } from "../actions";
-import { resetEditing, reviewApprove, deleteCover } from "@/modules/editing-task";
+import {
+  resetEditing,
+  reviewApprove,
+  deleteCover,
+  recordReviewWatch,
+} from "@/modules/editing-task";
 import type { EditorOption } from "@/modules/editing-editor";
 import type { TaskDetail, TaskEvent } from "@/modules/editing-task";
 import { ReviewRejectDialog } from "./review-reject-dialog";
@@ -28,12 +33,28 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
     fileName: string;
     kind: "source" | "edited";
   } | null>(null);
-  // 本次抽屉打开期间累计的成品观看秒数（审核时提交）
+  // 本次抽屉打开期间累计的成品观看秒数（preview 关闭时即时 flush 到 DB）
   const [editedWatchSec, setEditedWatchSec] = useState(0);
 
   useEffect(() => {
     loadTaskDetail(taskId).then(setData);
   }, [taskId]);
+
+  async function flushWatch() {
+    if (editedWatchSec <= 0) return;
+    if (!data?.task || data.task.status !== "review") {
+      setEditedWatchSec(0);
+      return;
+    }
+    try {
+      await recordReviewWatch({ taskId, seconds: editedWatchSec });
+      const fresh = await loadTaskDetail(taskId);
+      setData(fresh);
+    } catch {
+      // 静默忽略，不打断用户操作
+    }
+    setEditedWatchSec(0);
+  }
 
   if (!data) return null;
   if (!data.task) {
@@ -266,7 +287,8 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
                 onClick={async () => {
                   if (!confirm("审核通过？")) return;
                   try {
-                    await reviewApprove({ taskId: task.id, watchSeconds: editedWatchSec });
+                    await flushWatch();
+                    await reviewApprove({ taskId: task.id });
                     toast.success("审核通过");
                     onClose();
                     location.reload();
@@ -278,7 +300,7 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
               >
                 审核通过
               </button>
-              <ReviewRejectDialog taskId={task.id} watchSeconds={editedWatchSec} onDone={onClose} />
+              <ReviewRejectDialog taskId={task.id} onBeforeReject={flushWatch} onDone={onClose} />
             </>
           )}
           {task.status === "ready" && (
@@ -313,7 +335,10 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
         <VideoPreviewModal
           src={preview.src}
           fileName={preview.fileName}
-          onClose={() => setPreview(null)}
+          onClose={async () => {
+            await flushWatch();
+            setPreview(null);
+          }}
           onWatched={
             preview.kind === "edited" && task.status === "review"
               ? (sec) => setEditedWatchSec((s) => s + sec)
@@ -598,33 +623,76 @@ function UploadEditedButton({ taskId }: { taskId: number }) {
                 ×
               </button>
             </header>
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="text-sm font-medium">成品视频（可多选）</label>
-                <input
-                  type="file"
-                  accept="video/*"
-                  multiple
-                  onChange={(e) => setVideos(Array.from(e.target.files ?? []))}
-                  className="mt-1 block w-full text-sm"
-                />
-                {videos.length > 0 && (
-                  <p className="mt-1 text-xs text-slate-500">已选 {videos.length} 个文件</p>
-                )}
+                <div className="mb-1.5 text-sm font-semibold">
+                  成品视频 <span className="text-red-500">*</span>
+                </div>
+                <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50/50 py-6 transition hover:border-blue-400 hover:bg-blue-50/30">
+                  <input
+                    type="file"
+                    accept="video/*"
+                    multiple
+                    hidden
+                    onChange={(e) => setVideos(Array.from(e.target.files ?? []))}
+                  />
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-slate-400"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  <span className="text-sm text-slate-500">点击选择成品视频（可多选）</span>
+                  {videos.length > 0 && (
+                    <span className="text-xs text-blue-600">已选 {videos.length} 个文件</span>
+                  )}
+                </label>
               </div>
               <div>
-                <label className="text-sm font-medium">封面图（可选，≤ 20MB）</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setCover(e.target.files?.[0] ?? null)}
-                  className="mt-1 block w-full text-sm"
-                />
-                {cover && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    {cover.name} ({Math.round(cover.size / 1024)} KB)
-                  </p>
-                )}
+                <div className="mb-1.5 text-sm font-semibold">
+                  封面图{" "}
+                  <span className="ml-1 text-xs font-normal text-slate-400">
+                    （选填，单张，≤ 20MB）
+                  </span>
+                </div>
+                <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50/50 py-6 transition hover:border-blue-400 hover:bg-blue-50/30">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(e) => setCover(e.target.files?.[0] ?? null)}
+                  />
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-slate-400"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                  <span className="text-sm text-slate-500">点击选择封面图（jpg / png / webp）</span>
+                  {cover && (
+                    <span className="text-xs text-blue-600">
+                      {cover.name} · {Math.round(cover.size / 1024)} KB
+                    </span>
+                  )}
+                </label>
               </div>
             </div>
             <footer className="mt-6 flex justify-end gap-2 border-t pt-4">
