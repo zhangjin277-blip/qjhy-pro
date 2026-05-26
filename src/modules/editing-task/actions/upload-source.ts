@@ -21,13 +21,15 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
       live_account_id: editing_task.live_account_id,
       status: editing_task.status,
       product: live_account.product,
+      source_files: editing_task.source_files,
+      source_file_names: editing_task.source_file_names,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
     .where(eq(editing_task.id, data.taskId));
 
   if (!task) throw new Error("task not found");
-  if (task.status !== "uploaded") throw new Error("素材已上传过");
+  if (task.status !== "uploaded") throw new Error("仅 uploaded 状态可上传素材");
 
   const NAS = process.env.EDITING_NAS_PATH;
   if (!NAS) throw new Error("EDITING_NAS_PATH not configured");
@@ -45,8 +47,8 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
   await db
     .update(editing_task)
     .set({
-      source_files: [relPath],
-      source_file_names: [data.fileName],
+      source_files: [...(task.source_files ?? []), relPath],
+      source_file_names: [...(task.source_file_names ?? []), data.fileName],
       source_uploaded_at: new Date(),
     })
     .where(eq(editing_task.id, task.id));

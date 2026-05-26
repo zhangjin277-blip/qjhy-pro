@@ -278,26 +278,56 @@ function FileList({
 }
 
 function UploadEditedButton({ taskId }: { taskId: number }) {
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const label =
+    uploading && progress
+      ? `上传 ${progress.done}/${progress.total} ...`
+      : uploading
+        ? "上传中..."
+        : "上传成品";
+
   return (
-    <label className="cursor-pointer rounded border border-blue-500 bg-white px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50">
-      上传成品
+    <label
+      className={`cursor-pointer rounded border border-blue-500 bg-white px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 ${uploading ? "pointer-events-none opacity-60" : ""}`}
+    >
+      {label}
       <input
         type="file"
         accept="video/*"
+        multiple
         hidden
         onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          const fd = new FormData();
-          fd.append("taskId", String(taskId));
-          fd.append("file", file);
-          try {
-            const res = await fetch("/api/editing/upload-edited", { method: "POST", body: fd });
-            if (!res.ok) throw new Error("上传失败");
-            toast.success("成品已上传");
+          const files = Array.from(e.target.files ?? []);
+          if (files.length === 0) return;
+          setUploading(true);
+          setProgress({ done: 0, total: files.length });
+          let succeeded = 0;
+          let failed = 0;
+          let idx = 0;
+          for (const file of files) {
+            const fd = new FormData();
+            fd.append("taskId", String(taskId));
+            fd.append("file", file);
+            try {
+              const res = await fetch("/api/editing/upload-edited", { method: "POST", body: fd });
+              if (!res.ok) {
+                const j = await res.json().catch(() => ({}));
+                throw new Error((j as { error?: string }).error ?? "上传失败");
+              }
+              succeeded++;
+            } catch (err) {
+              failed++;
+              toast.error(`${file.name}: ${err instanceof Error ? err.message : "上传失败"}`);
+            }
+            idx++;
+            setProgress({ done: idx, total: files.length });
+          }
+          setUploading(false);
+          if (succeeded > 0) {
+            toast.success(`成功 ${succeeded} 条${failed > 0 ? ` · 失败 ${failed} 条` : ""}`);
             location.reload();
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "上传失败");
           }
         }}
       />

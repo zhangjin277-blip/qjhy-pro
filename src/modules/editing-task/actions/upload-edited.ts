@@ -28,13 +28,17 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
       status: editing_task.status,
       editor_user_id: editing_task.editor_user_id,
       product: live_account.product,
+      edited_files: editing_task.edited_files,
+      edited_file_names: editing_task.edited_file_names,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
     .where(eq(editing_task.id, data.taskId));
 
   if (!task) throw new Error("task not found");
-  assertTransition(task.status, "review");
+  if (task.status !== "editing" && task.status !== "review") {
+    throw new Error("仅 editing/review 状态可上传成品");
+  }
 
   const NAS = process.env.EDITING_NAS_PATH;
   if (!NAS) throw new Error("EDITING_NAS_PATH not configured");
@@ -49,15 +53,29 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
   });
   await nasWriteFile(NAS, relPath, buf);
 
-  await db
-    .update(editing_task)
-    .set({
-      edited_files: [relPath],
-      edited_file_names: [data.fileName],
-      edited_uploaded_at: new Date(),
-      status: "review",
-    })
-    .where(eq(editing_task.id, task.id));
+  if (task.status === "editing") {
+    // First upload: transition editing → review
+    assertTransition("editing", "review");
+    await db
+      .update(editing_task)
+      .set({
+        edited_files: [relPath],
+        edited_file_names: [data.fileName],
+        edited_uploaded_at: new Date(),
+        status: "review",
+      })
+      .where(eq(editing_task.id, task.id));
+  } else {
+    // Append: status already review, keep it
+    await db
+      .update(editing_task)
+      .set({
+        edited_files: [...(task.edited_files ?? []), relPath],
+        edited_file_names: [...(task.edited_file_names ?? []), data.fileName],
+        edited_uploaded_at: new Date(),
+      })
+      .where(eq(editing_task.id, task.id));
+  }
 
   await writeEvent({
     taskId: task.id,
