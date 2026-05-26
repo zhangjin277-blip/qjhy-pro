@@ -183,20 +183,34 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
             </section>
           )}
 
-          {task.status === "published" && (
-            <section className="mb-6 text-sm">
-              <SectionTitle>抖音视频</SectionTitle>
-              {task.videoId ? (
-                <a
-                  href={`https://www.douyin.com/video/${task.videoId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  {task.videoId}
-                </a>
-              ) : (
-                <span className="text-slate-400">未绑定（admin 跳过）</span>
+          {(task.reviewedAt || task.publishedAt) && (
+            <section className="mb-6 space-y-2 text-sm">
+              <SectionTitle>审核 / 发布</SectionTitle>
+              {task.reviewedAt && (
+                <>
+                  <Row label="审核人">{task.reviewedByName ?? "—"}</Row>
+                  <Row label="审核时间">{new Date(task.reviewedAt).toLocaleString("zh-CN")}</Row>
+                </>
+              )}
+              {task.publishedAt && (
+                <>
+                  <Row label="发布人">{task.publishedByName ?? "—"}</Row>
+                  <Row label="发布时间">{new Date(task.publishedAt).toLocaleString("zh-CN")}</Row>
+                  <Row label="抖音视频">
+                    {task.videoId ? (
+                      <a
+                        href={`https://www.douyin.com/video/${task.videoId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        {task.videoId}
+                      </a>
+                    ) : (
+                      <span className="text-slate-400">未绑定</span>
+                    )}
+                  </Row>
+                </>
               )}
             </section>
           )}
