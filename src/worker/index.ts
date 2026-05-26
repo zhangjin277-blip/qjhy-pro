@@ -8,6 +8,7 @@ import { enqueue, JOB_NAMES, stopBoss } from "@/modules/crawler/server";
 import { closeBrowser } from "@/lib/puppeteer";
 import { runCronAttributionSweep } from "@/modules/placement-attribution/server";
 import { runEditingCleanup } from "./jobs/editing-cleanup";
+import { runAnchorPenaltyJob } from "./jobs/anchor-penalty";
 
 // Phase 1: 钉钉同步
 registerJob({
@@ -87,6 +88,13 @@ registerJob({
     const r = await runEditingCleanup();
     console.log(`[editing-cleanup] tasks=${r.tasksRemoved} files=${r.filesRemoved}`);
   },
+});
+
+// 捕鱼系主播扣分（每天 02:00，处理昨天开播但未上传素材的主播）
+registerJob({
+  name: "anchor-penalty",
+  schedule: "0 2 * * *",
+  task: runAnchorPenaltyJob,
 });
 
 registerJob({
