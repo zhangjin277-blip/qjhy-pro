@@ -23,3 +23,5 @@ export { uploadEdited } from "./actions/upload-edited";
 export { reviewApprove } from "./actions/review-approve";
 export { reviewReject } from "./actions/review-reject";
 export { resetEditing } from "./actions/reset-editing";
+export { markPublished } from "./actions/mark-published";
+export { deleteTask } from "./actions/delete-task";
