@@ -66,9 +66,9 @@ export function groupByDate(
   ];
   return order
     .filter((l) => buckets.has(l))
-    .map((label, i) => ({
+    .map((label) => ({
       label,
       cards: buckets.get(label) ?? [],
-      defaultOpen: i < 2,
+      defaultOpen: label.startsWith("今天"),
     }));
 }
