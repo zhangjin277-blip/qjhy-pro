@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import type { StatusCounts, EditorMonthlyStat, AnchorMonthlyStat } from "@/modules/editing-task";
+import { ViewTabs } from "./view-tabs";
 
 interface Props {
   monthOffset: number;
@@ -31,30 +32,7 @@ export function StatsView({
     <div className="p-6 space-y-8">
       {/* 顶部：视图切换 + 月份选择 */}
       <div className="flex items-center justify-between">
-        {/* 视图切换 tab */}
-        <div className="inline-flex rounded-md bg-slate-100 p-0.5">
-          <button
-            onClick={() => router.push("/editing")}
-            className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
-          >
-            看板
-          </button>
-          <button
-            onClick={() => router.push("/editing/table")}
-            className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
-          >
-            表格
-          </button>
-          <button
-            onClick={() => router.push("/editing/gantt")}
-            className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
-          >
-            甘特
-          </button>
-          <button className="rounded bg-white px-3.5 py-1.5 text-sm font-medium text-blue-600 shadow-sm">
-            统计
-          </button>
-        </div>
+        <ViewTabs active="stats" />
 
         {/* 月份切换 */}
         <div className="flex items-center gap-2 text-sm">

@@ -16,6 +16,7 @@ import { Column } from "./board-column";
 import { SelectionProvider, useSelection } from "./selection-store";
 import { FloatingActionBar } from "./floating-action-bar";
 import { FilterBar } from "./filter-bar";
+import { ViewTabs } from "./view-tabs";
 import { TaskDrawer } from "./task-drawer";
 import { NewTaskDialog } from "./new-task-dialog";
 import { TodayStatsPanel } from "./today-stats-panel";
@@ -54,6 +55,7 @@ export function Board({
 
   return (
     <SelectionProvider>
+      <ViewTabs active="board" />
       <FilterBar products={products} editors={editors} onNewTask={() => setNewOpen(true)} />
       <TodayStatsPanel
         summary={todaySummary}

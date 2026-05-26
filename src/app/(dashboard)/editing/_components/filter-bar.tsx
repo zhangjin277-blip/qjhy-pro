@@ -28,33 +28,6 @@ export function FilterBar({ products, editors, onNewTask }: FilterBarProps) {
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 backdrop-blur">
-      {/* 视图切换 */}
-      <div className="inline-flex rounded-md bg-slate-100 p-0.5">
-        <button className="rounded bg-white px-3.5 py-1.5 text-sm font-medium text-blue-600 shadow-sm">
-          看板
-        </button>
-        <button
-          onClick={() => router.push("/editing/table")}
-          className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
-        >
-          表格
-        </button>
-        <button
-          onClick={() => router.push("/editing/gantt")}
-          className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
-        >
-          甘特
-        </button>
-        <button
-          onClick={() => router.push("/editing/stats")}
-          className="rounded px-3.5 py-1.5 text-sm text-slate-500 hover:text-slate-700"
-        >
-          统计
-        </button>
-      </div>
-
-      <div className="h-5 w-px bg-border" />
-
       {/* 产品筛选 */}
       <div className="relative">
         <button

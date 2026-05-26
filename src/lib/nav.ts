@@ -101,27 +101,9 @@ export const NAV: NavItem[] = [
     key: "editing",
     label: "剪辑管理",
     icon: Scissors,
-    children: [
-      { key: "editing-board", label: "剪辑看板", href: "/editing", module: "editing_workflow" },
-      {
-        key: "editing-table",
-        label: "任务列表",
-        href: "/editing/table",
-        module: "editing_workflow",
-      },
-      {
-        key: "editing-gantt",
-        label: "完成统计",
-        href: "/editing/gantt",
-        module: "editing_workflow",
-      },
-      {
-        key: "editing-stats",
-        label: "数据统计",
-        href: "/editing/stats",
-        module: "editing_workflow",
-      },
-    ],
+    single: true,
+    href: "/editing",
+    module: "editing_workflow",
   },
   {
     key: "ops",
