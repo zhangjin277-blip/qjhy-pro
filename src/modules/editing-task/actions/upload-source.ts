@@ -134,11 +134,18 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
     await nasWriteFile(NAS, relPath, buf);
   }
 
+  // 捕鱼系任务：UI / 下载文件名都用规则化的 basename（YYYYMMDD-直播间-主播-NN.ext）
+  // 普通任务：保留原文件名
+  const displayName =
+    isFishProduct(task.product) && task.room_name && task.anchor_name && task.anchor_id
+      ? (relPath.split("/").pop() ?? data.fileName)
+      : data.fileName;
+
   await db
     .update(editing_task)
     .set({
       source_files: [...(task.source_files ?? []), relPath],
-      source_file_names: [...(task.source_file_names ?? []), data.fileName],
+      source_file_names: [...(task.source_file_names ?? []), displayName],
       source_file_hashes: [...(task.source_file_hashes ?? []), md5],
       source_uploaded_at: new Date(),
     })
@@ -148,7 +155,7 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
     taskId: task.id,
     eventType: "source_uploaded",
     actorUserId: userId,
-    payload: { file_count: 1, file_names: [data.fileName] },
+    payload: { file_count: 1, file_names: [displayName] },
   });
 
   return { ok: true };
