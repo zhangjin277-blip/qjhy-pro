@@ -42,6 +42,27 @@ export function buildCoverPath(input: PathInput): string {
   );
 }
 
+export interface FishPathInput extends PathInput {
+  roomName: string;
+  anchorName: string;
+  sequenceNumber: number;
+}
+
+export function buildFishSourcePath(input: FishPathInput): string {
+  const dateNoSep = input.materialDate.replace(/-/g, "");
+  const nn = String(input.sequenceNumber).padStart(2, "0");
+  const ext = safeFilename(input.originalName).match(/\.[^.]+$/)?.[0] ?? "";
+  return join(
+    "source",
+    `${input.product}-新`,
+    `${dateNoSep}-${input.roomName}-${input.anchorName}-${nn}${ext}`,
+  );
+}
+
+export function isFishProduct(product: string | null | undefined): boolean {
+  return !!product && product.includes("捕鱼");
+}
+
 function assertInsideNas(nasRoot: string, relPath: string): string {
   const full = resolve(nasRoot, relPath);
   const root = resolve(nasRoot);

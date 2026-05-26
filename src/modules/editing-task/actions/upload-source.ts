@@ -1,11 +1,16 @@
 "use server";
 import { createHash } from "node:crypto";
 import { db } from "@/db/client";
-import { editing_task, live_account } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { editing_task, live_account, live_room, anchor_profile } from "@/db/schema";
+import { and, eq, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/page-auth";
 import { writeEvent } from "../event-writer";
-import { buildSourcePath, writeFile as nasWriteFile } from "@/modules/editing-storage/server";
+import {
+  buildSourcePath,
+  buildFishSourcePath,
+  isFishProduct,
+  writeFile as nasWriteFile,
+} from "@/modules/editing-storage/server";
 import { UploadSourceInput } from "../schema";
 
 export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
@@ -20,14 +25,19 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
       id: editing_task.id,
       material_date: editing_task.material_date,
       live_account_id: editing_task.live_account_id,
+      anchor_id: editing_task.anchor_id,
       status: editing_task.status,
       product: live_account.product,
       source_files: editing_task.source_files,
       source_file_names: editing_task.source_file_names,
       source_file_hashes: editing_task.source_file_hashes,
+      room_name: live_room.room_no,
+      anchor_name: anchor_profile.nick_name,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
+    .leftJoin(live_room, eq(live_room.id, live_account.room_id))
+    .leftJoin(anchor_profile, eq(anchor_profile.anchor_id, editing_task.anchor_id))
     .where(eq(editing_task.id, data.taskId));
 
   if (!task) throw new Error("task not found");
@@ -49,6 +59,7 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
     .from(editing_task)
     .where(sql`${editing_task.source_file_hashes} @> ${JSON.stringify([md5])}::jsonb`);
 
+  const materialDateStr = task.material_date.toISOString().slice(0, 10);
   let relPath: string;
 
   if (dupRows.length > 0 && dupRows[0] !== undefined) {
@@ -60,7 +71,7 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
       buildSourcePath({
         taskId: task.id,
         product: task.product ?? "未分类",
-        materialDate: task.material_date.toISOString().slice(0, 10),
+        materialDate: materialDateStr,
         originalName: data.fileName,
       });
 
@@ -81,9 +92,39 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
         payload: { duplicate_of: oldTask.id, md5 },
       });
     }
+  } else if (isFishProduct(task.product) && task.room_name && task.anchor_name && task.anchor_id) {
+    // 捕鱼系特殊命名：YYYYMMDD-直播间-主播-NN
+    // 计算同日期 + 直播间（room_id） + 主播下已有素材总数
+    const anchorId = task.anchor_id;
+    const roomId = sql`(SELECT room_id FROM live_account WHERE id = ${task.live_account_id})`;
+    const countRows = await db
+      .select({
+        existingCount: sql<number>`COALESCE(SUM(jsonb_array_length(${editing_task.source_files})), 0)::int`,
+      })
+      .from(editing_task)
+      .innerJoin(live_account, eq(live_account.id, editing_task.live_account_id))
+      .where(
+        and(
+          eq(editing_task.material_date, task.material_date),
+          sql`${live_account.room_id} = ${roomId}`,
+          eq(editing_task.anchor_id, anchorId),
+        ),
+      );
+
+    const existingCount = countRows[0]?.existingCount ?? 0;
+    const sequenceNumber = existingCount + 1;
+    relPath = buildFishSourcePath({
+      taskId: task.id,
+      product: task.product ?? "未分类",
+      materialDate: materialDateStr,
+      originalName: data.fileName,
+      roomName: task.room_name,
+      anchorName: task.anchor_name,
+      sequenceNumber,
+    });
+    await nasWriteFile(NAS, relPath, buf);
   } else {
-    // New file — write to NAS
-    const materialDateStr = task.material_date.toISOString().slice(0, 10);
+    // 普通路径
     relPath = buildSourcePath({
       taskId: task.id,
       product: task.product ?? "未分类",

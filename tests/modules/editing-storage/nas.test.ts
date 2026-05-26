@@ -3,6 +3,8 @@ import { mkdir, rm, readFile } from "node:fs/promises";
 import {
   buildSourcePath,
   buildEditedPath,
+  buildFishSourcePath,
+  isFishProduct,
   writeFile as nasWriteFile,
   getDownloadStream,
 } from "@/modules/editing-storage/nas";
@@ -36,6 +38,91 @@ describe("nas path helpers", () => {
       originalName: "../../etc/passwd",
     });
     expect(p).toBe("source/捕鱼大作战/2026-05-25/task-1-passwd");
+  });
+});
+
+describe("buildFishSourcePath", () => {
+  it("generates YYYYMMDD-room-anchor-NN.ext format", () => {
+    const p = buildFishSourcePath({
+      taskId: 10,
+      product: "捕鱼大作战",
+      materialDate: "2026-05-25",
+      originalName: "clip.mp4",
+      roomName: "B17",
+      anchorName: "小明",
+      sequenceNumber: 1,
+    });
+    expect(p).toBe("source/捕鱼大作战-新/20260525-B17-小明-01.mp4");
+  });
+
+  it("pads sequence number to 2 digits", () => {
+    const p = buildFishSourcePath({
+      taskId: 11,
+      product: "捕鱼大作战",
+      materialDate: "2026-05-25",
+      originalName: "raw.mp4",
+      roomName: "A20",
+      anchorName: "大壮",
+      sequenceNumber: 9,
+    });
+    expect(p).toBe("source/捕鱼大作战-新/20260525-A20-大壮-09.mp4");
+  });
+
+  it("handles sequence number >= 10", () => {
+    const p = buildFishSourcePath({
+      taskId: 12,
+      product: "捕鱼争霸赛",
+      materialDate: "2026-05-25",
+      originalName: "video.mp4",
+      roomName: "C05",
+      anchorName: "李梅",
+      sequenceNumber: 12,
+    });
+    expect(p).toBe("source/捕鱼争霸赛-新/20260525-C05-李梅-12.mp4");
+  });
+
+  it("handles file without extension", () => {
+    const p = buildFishSourcePath({
+      taskId: 13,
+      product: "捕鱼大作战",
+      materialDate: "2026-05-01",
+      originalName: "noext",
+      roomName: "B17",
+      anchorName: "小明",
+      sequenceNumber: 1,
+    });
+    expect(p).toBe("source/捕鱼大作战-新/20260501-B17-小明-01");
+  });
+
+  it("sanitizes traversal in originalName for extension extraction", () => {
+    const p = buildFishSourcePath({
+      taskId: 14,
+      product: "捕鱼大作战",
+      materialDate: "2026-05-25",
+      originalName: "../../etc/passwd.mp4",
+      roomName: "B17",
+      anchorName: "小明",
+      sequenceNumber: 2,
+    });
+    expect(p).toBe("source/捕鱼大作战-新/20260525-B17-小明-02.mp4");
+  });
+});
+
+describe("isFishProduct", () => {
+  it("returns true when product contains 捕鱼", () => {
+    expect(isFishProduct("捕鱼大作战")).toBe(true);
+    expect(isFishProduct("捕鱼争霸赛")).toBe(true);
+  });
+
+  it("returns false for non-fish products", () => {
+    expect(isFishProduct("三国冰河时代")).toBe(false);
+    expect(isFishProduct("途游斗地主")).toBe(false);
+  });
+
+  it("returns false for null/undefined/empty", () => {
+    expect(isFishProduct(null)).toBe(false);
+    expect(isFishProduct(undefined)).toBe(false);
+    expect(isFishProduct("")).toBe(false);
   });
 });
 

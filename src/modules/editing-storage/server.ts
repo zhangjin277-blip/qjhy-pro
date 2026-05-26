@@ -4,7 +4,10 @@ export {
   buildSourcePath,
   buildEditedPath,
   buildCoverPath,
+  buildFishSourcePath,
+  isFishProduct,
   writeFile,
   getDownloadStream,
   type PathInput,
+  type FishPathInput,
 } from "./nas";
