@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { resolvePermission } from "@/modules/permissions/server";
-import { listForBoard, buildEditingScopeWhere } from "@/modules/editing-task/server";
+import {
+  listForBoard,
+  buildEditingScopeWhere,
+  queryFishCoverageToday,
+} from "@/modules/editing-task/server";
 import { listEditors } from "@/modules/editing-editor/server";
 import { listProducts } from "@/modules/product-config/server";
 import { Board } from "./_components/board";
@@ -35,7 +39,7 @@ export default async function EditingBoardPage({
   const editorUserIds =
     typeof sp.editors === "string" ? sp.editors.split(",").filter(Boolean) : undefined;
 
-  const [cards, editors, products] = await Promise.all([
+  const [cards, editors, products, fishCoverage] = await Promise.all([
     listForBoard({
       whereClause: where,
       dateFrom: sevenDaysAgo,
@@ -45,6 +49,7 @@ export default async function EditingBoardPage({
     }),
     listEditors(),
     listProducts(),
+    queryFishCoverageToday(),
   ]);
 
   return (
@@ -53,6 +58,7 @@ export default async function EditingBoardPage({
       editors={editors}
       products={products}
       permissions={{ canEdit: perm.can_edit, isAdmin: perm.can_admin }}
+      fishCoverage={fishCoverage}
     />
   );
 }

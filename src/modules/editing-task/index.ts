@@ -12,6 +12,8 @@ export type {
   StatusCounts,
   EditorMonthlyStat,
   AnchorMonthlyStat,
+  FishCoverageItem,
+  FishCoverage,
 } from "./types";
 
 export {

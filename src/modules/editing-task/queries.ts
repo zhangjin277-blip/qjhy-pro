@@ -7,6 +7,7 @@ import {
   anchor_profile,
   dingtalk_user,
   product_config,
+  daily_schedule_segment,
 } from "@/db/schema";
 import type {
   BoardCard,
@@ -17,6 +18,8 @@ import type {
   StatusCounts,
   EditorMonthlyStat,
   AnchorMonthlyStat,
+  FishCoverage,
+  FishCoverageItem,
 } from "./types";
 import type { EditingTaskStatus } from "@/db/schema";
 import {
@@ -671,4 +674,148 @@ export async function queryAnchorMonthlyStats(args: {
   return Array.from(byAnchor.values())
     .map((s) => ({ ...s, completionRate: s.total > 0 ? s.published / s.total : 0 }))
     .sort((a, b) => b.total - a.total);
+}
+
+// ---- 捕鱼系今日完成度 ----
+
+/**
+ * 查询今日「捕鱼系」账号的上传完成情况。
+ *
+ * 逻辑：
+ * 1. 从 daily_schedule_segment 取 date=today、is_rest=false 的排班行（已含 default + override 全部来源）
+ * 2. Join live_account，过滤 product ILIKE '%捕鱼%'
+ * 3. 查今日已上传（source_uploaded_at IS NOT NULL）的 editing_task
+ * 4. 以 (live_account_id, dingtalk_user_id) 为维度做完成度对比
+ * 5. 同一 (account_id, dingtalk_user_id) 可能有多个时段 segment，去重后只计一个
+ */
+export async function queryFishCoverageToday(): Promise<FishCoverage> {
+  const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
+
+  // 1) 查今日捕鱼账号的 schedule segments（不含休息段）
+  const scheduleRows = await db
+    .select({
+      account_id: daily_schedule_segment.account_id,
+      dingtalk_user_id: daily_schedule_segment.dingtalk_user_id,
+      account_name: live_account.account_name,
+      product: live_account.product,
+    })
+    .from(daily_schedule_segment)
+    .innerJoin(live_account, eq(live_account.id, daily_schedule_segment.account_id))
+    .where(
+      and(
+        eq(daily_schedule_segment.date, todayStr),
+        eq(daily_schedule_segment.is_rest, false),
+        sql`${live_account.product} ILIKE ${"%" + "捕鱼" + "%"}`,
+      ),
+    );
+
+  if (scheduleRows.length === 0) {
+    return { date: todayStr, total: 0, uploaded: 0, missing: 0, items: [] };
+  }
+
+  // 2) 去重：同一 (account_id, dingtalk_user_id) 多时段只算一次
+  const dedupMap = new Map<
+    string,
+    { account_id: string; dingtalk_user_id: string; account_name: string; product: string }
+  >();
+  for (const r of scheduleRows) {
+    const key = `${r.account_id}::${r.dingtalk_user_id}`;
+    if (!dedupMap.has(key)) {
+      dedupMap.set(key, {
+        account_id: r.account_id,
+        dingtalk_user_id: r.dingtalk_user_id,
+        account_name: r.account_name,
+        product: r.product,
+      });
+    }
+  }
+  const scheduled = Array.from(dedupMap.values());
+  const fishAccountIds = [...new Set(scheduled.map((s) => s.account_id))];
+
+  // 3) 查今日已上传的捕鱼系任务
+  const todayDate = new Date(todayStr + "T00:00:00");
+  const tomorrowDate = new Date(todayStr + "T00:00:00");
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+
+  const uploadedTasks = await db
+    .select({
+      id: editing_task.id,
+      live_account_id: editing_task.live_account_id,
+      anchor_id: editing_task.anchor_id,
+    })
+    .from(editing_task)
+    .where(
+      and(
+        gte(editing_task.material_date, todayDate),
+        lte(editing_task.material_date, todayDate),
+        isNotNull(editing_task.source_uploaded_at),
+        isNull(editing_task.deleted_at),
+        inArray(editing_task.live_account_id, fishAccountIds),
+      ),
+    );
+
+  // 4) 查主播名（dingtalk_user 表）
+  const userIds = [...new Set(scheduled.map((s) => s.dingtalk_user_id))];
+  const userRows = await db
+    .select({ user_id: dingtalk_user.user_id, name: dingtalk_user.name })
+    .from(dingtalk_user)
+    .where(inArray(dingtalk_user.user_id, userIds));
+  const nameMap = new Map(userRows.map((u) => [u.user_id, u.name]));
+
+  // 5) 拼 items
+  //    匹配逻辑：task.anchor_id 是 anchor_profile.anchor_id（抖音 anchor_id），
+  //    排班里存的是 dingtalk_user_id。两者不一定相同。
+  //    先按 live_account_id 宽松匹配（同账号任意任务算上传），再尝试 anchor_profile.dingtalk_user_id 精确匹配。
+  //    若 anchor_profile 有 dingtalk_user_id 关联，则精确匹配；否则 live_account_id 宽松匹配。
+  const anchorProfileRows =
+    userIds.length > 0
+      ? await db
+          .select({
+            anchor_id: anchor_profile.anchor_id,
+            dingtalk_user_id: anchor_profile.dingtalk_user_id,
+          })
+          .from(anchor_profile)
+          .where(inArray(anchor_profile.dingtalk_user_id, userIds))
+      : [];
+  // dingtalk_user_id → anchor_id (可能多对多，取第一个)
+  const dtToAnchorId = new Map<string, string>();
+  for (const ap of anchorProfileRows) {
+    if (ap.dingtalk_user_id && !dtToAnchorId.has(ap.dingtalk_user_id)) {
+      dtToAnchorId.set(ap.dingtalk_user_id, ap.anchor_id);
+    }
+  }
+
+  const items: FishCoverageItem[] = scheduled.map((s) => {
+    const anchorProfileId = dtToAnchorId.get(s.dingtalk_user_id);
+
+    let task: (typeof uploadedTasks)[0] | undefined;
+    if (anchorProfileId) {
+      // 精确：同账号 + 同主播
+      task = uploadedTasks.find(
+        (t) => t.live_account_id === s.account_id && t.anchor_id === anchorProfileId,
+      );
+    }
+    if (!task) {
+      // 宽松：同账号 + 任意主播（兜底，任务可能没填 anchor_id）
+      task = uploadedTasks.find((t) => t.live_account_id === s.account_id);
+    }
+
+    return {
+      liveAccountId: s.account_id,
+      liveAccountName: s.account_name,
+      product: s.product,
+      anchorId: s.dingtalk_user_id,
+      anchorName: nameMap.get(s.dingtalk_user_id) ?? null,
+      uploaded: !!task,
+      taskId: task?.id ?? null,
+    };
+  });
+
+  return {
+    date: todayStr,
+    total: items.length,
+    uploaded: items.filter((i) => i.uploaded).length,
+    missing: items.filter((i) => !i.uploaded).length,
+    items,
+  };
 }

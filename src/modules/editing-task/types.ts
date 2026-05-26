@@ -112,3 +112,23 @@ export interface AnchorMonthlyStat {
   published: number;
   completionRate: number; // published / max(total, 1)
 }
+
+// ---- 捕鱼系今日完成度 ----
+
+export interface FishCoverageItem {
+  liveAccountId: string;
+  liveAccountName: string;
+  product: string;
+  anchorId: string | null; // dingtalk_user_id (从 daily_schedule_segment)
+  anchorName: string | null;
+  uploaded: boolean;
+  taskId: number | null;
+}
+
+export interface FishCoverage {
+  date: string; // YYYY-MM-DD
+  total: number;
+  uploaded: number;
+  missing: number;
+  items: FishCoverageItem[];
+}

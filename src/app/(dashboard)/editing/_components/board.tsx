@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { BoardCard, EditingTaskStatus } from "@/modules/editing-task";
+import type { BoardCard, EditingTaskStatus, FishCoverage } from "@/modules/editing-task";
 import { claimTask, resetEditing, reviewApprove } from "@/modules/editing-task";
 import type { EditorOption } from "@/modules/editing-editor";
 import type { ProductOption } from "@/modules/product-config";
@@ -11,6 +11,7 @@ import { FloatingActionBar } from "./floating-action-bar";
 import { FilterBar } from "./filter-bar";
 import { TaskDrawer } from "./task-drawer";
 import { NewTaskDialog } from "./new-task-dialog";
+import { FishCoveragePanel } from "./fish-coverage-panel";
 
 const COLUMNS: { status: EditingTaskStatus; label: string; dotColorClass: string }[] = [
   { status: "uploaded", label: "待剪辑", dotColorClass: "bg-blue-500" },
@@ -25,15 +26,17 @@ interface Props {
   editors: EditorOption[];
   products: ProductOption[];
   permissions: { canEdit: boolean; isAdmin: boolean };
+  fishCoverage: FishCoverage;
 }
 
-export function Board({ initialCards, editors, products, permissions }: Props) {
+export function Board({ initialCards, editors, products, permissions, fishCoverage }: Props) {
   const [openTaskId, setOpenTaskId] = useState<number | null>(null);
   const [newOpen, setNewOpen] = useState(false);
 
   return (
     <SelectionProvider>
       <FilterBar products={products} editors={editors} onNewTask={() => setNewOpen(true)} />
+      <FishCoveragePanel coverage={fishCoverage} />
       <Workspace cards={initialCards} editors={editors} onOpenDrawer={setOpenTaskId} />
       <FloatingActionBar editors={editors} />
       {openTaskId !== null && (
