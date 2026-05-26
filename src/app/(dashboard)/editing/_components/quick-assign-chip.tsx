@@ -42,7 +42,7 @@ export function QuickAssignChip({ taskId, editors }: Props) {
         + 派单
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 z-30 mb-1 max-h-60 min-w-[140px] overflow-auto rounded-md border border-border bg-white p-1 shadow-lg">
+        <div className="absolute top-full left-0 z-30 mt-1 max-h-60 min-w-[140px] overflow-auto rounded-md border border-border bg-white p-1 shadow-lg">
           {editors.length === 0 ? (
             <p className="p-2 text-xs text-slate-400">无剪辑师可派</p>
           ) : (
