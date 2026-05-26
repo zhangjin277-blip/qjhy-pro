@@ -73,6 +73,8 @@ export const editing_task = pgTable(
     edited_file_hashes: jsonb("edited_file_hashes").$type<string[]>().notNull().default([]),
     is_duplicate: boolean("is_duplicate").notNull().default(false),
     duplicate_of: bigint("duplicate_of", { mode: "number" }),
+    deleted_at: timestamp("deleted_at", { withTimezone: true }),
+    deleted_by_user_id: text("deleted_by_user_id").references(() => dingtalk_user.user_id),
   },
   (t) => ({
     idx_status_date: index("idx_editing_task_status_date").on(t.status, t.material_date),

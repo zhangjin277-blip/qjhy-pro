@@ -10,7 +10,7 @@ import {
 } from "@/db/schema";
 import type { BoardCard, TaskDetail, TaskEvent } from "./types";
 import type { EditingTaskStatus } from "@/db/schema";
-import { and, asc, desc, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export interface BoardFilter {
@@ -24,6 +24,7 @@ export interface BoardFilter {
 
 export async function listForBoard(args: BoardFilter): Promise<BoardCard[]> {
   const filters: (SQL | undefined)[] = [args.whereClause];
+  filters.push(isNull(editing_task.deleted_at));
   if (args.productNames?.length) filters.push(inArray(live_account.product, args.productNames));
   if (args.anchorIds?.length) filters.push(inArray(editing_task.anchor_id, args.anchorIds));
   if (args.editorUserIds?.length)
@@ -199,7 +200,7 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
     .leftJoin(reviewer, eq(reviewer.user_id, editing_task.reviewed_by_user_id))
     .leftJoin(publisher, eq(publisher.user_id, editing_task.published_by_user_id))
     .leftJoin(disqualifier, eq(disqualifier.user_id, editing_task.disqualified_by_user_id))
-    .where(eq(editing_task.id, taskId));
+    .where(and(eq(editing_task.id, taskId), isNull(editing_task.deleted_at)));
 
   if (!r) return null;
 
@@ -235,6 +236,7 @@ export interface TableFilter extends BoardFilter {
 
 export async function listForTable(args: TableFilter): Promise<BoardCard[]> {
   const filters: (SQL | undefined)[] = [args.whereClause];
+  filters.push(isNull(editing_task.deleted_at));
   if (args.productNames?.length) filters.push(inArray(live_account.product, args.productNames));
   if (args.anchorIds?.length) filters.push(inArray(editing_task.anchor_id, args.anchorIds));
   if (args.editorUserIds?.length)

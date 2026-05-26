@@ -7,6 +7,7 @@ import { registerCrawlerHandlers } from "./jobs/handlers/register";
 import { enqueue, JOB_NAMES, stopBoss } from "@/modules/crawler/server";
 import { closeBrowser } from "@/lib/puppeteer";
 import { runCronAttributionSweep } from "@/modules/placement-attribution/server";
+import { runEditingCleanup } from "./jobs/editing-cleanup";
 
 // Phase 1: 钉钉同步
 registerJob({
@@ -75,6 +76,16 @@ registerJob({
   schedule: "0 12 * * *",
   task: async () => {
     await enqueue(JOB_NAMES.FETCH_VIDEO, { basecamp: "cs" });
+  },
+});
+
+// 剪辑任务软删文件清理（每天 03:00，物理删除 30 天前软删的任务及关联文件）
+registerJob({
+  name: "editing-cleanup",
+  schedule: "0 3 * * *",
+  task: async () => {
+    const r = await runEditingCleanup();
+    console.log(`[editing-cleanup] tasks=${r.tasksRemoved} files=${r.filesRemoved}`);
   },
 });
 
