@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/db/client";
-import { editing_task } from "@/db/schema";
+import { editing_task, dingtalk_user } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/page-auth";
 import { writeEvent } from "../event-writer";
@@ -20,6 +20,11 @@ export async function claimTask(input: unknown): Promise<{ ok: true }> {
   if (!t) throw new Error("task not found");
   assertTransition(t.status, "editing");
 
+  const [me] = await db
+    .select({ name: dingtalk_user.name })
+    .from(dingtalk_user)
+    .where(eq(dingtalk_user.user_id, userId));
+
   await db
     .update(editing_task)
     .set({
@@ -33,7 +38,12 @@ export async function claimTask(input: unknown): Promise<{ ok: true }> {
     taskId,
     eventType: "assigned",
     actorUserId: userId,
-    payload: { from: "unassigned", to: userId, self_claimed: true },
+    payload: {
+      from: "unassigned",
+      to: userId,
+      to_name: me?.name ?? userId,
+      self_claimed: true,
+    },
   });
 
   return { ok: true };

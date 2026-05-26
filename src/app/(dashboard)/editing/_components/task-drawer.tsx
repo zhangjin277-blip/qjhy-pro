@@ -45,8 +45,8 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
-      <div className="fixed right-0 top-0 z-50 h-screen w-[520px] overflow-y-auto border-l border-border bg-white p-6 shadow-2xl">
-        <header className="mb-6 flex items-center justify-between gap-3">
+      <div className="fixed right-0 top-0 z-50 flex h-screen w-[520px] flex-col border-l border-border bg-white shadow-2xl">
+        <header className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold">{task.liveAccountName}</h2>
             <StatusChip status={task.status} />
@@ -64,148 +64,150 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
           </button>
         </header>
 
-        <section className="mb-6 space-y-2 text-sm">
-          <Row label="素材日期">{task.materialDate}</Row>
-          <Row label="主播">{task.anchorName ?? "—"}</Row>
-          <Row label="产品">{task.product}</Row>
-          <Row label="创建人">{task.createdByName}</Row>
-          <Row label="剪辑要求">{task.sourceRemark ?? "—"}</Row>
-          <Row label="优先级">
-            {task.priority === "urgent" ? (
-              <>
-                <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-600">
-                  🔴 紧急
-                </span>
-                {task.urgentReason && (
-                  <span className="ml-2 text-xs text-slate-400">· {task.urgentReason}</span>
-                )}
-              </>
-            ) : (
-              <span className="text-slate-500">正常</span>
-            )}
-          </Row>
-          {task.duplicateOf && (
-            <Row label="重复关联">
-              <a href={`?task=${task.duplicateOf}`} className="text-blue-600 hover:underline">
-                task #{task.duplicateOf}
-              </a>
-            </Row>
-          )}
-        </section>
-
-        {task.isDisqualified && (
-          <section className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm">
-            <div className="mb-1 font-semibold text-red-700">不合格素材</div>
-            {task.disqualifiedReason && (
-              <div className="mb-1 text-red-600">原因：{task.disqualifiedReason}</div>
-            )}
-            <div className="text-xs text-red-400">
-              标记人：{task.disqualifiedByName ?? "—"}
-              {task.disqualifiedAt && (
-                <> · {new Date(task.disqualifiedAt).toLocaleString("zh-CN")}</>
+        <main className="flex-1 overflow-y-auto px-6 py-4">
+          <section className="mb-6 space-y-2 text-sm">
+            <Row label="素材日期">{task.materialDate}</Row>
+            <Row label="主播">{task.anchorName ?? "—"}</Row>
+            <Row label="产品">{task.product}</Row>
+            <Row label="创建人">{task.createdByName}</Row>
+            <Row label="剪辑要求">{task.sourceRemark ?? "—"}</Row>
+            <Row label="优先级">
+              {task.priority === "urgent" ? (
+                <>
+                  <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-600">
+                    🔴 紧急
+                  </span>
+                  {task.urgentReason && (
+                    <span className="ml-2 text-xs text-slate-400">· {task.urgentReason}</span>
+                  )}
+                </>
+              ) : (
+                <span className="text-slate-500">正常</span>
               )}
-            </div>
+            </Row>
+            {task.duplicateOf && (
+              <Row label="重复关联">
+                <a href={`?task=${task.duplicateOf}`} className="text-blue-600 hover:underline">
+                  task #{task.duplicateOf}
+                </a>
+              </Row>
+            )}
           </section>
-        )}
 
-        <section className="mb-6">
-          <SectionTitle>素材文件</SectionTitle>
-          {task.sourceFiles.length === 0 ? (
-            <p className="text-sm text-slate-400">无</p>
-          ) : (
-            <FileList
-              files={task.sourceFiles}
-              names={task.sourceFileNames}
-              taskId={task.id}
-              kind="source"
-              onPreview={(src, fileName) => setPreview({ src, fileName })}
-            />
-          )}
-        </section>
-
-        {task.editedFiles.length > 0 && (
-          <section className="mb-6">
-            <SectionTitle>成品文件</SectionTitle>
-            <FileList
-              files={task.editedFiles}
-              names={task.editedFileNames}
-              taskId={task.id}
-              kind="edited"
-              onPreview={(src, fileName) => setPreview({ src, fileName })}
-            />
-          </section>
-        )}
-
-        {(task.editedFiles.length > 0 || task.coverImage) && (
-          <section className="mb-6">
-            <SectionTitle>封面图</SectionTitle>
-            {task.coverImage ? (
-              <div className="flex items-start gap-3">
-                <Image
-                  src={`/api/editing/download?taskId=${task.id}&kind=cover`}
-                  alt="封面"
-                  width={0}
-                  height={128}
-                  unoptimized
-                  className="h-32 w-auto rounded border border-border object-cover"
-                />
-                <div className="flex flex-col gap-2 text-sm">
-                  <a
-                    href={`/api/editing/download?taskId=${task.id}&kind=cover`}
-                    download
-                    className="text-blue-600 hover:underline"
-                  >
-                    下载
-                  </a>
-                  <button
-                    onClick={async () => {
-                      if (!confirm("删除封面图？")) return;
-                      try {
-                        await deleteCover({ taskId: task.id });
-                        toast.success("已删除");
-                        location.reload();
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : "删除失败");
-                      }
-                    }}
-                    className="text-left text-red-500 hover:underline"
-                  >
-                    删除
-                  </button>
-                </div>
+          {task.isDisqualified && (
+            <section className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm">
+              <div className="mb-1 font-semibold text-red-700">不合格素材</div>
+              {task.disqualifiedReason && (
+                <div className="mb-1 text-red-600">原因：{task.disqualifiedReason}</div>
+              )}
+              <div className="text-xs text-red-400">
+                标记人：{task.disqualifiedByName ?? "—"}
+                {task.disqualifiedAt && (
+                  <> · {new Date(task.disqualifiedAt).toLocaleString("zh-CN")}</>
+                )}
               </div>
-            ) : task.status === "editing" || task.status === "review" ? (
-              <UploadCoverButton taskId={task.id} />
+            </section>
+          )}
+
+          <section className="mb-6">
+            <SectionTitle>素材文件</SectionTitle>
+            {task.sourceFiles.length === 0 ? (
+              <p className="text-sm text-slate-400">无</p>
             ) : (
-              <span className="text-sm text-slate-400">无</span>
+              <FileList
+                files={task.sourceFiles}
+                names={task.sourceFileNames}
+                taskId={task.id}
+                kind="source"
+                onPreview={(src, fileName) => setPreview({ src, fileName })}
+              />
             )}
           </section>
-        )}
 
-        {task.status === "published" && (
-          <section className="mb-6 text-sm">
-            <SectionTitle>抖音视频</SectionTitle>
-            {task.videoId ? (
-              <a
-                href={`https://www.douyin.com/video/${task.videoId}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-blue-600 hover:underline"
-              >
-                {task.videoId}
-              </a>
-            ) : (
-              <span className="text-slate-400">未绑定（admin 跳过）</span>
-            )}
+          {task.editedFiles.length > 0 && (
+            <section className="mb-6">
+              <SectionTitle>成品文件</SectionTitle>
+              <FileList
+                files={task.editedFiles}
+                names={task.editedFileNames}
+                taskId={task.id}
+                kind="edited"
+                onPreview={(src, fileName) => setPreview({ src, fileName })}
+              />
+            </section>
+          )}
+
+          {(task.editedFiles.length > 0 || task.coverImage) && (
+            <section className="mb-6">
+              <SectionTitle>封面图</SectionTitle>
+              {task.coverImage ? (
+                <div className="flex items-start gap-3">
+                  <Image
+                    src={`/api/editing/download?taskId=${task.id}&kind=cover`}
+                    alt="封面"
+                    width={0}
+                    height={128}
+                    unoptimized
+                    className="h-32 w-auto rounded border border-border object-cover"
+                  />
+                  <div className="flex flex-col gap-2 text-sm">
+                    <a
+                      href={`/api/editing/download?taskId=${task.id}&kind=cover`}
+                      download
+                      className="text-blue-600 hover:underline"
+                    >
+                      下载
+                    </a>
+                    <button
+                      onClick={async () => {
+                        if (!confirm("删除封面图？")) return;
+                        try {
+                          await deleteCover({ taskId: task.id });
+                          toast.success("已删除");
+                          location.reload();
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : "删除失败");
+                        }
+                      }}
+                      className="text-left text-red-500 hover:underline"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+              ) : task.status === "editing" ? (
+                <UploadCoverButton taskId={task.id} />
+              ) : (
+                <span className="text-sm text-slate-400">无</span>
+              )}
+            </section>
+          )}
+
+          {task.status === "published" && (
+            <section className="mb-6 text-sm">
+              <SectionTitle>抖音视频</SectionTitle>
+              {task.videoId ? (
+                <a
+                  href={`https://www.douyin.com/video/${task.videoId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  {task.videoId}
+                </a>
+              ) : (
+                <span className="text-slate-400">未绑定（admin 跳过）</span>
+              )}
+            </section>
+          )}
+
+          <section className="mb-6">
+            <SectionTitle>操作历史</SectionTitle>
+            <Timeline events={events} editors={editors} />
           </section>
-        )}
+        </main>
 
-        <section className="mb-6">
-          <SectionTitle>操作历史</SectionTitle>
-          <Timeline events={events} />
-        </section>
-
-        <footer className="flex flex-wrap gap-2 border-t border-border pt-4">
+        <footer className="flex flex-wrap gap-2 border-t border-border bg-white px-6 py-3">
           {task.status === "uploaded" && permissions.canEdit && (
             <AssignPopover editors={editors} taskIds={[task.id]} onDone={onClose} />
           )}
@@ -320,8 +322,9 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-function Timeline({ events }: { events: TaskEvent[] }) {
+function Timeline({ events, editors }: { events: TaskEvent[]; editors: EditorOption[] }) {
   if (events.length === 0) return <p className="text-sm text-slate-400">暂无操作记录</p>;
+  const nameMap = new Map(editors.map((e) => [e.userId, e.name]));
   return (
     <ol className="space-y-3 border-l border-border pl-4">
       {events.map((e) => (
@@ -329,7 +332,7 @@ function Timeline({ events }: { events: TaskEvent[] }) {
           <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-blue-500" />
           <div className="text-sm">
             <span className="font-medium">{e.actorName}</span>{" "}
-            <span className="text-slate-500">{formatEvent(e)}</span>
+            <span className="text-slate-500">{formatEvent(e, nameMap)}</span>
           </div>
           <div className="text-xs text-slate-400">
             {new Date(e.createdAt).toLocaleString("zh-CN")}
@@ -340,17 +343,21 @@ function Timeline({ events }: { events: TaskEvent[] }) {
   );
 }
 
-function formatEvent(e: TaskEvent): string {
+function formatEvent(e: TaskEvent, nameMap: Map<string, string>): string {
   const p = e.payload as Record<string, unknown>;
+  const nameOf = (v: unknown) => {
+    if (typeof v !== "string") return String(v ?? "?");
+    return nameMap.get(v) ?? v;
+  };
   switch (e.eventType) {
     case "created":
       return "创建任务";
     case "source_uploaded":
       return `上传 ${p.file_count ?? 1} 个素材`;
     case "assigned":
-      return `派单给 ${p.to ?? "?"}`;
+      return `派单给 ${typeof p.to_name === "string" ? p.to_name : nameOf(p.to)}`;
     case "reassigned":
-      return `改派给 ${p.to ?? "?"}`;
+      return `改派给 ${typeof p.to_name === "string" ? p.to_name : nameOf(p.to)}`;
     case "editing_reset":
       return "回退到待剪辑";
     case "edited_uploaded":

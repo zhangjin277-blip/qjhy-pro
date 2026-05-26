@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/db/client";
-import { editing_task } from "@/db/schema";
+import { editing_task, dingtalk_user } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/page-auth";
 import { writeEvent } from "../event-writer";
@@ -19,6 +19,16 @@ export async function assignEditor(input: unknown): Promise<{ updated: number; s
     })
     .from(editing_task)
     .where(inArray(editing_task.id, data.taskIds));
+
+  // 查新剪辑师 + 旧剪辑师的名字（便于写到 event payload）
+  const involvedIds = new Set<string>([data.editorUserId]);
+  for (const t of tasks) if (t.prev_editor) involvedIds.add(t.prev_editor);
+  const users = await db
+    .select({ user_id: dingtalk_user.user_id, name: dingtalk_user.name })
+    .from(dingtalk_user)
+    .where(inArray(dingtalk_user.user_id, Array.from(involvedIds)));
+  const nameMap = new Map(users.map((u) => [u.user_id, u.name]));
+  const toName = nameMap.get(data.editorUserId) ?? data.editorUserId;
 
   let updated = 0;
   let skipped = 0;
@@ -40,7 +50,7 @@ export async function assignEditor(input: unknown): Promise<{ updated: number; s
         taskId: t.id,
         eventType: "assigned",
         actorUserId: userId,
-        payload: { from: "unassigned", to: data.editorUserId },
+        payload: { from: "unassigned", to: data.editorUserId, to_name: toName },
       });
       updated++;
     } else if (t.status === "editing") {
@@ -56,7 +66,12 @@ export async function assignEditor(input: unknown): Promise<{ updated: number; s
         taskId: t.id,
         eventType: "reassigned",
         actorUserId: userId,
-        payload: { from: t.prev_editor, to: data.editorUserId },
+        payload: {
+          from: t.prev_editor,
+          from_name: t.prev_editor ? (nameMap.get(t.prev_editor) ?? t.prev_editor) : null,
+          to: data.editorUserId,
+          to_name: toName,
+        },
       });
       updated++;
     } else {
