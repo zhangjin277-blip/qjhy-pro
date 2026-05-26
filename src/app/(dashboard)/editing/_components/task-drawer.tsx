@@ -474,59 +474,148 @@ function UploadCoverButton({ taskId }: { taskId: number }) {
 }
 
 function UploadEditedButton({ taskId }: { taskId: number }) {
+  const [open, setOpen] = useState(false);
+  const [videos, setVideos] = useState<File[]>([]);
+  const [cover, setCover] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
-  const label =
-    uploading && progress
-      ? `上传 ${progress.done}/${progress.total} ...`
-      : uploading
-        ? "上传中..."
-        : "上传成品";
+  async function submit() {
+    if (videos.length === 0) {
+      toast.error("请选择至少 1 个成品视频");
+      return;
+    }
+    setUploading(true);
+    const total = videos.length + (cover ? 1 : 0);
+    setProgress({ done: 0, total });
+    let done = 0;
+    let succeeded = 0;
+    let failed = 0;
+
+    // 视频们
+    for (const file of videos) {
+      const fd = new FormData();
+      fd.append("taskId", String(taskId));
+      fd.append("file", file);
+      try {
+        const res = await fetch("/api/editing/upload-edited", { method: "POST", body: fd });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error((j as { error?: string }).error ?? "上传失败");
+        }
+        succeeded++;
+      } catch (err) {
+        failed++;
+        toast.error(`${file.name}: ${err instanceof Error ? err.message : "上传失败"}`);
+      }
+      done++;
+      setProgress({ done, total });
+    }
+
+    // 封面图
+    if (cover) {
+      const fd = new FormData();
+      fd.append("taskId", String(taskId));
+      fd.append("file", cover);
+      try {
+        const res = await fetch("/api/editing/upload-cover", { method: "POST", body: fd });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error((j as { error?: string }).error ?? "封面上传失败");
+        }
+        succeeded++;
+      } catch (err) {
+        failed++;
+        toast.error(`封面图：${err instanceof Error ? err.message : "上传失败"}`);
+      }
+      done++;
+      setProgress({ done, total });
+    }
+
+    setUploading(false);
+    if (succeeded > 0) {
+      toast.success(`成功 ${succeeded}${failed > 0 ? ` · 失败 ${failed}` : ""}`);
+      location.reload();
+    }
+  }
 
   return (
-    <label
-      className={`cursor-pointer rounded border border-blue-500 bg-white px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 ${uploading ? "pointer-events-none opacity-60" : ""}`}
-    >
-      {label}
-      <input
-        type="file"
-        accept="video/*"
-        multiple
-        hidden
-        onChange={async (e) => {
-          const files = Array.from(e.target.files ?? []);
-          if (files.length === 0) return;
-          setUploading(true);
-          setProgress({ done: 0, total: files.length });
-          let succeeded = 0;
-          let failed = 0;
-          let idx = 0;
-          for (const file of files) {
-            const fd = new FormData();
-            fd.append("taskId", String(taskId));
-            fd.append("file", file);
-            try {
-              const res = await fetch("/api/editing/upload-edited", { method: "POST", body: fd });
-              if (!res.ok) {
-                const j = await res.json().catch(() => ({}));
-                throw new Error((j as { error?: string }).error ?? "上传失败");
-              }
-              succeeded++;
-            } catch (err) {
-              failed++;
-              toast.error(`${file.name}: ${err instanceof Error ? err.message : "上传失败"}`);
-            }
-            idx++;
-            setProgress({ done: idx, total: files.length });
-          }
-          setUploading(false);
-          if (succeeded > 0) {
-            toast.success(`成功 ${succeeded} 条${failed > 0 ? ` · 失败 ${failed} 条` : ""}`);
-            location.reload();
-          }
-        }}
-      />
-    </label>
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="rounded border border-blue-500 bg-white px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50"
+      >
+        上传成品
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-[60] bg-black/40"
+            onClick={() => !uploading && setOpen(false)}
+          />
+          <div className="fixed left-1/2 top-1/2 z-[70] w-[440px] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-2xl">
+            <header className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">上传成品</h2>
+              <button
+                disabled={uploading}
+                onClick={() => setOpen(false)}
+                className="text-2xl leading-none text-slate-400 hover:text-slate-700 disabled:opacity-30"
+              >
+                ×
+              </button>
+            </header>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">成品视频（可多选）</label>
+                <input
+                  type="file"
+                  accept="video/*"
+                  multiple
+                  onChange={(e) => setVideos(Array.from(e.target.files ?? []))}
+                  className="mt-1 block w-full text-sm"
+                />
+                {videos.length > 0 && (
+                  <p className="mt-1 text-xs text-slate-500">已选 {videos.length} 个文件</p>
+                )}
+              </div>
+              <div>
+                <label className="text-sm font-medium">封面图（可选，≤ 20MB）</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setCover(e.target.files?.[0] ?? null)}
+                  className="mt-1 block w-full text-sm"
+                />
+                {cover && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {cover.name} ({Math.round(cover.size / 1024)} KB)
+                  </p>
+                )}
+              </div>
+            </div>
+            <footer className="mt-6 flex justify-end gap-2 border-t pt-4">
+              <button
+                disabled={uploading}
+                onClick={() => setOpen(false)}
+                className="rounded border px-4 py-2 text-sm disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                disabled={uploading || videos.length === 0}
+                onClick={submit}
+                className="rounded bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600 disabled:opacity-50"
+              >
+                {uploading && progress
+                  ? `上传 ${progress.done}/${progress.total} ...`
+                  : uploading
+                    ? "上传中..."
+                    : "确认上传"}
+              </button>
+            </footer>
+          </div>
+        </>
+      )}
+    </>
   );
 }
