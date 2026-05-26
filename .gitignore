@@ -69,3 +69,4 @@ next-env.d.ts
 # 大型素材 / 备份
 *.tar
 _temp/
+tmp/
