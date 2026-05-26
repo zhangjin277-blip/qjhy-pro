@@ -229,7 +229,7 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
               <UploadEditedButton taskId={task.id} />
             </>
           )}
-          {task.status === "review" && permissions.canEdit && (
+          {task.status === "review" && (
             <>
               <button
                 onClick={async () => {
