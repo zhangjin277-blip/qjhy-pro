@@ -1,0 +1,70 @@
+"use server";
+import { db } from "@/db/client";
+import { editing_task, live_account } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { requireUser } from "@/lib/auth/page-auth";
+import { writeEvent } from "../event-writer";
+import { buildEditedPath, writeFile as nasWriteFile } from "@/modules/editing-storage/server";
+import { z } from "zod";
+import { assertTransition } from "../state-machine";
+
+const Input = z.object({
+  taskId: z.number().int().positive(),
+  fileName: z.string().min(1).max(255),
+});
+
+export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
+  const taskId = Number(formData.get("taskId"));
+  const file = formData.get("file") as File | null;
+  if (!file) throw new Error("missing file");
+  const data = Input.parse({ taskId, fileName: file.name });
+  const { userId } = await requireUser();
+
+  const [task] = await db
+    .select({
+      id: editing_task.id,
+      material_date: editing_task.material_date,
+      live_account_id: editing_task.live_account_id,
+      status: editing_task.status,
+      editor_user_id: editing_task.editor_user_id,
+      product: live_account.product,
+    })
+    .from(editing_task)
+    .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
+    .where(eq(editing_task.id, data.taskId));
+
+  if (!task) throw new Error("task not found");
+  assertTransition(task.status, "review");
+
+  const NAS = process.env.EDITING_NAS_PATH;
+  if (!NAS) throw new Error("EDITING_NAS_PATH not configured");
+
+  const buf = Buffer.from(await file.arrayBuffer());
+  const materialDateStr = task.material_date.toISOString().slice(0, 10);
+  const relPath = buildEditedPath({
+    taskId: task.id,
+    product: task.product ?? "未分类",
+    materialDate: materialDateStr,
+    originalName: data.fileName,
+  });
+  await nasWriteFile(NAS, relPath, buf);
+
+  await db
+    .update(editing_task)
+    .set({
+      edited_files: [relPath],
+      edited_file_names: [data.fileName],
+      edited_uploaded_at: new Date(),
+      status: "review",
+    })
+    .where(eq(editing_task.id, task.id));
+
+  await writeEvent({
+    taskId: task.id,
+    eventType: "edited_uploaded",
+    actorUserId: userId,
+    payload: { file_count: 1, file_names: [data.fileName] },
+  });
+
+  return { ok: true };
+}

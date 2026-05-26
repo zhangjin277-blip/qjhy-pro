@@ -19,3 +19,7 @@ export {
 export { createTask } from "./actions/create-task";
 export { uploadSource } from "./actions/upload-source";
 export { assignEditor } from "./actions/assign-editor";
+export { uploadEdited } from "./actions/upload-edited";
+export { reviewApprove } from "./actions/review-approve";
+export { reviewReject } from "./actions/review-reject";
+export { resetEditing } from "./actions/reset-editing";
