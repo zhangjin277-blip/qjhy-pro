@@ -113,6 +113,30 @@ export interface AnchorMonthlyStat {
   completionRate: number; // published / max(total, 1)
 }
 
+// ---- 今日统计面板 ----
+
+export interface TodaySummary {
+  uploadedToday: number; // 今天 source_uploaded_at 是今天
+  assignedToday: number; // 今天 editing_started_at 是今天
+  reviewToday: number; // 今天 edited_uploaded_at 是今天
+  approvedToday: number; // 今天 reviewed_at 是今天
+  publishedToday: number; // 今天 published_at 是今天
+}
+
+export interface TodayAnchorDist {
+  anchorId: string | null;
+  anchorName: string;
+  product: string;
+  count: number;
+}
+
+export interface TodayEditorLoad {
+  editorUserId: string;
+  editorName: string;
+  assigned: number; // 今天派给该剪辑师的（editing_started_at = today AND editor = X）
+  completed: number; // 今天该剪辑师完成（edited_uploaded_at = today AND editor = X）
+}
+
 // ---- 捕鱼系今日完成度 ----
 
 export interface FishCoverageItem {

@@ -14,6 +14,9 @@ export type {
   AnchorMonthlyStat,
   FishCoverageItem,
   FishCoverage,
+  TodaySummary,
+  TodayAnchorDist,
+  TodayEditorLoad,
 } from "./types";
 
 export {

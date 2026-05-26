@@ -5,6 +5,9 @@ import {
   listForBoard,
   buildEditingScopeWhere,
   queryFishCoverageToday,
+  queryTodaySummary,
+  queryTodayAnchorDist,
+  queryTodayEditorLoad,
 } from "@/modules/editing-task/server";
 import { listEditors } from "@/modules/editing-editor/server";
 import { listProducts } from "@/modules/product-config/server";
@@ -39,18 +42,22 @@ export default async function EditingBoardPage({
   const editorUserIds =
     typeof sp.editors === "string" ? sp.editors.split(",").filter(Boolean) : undefined;
 
-  const [cards, editors, products, fishCoverage] = await Promise.all([
-    listForBoard({
-      whereClause: where,
-      dateFrom: sevenDaysAgo,
-      dateTo: today,
-      productNames,
-      editorUserIds,
-    }),
-    listEditors(),
-    listProducts(),
-    queryFishCoverageToday(),
-  ]);
+  const [cards, editors, products, fishCoverage, summary, anchorDist, editorLoad] =
+    await Promise.all([
+      listForBoard({
+        whereClause: where,
+        dateFrom: sevenDaysAgo,
+        dateTo: today,
+        productNames,
+        editorUserIds,
+      }),
+      listEditors(),
+      listProducts(),
+      queryFishCoverageToday(),
+      queryTodaySummary({ whereClause: where }),
+      queryTodayAnchorDist({ whereClause: where }),
+      queryTodayEditorLoad({ whereClause: where }),
+    ]);
 
   return (
     <Board
@@ -59,6 +66,9 @@ export default async function EditingBoardPage({
       products={products}
       permissions={{ canEdit: perm.can_edit, isAdmin: perm.can_admin }}
       fishCoverage={fishCoverage}
+      todaySummary={summary}
+      anchorDist={anchorDist}
+      editorLoad={editorLoad}
     />
   );
 }

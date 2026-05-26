@@ -20,6 +20,9 @@ import type {
   AnchorMonthlyStat,
   FishCoverage,
   FishCoverageItem,
+  TodaySummary,
+  TodayAnchorDist,
+  TodayEditorLoad,
 } from "./types";
 import type { EditingTaskStatus } from "@/db/schema";
 import {
@@ -818,4 +821,123 @@ export async function queryFishCoverageToday(): Promise<FishCoverage> {
     missing: items.filter((i) => !i.uploaded).length,
     items,
   };
+}
+
+// ---- 今日统计面板 ----
+
+export async function queryTodaySummary(args: { whereClause?: SQL }): Promise<TodaySummary> {
+  const tz = "Asia/Shanghai";
+
+  const [r] = await db
+    .select({
+      uploaded: sql<number>`count(*) FILTER (WHERE (${editing_task.source_uploaded_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date)::int`,
+      assigned: sql<number>`count(*) FILTER (WHERE (${editing_task.editing_started_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date)::int`,
+      review: sql<number>`count(*) FILTER (WHERE (${editing_task.edited_uploaded_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date)::int`,
+      approved: sql<number>`count(*) FILTER (WHERE (${editing_task.reviewed_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date)::int`,
+      published: sql<number>`count(*) FILTER (WHERE (${editing_task.published_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date)::int`,
+    })
+    .from(editing_task)
+    .where(and(args.whereClause, isNull(editing_task.deleted_at)));
+
+  return {
+    uploadedToday: r?.uploaded ?? 0,
+    assignedToday: r?.assigned ?? 0,
+    reviewToday: r?.review ?? 0,
+    approvedToday: r?.approved ?? 0,
+    publishedToday: r?.published ?? 0,
+  };
+}
+
+export async function queryTodayAnchorDist(args: {
+  whereClause?: SQL;
+}): Promise<TodayAnchorDist[]> {
+  const tz = "Asia/Shanghai";
+  const rows = await db
+    .select({
+      anchor_id: editing_task.anchor_id,
+      anchor_name: anchor_profile.nick_name,
+      product: live_account.product,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(editing_task)
+    .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
+    .leftJoin(anchor_profile, eq(anchor_profile.anchor_id, editing_task.anchor_id))
+    .where(
+      and(
+        args.whereClause,
+        sql`(${editing_task.material_date})::date = (NOW() AT TIME ZONE ${tz})::date`,
+        isNull(editing_task.deleted_at),
+      ),
+    )
+    .groupBy(editing_task.anchor_id, anchor_profile.nick_name, live_account.product)
+    .orderBy(desc(sql`count(*)`));
+
+  return rows.map((r) => ({
+    anchorId: r.anchor_id,
+    anchorName: r.anchor_name ?? "(无主播)",
+    product: r.product ?? "未分类",
+    count: r.count,
+  }));
+}
+
+export async function queryTodayEditorLoad(args: {
+  whereClause?: SQL;
+}): Promise<TodayEditorLoad[]> {
+  const tz = "Asia/Shanghai";
+
+  const assignedRows = await db
+    .select({
+      editor_user_id: editing_task.editor_user_id,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(editing_task)
+    .where(
+      and(
+        args.whereClause,
+        isNotNull(editing_task.editor_user_id),
+        sql`(${editing_task.editing_started_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date`,
+        isNull(editing_task.deleted_at),
+      ),
+    )
+    .groupBy(editing_task.editor_user_id);
+
+  const completedRows = await db
+    .select({
+      editor_user_id: editing_task.editor_user_id,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(editing_task)
+    .where(
+      and(
+        args.whereClause,
+        isNotNull(editing_task.editor_user_id),
+        sql`(${editing_task.edited_uploaded_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date`,
+        isNull(editing_task.deleted_at),
+      ),
+    )
+    .groupBy(editing_task.editor_user_id);
+
+  const userIds = new Set([
+    ...assignedRows.map((r) => r.editor_user_id).filter((x): x is string => !!x),
+    ...completedRows.map((r) => r.editor_user_id).filter((x): x is string => !!x),
+  ]);
+  if (userIds.size === 0) return [];
+
+  const userNames = await db
+    .select({ user_id: dingtalk_user.user_id, name: dingtalk_user.name })
+    .from(dingtalk_user)
+    .where(inArray(dingtalk_user.user_id, Array.from(userIds)));
+  const nameMap = new Map(userNames.map((u) => [u.user_id, u.name]));
+
+  const assignedMap = new Map(assignedRows.map((r) => [r.editor_user_id ?? "", r.count]));
+  const completedMap = new Map(completedRows.map((r) => [r.editor_user_id ?? "", r.count]));
+
+  return Array.from(userIds)
+    .map((id) => ({
+      editorUserId: id,
+      editorName: nameMap.get(id) ?? "(未知)",
+      assigned: assignedMap.get(id) ?? 0,
+      completed: completedMap.get(id) ?? 0,
+    }))
+    .sort((a, b) => b.assigned + b.completed - (a.assigned + a.completed));
 }
