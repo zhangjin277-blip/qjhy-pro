@@ -58,6 +58,14 @@ export function Card({ card, selected, onSelect, onOpenDrawer }: Props) {
           >
             {card.product}
           </span>
+          {card.isDisqualified && (
+            <span
+              className="rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600"
+              title={card.disqualifiedReason ?? "未填原因"}
+            >
+              ❌ 不合格
+            </span>
+          )}
         </div>
         <div className="mt-2 flex items-center justify-between border-t border-dashed border-border-default pt-2 text-xs">
           {card.editorName ? (

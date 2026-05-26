@@ -17,6 +17,8 @@ export interface BoardCard {
   // status 入列时间，用于停留时长计算
   enteredStatusAt: string;
   publishedAt: string | null;
+  isDisqualified: boolean;
+  disqualifiedReason: string | null;
 }
 
 export interface TaskDetail extends BoardCard {
@@ -33,6 +35,8 @@ export interface TaskDetail extends BoardCard {
   sourceRemark: string | null;
   createdByName: string;
   createdAt: string;
+  disqualifiedByName: string | null;
+  disqualifiedAt: string | null;
 }
 
 export interface TaskEvent {

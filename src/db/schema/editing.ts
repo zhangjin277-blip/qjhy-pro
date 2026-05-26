@@ -1,4 +1,13 @@
-import { bigint, bigserial, index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  bigserial,
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 import { anchor_profile } from "./anchors";
 import { dingtalk_user } from "./dingtalk";
 import { live_account } from "./live-account";
@@ -48,6 +57,12 @@ export const editing_task = pgTable(
       .references(() => dingtalk_user.user_id),
     created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    is_disqualified: boolean("is_disqualified").notNull().default(false),
+    disqualified_reason: text("disqualified_reason"),
+    disqualified_by_user_id: text("disqualified_by_user_id").references(
+      () => dingtalk_user.user_id,
+    ),
+    disqualified_at: timestamp("disqualified_at", { withTimezone: true }),
   },
   (t) => ({
     idx_status_date: index("idx_editing_task_status_date").on(t.status, t.material_date),
@@ -68,6 +83,8 @@ export const EDITING_EVENT_TYPES = [
   "review_rejected",
   "published",
   "deleted",
+  "disqualified",
+  "disqualified_undone",
 ] as const;
 export type EditingEventType = (typeof EDITING_EVENT_TYPES)[number];
 

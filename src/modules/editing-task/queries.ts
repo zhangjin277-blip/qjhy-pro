@@ -50,6 +50,8 @@ export async function listForBoard(args: BoardFilter): Promise<BoardCard[]> {
       edited_uploaded_at: editing_task.edited_uploaded_at,
       reviewed_at: editing_task.reviewed_at,
       published_at: editing_task.published_at,
+      is_disqualified: editing_task.is_disqualified,
+      disqualified_reason: editing_task.disqualified_reason,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
@@ -80,6 +82,8 @@ function toBoardCard(r: {
   edited_uploaded_at: Date | null;
   reviewed_at: Date | null;
   published_at: Date | null;
+  is_disqualified: boolean;
+  disqualified_reason: string | null;
 }): BoardCard {
   const enteredAt = pickEnteredStatusAt(r);
   return {
@@ -96,6 +100,8 @@ function toBoardCard(r: {
     materialDate: r.material_date.toISOString().slice(0, 10),
     enteredStatusAt: enteredAt.toISOString(),
     publishedAt: r.published_at?.toISOString() ?? null,
+    isDisqualified: r.is_disqualified,
+    disqualifiedReason: r.disqualified_reason,
   };
 }
 
@@ -127,6 +133,7 @@ function pickEnteredStatusAt(r: {
 const creator = alias(dingtalk_user, "creator_user");
 const reviewer = alias(dingtalk_user, "reviewer_user");
 const publisher = alias(dingtalk_user, "publisher_user");
+const disqualifier = alias(dingtalk_user, "disqualifier_user");
 
 export async function getTask(taskId: number): Promise<TaskDetail | null> {
   const [r] = await db
@@ -159,6 +166,10 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
       video_id: editing_task.video_id,
       source_remark: editing_task.source_remark,
       created_by_name: creator.name,
+      is_disqualified: editing_task.is_disqualified,
+      disqualified_reason: editing_task.disqualified_reason,
+      disqualified_at: editing_task.disqualified_at,
+      disqualified_by_name: disqualifier.name,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
@@ -168,6 +179,7 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
     .leftJoin(creator, eq(creator.user_id, editing_task.created_by_user_id))
     .leftJoin(reviewer, eq(reviewer.user_id, editing_task.reviewed_by_user_id))
     .leftJoin(publisher, eq(publisher.user_id, editing_task.published_by_user_id))
+    .leftJoin(disqualifier, eq(disqualifier.user_id, editing_task.disqualified_by_user_id))
     .where(eq(editing_task.id, taskId));
 
   if (!r) return null;
@@ -188,6 +200,8 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
     sourceRemark: r.source_remark,
     createdByName: r.created_by_name ?? "(已离职)",
     createdAt: r.created_at.toISOString(),
+    disqualifiedByName: r.disqualified_by_name ?? null,
+    disqualifiedAt: r.disqualified_at?.toISOString() ?? null,
   };
 }
 
@@ -224,6 +238,8 @@ export async function listForTable(args: TableFilter): Promise<BoardCard[]> {
       edited_uploaded_at: editing_task.edited_uploaded_at,
       reviewed_at: editing_task.reviewed_at,
       published_at: editing_task.published_at,
+      is_disqualified: editing_task.is_disqualified,
+      disqualified_reason: editing_task.disqualified_reason,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))

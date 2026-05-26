@@ -6,8 +6,10 @@ import type { EditorOption } from "@/modules/editing-editor";
 import type { TaskDetail, TaskEvent } from "@/modules/editing-task";
 import { ReviewRejectDialog } from "./review-reject-dialog";
 import { MarkPublishedDialog } from "./mark-published-dialog";
+import { MarkDisqualifiedDialog } from "./mark-disqualified-dialog";
 import { AssignPopover } from "./assign-popover";
 import { toast } from "sonner";
+import { toggleDisqualified } from "@/modules/editing-task";
 
 interface Props {
   taskId: number;
@@ -41,9 +43,14 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
       <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
       <div className="fixed right-0 top-0 z-50 h-screen w-[520px] overflow-y-auto border-l border-border bg-white p-6 shadow-2xl">
         <header className="mb-6 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold">{task.liveAccountName}</h2>
             <StatusChip status={task.status} />
+            {task.isDisqualified && (
+              <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-600">
+                ❌ 不合格
+              </span>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -60,6 +67,21 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
           <Row label="创建人">{task.createdByName}</Row>
           <Row label="剪辑要求">{task.sourceRemark ?? "—"}</Row>
         </section>
+
+        {task.isDisqualified && (
+          <section className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm">
+            <div className="mb-1 font-semibold text-red-700">不合格素材</div>
+            {task.disqualifiedReason && (
+              <div className="mb-1 text-red-600">原因：{task.disqualifiedReason}</div>
+            )}
+            <div className="text-xs text-red-400">
+              标记人：{task.disqualifiedByName ?? "—"}
+              {task.disqualifiedAt && (
+                <> · {new Date(task.disqualifiedAt).toLocaleString("zh-CN")}</>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="mb-6">
           <SectionTitle>素材文件</SectionTitle>
@@ -158,6 +180,26 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
           {task.status === "ready" && permissions.canEdit && (
             <MarkPublishedDialog taskId={task.id} isAdmin={permissions.isAdmin} onDone={onClose} />
           )}
+          {task.isDisqualified ? (
+            <button
+              onClick={async () => {
+                if (!confirm("取消不合格标记？")) return;
+                try {
+                  await toggleDisqualified({ taskId: task.id, disqualified: false });
+                  toast.success("已取消标记");
+                  onClose();
+                  location.reload();
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "操作失败");
+                }
+              }}
+              className="rounded border px-3 py-1.5 text-sm hover:bg-slate-50"
+            >
+              取消不合格标记
+            </button>
+          ) : (
+            <MarkDisqualifiedDialog taskId={task.id} onDone={onClose} />
+          )}
         </footer>
       </div>
     </>
@@ -240,6 +282,10 @@ function formatEvent(e: TaskEvent): string {
       return "发布（未绑定视频）";
     case "deleted":
       return "删除任务";
+    case "disqualified":
+      return `标记不合格${p.reason ? `：${p.reason}` : ""}`;
+    case "disqualified_undone":
+      return "取消不合格标记";
     default:
       return e.eventType;
   }

@@ -33,6 +33,12 @@ export const DeleteTaskInput = z.object({
   taskIds: z.array(z.number().int().positive()).min(1).max(100),
 });
 
+export const ToggleDisqualifiedInput = z.object({
+  taskId: z.number().int().positive(),
+  disqualified: z.boolean(),
+  reason: z.string().max(200).optional().nullable(),
+});
+
 export const BoardFilterInput = z.object({
   productNames: z.array(z.string()).optional(),
   anchorIds: z.array(z.string()).optional(),
