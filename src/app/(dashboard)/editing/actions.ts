@@ -1,7 +1,7 @@
 "use server";
 import { getTask, listEvents } from "@/modules/editing-task/server";
 import { db } from "@/db/client";
-import { live_account, live_session_log, anchor_profile } from "@/db/schema";
+import { live_account, live_session_log, dingtalk_user } from "@/db/schema";
 import { and, asc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 
 export async function loadTaskDetail(taskId: number) {
@@ -35,17 +35,16 @@ export async function searchLiveAccounts(query: string): Promise<AccountSearchRe
   const accountIds = accounts.map((a) => a.id);
 
   // 主播候选 = 最近 3 天该账号开播记录里出现过的主播
+  // 注：anchor_profile.dingtalk_user_id 全为 NULL（爬虫数据未绑），直接走 dingtalk_user
+  // editing_task.anchor_id 字段现存 dingtalk_user_id（FK 已 drop）
   const recentRows = await db
     .selectDistinct({
       account_id: live_session_log.live_account_id,
-      anchor_id: anchor_profile.anchor_id,
-      anchor_name: anchor_profile.nick_name,
+      anchor_id: live_session_log.anchor_dingtalk_user_id,
+      anchor_name: dingtalk_user.name,
     })
     .from(live_session_log)
-    .innerJoin(
-      anchor_profile,
-      eq(anchor_profile.dingtalk_user_id, live_session_log.anchor_dingtalk_user_id),
-    )
+    .innerJoin(dingtalk_user, eq(dingtalk_user.user_id, live_session_log.anchor_dingtalk_user_id))
     .where(
       and(
         inArray(live_session_log.live_account_id, accountIds),

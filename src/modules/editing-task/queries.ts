@@ -67,7 +67,7 @@ export async function listForBoard(args: BoardFilter): Promise<BoardCard[]> {
       product: live_account.product,
       product_short: product_config.display_short,
       product_color: product_config.accent_color,
-      anchor_name: anchor_profile.nick_name, // anchor_profile 显示名字段为 nick_name
+      anchor_name: anchorUser.name, // anchor_profile 显示名字段为 nick_name
       editor_user_id: editing_task.editor_user_id,
       editor_name: dingtalk_user.name,
       material_date: editing_task.material_date,
@@ -85,7 +85,7 @@ export async function listForBoard(args: BoardFilter): Promise<BoardCard[]> {
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
     .leftJoin(product_config, eq(product_config.product_name, live_account.product))
-    .leftJoin(anchor_profile, eq(anchor_profile.anchor_id, editing_task.anchor_id))
+    .leftJoin(anchorUser, eq(anchorUser.user_id, editing_task.anchor_id))
     .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
     .where(and(...(filters.filter(Boolean) as SQL[])))
     .orderBy(
@@ -173,6 +173,7 @@ const creator = alias(dingtalk_user, "creator_user");
 const reviewer = alias(dingtalk_user, "reviewer_user");
 const publisher = alias(dingtalk_user, "publisher_user");
 const disqualifier = alias(dingtalk_user, "disqualifier_user");
+const anchorUser = alias(dingtalk_user, "anchor_user");
 
 export async function getTask(taskId: number): Promise<TaskDetail | null> {
   const [r] = await db
@@ -185,7 +186,7 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
       product: live_account.product,
       product_short: product_config.display_short,
       product_color: product_config.accent_color,
-      anchor_name: anchor_profile.nick_name,
+      anchor_name: anchorUser.name,
       editor_user_id: editing_task.editor_user_id,
       editor_name: dingtalk_user.name,
       material_date: editing_task.material_date,
@@ -221,7 +222,7 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
     .leftJoin(product_config, eq(product_config.product_name, live_account.product))
-    .leftJoin(anchor_profile, eq(anchor_profile.anchor_id, editing_task.anchor_id))
+    .leftJoin(anchorUser, eq(anchorUser.user_id, editing_task.anchor_id))
     .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
     .leftJoin(creator, eq(creator.user_id, editing_task.created_by_user_id))
     .leftJoin(reviewer, eq(reviewer.user_id, editing_task.reviewed_by_user_id))
@@ -282,7 +283,7 @@ export async function listForTable(args: TableFilter): Promise<BoardCard[]> {
       product: live_account.product,
       product_short: product_config.display_short,
       product_color: product_config.accent_color,
-      anchor_name: anchor_profile.nick_name,
+      anchor_name: anchorUser.name,
       editor_user_id: editing_task.editor_user_id,
       editor_name: dingtalk_user.name,
       material_date: editing_task.material_date,
@@ -300,7 +301,7 @@ export async function listForTable(args: TableFilter): Promise<BoardCard[]> {
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
     .leftJoin(product_config, eq(product_config.product_name, live_account.product))
-    .leftJoin(anchor_profile, eq(anchor_profile.anchor_id, editing_task.anchor_id))
+    .leftJoin(anchorUser, eq(anchorUser.user_id, editing_task.anchor_id))
     .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
     .where(and(...(filters.filter(Boolean) as SQL[])))
     .orderBy(desc(editing_task.material_date), desc(editing_task.id));
@@ -634,12 +635,12 @@ export async function queryAnchorMonthlyStats(args: {
   const rows = await db
     .select({
       anchor_id: editing_task.anchor_id,
-      anchor_name: anchor_profile.nick_name,
+      anchor_name: anchorUser.name,
       status: editing_task.status,
       count: sql<number>`count(*)::int`,
     })
     .from(editing_task)
-    .leftJoin(anchor_profile, eq(anchor_profile.anchor_id, editing_task.anchor_id))
+    .leftJoin(anchorUser, eq(anchorUser.user_id, editing_task.anchor_id))
     .where(
       and(
         args.whereClause,
@@ -649,7 +650,7 @@ export async function queryAnchorMonthlyStats(args: {
         isNull(editing_task.deleted_at),
       ),
     )
-    .groupBy(editing_task.anchor_id, anchor_profile.nick_name, editing_task.status);
+    .groupBy(editing_task.anchor_id, anchorUser.name, editing_task.status);
 
   // 按 anchor 聚合
   const byAnchor = new Map<string, AnchorMonthlyStat>();
@@ -853,13 +854,13 @@ export async function queryTodayAnchorDist(args: {
   const rows = await db
     .select({
       anchor_id: editing_task.anchor_id,
-      anchor_name: anchor_profile.nick_name,
+      anchor_name: anchorUser.name,
       product: live_account.product,
       count: sql<number>`count(*)::int`,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
-    .leftJoin(anchor_profile, eq(anchor_profile.anchor_id, editing_task.anchor_id))
+    .leftJoin(anchorUser, eq(anchorUser.user_id, editing_task.anchor_id))
     .where(
       and(
         args.whereClause,
@@ -867,7 +868,7 @@ export async function queryTodayAnchorDist(args: {
         isNull(editing_task.deleted_at),
       ),
     )
-    .groupBy(editing_task.anchor_id, anchor_profile.nick_name, live_account.product)
+    .groupBy(editing_task.anchor_id, anchorUser.name, live_account.product)
     .orderBy(desc(sql`count(*)`));
 
   return rows.map((r) => ({
