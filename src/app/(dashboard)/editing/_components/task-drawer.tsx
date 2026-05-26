@@ -12,6 +12,7 @@ import { AssignPopover } from "./assign-popover";
 import { ChangePriorityDialog } from "./change-priority-dialog";
 import { toast } from "sonner";
 import { toggleDisqualified } from "@/modules/editing-task";
+import { VideoPreviewModal } from "./video-preview-modal";
 
 interface Props {
   taskId: number;
@@ -22,6 +23,7 @@ interface Props {
 
 export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
   const [data, setData] = useState<{ task: TaskDetail | null; events: TaskEvent[] } | null>(null);
+  const [preview, setPreview] = useState<{ src: string; fileName: string } | null>(null);
 
   useEffect(() => {
     loadTaskDetail(taskId).then(setData);
@@ -109,6 +111,7 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
               names={task.sourceFileNames}
               taskId={task.id}
               kind="source"
+              onPreview={(src, fileName) => setPreview({ src, fileName })}
             />
           )}
         </section>
@@ -121,6 +124,7 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
               names={task.editedFileNames}
               taskId={task.id}
               kind="edited"
+              onPreview={(src, fileName) => setPreview({ src, fileName })}
             />
           </section>
         )}
@@ -267,6 +271,13 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
           )}
         </footer>
       </div>
+      {preview && (
+        <VideoPreviewModal
+          src={preview.src}
+          fileName={preview.fileName}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </>
   );
 }
@@ -367,29 +378,50 @@ function FileList({
   names,
   taskId,
   kind,
+  onPreview,
 }: {
   files: string[];
   names: string[];
   taskId: number;
   kind: "source" | "edited";
+  onPreview: (src: string, fileName: string) => void;
 }) {
   return (
     <ul className="space-y-1 text-sm">
-      {files.map((p, i) => (
-        <li
-          key={p}
-          className="flex items-center justify-between rounded px-2 py-1 hover:bg-slate-50"
-        >
-          <span className="truncate">{names[i] ?? p}</span>
-          <a
-            href={`/api/editing/download?taskId=${taskId}&kind=${kind}&index=${i}`}
-            className="text-blue-600 hover:underline"
-            download
+      {files.map((p, i) => {
+        const fileName = names[i] ?? p;
+        const isVideo = /\.(mp4|mov|webm|m4v)$/i.test(fileName);
+        return (
+          <li
+            key={p}
+            className="flex items-center justify-between rounded px-2 py-1 hover:bg-slate-50"
           >
-            下载
-          </a>
-        </li>
-      ))}
+            <span className="flex-1 truncate">{fileName}</span>
+            <div className="flex items-center gap-3">
+              {isVideo && (
+                <button
+                  onClick={() =>
+                    onPreview(
+                      `/api/editing/download?taskId=${taskId}&kind=${kind}&index=${i}&inline=1`,
+                      fileName,
+                    )
+                  }
+                  className="text-blue-600 hover:underline"
+                >
+                  预览
+                </button>
+              )}
+              <a
+                href={`/api/editing/download?taskId=${taskId}&kind=${kind}&index=${i}`}
+                className="text-blue-600 hover:underline"
+                download
+              >
+                下载
+              </a>
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }

@@ -63,14 +63,30 @@ export async function GET(req: NextRequest) {
     const { Readable } = await import("node:stream");
     const webStream = Readable.toWeb(stream as never) as ReadableStream;
 
+    const inline = req.nextUrl.searchParams.get("inline") === "1";
+    const disposition = inline
+      ? `inline; filename="${filename}"`
+      : `attachment; filename="${filename}"`;
+    const contentType = inline ? guessVideoMime(filename) : "application/octet-stream";
+
     return new NextResponse(webStream, {
       headers: {
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Type": "application/octet-stream",
+        "Content-Disposition": disposition,
+        "Content-Type": contentType,
+        "Accept-Ranges": "bytes",
       },
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return new NextResponse(msg, { status: 500 });
   }
+}
+
+function guessVideoMime(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".mp4")) return "video/mp4";
+  if (lower.endsWith(".mov")) return "video/quicktime";
+  if (lower.endsWith(".webm")) return "video/webm";
+  if (lower.endsWith(".m4v")) return "video/x-m4v";
+  return "application/octet-stream";
 }
