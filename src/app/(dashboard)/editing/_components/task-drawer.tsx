@@ -252,7 +252,7 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
               <ReviewRejectDialog taskId={task.id} onDone={onClose} />
             </>
           )}
-          {task.status === "ready" && permissions.canEdit && (
+          {task.status === "ready" && (
             <MarkPublishedDialog taskId={task.id} isAdmin={permissions.isAdmin} onDone={onClose} />
           )}
           {task.isDisqualified ? (
