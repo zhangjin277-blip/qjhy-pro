@@ -27,7 +27,7 @@ export async function buildEditingScopeWhere(args: {
   if (scope === "all") return undefined;
   if (scope === "none") return sql`false`;
 
-  // self 条件：5 种 OR（含「未派单待剪辑池」剪辑师可领取）
+  // self 条件：4 种 OR（spec §6.2 原始定义，不开公共池）
   const selfCondition = or(
     eq(editing_task.created_by_user_id, userId),
     eq(editing_task.editor_user_id, userId),
@@ -37,8 +37,6 @@ export async function buildEditingScopeWhere(args: {
     sql`${editing_task.anchor_id} IN (
       SELECT anchor_id FROM anchor_profile WHERE dingtalk_user_id = ${userId}
     )`,
-    // 公共池：待剪辑（剪辑师可自领）+ 审核 + 待发布（运营跨账号审核/发布）
-    sql`${editing_task.status} IN ('uploaded', 'review', 'ready')`,
   );
 
   if (scope === "self") return selfCondition;

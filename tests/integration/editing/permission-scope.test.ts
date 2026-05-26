@@ -99,7 +99,7 @@ describe("editing scope visibility", () => {
     expect(ids).toContain(task2Id);
   });
 
-  it("op1 (scope=self) sees own account task + uploaded pool", async () => {
+  it("op1 (scope=self) sees only own account tasks", async () => {
     const where = await buildEditingScopeWhere({ scope: "self", userId: OP1_ID });
     const cards = await listForBoard({
       whereClause: where,
@@ -108,10 +108,10 @@ describe("editing scope visibility", () => {
     });
     const ids = cards.map((c) => c.id);
     expect(ids).toContain(task1Id); // self: 创建人 + agent
-    expect(ids).toContain(task2Id); // uploaded 公共池可见
+    expect(ids).not.toContain(task2Id); // op2 创建，op1 不命中 self
   });
 
-  it("editor1 (scope=self) sees assigned task + uploaded pool", async () => {
+  it("editor1 (scope=self) sees only assigned tasks", async () => {
     const where = await buildEditingScopeWhere({ scope: "self", userId: EDITOR1_ID });
     const cards = await listForBoard({
       whereClause: where,
@@ -120,10 +120,10 @@ describe("editing scope visibility", () => {
     });
     const ids = cards.map((c) => c.id);
     expect(ids).toContain(task1Id); // self: editor
-    expect(ids).toContain(task2Id); // uploaded 公共池
+    expect(ids).not.toContain(task2Id);
   });
 
-  it("op2 (scope=self) sees uploaded pool (no editing task1)", async () => {
+  it("op2 (scope=self) sees only own account tasks", async () => {
     const where = await buildEditingScopeWhere({ scope: "self", userId: OP2_ID });
     const cards = await listForBoard({
       whereClause: where,
@@ -132,10 +132,10 @@ describe("editing scope visibility", () => {
     });
     const ids = cards.map((c) => c.id);
     expect(ids).toContain(task2Id);
-    expect(ids).not.toContain(task1Id); // task1=editing, op2 不命中 self
+    expect(ids).not.toContain(task1Id);
   });
 
-  it("unknown user (scope=self) sees only uploaded pool", async () => {
+  it("unknown user (scope=self) sees nothing", async () => {
     const where = await buildEditingScopeWhere({ scope: "self", userId: "nobody-xyz" });
     const cards = await listForBoard({
       whereClause: where,
@@ -144,6 +144,6 @@ describe("editing scope visibility", () => {
     });
     const ids = cards.map((c) => c.id);
     expect(ids).not.toContain(task1Id);
-    expect(ids).toContain(task2Id); // uploaded 公共池：无关用户也能看到（让剪辑师领）
+    expect(ids).not.toContain(task2Id);
   });
 });
