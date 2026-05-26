@@ -27,7 +27,7 @@ export async function buildEditingScopeWhere(args: {
   if (scope === "all") return undefined;
   if (scope === "none") return sql`false`;
 
-  // self 条件：4 种 OR
+  // self 条件：5 种 OR（含「未派单待剪辑池」剪辑师可领取）
   const selfCondition = or(
     eq(editing_task.created_by_user_id, userId),
     eq(editing_task.editor_user_id, userId),
@@ -37,6 +37,8 @@ export async function buildEditingScopeWhere(args: {
     sql`${editing_task.anchor_id} IN (
       SELECT anchor_id FROM anchor_profile WHERE dingtalk_user_id = ${userId}
     )`,
+    // 待剪辑公共池：所有 self/team 用户可见未派单任务，便于剪辑师自领
+    sql`${editing_task.status} = 'uploaded' AND ${editing_task.editor_user_id} IS NULL`,
   );
 
   if (scope === "self") return selfCondition;
