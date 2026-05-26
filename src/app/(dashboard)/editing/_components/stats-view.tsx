@@ -29,7 +29,7 @@ export function StatsView({
   const router = useRouter();
 
   return (
-    <div className="p-6 space-y-8">
+    <div className="flex flex-col gap-6">
       {/* 顶部：视图切换 + 月份选择 */}
       <div className="flex items-center justify-between">
         <ViewTabs active="stats" />

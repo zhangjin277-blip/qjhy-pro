@@ -48,9 +48,9 @@ export function GanttView({
   }
 
   return (
-    <div className="p-4">
+    <div className="flex flex-col gap-3">
       {/* Top toolbar */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="flex items-center justify-between">
         <ViewTabs active="gantt" />
         <div className="flex items-center gap-3 text-sm">
           <button
