@@ -31,7 +31,7 @@ export function Column({
   editors,
   onDropToColumn,
 }: Props) {
-  const field = status === "published" ? "publishedAt" : "enteredStatusAt";
+  const field = status === "published" ? "publishedAt" : "materialDate";
   const groups = groupBoardCards(cards, field);
   const [dragOver, setDragOver] = useState(false);
 
