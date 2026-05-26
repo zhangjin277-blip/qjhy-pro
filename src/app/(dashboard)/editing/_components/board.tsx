@@ -32,7 +32,7 @@ export function Board({ initialCards, editors, products, permissions }: Props) {
   return (
     <SelectionProvider>
       <FilterBar products={products} editors={editors} onNewTask={() => setNewOpen(true)} />
-      <Workspace cards={initialCards} onOpenDrawer={setOpenTaskId} />
+      <Workspace cards={initialCards} editors={editors} onOpenDrawer={setOpenTaskId} />
       <FloatingActionBar editors={editors} />
       {openTaskId !== null && (
         <TaskDrawer
@@ -49,9 +49,11 @@ export function Board({ initialCards, editors, products, permissions }: Props) {
 
 function Workspace({
   cards,
+  editors,
   onOpenDrawer,
 }: {
   cards: BoardCard[];
+  editors: EditorOption[];
   onOpenDrawer: (id: number) => void;
 }) {
   const { toggle, selectedIds } = useSelection();
@@ -73,6 +75,7 @@ function Workspace({
             selectedIds={selectedIds}
             onSelect={toggle}
             onOpenDrawer={onOpenDrawer}
+            editors={editors}
           />
         ))}
       </div>

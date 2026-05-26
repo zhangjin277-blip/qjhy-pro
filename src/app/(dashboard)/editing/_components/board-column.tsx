@@ -11,6 +11,7 @@ interface Props {
   selectedIds: Set<number>;
   onSelect: (id: number) => void;
   onOpenDrawer: (id: number) => void;
+  editors: { userId: string; name: string }[];
 }
 
 export function Column({
@@ -21,6 +22,7 @@ export function Column({
   selectedIds,
   onSelect,
   onOpenDrawer,
+  editors,
 }: Props) {
   const field = status === "published" ? "publishedAt" : "enteredStatusAt";
   const groups = groupByDate(cards, field);
@@ -43,6 +45,7 @@ export function Column({
           selectedIds={selectedIds}
           onSelect={onSelect}
           onOpenDrawer={onOpenDrawer}
+          editors={editors}
         />
       ))}
     </div>

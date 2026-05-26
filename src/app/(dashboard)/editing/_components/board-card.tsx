@@ -1,15 +1,17 @@
 "use client";
 import type { BoardCard } from "@/modules/editing-task";
 import { formatDwellTime, dwellSeverity } from "../_lib/dwell";
+import { QuickAssignChip } from "./quick-assign-chip";
 
 interface Props {
   card: BoardCard;
   selected: boolean;
   onSelect: (id: number) => void;
   onOpenDrawer: (id: number) => void;
+  editors: { userId: string; name: string }[];
 }
 
-export function Card({ card, selected, onSelect, onOpenDrawer }: Props) {
+export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props) {
   const dwell = formatDwellTime(card.enteredStatusAt);
   const severity = dwellSeverity(card.enteredStatusAt);
   const dwellClass =
@@ -37,15 +39,15 @@ export function Card({ card, selected, onSelect, onOpenDrawer }: Props) {
           e.stopPropagation();
           onSelect(card.id);
         }}
-        className={`absolute left-2.5 top-2.5 flex h-4 w-4 items-center justify-center rounded border-[1.5px] bg-white transition-opacity ${
+        className={`absolute left-2 top-2 flex h-[18px] w-[18px] cursor-pointer items-center justify-center rounded border-[1.5px] transition-colors ${
           selected
-            ? "border-[var(--selection-primary)] bg-[var(--selection-primary)] opacity-100"
-            : "border-slate-300 opacity-0 group-hover:opacity-100"
+            ? "border-[var(--selection-primary)] bg-[var(--selection-primary)]"
+            : "border-slate-300 bg-white hover:border-[var(--selection-primary)]"
         }`}
       >
-        {selected && <span className="text-[11px] font-bold leading-none text-white">✓</span>}
+        {selected && <span className="text-[12px] font-bold leading-none text-white">✓</span>}
       </div>
-      <div className="pl-6">
+      <div className="pl-7">
         <div className="mb-1.5 text-sm font-semibold text-slate-800">{card.liveAccountName}</div>
         <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
           {card.anchorName && <span>主播 {card.anchorName}</span>}
@@ -76,7 +78,7 @@ export function Card({ card, selected, onSelect, onOpenDrawer }: Props) {
               <span className="font-medium text-slate-800">{card.editorName}</span>
             </span>
           ) : (
-            <span className="text-slate-400">待派单</span>
+            <QuickAssignChip taskId={card.id} editors={editors} />
           )}
           <span className={`tabular-nums ${dwellClass}`}>
             {card.materialDate.slice(5)} · {dwell}

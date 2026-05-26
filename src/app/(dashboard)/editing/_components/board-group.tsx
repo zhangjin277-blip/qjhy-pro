@@ -10,11 +10,20 @@ interface Props {
   selectedIds: Set<number>;
   onSelect: (id: number) => void;
   onOpenDrawer: (id: number) => void;
+  editors: { userId: string; name: string }[];
 }
 
 const MAX_VISIBLE = 6;
 
-export function Group({ label, cards, defaultOpen, selectedIds, onSelect, onOpenDrawer }: Props) {
+export function Group({
+  label,
+  cards,
+  defaultOpen,
+  selectedIds,
+  onSelect,
+  onOpenDrawer,
+  editors,
+}: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? cards : cards.slice(0, MAX_VISIBLE);
@@ -39,6 +48,7 @@ export function Group({ label, cards, defaultOpen, selectedIds, onSelect, onOpen
               selected={selectedIds.has(c.id)}
               onSelect={onSelect}
               onOpenDrawer={onOpenDrawer}
+              editors={editors}
             />
           ))}
           {remaining > 0 && !expanded && (
