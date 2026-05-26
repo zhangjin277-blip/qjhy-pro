@@ -71,6 +71,13 @@
       "when": 1779708182525,
       "tag": "0049_add_product_config",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1779762290628,
+      "tag": "0010_right_big_bertha",
+      "breakpoints": true
     }
   ]
 }
