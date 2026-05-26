@@ -733,11 +733,7 @@ export async function queryFishCoverageToday(): Promise<FishCoverage> {
   }
   const fishAccountIds = [...new Set(scheduled.map((s) => s.account_id))];
 
-  // 3) 查今日已上传的捕鱼系任务
-  const todayDate = new Date(todayStr + "T00:00:00");
-  const tomorrowDate = new Date(todayStr + "T00:00:00");
-  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-
+  // 3) 查今日已上传的捕鱼系任务（用字符串 ::date 比较，避开 JS Date 时区漂移）
   const uploadedTasks = await db
     .select({
       id: editing_task.id,
@@ -747,8 +743,7 @@ export async function queryFishCoverageToday(): Promise<FishCoverage> {
     .from(editing_task)
     .where(
       and(
-        gte(editing_task.material_date, todayDate),
-        lte(editing_task.material_date, todayDate),
+        sql`${editing_task.material_date}::date = ${todayStr}::date`,
         isNotNull(editing_task.source_uploaded_at),
         isNull(editing_task.deleted_at),
         inArray(editing_task.live_account_id, fishAccountIds),
