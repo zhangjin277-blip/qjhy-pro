@@ -59,35 +59,24 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
   });
   await nasWriteFile(NAS, relPath, buf);
 
-  if (task.status === "editing") {
-    // First upload: transition editing → review
-    assertTransition("editing", "review");
-    await db
-      .update(editing_task)
-      .set({
-        edited_files: [relPath],
-        edited_file_names: [data.fileName],
-        edited_file_hashes: [md5],
-        edited_uploaded_at: new Date(),
-        status: "review",
-      })
-      .where(eq(editing_task.id, task.id));
+  // 始终追加，避免回退后再传覆盖原成品
+  const isFirstTransition = task.status === "editing";
+  if (isFirstTransition) assertTransition("editing", "review");
 
-    // 紧急任务：fire-and-forget 钉钉通知，不阻塞主流程
-    if (task.priority === "urgent") {
-      notifyUrgentEditedUploaded(task.id).catch((e: unknown) => void e);
-    }
-  } else {
-    // Append: status already review, keep it
-    await db
-      .update(editing_task)
-      .set({
-        edited_files: [...(task.edited_files ?? []), relPath],
-        edited_file_names: [...(task.edited_file_names ?? []), data.fileName],
-        edited_file_hashes: [...(task.edited_file_hashes ?? []), md5],
-        edited_uploaded_at: new Date(),
-      })
-      .where(eq(editing_task.id, task.id));
+  await db
+    .update(editing_task)
+    .set({
+      edited_files: [...(task.edited_files ?? []), relPath],
+      edited_file_names: [...(task.edited_file_names ?? []), data.fileName],
+      edited_file_hashes: [...(task.edited_file_hashes ?? []), md5],
+      edited_uploaded_at: new Date(),
+      ...(isFirstTransition ? { status: "review" as const } : {}),
+    })
+    .where(eq(editing_task.id, task.id));
+
+  // 紧急任务首次进入 review：fire-and-forget 钉钉通知
+  if (isFirstTransition && task.priority === "urgent") {
+    notifyUrgentEditedUploaded(task.id).catch((e: unknown) => void e);
   }
 
   await writeEvent({
