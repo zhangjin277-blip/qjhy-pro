@@ -8,7 +8,9 @@ import { writeEvent } from "../event-writer";
 import {
   buildEditedPath,
   buildFishEditedPath,
+  buildPokerSlgEditedPath,
   isFishProduct,
+  isPokerSlgProduct,
   writeFile as nasWriteFile,
 } from "@/modules/editing-storage/server";
 import { z } from "zod";
@@ -92,6 +94,31 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
       originalName: data.fileName,
       roomName: task.room_name,
       anchorName: task.anchor_name,
+      sequenceNumber,
+    });
+    displayName = relPath.split("/").pop() ?? data.fileName;
+  } else if (isPokerSlgProduct(task.product)) {
+    // 斗地主 / 三国冰河时代：YYYYMMDD-{产品}-{直播间}-NN.ext
+    const roomId = sql`(SELECT room_id FROM live_account WHERE id = ${task.live_account_id})`;
+    const countRows = await db
+      .select({
+        existingCount: sql<number>`COALESCE(SUM(jsonb_array_length(${editing_task.edited_files})), 0)::int`,
+      })
+      .from(editing_task)
+      .innerJoin(live_account, eq(live_account.id, editing_task.live_account_id))
+      .where(
+        and(
+          eq(editing_task.material_date, task.material_date),
+          sql`${live_account.room_id} = ${roomId}`,
+        ),
+      );
+    const sequenceNumber = (countRows[0]?.existingCount ?? 0) + 1;
+    relPath = buildPokerSlgEditedPath({
+      taskId: task.id,
+      product: task.product ?? "未分类",
+      materialDate: materialDateStr,
+      originalName: data.fileName,
+      roomName: task.room_name,
       sequenceNumber,
     });
     displayName = relPath.split("/").pop() ?? data.fileName;

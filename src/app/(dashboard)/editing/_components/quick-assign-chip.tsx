@@ -70,7 +70,7 @@ export function QuickAssignChip({ taskId, editors }: Props) {
         }}
         className="rounded border border-dashed border-slate-300 px-2 py-0.5 text-xs text-slate-500 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600"
       >
-        + 派单
+        + 选择剪辑师
       </button>
       {open && pos
         ? createPortal(

@@ -73,6 +73,43 @@ export function isFishProduct(product: string | null | undefined): boolean {
   return !!product && product.includes("捕鱼");
 }
 
+// ─── 斗地主 / 三国冰河时代 命名规则 ─────────────────────────────────────
+// 完整：YYYYMMDD-{产品}-{直播间}-NN.ext
+// 降级（无直播间）：YYYYMMDD-{产品}-NN.ext
+// 不带主播段（与捕鱼系区分）
+
+export interface PokerSlgPathInput extends PathInput {
+  roomName: string | null;
+  sequenceNumber: number;
+}
+
+function buildPokerSlgPath(root: "source" | "edited" | "cover", input: PokerSlgPathInput): string {
+  const dateNoSep = input.materialDate.replace(/-/g, "");
+  const nn = String(input.sequenceNumber).padStart(2, "0");
+  const ext = safeFilename(input.originalName).match(/\.[^.]+$/)?.[0] ?? "";
+  const segments = input.roomName
+    ? [dateNoSep, input.product, input.roomName, nn]
+    : [dateNoSep, input.product, nn];
+  return join(root, `${input.product}-新`, `${segments.join("-")}${ext}`);
+}
+
+export function buildPokerSlgSourcePath(input: PokerSlgPathInput): string {
+  return buildPokerSlgPath("source", input);
+}
+
+export function buildPokerSlgEditedPath(input: PokerSlgPathInput): string {
+  return buildPokerSlgPath("edited", input);
+}
+
+export function buildPokerSlgCoverPath(input: PokerSlgPathInput): string {
+  return buildPokerSlgPath("cover", input);
+}
+
+export function isPokerSlgProduct(product: string | null | undefined): boolean {
+  if (!product) return false;
+  return product.includes("斗地主") || product.includes("三国");
+}
+
 function assertInsideNas(nasRoot: string, relPath: string): string {
   const full = resolve(nasRoot, relPath);
   const root = resolve(nasRoot);

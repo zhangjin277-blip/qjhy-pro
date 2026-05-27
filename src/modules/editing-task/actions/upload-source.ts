@@ -8,7 +8,9 @@ import { writeEvent } from "../event-writer";
 import {
   buildSourcePath,
   buildFishSourcePath,
+  buildPokerSlgSourcePath,
   isFishProduct,
+  isPokerSlgProduct,
   writeFile as nasWriteFile,
 } from "@/modules/editing-storage/server";
 import { UploadSourceInput } from "../schema";
@@ -126,6 +128,31 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
       sequenceNumber,
     });
     await nasWriteFile(NAS, relPath, buf);
+  } else if (isPokerSlgProduct(task.product)) {
+    // 斗地主 / 三国冰河时代：YYYYMMDD-{产品}-{直播间}-NN.ext（无主播段）
+    const roomId = sql`(SELECT room_id FROM live_account WHERE id = ${task.live_account_id})`;
+    const countRows = await db
+      .select({
+        existingCount: sql<number>`COALESCE(SUM(jsonb_array_length(${editing_task.source_files})), 0)::int`,
+      })
+      .from(editing_task)
+      .innerJoin(live_account, eq(live_account.id, editing_task.live_account_id))
+      .where(
+        and(
+          eq(editing_task.material_date, task.material_date),
+          sql`${live_account.room_id} = ${roomId}`,
+        ),
+      );
+    const sequenceNumber = (countRows[0]?.existingCount ?? 0) + 1;
+    relPath = buildPokerSlgSourcePath({
+      taskId: task.id,
+      product: task.product ?? "未分类",
+      materialDate: materialDateStr,
+      originalName: data.fileName,
+      roomName: task.room_name,
+      sequenceNumber,
+    });
+    await nasWriteFile(NAS, relPath, buf);
   } else {
     // 普通路径
     relPath = buildSourcePath({
@@ -137,12 +164,12 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
     await nasWriteFile(NAS, relPath, buf);
   }
 
-  // 捕鱼系任务（有主播）：UI / 下载文件名都用规则化的 basename
+  // 规则化命名（捕鱼系 / 斗地主 / 三冰）：UI / 下载文件名用规则化的 basename
   // 普通任务：保留原文件名
-  const displayName =
-    isFishProduct(task.product) && task.anchor_name && task.anchor_id
-      ? (relPath.split("/").pop() ?? data.fileName)
-      : data.fileName;
+  const isRegulated =
+    (isFishProduct(task.product) && task.anchor_name && task.anchor_id) ||
+    isPokerSlgProduct(task.product);
+  const displayName = isRegulated ? (relPath.split("/").pop() ?? data.fileName) : data.fileName;
 
   await db
     .update(editing_task)
