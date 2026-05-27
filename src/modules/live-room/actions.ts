@@ -2,14 +2,14 @@
 import { db } from "@/db/client";
 import { live_room } from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireModuleEdit } from "@/lib/admin-guard";
 import { AppError } from "@/lib/errors";
 import { eq } from "drizzle-orm";
 import { CreateRoomInput, UpdateRoomInput, DeleteRoomInput } from "./schema";
 
 export async function createRoom(input: unknown) {
   const data = CreateRoomInput.parse(input);
-  const { userId } = await requireAdmin();
+  const { userId } = await requireModuleEdit("live_account");
 
   const id = crypto.randomUUID();
   const [created] = await db
@@ -30,7 +30,7 @@ export async function createRoom(input: unknown) {
 
 export async function updateRoom(input: unknown) {
   const data = UpdateRoomInput.parse(input);
-  const { userId } = await requireAdmin();
+  const { userId } = await requireModuleEdit("live_account");
 
   const [before] = await db.select().from(live_room).where(eq(live_room.id, data.id));
   if (!before) throw new AppError("LIVE_ROOM_NOT_FOUND", "直播间不存在", 404);
@@ -60,7 +60,7 @@ export async function updateRoom(input: unknown) {
 
 export async function deleteRoom(input: unknown) {
   const { id } = DeleteRoomInput.parse(input);
-  const { userId } = await requireAdmin();
+  const { userId } = await requireModuleEdit("live_account");
 
   const [before] = await db.select().from(live_room).where(eq(live_room.id, id));
   if (!before) throw new AppError("LIVE_ROOM_NOT_FOUND", "直播间不存在", 404);

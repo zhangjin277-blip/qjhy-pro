@@ -12,7 +12,7 @@ import {
   type ScheduleYesterdayHourly,
   type DeleteBatchResult,
 } from "@/modules/placement/server";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireModuleEdit } from "@/lib/admin-guard";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { writeAuditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
@@ -61,7 +61,7 @@ export async function fetchAnchorCheckin(
 }
 
 export async function deleteBatchAction(batchId: string): Promise<DeleteBatchResult> {
-  const { userId } = await requireAdmin();
+  const { userId } = await requireModuleEdit("placement");
   const result = await deleteBatchAndRecompute(batchId);
   await writeAuditLog({
     user_id: userId,

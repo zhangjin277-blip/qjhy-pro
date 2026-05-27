@@ -12,7 +12,7 @@ import {
   schedule_override,
 } from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireModuleEdit } from "@/lib/admin-guard";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { getManagedDeptIds, resolvePermission } from "@/modules/permissions/server";
 import { AppError } from "@/lib/errors";
@@ -153,7 +153,7 @@ export async function deleteAccount(input: unknown): Promise<DeleteAccountResult
   const { id, force } = DeleteAccountInput.parse(input);
   let userId: string;
   try {
-    ({ userId } = await requireAdmin());
+    ({ userId } = await requireModuleEdit("live_account"));
   } catch (e) {
     return { ok: false, error: e instanceof AppError ? e.message : "需要管理员权限" };
   }
