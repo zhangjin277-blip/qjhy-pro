@@ -49,11 +49,11 @@ function buildFishPath(root: "source" | "edited" | "cover", input: FishPathInput
   const dateNoSep = input.materialDate.replace(/-/g, "");
   const nn = String(input.sequenceNumber).padStart(2, "0");
   const ext = safeFilename(input.originalName).match(/\.[^.]+$/)?.[0] ?? "";
-  // 完整：YYYYMMDD-{直播间}-{主播}-NN.ext
-  // 降级（无直播间）：YYYYMMDD-{主播}-NN.ext
+  // 完整：YYYYMMDD-{直播间}-{产品}-{主播}-NN.ext
+  // 降级（无直播间）：YYYYMMDD-{产品}-{主播}-NN.ext
   const segments = input.roomName
-    ? [dateNoSep, input.roomName, input.anchorName, nn]
-    : [dateNoSep, input.anchorName, nn];
+    ? [dateNoSep, input.roomName, input.product, input.anchorName, nn]
+    : [dateNoSep, input.product, input.anchorName, nn];
   return join(root, `${input.product}-新`, `${segments.join("-")}${ext}`);
 }
 

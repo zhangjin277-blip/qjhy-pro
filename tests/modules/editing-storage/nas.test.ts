@@ -52,7 +52,7 @@ describe("buildFishSourcePath", () => {
       anchorName: "小明",
       sequenceNumber: 1,
     });
-    expect(p).toBe("source/捕鱼大作战-新/20260525-B17-小明-01.mp4");
+    expect(p).toBe("source/捕鱼大作战-新/20260525-B17-捕鱼大作战-小明-01.mp4");
   });
 
   it("pads sequence number to 2 digits", () => {
@@ -65,7 +65,7 @@ describe("buildFishSourcePath", () => {
       anchorName: "大壮",
       sequenceNumber: 9,
     });
-    expect(p).toBe("source/捕鱼大作战-新/20260525-A20-大壮-09.mp4");
+    expect(p).toBe("source/捕鱼大作战-新/20260525-A20-捕鱼大作战-大壮-09.mp4");
   });
 
   it("handles sequence number >= 10", () => {
@@ -78,7 +78,7 @@ describe("buildFishSourcePath", () => {
       anchorName: "李梅",
       sequenceNumber: 12,
     });
-    expect(p).toBe("source/捕鱼争霸赛-新/20260525-C05-李梅-12.mp4");
+    expect(p).toBe("source/捕鱼争霸赛-新/20260525-C05-捕鱼争霸赛-李梅-12.mp4");
   });
 
   it("handles file without extension", () => {
@@ -91,7 +91,7 @@ describe("buildFishSourcePath", () => {
       anchorName: "小明",
       sequenceNumber: 1,
     });
-    expect(p).toBe("source/捕鱼大作战-新/20260501-B17-小明-01");
+    expect(p).toBe("source/捕鱼大作战-新/20260501-B17-捕鱼大作战-小明-01");
   });
 
   it("sanitizes traversal in originalName for extension extraction", () => {
@@ -104,7 +104,7 @@ describe("buildFishSourcePath", () => {
       anchorName: "小明",
       sequenceNumber: 2,
     });
-    expect(p).toBe("source/捕鱼大作战-新/20260525-B17-小明-02.mp4");
+    expect(p).toBe("source/捕鱼大作战-新/20260525-B17-捕鱼大作战-小明-02.mp4");
   });
 });
 
