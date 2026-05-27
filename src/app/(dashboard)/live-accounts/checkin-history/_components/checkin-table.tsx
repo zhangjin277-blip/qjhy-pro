@@ -90,7 +90,10 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
     reason: string;
     error: string | null;
   } | null>(null);
-  const [anchors, setAnchors] = useState<{ id: string; name: string }[]>([]);
+  const [anchors, setAnchors] = useState<
+    { id: string; realName: string; externalName: string | null }[]
+  >([]);
+  const [anchorQuery, setAnchorQuery] = useState("");
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -144,6 +147,7 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
       });
       if (r.ok) {
         setCorrectDialog(null);
+        setAnchorQuery("");
         onChanged?.();
       } else {
         setCorrectDialog({ ...correctDialog, error: r.error ?? "修改失败" });
@@ -306,19 +310,68 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
               </span>
             </div>
             <label className="mb-1 block text-[12px] text-slate-600">新主播</label>
-            <select
-              value={correctDialog.newAnchorId}
-              onChange={(e) => setCorrectDialog({ ...correctDialog, newAnchorId: e.target.value })}
+            <input
+              type="text"
+              autoFocus
+              value={anchorQuery}
+              onChange={(e) => {
+                setAnchorQuery(e.target.value);
+                setCorrectDialog({ ...correctDialog, newAnchorId: "" });
+              }}
+              placeholder={anchors.length === 0 ? "加载中..." : "搜索主播 / 艺名"}
               disabled={isPending}
-              className="mb-3 w-full rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">{anchors.length === 0 ? "加载中..." : "请选择"}</option>
-              {anchors.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+              className="mb-1 w-full rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <div className="mb-3 max-h-48 overflow-y-auto rounded border border-slate-200 bg-white">
+              {anchors
+                .filter((a) => {
+                  if (!anchorQuery) return true;
+                  const q = anchorQuery.toLowerCase();
+                  return (
+                    a.realName.toLowerCase().includes(q) ||
+                    (a.externalName?.toLowerCase().includes(q) ?? false)
+                  );
+                })
+                .slice(0, 50)
+                .map((a) => {
+                  const selected = correctDialog.newAnchorId === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => {
+                        setCorrectDialog({ ...correctDialog, newAnchorId: a.id });
+                        setAnchorQuery(
+                          a.externalName ? `${a.realName}（${a.externalName}）` : a.realName,
+                        );
+                      }}
+                      className={`flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[12px] hover:bg-slate-50 ${
+                        selected ? "bg-blue-50 text-blue-700" : "text-slate-700"
+                      }`}
+                    >
+                      <span>
+                        <b>{a.realName}</b>
+                        {a.externalName && (
+                          <span className="ml-1 text-slate-400">（{a.externalName}）</span>
+                        )}
+                      </span>
+                      {selected && <span className="text-blue-500">✓</span>}
+                    </button>
+                  );
+                })}
+              {anchors.length > 0 &&
+                anchors.filter((a) => {
+                  if (!anchorQuery) return false;
+                  const q = anchorQuery.toLowerCase();
+                  return (
+                    a.realName.toLowerCase().includes(q) ||
+                    (a.externalName?.toLowerCase().includes(q) ?? false)
+                  );
+                }).length === 0 &&
+                anchorQuery && (
+                  <div className="px-2 py-1.5 text-[12px] text-slate-400">无匹配主播</div>
+                )}
+            </div>
             <label className="mb-1 block text-[12px] text-slate-600">原因（可选）</label>
             <textarea
               value={correctDialog.reason}

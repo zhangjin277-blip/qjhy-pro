@@ -51,8 +51,9 @@ export async function forceEndSessionAction(args: {
   }
 }
 
-export async function listAnchorsForCorrection(): Promise<{ id: string; name: string }[]> {
-  // 所有 active 钉钉用户（含艺名 fallback 真名），按名字排序
+export async function listAnchorsForCorrection(): Promise<
+  { id: string; realName: string; externalName: string | null }[]
+> {
   const rows = await db
     .select({
       id: dingtalk_user.user_id,
@@ -61,9 +62,18 @@ export async function listAnchorsForCorrection(): Promise<{ id: string; name: st
     })
     .from(dingtalk_user)
     .leftJoin(live_anchor, eq(live_anchor.dingtalk_user_id, dingtalk_user.user_id))
-    .where(and(eq(dingtalk_user.active, true), sql`${dingtalk_user.dept_ids} ?| ARRAY['728935814','928732653','932021044','929188023']::text[]`))
+    .where(
+      and(
+        eq(dingtalk_user.active, true),
+        sql`${dingtalk_user.dept_ids} ?| ARRAY['728935814','928732653','932021044','929188023']::text[]`,
+      ),
+    )
     .orderBy(dingtalk_user.name);
-  return rows.map((r) => ({ id: r.id, name: r.external_name ?? r.real_name }));
+  return rows.map((r) => ({
+    id: r.id,
+    realName: r.real_name,
+    externalName: r.external_name,
+  }));
 }
 
 export async function updateSessionAnchorAction(args: {
