@@ -505,3 +505,60 @@ export async function forceEndSession(args: {
 
   return { session_id: result.session_id, duration_seconds: result.duration_seconds };
 }
+
+/**
+ * 修改 session 的主播（管理员纠正误扫场次）。
+ * 权限同强制下播：emergency / 白名单 / 任意 dept_leader。
+ * 不限 session status（已结束的也能改）。
+ */
+export async function updateSessionAnchor(args: {
+  sessionId: string;
+  newAnchorDingtalkUserId: string;
+  operatorDingtalkUserId: string;
+  isEmergency: boolean;
+  reason?: string | null;
+}): Promise<{ session_id: string }> {
+  const { sessionId, newAnchorDingtalkUserId, operatorDingtalkUserId, isEmergency, reason } = args;
+
+  const allowed = await canForceEndAnySession(operatorDingtalkUserId, isEmergency);
+  if (!allowed) throw new ForceEndPermissionDenied();
+
+  const [existing] = await db
+    .select({
+      id: live_session_log.id,
+      anchor_dingtalk_user_id: live_session_log.anchor_dingtalk_user_id,
+      raw: live_session_log.raw,
+    })
+    .from(live_session_log)
+    .where(eq(live_session_log.id, sessionId));
+  if (!existing) throw new Error("SESSION_NOT_FOUND");
+
+  const now = new Date();
+  const prevRaw = (existing.raw ?? {}) as Record<string, unknown>;
+  await db
+    .update(live_session_log)
+    .set({
+      anchor_dingtalk_user_id: newAnchorDingtalkUserId,
+      updated_at: now,
+      raw: {
+        ...prevRaw,
+        anchor_corrected_by: operatorDingtalkUserId,
+        anchor_corrected_at: now.toISOString(),
+        anchor_previous: existing.anchor_dingtalk_user_id,
+        anchor_correction_reason: reason ?? null,
+      },
+    })
+    .where(eq(live_session_log.id, sessionId));
+
+  const { writeAuditLog } = await import("@/lib/audit/log");
+  await writeAuditLog({
+    user_id: operatorDingtalkUserId,
+    action: "LIVE_SESSION_ANCHOR_CORRECT",
+    target_type: "live_session_log",
+    target_id: sessionId,
+    before: { anchor_dingtalk_user_id: existing.anchor_dingtalk_user_id },
+    after: { anchor_dingtalk_user_id: newAnchorDingtalkUserId, reason: reason ?? null },
+  });
+
+  return { session_id: sessionId };
+}
