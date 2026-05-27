@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/db/client";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { live_session_log, live_account, dingtalk_user } from "@/db/schema";
+import { resolvePermission } from "@/modules/permissions/server";
 
 /**
  * 主播部门 ID 白名单（dingtalk_dept）。
@@ -392,13 +393,18 @@ export class ForceEndPermissionDenied extends Error {
   }
 }
 
-/** 该 user 在任意 session 上是否有强制下播权限（emergency / 个人白名单 / 任何 dept_leader） */
+/**
+ * 该 user 在任意 session 上是否有强制下播/改主播权限。
+ * 通过：emergency / 代码白名单 / live_account.can_admin / 任意 dept_leader。
+ */
 export async function canForceEndAnySession(
   operatorDingtalkUserId: string,
   isEmergency: boolean,
 ): Promise<boolean> {
   if (isEmergency) return true;
   if (ANCHOR_USER_IDS_ALLOW.includes(operatorDingtalkUserId)) return true;
+  const perm = await resolvePermission(operatorDingtalkUserId, "live_account");
+  if (perm.can_admin) return true;
   const { dept_leader } = await import("@/db/schema");
   const [row] = await db
     .select({ dept_id: dept_leader.dept_id })
@@ -408,7 +414,13 @@ export async function canForceEndAnySession(
   return !!row;
 }
 
-/** 具体某个 session 上是否有强制下播权限（dept_leader 管辖主播所在部门） */
+/**
+ * 具体某个 session 上是否有强制下播权限：
+ * - emergency / 代码白名单 → 通过
+ * - live_account.can_admin && scope=all → 通过
+ * - live_account.can_admin && scope=team → 主播所在部门 ∈ 自己 dept_leader 范围
+ * - dept_leader 管辖主播所在部门 → 通过
+ */
 async function canForceEndSession(
   sessionId: string,
   operatorDingtalkUserId: string,
@@ -425,6 +437,22 @@ async function canForceEndSession(
     .limit(1);
   if (!row) return false;
   const anchorDepts = (row.dept_ids ?? []) as string[];
+
+  const perm = await resolvePermission(operatorDingtalkUserId, "live_account");
+  if (perm.can_admin) {
+    if (perm.scope === "all") return true;
+    if (perm.scope === "team") {
+      // 复用 dept_leader 范围作为 team 边界
+      const { dept_leader } = await import("@/db/schema");
+      const myDepts = await db
+        .select({ dept_id: dept_leader.dept_id })
+        .from(dept_leader)
+        .where(eq(dept_leader.user_id, operatorDingtalkUserId));
+      const myDeptSet = new Set(myDepts.map((r) => r.dept_id));
+      if (anchorDepts.some((d) => myDeptSet.has(d))) return true;
+    }
+    // scope=self/none：can_admin 但范围太窄，落到 dept_leader 兜底
+  }
 
   const { dept_leader } = await import("@/db/schema");
   const myDepts = await db
