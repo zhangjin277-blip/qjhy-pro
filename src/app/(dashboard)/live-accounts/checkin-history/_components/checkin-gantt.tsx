@@ -252,9 +252,18 @@ function GanttArea({
               // 允许名字溢出到右侧空白（生产场景每场 3h+ 不会跟相邻条重叠）
               overflow: "visible",
             }}
-            title={`${s.anchor_name} · ${fmtTime(s.start_at)}→${s.end_at ? fmtTime(s.end_at) : "进行中"} · ${statusLabel(s)}`}
+            title={`${s.anchor_name} · ${fmtTime(s.start_at)}→${s.end_at ? fmtTime(s.end_at) : "进行中"} · ${statusLabel(s)}${
+              s.status !== "in_progress" && s.income_cents !== null
+                ? ` · 礼物 ${(s.income_cents / 100).toFixed(1)} 元`
+                : ""
+            }`}
           >
             {s.anchor_name}
+            {s.status !== "in_progress" && s.income_cents !== null && (
+              <span className="ml-1 text-[10px] opacity-70">
+                {(s.income_cents / 100).toFixed(s.income_cents >= 10000 ? 0 : 1)}
+              </span>
+            )}
           </button>
         );
       })}
