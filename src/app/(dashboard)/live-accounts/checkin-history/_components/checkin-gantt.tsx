@@ -36,6 +36,13 @@ function statusLabel(s: CheckinDaySession): string {
   return s.status;
 }
 
+function fmtGift(cents: number): string {
+  const yuan = cents / 100;
+  if (yuan >= 10000) return `${(yuan / 10000).toFixed(1)}万`;
+  if (yuan >= 1000) return Math.round(yuan).toLocaleString("zh-CN");
+  return yuan.toFixed(1);
+}
+
 function fmtTime(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -258,10 +265,10 @@ function GanttArea({
                 : ""
             }`}
           >
-            {s.anchor_name}
-            {s.status !== "in_progress" && s.income_cents !== null && (
-              <span className="ml-1 text-[10px] opacity-70">
-                {(s.income_cents / 100).toFixed(s.income_cents >= 10000 ? 0 : 1)}
+            <b className="font-semibold">{s.anchor_name}</b>
+            {s.status !== "in_progress" && s.income_cents !== null && s.income_cents > 0 && (
+              <span className="ml-1 inline-block rounded bg-white/60 px-1 py-px text-[10px] tabular-nums">
+                {fmtGift(s.income_cents)}
               </span>
             )}
           </button>
