@@ -3,15 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Check,
-  ChevronDown,
-  ChevronsLeft,
-  ChevronsRight,
-  ExternalLink,
-  Radio,
-  X,
-} from "lucide-react";
+import { Check, ChevronDown, ChevronsLeft, ChevronsRight, Radio, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { filterNavByVisibility, findActiveSectionKey, isHrefActive, type NavItem } from "@/lib/nav";
 import type { ModuleKey } from "@/modules/permissions";
@@ -170,14 +162,11 @@ function BackendSwitcher() {
           </div>
           <a
             href="http://qjhypro.cn:8888/"
-            target="_blank"
-            rel="noreferrer"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 rounded px-2 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
           >
             <span className="h-3.5 w-3.5" />
             <span>老后台</span>
-            <ExternalLink className="ml-auto h-3 w-3 text-slate-400" />
           </a>
         </div>
       )}
