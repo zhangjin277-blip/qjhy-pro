@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Gift } from "lucide-react";
 import type { CheckinDayResult, CheckinDaySession } from "@/modules/checkin/queries";
 
 interface Props {
@@ -267,8 +268,9 @@ function GanttArea({
           >
             <b className="font-semibold">{s.anchor_name}</b>
             {s.status !== "in_progress" && s.income_cents !== null && s.income_cents > 0 && (
-              <span className="ml-1 inline-block rounded bg-white/60 px-1 py-px text-[10px] tabular-nums">
-                {fmtGift(s.income_cents)}
+              <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] opacity-80">
+                <Gift className="h-2.5 w-2.5" strokeWidth={2.2} />
+                <span className="tabular-nums">{fmtGift(s.income_cents)}</span>
               </span>
             )}
           </button>
