@@ -39,7 +39,7 @@ function statusLabel(s: CheckinDaySession): string {
 
 function fmtGift(cents: number): string {
   const yuan = cents / 100;
-  if (yuan >= 10000) return `${(yuan / 10000).toFixed(1)}万`;
+  if (yuan >= 1_000_000) return `${(yuan / 10000).toFixed(1)}万`;
   if (yuan >= 1000) return Math.round(yuan).toLocaleString("zh-CN");
   return yuan.toFixed(1);
 }

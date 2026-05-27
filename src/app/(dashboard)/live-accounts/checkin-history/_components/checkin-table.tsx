@@ -32,14 +32,16 @@ function fmtYuan(cents: number | null): string {
   if (cents == null) return "—";
   if (cents === 0) return "0";
   const yuan = cents / 100;
-  if (yuan >= 10000) return `${(yuan / 10000).toFixed(2)}万`;
+  if (yuan >= 1_000_000) return `${(yuan / 10000).toFixed(2)}万`;
+  if (yuan >= 1000) return Math.round(yuan).toLocaleString("zh-CN");
   return yuan.toFixed(2);
 }
 
 function fmtMoney(yuan: number | null): string {
   if (yuan == null) return "—";
   if (yuan === 0) return "0";
-  if (yuan >= 10000) return `${(yuan / 10000).toFixed(2)}万`;
+  if (yuan >= 1_000_000) return `${(yuan / 10000).toFixed(2)}万`;
+  if (yuan >= 1000) return Math.round(yuan).toLocaleString("zh-CN");
   return yuan.toFixed(2);
 }
 

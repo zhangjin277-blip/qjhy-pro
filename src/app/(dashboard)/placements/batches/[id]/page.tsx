@@ -2,7 +2,7 @@ import { getBatchDetail, getBatchRows } from "@/modules/placement/server";
 import { notFound } from "next/navigation";
 
 function fmt(n: number): string {
-  if (Math.abs(n) >= 1e4) return (n / 1e4).toFixed(2).replace(/\.?0+$/, "") + "万";
+  if (Math.abs(n) >= 1e6) return (n / 1e4).toFixed(2).replace(/\.?0+$/, "") + "万";
   return n.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 }
 
