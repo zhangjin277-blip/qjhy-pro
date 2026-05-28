@@ -7,6 +7,7 @@ import { getCheckinDay, type CheckinDayResult } from "@/modules/checkin/queries"
 import {
   forceEndSession,
   ForceEndPermissionDenied,
+  insertManualSession,
   updateSessionAnchor,
   updateSessionTime,
 } from "@/modules/checkin/server";
@@ -75,6 +76,44 @@ export async function listAnchorsForCorrection(): Promise<
     realName: r.real_name,
     externalName: r.external_name,
   }));
+}
+
+export async function insertManualSessionAction(args: {
+  liveAccountId: string;
+  anchorDingtalkUserId: string;
+  startAt: string;
+  endAt: string;
+  reason?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind !== "ok") return { ok: false, error: "未登录" };
+
+  const startAt = new Date(args.startAt);
+  if (Number.isNaN(startAt.getTime())) return { ok: false, error: "开始时间格式错" };
+  const endAt = new Date(args.endAt);
+  if (Number.isNaN(endAt.getTime())) return { ok: false, error: "结束时间格式错" };
+
+  try {
+    await insertManualSession({
+      liveAccountId: args.liveAccountId,
+      anchorDingtalkUserId: args.anchorDingtalkUserId,
+      startAt,
+      endAt,
+      operatorDingtalkUserId: ctx.dingtalkUserId,
+      isEmergency: ctx.isEmergency,
+      reason: args.reason?.trim() || null,
+    });
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof ForceEndPermissionDenied) return { ok: false, error: "无权限补打卡" };
+    const msg = err instanceof Error ? err.message : "未知错误";
+    if (msg === "ACCOUNT_NOT_FOUND") return { ok: false, error: "账号不存在" };
+    if (msg === "ANCHOR_NOT_FOUND") return { ok: false, error: "主播不存在" };
+    if (msg === "INVALID_TIME_RANGE") return { ok: false, error: "结束必须晚于开始" };
+    if (msg === "ACCOUNT_HAS_OTHER_IN_PROGRESS")
+      return { ok: false, error: "该账号还有进行中场次，会被压住，请先关掉" };
+    return { ok: false, error: msg };
+  }
 }
 
 export async function updateSessionTimeAction(args: {

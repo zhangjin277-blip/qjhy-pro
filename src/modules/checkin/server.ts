@@ -701,3 +701,112 @@ export async function updateSessionTime(args: {
 
   return { session_id: sessionId, duration_seconds: newDuration };
 }
+
+/**
+ * 手动补一条已结束的开播记录（主播当时忘扫码）。
+ * 权限：同强制下播。
+ * 仅插 status='ended' / closed_by='admin_insert'；不允许补 in_progress。
+ * 校验：account 存在；anchor 存在；newEndAt > newStartAt；
+ *      同账号同时段无 in_progress 冲突。
+ */
+export async function insertManualSession(args: {
+  liveAccountId: string;
+  anchorDingtalkUserId: string;
+  startAt: Date;
+  endAt: Date;
+  operatorDingtalkUserId: string;
+  isEmergency: boolean;
+  reason?: string | null;
+}): Promise<{ session_id: string; duration_seconds: number }> {
+  const {
+    liveAccountId,
+    anchorDingtalkUserId,
+    startAt,
+    endAt,
+    operatorDingtalkUserId,
+    isEmergency,
+    reason,
+  } = args;
+
+  if (endAt.getTime() <= startAt.getTime()) throw new Error("INVALID_TIME_RANGE");
+
+  const allowed = await canForceEndAnySession(operatorDingtalkUserId, isEmergency);
+  if (!allowed) throw new ForceEndPermissionDenied();
+
+  // 1. 账号必须存在
+  const [account] = await db
+    .select({ id: live_account.id })
+    .from(live_account)
+    .where(eq(live_account.id, liveAccountId))
+    .limit(1);
+  if (!account) throw new Error("ACCOUNT_NOT_FOUND");
+
+  // 2. 主播必须存在（dingtalk_user）
+  const [anchor] = await db
+    .select({ user_id: dingtalk_user.user_id })
+    .from(dingtalk_user)
+    .where(eq(dingtalk_user.user_id, anchorDingtalkUserId))
+    .limit(1);
+  if (!anchor) throw new Error("ANCHOR_NOT_FOUND");
+
+  // 3. 同账号有 in_progress 时禁止插入跨越其 start_at 的 session（防止压住）
+  const [inProgress] = await db
+    .select({
+      id: live_session_log.id,
+      start_at: live_session_log.start_at,
+    })
+    .from(live_session_log)
+    .where(
+      and(
+        eq(live_session_log.live_account_id, liveAccountId),
+        eq(live_session_log.status, "in_progress"),
+      ),
+    )
+    .limit(1);
+  if (inProgress && endAt.getTime() > inProgress.start_at.getTime()) {
+    throw new Error("ACCOUNT_HAS_OTHER_IN_PROGRESS");
+  }
+
+  const now = new Date();
+  const duration = Math.floor((endAt.getTime() - startAt.getTime()) / 1000);
+
+  const [inserted] = await db
+    .insert(live_session_log)
+    .values({
+      live_account_id: liveAccountId,
+      anchor_dingtalk_user_id: anchorDingtalkUserId,
+      start_at: startAt,
+      end_at: endAt,
+      duration_seconds: duration,
+      status: "ended",
+      closed_by: "admin_insert",
+      created_at: now,
+      updated_at: now,
+      raw: {
+        manual_inserted_by: operatorDingtalkUserId,
+        manual_inserted_at: now.toISOString(),
+        manual_inserted_reason: reason ?? null,
+      },
+    })
+    .returning({ id: live_session_log.id });
+
+  if (!inserted) throw new Error("INSERT_FAILED");
+
+  const { writeAuditLog } = await import("@/lib/audit/log");
+  await writeAuditLog({
+    user_id: operatorDingtalkUserId,
+    action: "LIVE_SESSION_MANUAL_INSERT",
+    target_type: "live_session_log",
+    target_id: inserted.id,
+    after: {
+      live_account_id: liveAccountId,
+      anchor_dingtalk_user_id: anchorDingtalkUserId,
+      start_at: startAt.toISOString(),
+      end_at: endAt.toISOString(),
+      duration_seconds: duration,
+      reason: reason ?? null,
+    },
+  });
+
+  return { session_id: inserted.id, duration_seconds: duration };
+}

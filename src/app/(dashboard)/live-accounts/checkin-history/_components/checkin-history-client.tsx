@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import type { CheckinDayResult } from "@/modules/checkin/queries";
-import { fetchCheckinDay } from "../actions";
+import { fetchCheckinDay, insertManualSessionAction, listAnchorsForCorrection } from "../actions";
 import { CheckinGantt } from "./checkin-gantt";
 import { CheckinTable } from "./checkin-table";
 
@@ -31,6 +31,28 @@ export function CheckinHistoryClient({
   const [accountQuery, setAccountQuery] = useState("");
   const [data, setData] = useState<CheckinDayResult>(initialData);
   const [isPending, startTransition] = useTransition();
+
+  // 补打卡 dialog
+  const [insertDialog, setInsertDialog] = useState<{
+    liveAccountId: string;
+    anchorDingtalkUserId: string;
+    startAtLocal: string;
+    endAtLocal: string;
+    reason: string;
+    error: string | null;
+  } | null>(null);
+  const [anchorOptions, setAnchorOptions] = useState<
+    { id: string; realName: string; externalName: string | null }[]
+  >([]);
+  const [anchorOptionQuery, setAnchorOptionQuery] = useState("");
+
+  useEffect(() => {
+    if (insertDialog && anchorOptions.length === 0) {
+      listAnchorsForCorrection()
+        .then(setAnchorOptions)
+        .catch((e) => console.error("load anchors failed", e));
+    }
+  }, [insertDialog, anchorOptions.length]);
 
   const filteredData = useMemo<CheckinDayResult>(() => {
     const q = accountQuery.trim().toLowerCase();
@@ -195,7 +217,29 @@ export function CheckinHistoryClient({
             ? "加载中..."
             : `${stats.accountCount} 账号 / ${stats.totalSessions} 场次 / ${stats.anchorCount} 主播 / 累计 ${stats.totalHours} 小时${stats.inProgress > 0 ? ` / 进行中 ${stats.inProgress}` : ""}`}
         </span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {canForceEnd && (
+            <button
+              type="button"
+              onClick={() => {
+                // 默认开始 = 当天 12:00 本地，结束 = 15:00 本地，供 admin 微调
+                const base = date + "T12:00";
+                const endBase = date + "T15:00";
+                setInsertDialog({
+                  liveAccountId: filteredData.accounts[0]?.live_account_id ?? "",
+                  anchorDingtalkUserId: "",
+                  startAtLocal: base,
+                  endAtLocal: endBase,
+                  reason: "",
+                  error: null,
+                });
+                setAnchorOptionQuery("");
+              }}
+              className="rounded border border-amber-300 bg-white px-3 py-1 text-[12px] font-medium text-amber-700 hover:bg-amber-50"
+            >
+              + 补打卡
+            </button>
+          )}
           <button
             type="button"
             onClick={downloadCsv}
@@ -220,6 +264,195 @@ export function CheckinHistoryClient({
             onChanged={() => refresh(date, product)}
           />
         </>
+      )}
+
+      {insertDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => !isPending && setInsertDialog(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 text-sm font-semibold text-slate-800">补打卡（手动新增）</div>
+            <div className="mb-3 rounded bg-slate-50 p-3 text-[11.5px] text-slate-500">
+              主播当时忘扫码，admin 直接补一条已结束的开播记录。会写 audit_log；status =
+              ended，closed_by = admin_insert。
+            </div>
+
+            <label className="mb-1 block text-[12px] text-slate-600">账号</label>
+            <select
+              value={insertDialog.liveAccountId}
+              onChange={(e) =>
+                setInsertDialog({ ...insertDialog, liveAccountId: e.target.value, error: null })
+              }
+              disabled={isPending}
+              className="mb-3 w-full rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              {data.accounts.length === 0 && (
+                <option value="">当日无账号，请先切到有数据的日期</option>
+              )}
+              {data.accounts.map((a) => (
+                <option key={a.live_account_id} value={a.live_account_id}>
+                  {a.placement_label ?? a.account_name} · {a.platform} · {a.product}
+                </option>
+              ))}
+            </select>
+
+            <label className="mb-1 block text-[12px] text-slate-600">主播</label>
+            <input
+              type="text"
+              value={anchorOptionQuery}
+              onChange={(e) => {
+                setAnchorOptionQuery(e.target.value);
+                setInsertDialog({ ...insertDialog, anchorDingtalkUserId: "", error: null });
+              }}
+              placeholder={anchorOptions.length === 0 ? "加载中..." : "搜索主播 / 艺名"}
+              disabled={isPending}
+              className="mb-1 w-full rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <div className="mb-3 max-h-40 overflow-y-auto rounded border border-slate-200 bg-white">
+              {anchorOptions
+                .filter((a) => {
+                  if (!anchorOptionQuery) return true;
+                  const q = anchorOptionQuery.toLowerCase();
+                  return (
+                    a.realName.toLowerCase().includes(q) ||
+                    (a.externalName?.toLowerCase().includes(q) ?? false)
+                  );
+                })
+                .slice(0, 50)
+                .map((a) => {
+                  const selected = insertDialog.anchorDingtalkUserId === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => {
+                        setInsertDialog({
+                          ...insertDialog,
+                          anchorDingtalkUserId: a.id,
+                          error: null,
+                        });
+                        setAnchorOptionQuery(
+                          a.externalName ? `${a.realName}（${a.externalName}）` : a.realName,
+                        );
+                      }}
+                      className={`flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[12px] hover:bg-slate-50 ${
+                        selected ? "bg-blue-50 text-blue-700" : "text-slate-700"
+                      }`}
+                    >
+                      <span>
+                        <b>{a.realName}</b>
+                        {a.externalName && (
+                          <span className="ml-1 text-slate-400">（{a.externalName}）</span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
+
+            <div className="mb-3 grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-[12px] text-slate-600">开始时间</label>
+                <input
+                  type="datetime-local"
+                  value={insertDialog.startAtLocal}
+                  onChange={(e) =>
+                    setInsertDialog({
+                      ...insertDialog,
+                      startAtLocal: e.target.value,
+                      error: null,
+                    })
+                  }
+                  disabled={isPending}
+                  step={60}
+                  className="w-full rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[12px] text-slate-600">结束时间</label>
+                <input
+                  type="datetime-local"
+                  value={insertDialog.endAtLocal}
+                  onChange={(e) =>
+                    setInsertDialog({ ...insertDialog, endAtLocal: e.target.value, error: null })
+                  }
+                  disabled={isPending}
+                  step={60}
+                  className="w-full rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+
+            <label className="mb-1 block text-[12px] text-slate-600">原因（可选）</label>
+            <textarea
+              value={insertDialog.reason}
+              onChange={(e) => setInsertDialog({ ...insertDialog, reason: e.target.value })}
+              disabled={isPending}
+              rows={2}
+              className="mb-3 w-full rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="如：主播忘扫码补 / 接班漏点"
+            />
+
+            {insertDialog.error && (
+              <div className="mb-3 rounded border border-red-200 bg-red-50 px-2 py-1 text-[12px] text-red-700">
+                {insertDialog.error}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setInsertDialog(null)}
+                disabled={isPending}
+                className="rounded border border-slate-300 bg-white px-3 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const d = insertDialog;
+                  if (!d.liveAccountId) {
+                    setInsertDialog({ ...d, error: "请选账号" });
+                    return;
+                  }
+                  if (!d.anchorDingtalkUserId) {
+                    setInsertDialog({ ...d, error: "请选主播" });
+                    return;
+                  }
+                  if (!d.startAtLocal || !d.endAtLocal) {
+                    setInsertDialog({ ...d, error: "请填开始和结束时间" });
+                    return;
+                  }
+                  startTransition(async () => {
+                    const r = await insertManualSessionAction({
+                      liveAccountId: d.liveAccountId,
+                      anchorDingtalkUserId: d.anchorDingtalkUserId,
+                      startAt: new Date(d.startAtLocal).toISOString(),
+                      endAt: new Date(d.endAtLocal).toISOString(),
+                      reason: d.reason,
+                    });
+                    if (r.ok) {
+                      setInsertDialog(null);
+                      setAnchorOptionQuery("");
+                      refresh(date, product);
+                    } else {
+                      setInsertDialog({ ...d, error: r.error ?? "保存失败" });
+                    }
+                  });
+                }}
+                disabled={isPending}
+                className="rounded bg-amber-600 px-3 py-1 text-[12px] font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {isPending ? "保存中..." : "确认补打卡"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
