@@ -474,6 +474,54 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
     hour: Number(p.hour),
   }));
 
+  // Index by (account_id, date, hour) for O(1) lookup per slot-hour.
+  // 不改语义，去掉每个 slot 都全表扫 placementList 的 N² 行为。
+  type PRow = (typeof placementList)[number];
+  const placementIndex = new Map<string, PRow[]>();
+  for (const p of placementList) {
+    const k = `${p.account_id}::${p.date}::${p.hour}`;
+    const arr = placementIndex.get(k);
+    if (arr) arr.push(p);
+    else placementIndex.set(k, [p]);
+  }
+
+  function aggregateSlot(
+    accountId: string,
+    date: string,
+    startHour: number,
+    endHour: number,
+    targetUser: string,
+  ): {
+    totalCost: number;
+    personalCost: number;
+    totalActs: number;
+    personalActs: number;
+    totalPayment: number;
+    personalPayment: number;
+  } {
+    let totalCost = 0,
+      personalCost = 0;
+    let totalActs = 0,
+      personalActs = 0;
+    let totalPayment = 0,
+      personalPayment = 0;
+    for (let h = startHour; h < endHour; h++) {
+      const arr = placementIndex.get(`${accountId}::${date}::${h}`);
+      if (!arr) continue;
+      for (const p of arr) {
+        totalCost += p.cost;
+        totalActs += p.activations;
+        totalPayment += p.payment;
+        if (p.attributed_dingtalk_user_id === targetUser) {
+          personalCost += p.cost;
+          personalActs += p.activations;
+          personalPayment += p.payment;
+        }
+      }
+    }
+    return { totalCost, personalCost, totalActs, personalActs, totalPayment, personalPayment };
+  }
+
   // 8. Generate all dates in range
   const dates: string[] = [];
   const fromD = new Date(filter.date_from);
@@ -516,27 +564,14 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
             const startHour = parseInt((slotStart ?? "0:00").split(":")[0] ?? "0");
             const endHour = parseInt((slotEnd ?? "24:00").split(":")[0] ?? "24");
 
-            let totalCost = 0,
-              personalCost = 0;
-            let totalActs = 0,
-              personalActs = 0;
-            let totalPayment = 0,
-              personalPayment = 0;
-
-            for (const p of placementList) {
-              if (p.account_id !== accountId) continue;
-              if (p.date !== date) continue;
-              const h = p.hour;
-              if (h < startHour || h >= endHour) continue;
-              totalCost += p.cost;
-              totalActs += p.activations;
-              totalPayment += p.payment;
-              if (p.attributed_dingtalk_user_id === eff.user) {
-                personalCost += p.cost;
-                personalActs += p.activations;
-                personalPayment += p.payment;
-              }
-            }
+            const {
+              totalCost,
+              personalCost,
+              totalActs,
+              personalActs,
+              totalPayment,
+              personalPayment,
+            } = aggregateSlot(accountId, date, startHour, endHour, eff.user);
 
             if (totalCost === 0 && totalActs === 0) continue;
 
@@ -587,27 +622,14 @@ export async function querySchedule(filter: BoardFilter): Promise<ScheduleRow[]>
           const startHour = parseInt((slotStart ?? "0:00").split(":")[0] ?? "0");
           const endHour = parseInt((slotEnd ?? "24:00").split(":")[0] ?? "24");
 
-          let totalCost = 0,
-            personalCost = 0;
-          let totalActs = 0,
-            personalActs = 0;
-          let totalPayment = 0,
-            personalPayment = 0;
-
-          for (const p of placementList) {
-            if (p.account_id !== accountId) continue;
-            if (p.date !== date) continue;
-            const h = p.hour;
-            if (h < startHour || h >= endHour) continue;
-            totalCost += p.cost;
-            totalActs += p.activations;
-            totalPayment += p.payment;
-            if (p.attributed_dingtalk_user_id === eff.user) {
-              personalCost += p.cost;
-              personalActs += p.activations;
-              personalPayment += p.payment;
-            }
-          }
+          const {
+            totalCost,
+            personalCost,
+            totalActs,
+            personalActs,
+            totalPayment,
+            personalPayment,
+          } = aggregateSlot(accountId, date, startHour, endHour, eff.user);
 
           if (totalCost === 0 && totalActs === 0) continue;
 

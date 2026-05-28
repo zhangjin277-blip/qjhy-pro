@@ -86,8 +86,19 @@ src/app/(dashboard)/[feature]/page.tsx
 | live-room | `src/modules/live-room/` | 线下物理直播间（B17/A20）CRUD | Phase 2.1 (2026-05-06) |
 | live-account | `src/modules/live-account/` | 跨平台直播账号 + PRO3 迁移工具 + 姓名 fuzzy match + 时段命中算法 | Phase 2.1 (2026-05-06) |
 | live-anchor | `src/modules/live-anchor/` | 主播业务扩展（钉钉用户的主播身份）+ N:M 默认排班关联 | Phase 2.1 (2026-05-06) |
+| placement | `src/modules/placement/` | 投放数据 ingest + 看板（小时聚合 / 增量累计切换 / 5 列分配）| Phase 2.2 (2026-05-06) |
+| placement-attribution | `src/modules/placement-attribution/` | 排班 ↔ 投放 attribution 兜底 cron + dirty mark | Phase 2.2 (2026-05-06) |
+| schedule-override | `src/modules/schedule-override/` | 排班 override（个人+部门）+ audit | Phase 2.2 (2026-05-06) |
+| column-presets | `src/modules/column-presets/` | 用户列偏好（per-platform）| Phase 2.2 |
+| aliases | `src/modules/aliases/` | 字段别名（中文显示名）| Phase 2.2 |
+| checkin | `src/modules/checkin/` | 主播开播打卡 + 5 列归因 + 强制下播 + 礼物 trend | Phase 2.2 (2026-05-15) |
+| invite-codes | `src/modules/invite-codes/` | 邀请码注册 + 委托视图 | Phase 2.4 |
+| product-config | `src/modules/product-config/` | 产品分类配置（display_short / category）| Phase 3.0 |
+| editing-task | `src/modules/editing-task/` | 剪辑任务状态机 + 事件流 + 扣分 | Phase 3.0 (2026-05-26) |
+| editing-editor | `src/modules/editing-editor/` | 剪辑师视图 + 工作量统计 | Phase 3.0 |
+| editing-storage | `src/modules/editing-storage/` | NAS 文件存储健康检查 + 上传/下载 | Phase 3.0 |
 
-> 每加一个业务模块，PR 里必须更新此表。
+> 每加一个业务模块，PR 里必须更新此表 + 在 `eslint.config.mjs` 加 zone。
 
 ## 9. Code Review 检查清单
 

@@ -1,22 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { requireAdmin } from "@/lib/admin-guard";
 import { AppError } from "@/lib/errors";
 import { db } from "@/db/client";
 import { kuaishou_member } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-const VALID_PRODUCTS = new Set([
+const VALID_PRODUCTS = [
   "捕鱼大作战",
   "途游休闲捕鱼",
   "电玩捕鱼",
   "三国冰河时代",
   "迷游斗地主",
   "富豪麻将",
-]);
+] as const;
+
+const patchBodySchema = z.object({
+  manual_product: z.enum(VALID_PRODUCTS).nullable(),
+});
 
 /**
  * PATCH /api/anchors-kuaishou/[memberId]
- * Body: { manual_product: string | null }
+ * Body: { manual_product: enum | null }
  * 设置或清除手动覆盖的项目分类（admin only：改的是全局分类规则）。
  */
 export async function PATCH(
@@ -33,16 +38,21 @@ export async function PATCH(
   }
 
   const { memberId } = await ctx.params;
-  const body = (await req.json()) as { manual_product?: string | null };
 
-  // null = 清除覆盖（恢复用 inferred_product）
-  if (body.manual_product != null && !VALID_PRODUCTS.has(body.manual_product)) {
-    return NextResponse.json({ error: "Invalid product" }, { status: 400 });
+  let parsed: z.infer<typeof patchBodySchema>;
+  try {
+    const json = await req.json();
+    parsed = patchBodySchema.parse(json);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: "INVALID_BODY", detail: err.issues }, { status: 400 });
+    }
+    return NextResponse.json({ error: "INVALID_JSON" }, { status: 400 });
   }
 
   await db
     .update(kuaishou_member)
-    .set({ manual_product: body.manual_product ?? null, updated_at: new Date() })
+    .set({ manual_product: parsed.manual_product, updated_at: new Date() })
     .where(eq(kuaishou_member.user_id, memberId));
 
   return NextResponse.json({ ok: true });

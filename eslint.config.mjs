@@ -195,6 +195,17 @@ export default tseslint.config(
               from: "./src/modules/invite-codes/!(index|server).ts",
               message: "跨模块只允许 import 对方的 index.ts。详见 CONTRIBUTING.md 第 10.2 节。",
             },
+            {
+              target: [
+                "./src/app/**",
+                "./src/components/**",
+                "./src/lib/**",
+                "./src/worker/**",
+                "./src/modules/!(checkin)/**",
+              ],
+              from: "./src/modules/checkin/!(index|queries|server).ts",
+              message: "跨模块只允许 import 对方的 index.ts / server.ts / queries.ts。详见 CONTRIBUTING.md 第 10.2 节。",
+            },
           ],
         },
       ],

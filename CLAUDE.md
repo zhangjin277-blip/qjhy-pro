@@ -47,16 +47,38 @@ Next.js 16.2.4 + TypeScript strict + PostgreSQL 16 + Drizzle ORM + better-auth 1
 - token/userinfo 用自定义交换逻辑：`userAccessToken` 走 JSON body，`contact/users/me` 走 `x-acs-dingtalk-access-token`。
 - 钉钉机器人 webhook 关键词："报错"
 
-## 数据库当前状态（11 张表）
+## 数据库当前状态（45 张 public 表）
 
 ```
-dingtalk_dept (28) / dingtalk_user (146)        ← Phase 1 同步
-role_default_permission (8)                      ← 8 岗位
-dept_leader / auth_permission_override / audit_log
-auth_user (2: emergency + 张锦)
-auth_session / auth_account / auth_verification (better-auth)
-_meta
+Phase 1 钉钉/权限：
+  dingtalk_dept / dingtalk_user / role_default_permission / dept_leader
+  auth_permission_override / audit_log / auth_user / auth_session
+  auth_account / auth_verification / auth_invite_code / auth_invite_code_use / _meta
+
+Phase 2 主播/爬虫：
+  anchor_profile / kuaishou_member / kuaishou_live_session / kuaishou_live_trend
+  broker / broker_user_mapping / douyin_video_snapshot
+  crawler_cookie_session / fetch_job_* / video_*
+
+Phase 2.1 直播账号：
+  live_account / live_anchor / live_anchor_account / live_room
+  account_anchor_default / daily_schedule_day / daily_schedule_segment
+
+Phase 2.2 投放归因：
+  placement_dataset / placement_row / placement_cumulative_raw
+  schedule_override / placement_attribution_dirty
+
+Phase 2.4 配置 / 别名：
+  product_config / field_alias / user_column_preset / aliases
+
+Phase 3.0 剪辑工作流（剪辑师 + 任务 + 事件）：
+  editing_task / editing_task_event
+
+打卡 / 直播日志：
+  live_session_log
 ```
+
+> 具体字段以 `src/db/schema/*.ts` 为准；表名仅供导航。
 
 ## 启动开发
 
@@ -74,21 +96,26 @@ pnpm worker                          # 另开终端，钉钉同步等定时任�
 - **sync job unionid 兜底**：`/topapi/user/listsimple` 不返回 unionid，sync job 用 userid 兜底，导致钉钉 OAuth 拿到的 user.id ≠ dingtalk_user.unionid。需改用 `/v2/user/get` 接口拉真实 unionid。
 - **张锦 admin override 是手动 SQL 加的**，每天 02:00 sync 会被覆盖（unionid 变回 userid 后查不到）。临时方案：每次同步后重新 seed；根因解决在上一条。
 
-## Phase 2 范围（待 brainstorm）
+## 模块清单（19 个 module / `src/modules/*`）
 
-- 主播实体（`anchor_profile`） + 主播 ↔ 运营关联（`anchor_operator`）
-- **抖音/快手爬虫**（PRO3 没有现成可复用！PRO3 是 Excel 导入不是 API 爬虫）
-- 单场粒度直播数据（`douyin_session` / `kuaishou_session`，每平台一张表，原始字段直存 `raw: jsonb`）
-- 直播数据看板（按权限过滤）
-- field_alias 配置（中文显示名）
+```
+基础 / 权限：permissions / brokers / aliases / column-presets / invite-codes
+看板 / 数据：dashboard / anchors / placement / placement-attribution
+账号 / 排班 / 打卡：live-account / live-anchor / live-room / schedule-override / checkin
+爬虫：crawler
+配置：product-config
+剪辑工作流：editing-task / editing-editor / editing-storage
+```
+
+每个 module 必须双入口（`index.ts` 客户端可用 / `server.ts` server-only）。eslint zone 同步注册。
 
 ## 开始工作前的快速检查
 
 ```bash
-git log -1 --oneline                 # 看最后一个 commit
-git tag --list                       # 看到 v0.1.0-phase0 v0.2.0-phase1
-pnpm typecheck && pnpm lint && pnpm test  # 应全过（18/18）
-docker exec qjhy-postgres psql -U qjhy -d qjhy -c "SELECT COUNT(*) FROM dingtalk_user;"  # 应 146
+git log -1 --oneline                          # 看最后一个 commit
+git tag --list                                 # 看到 phase tags
+pnpm typecheck && pnpm lint && pnpm test       # 应全过
+docker exec qjhy-postgres psql -U qjhy -d qjhy -c "SELECT COUNT(*) FROM dingtalk_user;"  # 应 146+
 ```
 
 ## 开发流程
