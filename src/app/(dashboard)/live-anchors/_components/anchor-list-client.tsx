@@ -2,23 +2,18 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, LayoutGrid, Plus, Rows3 } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { AnchorWithDingtalk } from "@/modules/live-anchor";
-import { Button } from "@/components/ui/button";
 import { AnchorTable } from "./anchor-table";
 import { AnchorEditDrawer } from "./anchor-edit-drawer";
-import { AnchorCard, type BindingLite } from "./anchor-card";
-import { AnchorStatCards } from "./anchor-stat-cards";
-import { AnchorPillTabs } from "./anchor-pill-tabs";
+import { AnchorBentoCard, type BindingLite } from "./anchor-bento-card";
 import {
-  AnchorFilterBar,
-  type EmpFilter,
-  type StatusFilter,
-  type SortKey,
-} from "./anchor-filter-bar";
-import { BUSINESS_LINE_TABS, type BusinessLineTabKey } from "./anchor-business-line-styles";
+  BUSINESS_LINE_TABS,
+  blStyle,
+  type BusinessLineTabKey,
+} from "./anchor-business-line-styles";
 
-const PAGE_SIZES = [12, 24, 48] as const;
+const PAGE_SIZES = [25, 50, 100] as const;
 type PageSize = (typeof PAGE_SIZES)[number];
 type ViewMode = "cards" | "table";
 
@@ -35,26 +30,15 @@ interface Props {
   deptUsers: DeptUserLite[];
 }
 
-function getDateKey(d: Date | string | null | undefined): string {
-  if (!d) return "";
-  if (typeof d === "string") return d;
-  return d.toISOString();
-}
-
 export function AnchorListClient({ initialAnchors, bindingsByAnchor, deptUsers }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<BusinessLineTabKey>("all");
-  const [empFilter, setEmpFilter] = useState<EmpFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("updated_desc");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
-
   const [editingAnchor, setEditingAnchor] = useState<AnchorWithDingtalk | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<PageSize>(12);
+  const [pageSize, setPageSize] = useState<PageSize>(25);
 
   const counts = useMemo(() => {
     const c: Record<BusinessLineTabKey, number> = {
@@ -73,94 +57,31 @@ export function AnchorListClient({ initialAnchors, bindingsByAnchor, deptUsers }
     return c;
   }, [initialAnchors]);
 
-  const byLine = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const t of BUSINESS_LINE_TABS) {
-      if (t.key === "all") continue;
-      m[t.key] = counts[t.key];
-    }
-    return m;
-  }, [counts]);
+  const filteredAnchors =
+    activeTab === "all"
+      ? initialAnchors
+      : initialAnchors.filter((a) => a.business_line === activeTab);
 
-  const stats = useMemo(() => {
-    let active = 0,
-      rest = 0,
-      leave = 0,
-      trial = 0,
-      unbound = 0;
-    for (const a of initialAnchors) {
-      if (a.work_status === "active") active += 1;
-      else if (a.work_status === "rest") rest += 1;
-      else if (a.work_status === "leave") leave += 1;
-      if (a.employment_type === "试播") trial += 1;
-      const bindings = bindingsByAnchor[a.dingtalk_user_id] ?? [];
-      if (bindings.length === 0 && a.work_status !== "leave") unbound += 1;
-    }
-    return { total: initialAnchors.length, active, rest, leave, trial, unbound };
-  }, [initialAnchors, bindingsByAnchor]);
-
-  // 过滤
-  const filteredAnchors = useMemo(() => {
-    let list = initialAnchors;
-    if (activeTab !== "all") list = list.filter((a) => a.business_line === activeTab);
-    if (empFilter !== "all") list = list.filter((a) => a.employment_type === empFilter);
-    if (statusFilter !== "all") list = list.filter((a) => a.work_status === statusFilter);
-    if (query.trim()) {
-      const q = query.trim().toLowerCase();
-      list = list.filter(
-        (a) =>
-          a.name.toLowerCase().includes(q) || (a.external_name ?? "").toLowerCase().includes(q),
-      );
-    }
-    return list;
-  }, [initialAnchors, activeTab, empFilter, statusFilter, query]);
-
-  // 排序
-  const sortedAnchors = useMemo(() => {
-    const arr = [...filteredAnchors];
-    if (sort === "updated_desc") {
-      arr.sort((a, b) => getDateKey(b.updated_at).localeCompare(getDateKey(a.updated_at)));
-    } else if (sort === "updated_asc") {
-      arr.sort((a, b) => getDateKey(a.updated_at).localeCompare(getDateKey(b.updated_at)));
-    } else if (sort === "name") {
-      arr.sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"));
-    } else if (sort === "trial_desc") {
-      arr.sort((a, b) =>
-        getDateKey(b.trial_start_date).localeCompare(getDateKey(a.trial_start_date)),
-      );
-    } else if (sort === "bindings_desc") {
-      arr.sort(
-        (a, b) =>
-          (bindingsByAnchor[b.dingtalk_user_id]?.length ?? 0) -
-          (bindingsByAnchor[a.dingtalk_user_id]?.length ?? 0),
-      );
-    }
-    return arr;
-  }, [filteredAnchors, sort, bindingsByAnchor]);
-
-  // 任何筛选变化回到第 1 页
   useEffect(() => {
     setPage(1);
-  }, [activeTab, empFilter, statusFilter, query, sort, pageSize]);
+  }, [activeTab, pageSize]);
 
-  const totalPages = Math.max(1, Math.ceil(sortedAnchors.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredAnchors.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pagedAnchors = sortedAnchors.slice((safePage - 1) * pageSize, safePage * pageSize);
-  const rangeStart = sortedAnchors.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const rangeEnd = Math.min(safePage * pageSize, sortedAnchors.length);
+  const pagedAnchors = filteredAnchors.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const rangeStart = filteredAnchors.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, filteredAnchors.length);
 
-  const activeFilterCount =
-    (activeTab !== "all" ? 1 : 0) +
-    (empFilter !== "all" ? 1 : 0) +
-    (statusFilter !== "all" ? 1 : 0) +
-    (query.trim() ? 1 : 0);
-
-  function clearAllFilters() {
-    setActiveTab("all");
-    setEmpFilter("all");
-    setStatusFilter("all");
-    setQuery("");
-  }
+  // 有绑定的主播置顶
+  const sortedAnchors = useMemo(
+    () =>
+      [...pagedAnchors].sort((a, b) => {
+        const ah = (bindingsByAnchor[a.dingtalk_user_id]?.length ?? 0) > 0 ? 0 : 1;
+        const bh = (bindingsByAnchor[b.dingtalk_user_id]?.length ?? 0) > 0 ? 0 : 1;
+        return ah - bh;
+      }),
+    [pagedAnchors, bindingsByAnchor],
+  );
 
   function openEdit(anchor: AnchorWithDingtalk) {
     setEditingAnchor(anchor);
@@ -179,96 +100,83 @@ export function AnchorListClient({ initialAnchors, bindingsByAnchor, deptUsers }
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">主播档案</h1>
-        <span className="text-[13px] text-slate-400">管理全部主播 · 业务线 · 账号绑定</span>
-        <div className="flex-1" />
-        <Button variant="outline" size="sm">
-          导出 CSV
-        </Button>
-        <Button size="sm" onClick={openNew}>
-          <Plus className="mr-1 h-4 w-4" />
-          新增主播
-        </Button>
-      </div>
-
-      {/* KPI strip */}
-      <AnchorStatCards stats={stats} byLine={byLine} />
-
-      {/* Business line pill tabs */}
-      <AnchorPillTabs active={activeTab} onChange={setActiveTab} counts={counts} />
-
-      {/* Filter row */}
-      <AnchorFilterBar
-        empFilter={empFilter}
-        onEmpChange={setEmpFilter}
-        statusFilter={statusFilter}
-        onStatusChange={setStatusFilter}
-        query={query}
-        onQueryChange={setQuery}
-        sort={sort}
-        onSortChange={setSort}
-      />
-
-      {/* Result bar */}
-      <div className="flex items-center justify-between gap-2 text-xs tabular-nums text-slate-500">
-        <div>
-          匹配 <strong className="font-semibold text-slate-900">{sortedAnchors.length}</strong>
-          {sortedAnchors.length !== initialAnchors.length && (
-            <span> / {initialAnchors.length}</span>
-          )}
-          <span> 位主播</span>
-          {activeFilterCount > 0 && (
+    <div>
+      {/* Toolbar — 跟直播账号一个标准：业务线 pill tabs + 视图说明 + 新增 */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
+          {BUSINESS_LINE_TABS.map((t) => {
+            const active = t.key === activeTab;
+            const s = t.key === "all" ? null : blStyle(t.key);
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setActiveTab(t.key)}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  active
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                {s && (
+                  <span className={`h-1.5 w-1.5 rounded-full bg-gradient-to-br ${s.gradient}`} />
+                )}
+                {t.label}
+                <span
+                  className={`rounded px-1.5 text-[10px] ${
+                    active ? "bg-blue-50 text-blue-600" : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {counts[t.key] ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="inline-flex gap-0.5 rounded-md bg-slate-100 p-0.5">
             <button
               type="button"
-              onClick={clearAllFilters}
-              className="ml-2 inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600 hover:bg-blue-100"
+              onClick={() => setViewMode("cards")}
+              className={`rounded px-2 py-1 text-[11px] transition-colors ${
+                viewMode === "cards"
+                  ? "bg-white font-semibold text-blue-600 shadow-xs"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
             >
-              清除 {activeFilterCount} 项筛选 ×
+              卡片
             </button>
-          )}
-        </div>
-        <div className="inline-flex gap-0.5 rounded-md bg-slate-100 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`rounded px-2 py-1 text-[11px] transition-colors ${
+                viewMode === "table"
+                  ? "bg-white font-semibold text-blue-600 shadow-xs"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              表格
+            </button>
+          </div>
           <button
             type="button"
-            title="卡片"
-            onClick={() => setViewMode("cards")}
-            className={`flex h-6 w-7 items-center justify-center rounded transition-colors ${
-              viewMode === "cards"
-                ? "bg-white text-blue-600 shadow-xs"
-                : "text-slate-400 hover:text-slate-600"
-            }`}
-            aria-label="卡片视图"
+            onClick={openNew}
+            className="rounded-[5px] bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600"
           >
-            <LayoutGrid className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            title="表格"
-            onClick={() => setViewMode("table")}
-            className={`flex h-6 w-7 items-center justify-center rounded transition-colors ${
-              viewMode === "table"
-                ? "bg-white text-blue-600 shadow-xs"
-                : "text-slate-400 hover:text-slate-600"
-            }`}
-            aria-label="表格视图"
-          >
-            <Rows3 className="h-3.5 w-3.5" />
+            + 新增主播
           </button>
         </div>
       </div>
 
-      {/* Grid / Table */}
-      {pagedAnchors.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 py-20 text-center text-[13px] text-slate-400">
-          {activeFilterCount > 0 ? "无匹配主播" : "暂无主播档案"}
+      {/* Layout — bento grid 或 表格 */}
+      {filteredAnchors.length === 0 ? (
+        <div className="flex items-center justify-center py-20 text-sm text-slate-400">
+          {activeTab === "all" ? "暂无主播档案" : `「${activeTab}」 下暂无主播`}
         </div>
       ) : viewMode === "cards" ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {pagedAnchors.map((a) => (
-            <AnchorCard
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {sortedAnchors.map((a) => (
+            <AnchorBentoCard
               key={a.dingtalk_user_id}
               anchor={a}
               bindings={bindingsByAnchor[a.dingtalk_user_id] ?? []}
@@ -287,10 +195,10 @@ export function AnchorListClient({ initialAnchors, bindingsByAnchor, deptUsers }
       )}
 
       {/* Pagination */}
-      {sortedAnchors.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[12.5px] tabular-nums text-slate-500">
+      {filteredAnchors.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 text-[12.5px] tabular-nums text-slate-500">
           <span>
-            共 <strong className="text-slate-800">{sortedAnchors.length}</strong> 位 · 当前{" "}
+            共 <strong className="text-slate-800">{filteredAnchors.length}</strong> 位 · 当前{" "}
             <strong className="text-slate-800">
               {rangeStart}-{rangeEnd}
             </strong>
@@ -330,7 +238,6 @@ export function AnchorListClient({ initialAnchors, bindingsByAnchor, deptUsers }
         </div>
       )}
 
-      {/* Edit drawer (保持原状) */}
       <AnchorEditDrawer
         open={drawerOpen}
         onOpenChange={onDrawerClose}
