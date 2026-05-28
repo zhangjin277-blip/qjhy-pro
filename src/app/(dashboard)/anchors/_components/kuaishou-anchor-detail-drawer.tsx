@@ -151,11 +151,11 @@ const DAYS_PRESETS: { value: number; label: string }[] = [
 
 function fmtChinese(n: number): string {
   if (Math.abs(n) >= 1e8) return (n / 1e8).toFixed(2).replace(/\.?0+$/, "") + "亿";
-  if (Math.abs(n) >= 1e4) return (n / 1e4).toFixed(2).replace(/\.?0+$/, "") + "万";
+  if (Math.abs(n) >= 1e6) return (n / 1e4).toFixed(2).replace(/\.?0+$/, "") + "万";
   return n.toLocaleString("zh-CN", { maximumFractionDigits: 0 });
 }
 function fmtMoney(n: number): string {
-  if (Math.abs(n) >= 1e4) return "¥" + (n / 1e4).toFixed(2).replace(/\.?0+$/, "") + "万";
+  if (Math.abs(n) >= 1e6) return "¥" + (n / 1e4).toFixed(2).replace(/\.?0+$/, "") + "万";
   return "¥" + n.toLocaleString("zh-CN", { maximumFractionDigits: 0 });
 }
 function fmtDateTime(iso: string): string {

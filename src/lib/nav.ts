@@ -2,6 +2,7 @@ import {
   BarChart3,
   Home,
   MonitorPlay,
+  Scissors,
   Settings2,
   Shield,
   UserCircle2,
@@ -97,6 +98,19 @@ export const NAV: NavItem[] = [
     ],
   },
   {
+    key: "editing",
+    label: "短视频",
+    icon: Scissors,
+    children: [
+      {
+        key: "editing-workbench",
+        label: "剪辑工作台",
+        href: "/editing",
+        module: "editing_workflow",
+      },
+    ],
+  },
+  {
     key: "ops",
     label: "运营管理",
     icon: Settings2,
@@ -119,6 +133,12 @@ export const NAV: NavItem[] = [
         module: "permissions",
       },
       { key: "sys-brokers", label: "经纪人映射", href: "/admin/brokers", module: "permissions" },
+      {
+        key: "sys-product",
+        label: "产品分类",
+        href: "/admin/product-config",
+        module: "permissions",
+      },
       { key: "sys-dept", label: "部门架构", href: "/admin/depts", disabled: true },
       { key: "sys-alias", label: "字段别名", href: "/admin/aliases", disabled: true },
       { key: "sys-crawler", label: "采集监控", href: "/admin/crawler", module: "crawler" },

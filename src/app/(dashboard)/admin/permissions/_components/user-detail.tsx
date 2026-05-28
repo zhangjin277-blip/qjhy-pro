@@ -111,11 +111,16 @@ const WORKING_OPTIONS: { value: WorkingScope; label: string }[] = [
   { value: "all", label: "所有人" },
 ];
 
+type FlagState = "default" | "on" | "off";
+
 export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?: () => void }) {
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [working, setWorking] = useState<Record<ModuleKey, WorkingScope>>(
     {} as Record<ModuleKey, WorkingScope>,
   );
+  const [workingFlags, setWorkingFlags] = useState<
+    Record<ModuleKey, { can_edit: FlagState; can_export: FlagState; can_admin: FlagState }>
+  >({} as never);
   const [workingPosition, setWorkingPosition] = useState<string>("");
   const [positionOptions, setPositionOptions] = useState<string[]>([]);
   const [reason, setReason] = useState("");
@@ -140,11 +145,23 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
         setDetail(d);
         // 初始化 working：根据 overrides 判断每 module 是 default 还是有 override
         const init: Record<ModuleKey, WorkingScope> = {} as Record<ModuleKey, WorkingScope>;
+        const initFlags: Record<
+          ModuleKey,
+          { can_edit: FlagState; can_export: FlagState; can_admin: FlagState }
+        > = {} as never;
+        const flagOf = (v: boolean | null | undefined): FlagState =>
+          v === true ? "on" : v === false ? "off" : "default";
         for (const m of MODULE_KEYS) {
           const ov = d.overrides.find((x) => x.module === m);
           init[m] = ov?.scope ? (ov.scope as Scope) : "default";
+          initFlags[m] = {
+            can_edit: flagOf(ov?.can_edit),
+            can_export: flagOf(ov?.can_export),
+            can_admin: flagOf(ov?.can_admin),
+          };
         }
         setWorking(init);
+        setWorkingFlags(initFlags);
         setWorkingPosition(d.effective_position);
         setDelegatedUserIds((d.delegated_users ?? []).map((u) => u.user_id));
       });
@@ -272,9 +289,14 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
         });
       }
       // 2. 写板块权限 override（含委托视图）
+      const flagVal = (s: FlagState): boolean | null =>
+        s === "on" ? true : s === "off" ? false : null;
       const entries = MODULE_KEYS.map((m) => ({
         module: m,
         scope: working[m] === "default" ? null : (working[m] as Scope),
+        can_edit: flagVal(workingFlags[m]?.can_edit ?? "default"),
+        can_export: flagVal(workingFlags[m]?.can_export ?? "default"),
+        can_admin: flagVal(workingFlags[m]?.can_admin ?? "default"),
       }));
       await upsertOverrideBatch({
         user_id: userId,
@@ -754,6 +776,55 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
                       ))}
                     </div>
                   </div>
+                  {(["can_edit", "can_export", "can_admin"] as const).map((flag) => {
+                    const flagLabel = {
+                      can_edit: "编辑",
+                      can_export: "导出",
+                      can_admin: "管理",
+                    }[flag];
+                    const cur = workingFlags[m]?.[flag] ?? "default";
+                    return (
+                      <div key={flag} className="flex items-center gap-3 flex-wrap">
+                        <span className="text-xs text-muted-foreground w-16 shrink-0">
+                          {flagLabel}
+                        </span>
+                        <div className="inline-flex rounded-md border bg-muted/50 p-0.5">
+                          {(
+                            [
+                              { v: "default", l: "使用默认" },
+                              { v: "on", l: "✓ 启用" },
+                              { v: "off", l: "✗ 禁用" },
+                            ] as const
+                          ).map((opt) => (
+                            <button
+                              key={opt.v}
+                              type="button"
+                              onClick={() =>
+                                setWorkingFlags((prev) => ({
+                                  ...prev,
+                                  [m]: {
+                                    ...(prev[m] ?? {
+                                      can_edit: "default",
+                                      can_export: "default",
+                                      can_admin: "default",
+                                    }),
+                                    [flag]: opt.v,
+                                  },
+                                }))
+                              }
+                              className={`px-3 py-1 text-xs rounded transition-colors ${
+                                cur === opt.v
+                                  ? "bg-background text-primary font-medium shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              {opt.l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             );
@@ -806,5 +877,7 @@ function moduleEmoji(m: ModuleKey): string {
       return "📍";
     case "placement":
       return "💸";
+    case "editing_workflow":
+      return "✂️";
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Gift } from "lucide-react";
 import type { CheckinDayResult, CheckinDaySession } from "@/modules/checkin/queries";
 
 interface Props {
@@ -34,6 +35,13 @@ function statusLabel(s: CheckinDaySession): string {
   if (s.status === "auto_closed_by_offline") return "系统检测离线";
   if (s.status === "auto_closed_by_cron") return "系统兜底";
   return s.status;
+}
+
+function fmtGift(cents: number): string {
+  const yuan = cents / 100;
+  if (yuan >= 1_000_000) return `${(yuan / 10000).toFixed(1)}万`;
+  if (yuan >= 1000) return Math.round(yuan).toLocaleString("zh-CN");
+  return yuan.toFixed(1);
 }
 
 function fmtTime(iso: string): string {
@@ -252,9 +260,19 @@ function GanttArea({
               // 允许名字溢出到右侧空白（生产场景每场 3h+ 不会跟相邻条重叠）
               overflow: "visible",
             }}
-            title={`${s.anchor_name} · ${fmtTime(s.start_at)}→${s.end_at ? fmtTime(s.end_at) : "进行中"} · ${statusLabel(s)}`}
+            title={`${s.anchor_name} · ${fmtTime(s.start_at)}→${s.end_at ? fmtTime(s.end_at) : "进行中"} · ${statusLabel(s)}${
+              s.status !== "in_progress" && s.income_cents !== null
+                ? ` · 礼物 ${(s.income_cents / 100).toFixed(1)} 元`
+                : ""
+            }`}
           >
-            {s.anchor_name}
+            <b className="font-semibold">{s.anchor_name}</b>
+            {s.status !== "in_progress" && s.income_cents !== null && s.income_cents > 0 && (
+              <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] opacity-80">
+                <Gift className="h-2.5 w-2.5" strokeWidth={2.2} />
+                <span className="tabular-nums">{fmtGift(s.income_cents)}</span>
+              </span>
+            )}
           </button>
         );
       })}

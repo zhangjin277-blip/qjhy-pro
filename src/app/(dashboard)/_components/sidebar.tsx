@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronsLeft, ChevronsRight, Radio, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronDown, ChevronsLeft, ChevronsRight, Radio, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { filterNavByVisibility, findActiveSectionKey, isHrefActive, type NavItem } from "@/lib/nav";
 import type { ModuleKey } from "@/modules/permissions";
@@ -131,6 +131,49 @@ interface SidebarInnerProps {
   onItemClick?: () => void;
 }
 
+function BackendSwitcher() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="inline-flex items-center gap-0.5 rounded text-[11px] text-primary hover:bg-primary/10 px-1 py-0.5"
+      >
+        切换
+        <ChevronDown className="h-3 w-3" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-[160px] rounded-lg border border-border bg-white p-1 shadow-lg">
+          <div className="flex items-center gap-2 rounded px-2 py-1.5 bg-primary/10 text-primary text-[12px]">
+            <Check className="h-3.5 w-3.5" />
+            <span className="font-medium">新后台</span>
+            <span className="ml-auto text-[10px] text-primary/60">当前</span>
+          </div>
+          <a
+            href="http://qjhypro.cn:8888/"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded px-2 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
+          >
+            <span className="h-3.5 w-3.5" />
+            <span>老后台</span>
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SidebarInner({
   nav,
   showLabels,
@@ -144,16 +187,17 @@ function SidebarInner({
   return (
     <>
       {/* 品牌 */}
-      <div className="flex h-13 items-center gap-2 px-2.5">
+      <div className="flex h-14 items-center gap-2 px-2.5">
         <div className="from-primary to-primary/70 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br shadow-sm ring-1 ring-white/30 ring-inset">
           <Radio className="h-4 w-4 text-white" strokeWidth={2.4} />
         </div>
         {showLabels && (
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="max-w-[72px] truncate text-[13px] font-semibold">直播服务平台</span>
-            <span className="ring-amber-200/60 inline-flex shrink-0 items-center rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 ring-1 ring-inset">
-              长沙奇迹互娱
-            </span>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-[13px] font-semibold">直播服务平台</span>
+              <BackendSwitcher />
+            </div>
+            <span className="truncate text-[10px] text-muted-foreground">长沙奇迹互娱</span>
           </div>
         )}
       </div>

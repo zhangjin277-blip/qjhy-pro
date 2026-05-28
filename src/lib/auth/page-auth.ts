@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db/client";
 import { auth_user, dingtalk_user } from "@/db/schema";
 import { resolveDingtalkIdentityByAuthUserId } from "./dingtalk-identity";
+import { AppError } from "@/lib/errors";
 
 /**
  * Page-level 用户身份解析。所有需要权限过滤的 server component / server action 调用，
@@ -88,4 +89,29 @@ export async function getCurrentDingtalkUser(): Promise<
     dingtalkUnionId: identity.dingtalkUnionId,
     isEmergency: false,
   };
+}
+
+/**
+ * 任意已登录用户均可调用的 Server Action 鉴权辅助。
+ *
+ * 与 requireAdmin（admin-guard.ts）的区别：
+ *   - requireAdmin  → 仅 can_admin=true 的用户（权限管理专用）
+ *   - requireUser   → 任意已登录的在职员工（运营、剪辑、admin 皆可）
+ *
+ * 返回 { userId: string }，userId 为钉钉 user_id（emergency 模式下为 auth_user.id）。
+ * 未登录 / 账号失效 / 钉钉未同步均抛 AppError。
+ */
+export async function requireUser(): Promise<{ userId: string }> {
+  const identity = await getCurrentDingtalkUser();
+  if (identity.kind === "unauth") {
+    throw new AppError("AUTH_NOT_LOGGED_IN", "未登录", 401);
+  }
+  if (identity.kind === "user_not_synced") {
+    throw new AppError(
+      "AUTH_USER_NOT_SYNCED",
+      "当前钉钉账号不在本企业通讯录或已离职，无法操作",
+      403,
+    );
+  }
+  return { userId: identity.dingtalkUserId };
 }

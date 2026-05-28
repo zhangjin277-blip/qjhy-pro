@@ -36,8 +36,11 @@ services:
       DINGTALK_CORP_ID: ${DINGTALK_CORP_ID:-}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NODE_ENV: production
+      EDITING_NAS_PATH: /mnt/qjhy-edit
     ports:
       - "3000:3000"
+    volumes:
+      - editing_nas:/mnt/qjhy-edit
 
   worker:
     build:
@@ -57,6 +60,16 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
       PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
+      EDITING_NAS_PATH: /mnt/qjhy-edit
+    volumes:
+      - editing_nas:/mnt/qjhy-edit
 
 volumes:
   qjhy_postgres_data:
+  # 与 PRO3 共用：source/edited/cover 三个根目录下用 {产品}-新/ 子目录
+  editing_nas:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=172.16.39.61,nolock,soft,rw"
+      device: ":/volume1/docker/miracle-pro-cs/server/uploads/editing"

@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { CheckinDayResult, CheckinDaySession } from "@/modules/checkin/queries";
-import { forceEndSessionAction } from "../actions";
+import {
+  forceEndSessionAction,
+  listAnchorsForCorrection,
+  updateSessionAnchorAction,
+} from "../actions";
 
 interface Props {
   data: CheckinDayResult;
@@ -28,14 +32,16 @@ function fmtYuan(cents: number | null): string {
   if (cents == null) return "—";
   if (cents === 0) return "0";
   const yuan = cents / 100;
-  if (yuan >= 10000) return `${(yuan / 10000).toFixed(2)}万`;
+  if (yuan >= 1_000_000) return `${(yuan / 10000).toFixed(2)}万`;
+  if (yuan >= 1000) return Math.round(yuan).toLocaleString("zh-CN");
   return yuan.toFixed(2);
 }
 
 function fmtMoney(yuan: number | null): string {
   if (yuan == null) return "—";
   if (yuan === 0) return "0";
-  if (yuan >= 10000) return `${(yuan / 10000).toFixed(2)}万`;
+  if (yuan >= 1_000_000) return `${(yuan / 10000).toFixed(2)}万`;
+  if (yuan >= 1000) return Math.round(yuan).toLocaleString("zh-CN");
   return yuan.toFixed(2);
 }
 
@@ -78,7 +84,29 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
     reason: string;
     error: string | null;
   } | null>(null);
+  const [correctDialog, setCorrectDialog] = useState<{
+    sessionId: string;
+    anchorName: string;
+    accountName: string;
+    newAnchorId: string;
+    reason: string;
+    error: string | null;
+  } | null>(null);
+  const [anchors, setAnchors] = useState<
+    { id: string; realName: string; externalName: string | null }[]
+  >([]);
+  const [anchorQuery, setAnchorQuery] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (correctDialog && anchors.length === 0) {
+      listAnchorsForCorrection()
+        .then(setAnchors)
+        .catch((e) => {
+          console.error("load anchors failed", e);
+        });
+    }
+  }, [correctDialog, anchors.length]);
 
   const flat: FlatRow[] = [];
   for (const acc of data.accounts) {
@@ -106,6 +134,25 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
         onChanged?.();
       } else {
         setDialog({ ...dialog, error: r.error ?? "下播失败" });
+      }
+    });
+  }
+
+  function submitCorrect(): void {
+    if (!correctDialog || !correctDialog.newAnchorId) return;
+    const { sessionId, newAnchorId, reason } = correctDialog;
+    startTransition(async () => {
+      const r = await updateSessionAnchorAction({
+        sessionId,
+        newAnchorDingtalkUserId: newAnchorId,
+        reason,
+      });
+      if (r.ok) {
+        setCorrectDialog(null);
+        setAnchorQuery("");
+        onChanged?.();
+      } else {
+        setCorrectDialog({ ...correctDialog, error: r.error ?? "修改失败" });
       }
     });
   }
@@ -200,25 +247,41 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
                     </td>
                     {canForceEnd && (
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        {isLive ? (
+                        <div className="inline-flex items-center gap-1.5">
+                          {isLive && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDialog({
+                                  sessionId: r.session.session_id,
+                                  anchorName: r.session.anchor_name,
+                                  accountName: r.account_name,
+                                  reason: "",
+                                  error: null,
+                                })
+                              }
+                              className="rounded border border-red-300 bg-white px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50"
+                            >
+                              强制下播
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() =>
-                              setDialog({
+                              setCorrectDialog({
                                 sessionId: r.session.session_id,
                                 anchorName: r.session.anchor_name,
                                 accountName: r.account_name,
+                                newAnchorId: "",
                                 reason: "",
                                 error: null,
                               })
                             }
-                            className="rounded border border-red-300 bg-white px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50"
+                            className="rounded border border-blue-300 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-50"
                           >
-                            强制下播
+                            改主播
                           </button>
-                        ) : (
-                          <span className="text-[11px] text-slate-300">—</span>
-                        )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -228,6 +291,124 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
           </tbody>
         </table>
       </div>
+
+      {correctDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => !isPending && setCorrectDialog(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 text-sm font-semibold text-slate-800">改主播</div>
+            <div className="mb-3 rounded bg-slate-50 p-3 text-[12.5px] text-slate-700">
+              当前主播：<span className="font-medium">{correctDialog.anchorName}</span>
+              <br />
+              账号：<span className="font-medium">{correctDialog.accountName}</span>
+              <br />
+              <span className="text-[11.5px] text-slate-500">
+                适用于扫码失误等场景，会写 audit_log。
+              </span>
+            </div>
+            <label className="mb-1 block text-[12px] text-slate-600">新主播</label>
+            <input
+              type="text"
+              autoFocus
+              value={anchorQuery}
+              onChange={(e) => {
+                setAnchorQuery(e.target.value);
+                setCorrectDialog({ ...correctDialog, newAnchorId: "" });
+              }}
+              placeholder={anchors.length === 0 ? "加载中..." : "搜索主播 / 艺名"}
+              disabled={isPending}
+              className="mb-1 w-full rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <div className="mb-3 max-h-48 overflow-y-auto rounded border border-slate-200 bg-white">
+              {anchors
+                .filter((a) => {
+                  if (!anchorQuery) return true;
+                  const q = anchorQuery.toLowerCase();
+                  return (
+                    a.realName.toLowerCase().includes(q) ||
+                    (a.externalName?.toLowerCase().includes(q) ?? false)
+                  );
+                })
+                .slice(0, 50)
+                .map((a) => {
+                  const selected = correctDialog.newAnchorId === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => {
+                        setCorrectDialog({ ...correctDialog, newAnchorId: a.id });
+                        setAnchorQuery(
+                          a.externalName ? `${a.realName}（${a.externalName}）` : a.realName,
+                        );
+                      }}
+                      className={`flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[12px] hover:bg-slate-50 ${
+                        selected ? "bg-blue-50 text-blue-700" : "text-slate-700"
+                      }`}
+                    >
+                      <span>
+                        <b>{a.realName}</b>
+                        {a.externalName && (
+                          <span className="ml-1 text-slate-400">（{a.externalName}）</span>
+                        )}
+                      </span>
+                      {selected && <span className="text-blue-500">✓</span>}
+                    </button>
+                  );
+                })}
+              {anchors.length > 0 &&
+                anchors.filter((a) => {
+                  if (!anchorQuery) return false;
+                  const q = anchorQuery.toLowerCase();
+                  return (
+                    a.realName.toLowerCase().includes(q) ||
+                    (a.externalName?.toLowerCase().includes(q) ?? false)
+                  );
+                }).length === 0 &&
+                anchorQuery && (
+                  <div className="px-2 py-1.5 text-[12px] text-slate-400">无匹配主播</div>
+                )}
+            </div>
+            <label className="mb-1 block text-[12px] text-slate-600">原因（可选）</label>
+            <textarea
+              value={correctDialog.reason}
+              onChange={(e) => setCorrectDialog({ ...correctDialog, reason: e.target.value })}
+              disabled={isPending}
+              rows={2}
+              className="mb-3 w-full rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="如：主播扫错码 / 误顶上一场"
+            />
+            {correctDialog.error && (
+              <div className="mb-3 rounded border border-red-200 bg-red-50 px-2 py-1 text-[12px] text-red-700">
+                {correctDialog.error}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCorrectDialog(null)}
+                disabled={isPending}
+                className="rounded border border-slate-300 bg-white px-3 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={submitCorrect}
+                disabled={isPending || !correctDialog.newAnchorId}
+                className="rounded bg-blue-600 px-3 py-1 text-[12px] font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isPending ? "提交中..." : "确认修改"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {dialog && (
         <div

@@ -124,12 +124,20 @@ async function ksPost<T>(opts: {
 
 /**
  * 从 liveStreamUrl 提取字符串 ID（666 trend 接口用）。
- * 例：https://...gifshow/n4qImNF2Bf0_GameAvcSdL0.m3u8?... → "n4qImNF2Bf0"
+ * URL 形如：https://...gifshow/{streamId}_{type}.m3u8?...
+ *   - {streamId} 可能本身含下划线，如「klLHvUy_x0w」
+ *   - {type} 是单段英文，如「GameAvcSdL0」
+ * 策略：先抓 gifshow/...m3u8 之间的整段，再去掉最后一个下划线及其后内容（即 _{type}）。
+ * 例：gifshow/ZM40gx3RvFw_GameAvcSdL0.m3u8 → "ZM40gx3RvFw"
+ * 例：gifshow/klLHvUy_x0w_GameAvcSdL0.m3u8 → "klLHvUy_x0w"
  */
 function extractStreamLiveIdStr(liveStreamUrl: string | undefined | null): string | null {
   if (!liveStreamUrl) return null;
-  const m = liveStreamUrl.match(/gifshow\/([^_/]+)/);
-  return m?.[1] ?? null;
+  const m = liveStreamUrl.match(/gifshow\/([^/?]+?)\.m3u8/);
+  if (!m) return null;
+  const full = m[1] ?? "";
+  const idx = full.lastIndexOf("_");
+  return idx > 0 ? full.slice(0, idx) : full;
 }
 
 /** jigou: 拉当前在播直播间列表（含字符串 streamLiveId） */

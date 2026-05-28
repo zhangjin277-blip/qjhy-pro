@@ -2,6 +2,50 @@ import { env } from "@/lib/env";
 import { isAppError } from "@/lib/errors";
 
 /**
+ * 剪辑加急通知专用 webhook。
+ * 优先用 EDITING_DINGTALK_WEBHOOK，兜底用 DINGTALK_BOT_WEBHOOK。
+ */
+function editingWebhook(): string {
+  return env.EDITING_DINGTALK_WEBHOOK || env.DINGTALK_BOT_WEBHOOK;
+}
+
+/**
+ * 给钉钉机器人发 markdown 消息（剪辑加急场景）。
+ * webhook 读 EDITING_DINGTALK_WEBHOOK ?? DINGTALK_BOT_WEBHOOK。
+ */
+export async function sendDingtalkMarkdown(
+  title: string,
+  content: string,
+  opts?: { isAtAll?: boolean; atMobiles?: string[] },
+): Promise<void> {
+  const webhook = editingWebhook();
+  if (!webhook) {
+    console.warn("[dingtalk] EDITING_DINGTALK_WEBHOOK / DINGTALK_BOT_WEBHOOK not configured, skip");
+    return;
+  }
+
+  const message = {
+    msgtype: "markdown",
+    markdown: { title, text: content },
+    at: opts,
+  };
+
+  try {
+    const res = await fetch(webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(message),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      console.error("[dingtalk] send failed:", res.status, await res.text());
+    }
+  } catch (err) {
+    console.error("[dingtalk] send error:", err);
+  }
+}
+
+/**
  * 给钉钉机器人发文本消息。
  *
  * ⚠️ 机器人配置了关键词"报错"——所有消息会自动加 [报错] 前缀。

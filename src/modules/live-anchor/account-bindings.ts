@@ -2,10 +2,22 @@
 import { db } from "@/db/client";
 import { account_anchor_default, live_account, dingtalk_user } from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
-import { requireAdmin } from "@/lib/admin-guard";
+import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
+import { resolvePermission } from "@/modules/permissions/server";
 import { AppError } from "@/lib/errors";
 import { eq, and, isNull, or, sql } from "drizzle-orm";
 import { UpsertBindingInput, DeleteBindingInput, ListBindingsInput } from "./schema";
+
+async function requireBindingEdit(): Promise<{ userId: string }> {
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind === "unauth") throw new AppError("AUTH_NOT_LOGGED_IN", "未登录", 401);
+  if (ctx.kind === "user_not_synced")
+    throw new AppError("AUTH_USER_NOT_SYNCED", "钉钉账号未同步", 403);
+  if (ctx.isEmergency) return { userId: ctx.dingtalkUserId };
+  const perm = await resolvePermission(ctx.dingtalkUserId, "live_account");
+  if (!perm.can_edit) throw new AppError("AUTH_FORBIDDEN", "无排班编辑权限", 403);
+  return { userId: ctx.dingtalkUserId };
+}
 
 export async function listBindings(input: unknown) {
   const data = ListBindingsInput.parse(input);
@@ -40,7 +52,7 @@ export async function listBindings(input: unknown) {
 
 export async function upsertBinding(input: unknown) {
   const data = UpsertBindingInput.parse(input);
-  const { userId } = await requireAdmin();
+  const { userId } = await requireBindingEdit();
 
   const id = data.id ?? crypto.randomUUID();
   const isUpdate = Boolean(data.id);
@@ -89,7 +101,7 @@ export async function upsertBinding(input: unknown) {
 
 export async function deleteBinding(input: unknown) {
   const { id } = DeleteBindingInput.parse(input);
-  const { userId } = await requireAdmin();
+  const { userId } = await requireBindingEdit();
 
   const [before] = await db
     .select()

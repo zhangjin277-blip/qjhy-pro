@@ -76,7 +76,7 @@ function formatKpiValue(value: number, unit?: string): { body: string; suffix: s
   if (abs >= 100_000_000) {
     return { body: (value / 100_000_000).toFixed(2).replace(/\.?0+$/, ""), suffix: "亿" };
   }
-  if (abs >= 10_000) {
+  if (abs >= 1_000_000) {
     return { body: (value / 10_000).toFixed(2).replace(/\.?0+$/, ""), suffix: "万" };
   }
   return { body: value.toLocaleString("zh-CN"), suffix: "" };

@@ -1,8 +1,8 @@
-/** 中文数字缩写：≥1 亿 → 「N 亿」，≥1 万 → 「N 万」，否则原数字 */
+/** 中文数字缩写：≥1 亿 → 「N 亿」，≥100 万 → 「N 万」，否则千分位整数 */
 export function formatChineseNumber(n: number): string {
   const abs = Math.abs(n);
   if (abs >= 100_000_000) return `${(n / 100_000_000).toFixed(2).replace(/\.?0+$/, "")}亿`;
-  if (abs >= 10_000) return `${(n / 10_000).toFixed(2).replace(/\.?0+$/, "")}万`;
+  if (abs >= 1_000_000) return `${(n / 10_000).toFixed(2).replace(/\.?0+$/, "")}万`;
   return n.toLocaleString("zh-CN");
 }
 
