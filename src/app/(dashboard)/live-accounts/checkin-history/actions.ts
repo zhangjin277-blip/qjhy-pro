@@ -8,6 +8,7 @@ import {
   forceEndSession,
   ForceEndPermissionDenied,
   updateSessionAnchor,
+  updateSessionTime,
 } from "@/modules/checkin/server";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 
@@ -74,6 +75,46 @@ export async function listAnchorsForCorrection(): Promise<
     realName: r.real_name,
     externalName: r.external_name,
   }));
+}
+
+export async function updateSessionTimeAction(args: {
+  sessionId: string;
+  /** ISO string，本地时区 */
+  newStartAt: string;
+  /** ISO string；空字符串 / null = 把 session 重置为 in_progress */
+  newEndAt: string | null;
+  reason?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind !== "ok") return { ok: false, error: "未登录" };
+
+  const startAt = new Date(args.newStartAt);
+  if (Number.isNaN(startAt.getTime())) return { ok: false, error: "开始时间格式错" };
+  let endAt: Date | null = null;
+  if (args.newEndAt) {
+    endAt = new Date(args.newEndAt);
+    if (Number.isNaN(endAt.getTime())) return { ok: false, error: "结束时间格式错" };
+  }
+
+  try {
+    await updateSessionTime({
+      sessionId: args.sessionId,
+      newStartAt: startAt,
+      newEndAt: endAt,
+      operatorDingtalkUserId: ctx.dingtalkUserId,
+      isEmergency: ctx.isEmergency,
+      reason: args.reason?.trim() || null,
+    });
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof ForceEndPermissionDenied) return { ok: false, error: "无权限改时间" };
+    const msg = err instanceof Error ? err.message : "未知错误";
+    if (msg === "SESSION_NOT_FOUND") return { ok: false, error: "记录不存在" };
+    if (msg === "INVALID_TIME_RANGE") return { ok: false, error: "结束必须晚于开始" };
+    if (msg === "ACCOUNT_HAS_OTHER_IN_PROGRESS")
+      return { ok: false, error: "该账号已有进行中场次，不能再开一个" };
+    return { ok: false, error: msg };
+  }
 }
 
 export async function updateSessionAnchorAction(args: {

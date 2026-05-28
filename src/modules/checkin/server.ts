@@ -590,3 +590,114 @@ export async function updateSessionAnchor(args: {
 
   return { session_id: sessionId };
 }
+
+/**
+ * 修改 session 的开始 / 结束时间（管理员纠正主播忘点 / 接班错时段）。
+ * 权限：同 updateSessionAnchor (canForceEndAnySession)。
+ * 不限 session status，但 newEndAt = null 时强制要求该账号无其它 in_progress。
+ * end_at 设了会重算 duration_seconds + 把 status 标 ended（如果原来是 in_progress）。
+ */
+export async function updateSessionTime(args: {
+  sessionId: string;
+  newStartAt: Date;
+  newEndAt: Date | null;
+  operatorDingtalkUserId: string;
+  isEmergency: boolean;
+  reason?: string | null;
+}): Promise<{ session_id: string; duration_seconds: number | null }> {
+  const { sessionId, newStartAt, newEndAt, operatorDingtalkUserId, isEmergency, reason } = args;
+
+  if (newEndAt && newEndAt.getTime() <= newStartAt.getTime()) {
+    throw new Error("INVALID_TIME_RANGE");
+  }
+
+  const allowed = await canForceEndAnySession(operatorDingtalkUserId, isEmergency);
+  if (!allowed) throw new ForceEndPermissionDenied();
+
+  const [existing] = await db
+    .select({
+      id: live_session_log.id,
+      live_account_id: live_session_log.live_account_id,
+      anchor_dingtalk_user_id: live_session_log.anchor_dingtalk_user_id,
+      status: live_session_log.status,
+      start_at: live_session_log.start_at,
+      end_at: live_session_log.end_at,
+      duration_seconds: live_session_log.duration_seconds,
+      raw: live_session_log.raw,
+    })
+    .from(live_session_log)
+    .where(eq(live_session_log.id, sessionId));
+  if (!existing) throw new Error("SESSION_NOT_FOUND");
+
+  // 改成 in_progress 时检查该账号是否有其它 in_progress（partial unique）
+  if (newEndAt === null && existing.status !== "in_progress") {
+    const [other] = await db
+      .select({ id: live_session_log.id })
+      .from(live_session_log)
+      .where(
+        and(
+          eq(live_session_log.live_account_id, existing.live_account_id),
+          eq(live_session_log.status, "in_progress"),
+        ),
+      )
+      .limit(1);
+    if (other && other.id !== sessionId) throw new Error("ACCOUNT_HAS_OTHER_IN_PROGRESS");
+  }
+
+  const now = new Date();
+  const newDuration = newEndAt
+    ? Math.floor((newEndAt.getTime() - newStartAt.getTime()) / 1000)
+    : null;
+  const newStatus =
+    newEndAt === null
+      ? "in_progress"
+      : existing.status === "in_progress"
+        ? "ended"
+        : existing.status;
+
+  const prevRaw = (existing.raw ?? {}) as Record<string, unknown>;
+  await db
+    .update(live_session_log)
+    .set({
+      start_at: newStartAt,
+      end_at: newEndAt,
+      duration_seconds: newDuration,
+      status: newStatus,
+      updated_at: now,
+      raw: {
+        ...prevRaw,
+        time_edited_by: operatorDingtalkUserId,
+        time_edited_at: now.toISOString(),
+        time_edited_reason: reason ?? null,
+        time_previous: {
+          start_at: existing.start_at.toISOString(),
+          end_at: existing.end_at?.toISOString() ?? null,
+          status: existing.status,
+        },
+      },
+    })
+    .where(eq(live_session_log.id, sessionId));
+
+  const { writeAuditLog } = await import("@/lib/audit/log");
+  await writeAuditLog({
+    user_id: operatorDingtalkUserId,
+    action: "LIVE_SESSION_TIME_EDIT",
+    target_type: "live_session_log",
+    target_id: sessionId,
+    before: {
+      start_at: existing.start_at.toISOString(),
+      end_at: existing.end_at?.toISOString() ?? null,
+      duration_seconds: existing.duration_seconds,
+      status: existing.status,
+    },
+    after: {
+      start_at: newStartAt.toISOString(),
+      end_at: newEndAt?.toISOString() ?? null,
+      duration_seconds: newDuration,
+      status: newStatus,
+      reason: reason ?? null,
+    },
+  });
+
+  return { session_id: sessionId, duration_seconds: newDuration };
+}

@@ -6,7 +6,16 @@ import {
   forceEndSessionAction,
   listAnchorsForCorrection,
   updateSessionAnchorAction,
+  updateSessionTimeAction,
 } from "../actions";
+
+function isoToLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 interface Props {
   data: CheckinDayResult;
@@ -92,6 +101,17 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
     reason: string;
     error: string | null;
   } | null>(null);
+  const [timeDialog, setTimeDialog] = useState<{
+    sessionId: string;
+    anchorName: string;
+    accountName: string;
+    startAtLocal: string;
+    endAtLocal: string;
+    /** 原始 status，用于提示用户"清空结束时间会改回进行中" */
+    originalStatus: string;
+    reason: string;
+    error: string | null;
+  } | null>(null);
   const [anchors, setAnchors] = useState<
     { id: string; realName: string; externalName: string | null }[]
   >([]);
@@ -134,6 +154,31 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
         onChanged?.();
       } else {
         setDialog({ ...dialog, error: r.error ?? "下播失败" });
+      }
+    });
+  }
+
+  function submitTime(): void {
+    if (!timeDialog) return;
+    const { sessionId, startAtLocal, endAtLocal, reason } = timeDialog;
+    if (!startAtLocal) {
+      setTimeDialog({ ...timeDialog, error: "开始时间必填" });
+      return;
+    }
+    const newStartAt = new Date(startAtLocal).toISOString();
+    const newEndAt = endAtLocal ? new Date(endAtLocal).toISOString() : null;
+    startTransition(async () => {
+      const r = await updateSessionTimeAction({
+        sessionId,
+        newStartAt,
+        newEndAt,
+        reason,
+      });
+      if (r.ok) {
+        setTimeDialog(null);
+        onChanged?.();
+      } else {
+        setTimeDialog({ ...timeDialog, error: r.error ?? "保存失败" });
       }
     });
   }
@@ -265,6 +310,24 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
                               强制下播
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTimeDialog({
+                                sessionId: r.session.session_id,
+                                anchorName: r.session.anchor_name,
+                                accountName: r.account_name,
+                                startAtLocal: isoToLocal(r.session.start_at),
+                                endAtLocal: r.session.end_at ? isoToLocal(r.session.end_at) : "",
+                                originalStatus: r.session.status,
+                                reason: "",
+                                error: null,
+                              })
+                            }
+                            className="rounded border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50"
+                          >
+                            改时间
+                          </button>
                           <button
                             type="button"
                             onClick={() =>
@@ -460,6 +523,103 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
                 className="rounded bg-red-600 px-3 py-1 text-[12px] font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {isPending ? "提交中..." : "确认下播"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {timeDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => !isPending && setTimeDialog(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 text-sm font-semibold text-slate-800">改开始 / 结束时间</div>
+            <div className="mb-3 rounded bg-slate-50 p-3 text-[12.5px] text-slate-700">
+              主播：<span className="font-medium">{timeDialog.anchorName}</span>
+              <br />
+              账号：<span className="font-medium">{timeDialog.accountName}</span>
+              <br />
+              <span className="text-[11.5px] text-slate-500">
+                用于主播忘点下播 / 误接班补正。时长按新时间重算，写 audit_log。
+              </span>
+            </div>
+
+            <label className="mb-1 block text-[12px] text-slate-600">开始时间</label>
+            <input
+              type="datetime-local"
+              value={timeDialog.startAtLocal}
+              onChange={(e) =>
+                setTimeDialog({ ...timeDialog, startAtLocal: e.target.value, error: null })
+              }
+              disabled={isPending}
+              step={60}
+              className="mb-3 w-full rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+
+            <label className="mb-1 block text-[12px] text-slate-600">
+              结束时间
+              <span className="ml-1.5 text-[11px] text-slate-400">（留空 = 改为进行中）</span>
+            </label>
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                type="datetime-local"
+                value={timeDialog.endAtLocal}
+                onChange={(e) =>
+                  setTimeDialog({ ...timeDialog, endAtLocal: e.target.value, error: null })
+                }
+                disabled={isPending}
+                step={60}
+                className="flex-1 rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              {timeDialog.endAtLocal && (
+                <button
+                  type="button"
+                  onClick={() => setTimeDialog({ ...timeDialog, endAtLocal: "", error: null })}
+                  disabled={isPending}
+                  className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-50"
+                >
+                  清空
+                </button>
+              )}
+            </div>
+
+            <label className="mb-1 block text-[12px] text-slate-600">原因（可选）</label>
+            <textarea
+              value={timeDialog.reason}
+              onChange={(e) => setTimeDialog({ ...timeDialog, reason: e.target.value })}
+              disabled={isPending}
+              rows={2}
+              className="mb-3 w-full rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="如：主播 18 点就下了忘点 / 提前 30min 接班"
+            />
+
+            {timeDialog.error && (
+              <div className="mb-3 rounded border border-red-200 bg-red-50 px-2 py-1 text-[12px] text-red-700">
+                {timeDialog.error}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setTimeDialog(null)}
+                disabled={isPending}
+                className="rounded border border-slate-300 bg-white px-3 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={submitTime}
+                disabled={isPending || !timeDialog.startAtLocal}
+                className="rounded bg-amber-600 px-3 py-1 text-[12px] font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {isPending ? "保存中..." : "保存"}
               </button>
             </div>
           </div>
