@@ -86,7 +86,7 @@ function RegisterInner() {
     <main className="bg-muted/30 flex min-h-screen items-center justify-center">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>QJHY-Pro 邀请码注册</CardTitle>
+          <CardTitle>奇迹服务平台·运营版 邀请码注册</CardTitle>
           <CardDescription>使用 admin 提供的邀请码创建外部账号</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

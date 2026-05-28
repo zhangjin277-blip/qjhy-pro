@@ -3,7 +3,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "QJHY-Pro",
+  title: "奇迹服务平台·运营版",
   description: "新中台 · 数据底座",
 };
 

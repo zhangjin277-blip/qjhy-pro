@@ -201,10 +201,8 @@ function LoginInner() {
             color: C.ink,
           }}
         >
-          QJHY-Pro
+          奇迹服务平台·运营版
         </span>
-        <span style={{ width: 1, height: 14, background: C.line }} />
-        <span style={{ fontSize: 12.5, color: C.sub, letterSpacing: ".04em" }}>直播运营中台</span>
       </div>
 
       {/* 左上角光晕 */}

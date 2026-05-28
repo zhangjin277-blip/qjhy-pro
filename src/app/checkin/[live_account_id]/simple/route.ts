@@ -121,7 +121,7 @@ button:disabled{opacity:.5}
   <div id="rWrap"></div>
 </div>
 
-<div class="footer">QJHY-Pro · 主播打卡 v1（朴素版）</div>
+<div class="footer">奇迹服务平台·运营版 · 主播打卡 v1（朴素版）</div>
 
 <script>
 (function(){

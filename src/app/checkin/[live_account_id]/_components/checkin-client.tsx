@@ -206,7 +206,9 @@ export function CheckinClient({ initialState, liveAccountId }: Props): React.JSX
         )}
       </div>
 
-      <div className="mt-6 text-center text-[11px] text-slate-400">QJHY-Pro · 主播打卡 v1</div>
+      <div className="mt-6 text-center text-[11px] text-slate-400">
+        奇迹服务平台·运营版 · 主播打卡 v1
+      </div>
     </div>
   );
 }
