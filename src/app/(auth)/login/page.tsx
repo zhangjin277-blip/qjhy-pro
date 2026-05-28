@@ -174,14 +174,25 @@ function LoginInner() {
           gap: 10,
         }}
       >
-        <Image
-          src="/favicon.ico"
-          alt="logo"
-          width={28}
-          height={28}
-          unoptimized
-          style={{ borderRadius: 6 }}
-        />
+        <div
+          aria-hidden
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 999,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "linear-gradient(135deg, #1677ff, #4096ff)",
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,.3), 0 1px 2px rgba(0,0,0,.04)",
+            flexShrink: 0,
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">
+            <rect x="4" y="5.5" width="16" height="4.2" rx="2.1" />
+            <rect x="9.9" y="6" width="4.2" height="13" rx="2.1" />
+          </svg>
+        </div>
         <span
           style={{
             fontSize: 14,

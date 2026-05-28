@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronsLeft, ChevronsRight, Radio, X } from "lucide-react";
+import { Check, ChevronDown, ChevronsLeft, ChevronsRight, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { filterNavByVisibility, findActiveSectionKey, isHrefActive, type NavItem } from "@/lib/nav";
 import type { ModuleKey } from "@/modules/permissions";
@@ -186,10 +186,13 @@ function SidebarInner({
 }: SidebarInnerProps) {
   return (
     <>
-      {/* 品牌 */}
+      {/* 品牌 — 蓝渐变圆 + 自定义广播塔 mark（参考 design-system/logomark） */}
       <div className="flex h-14 items-center gap-2 px-2.5">
         <div className="from-primary to-primary/70 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br shadow-sm ring-1 ring-white/30 ring-inset">
-          <Radio className="h-4 w-4 text-white" strokeWidth={2.4} />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
+            <rect x="4" y="5.5" width="16" height="4.2" rx="2.1" />
+            <rect x="9.9" y="6" width="4.2" height="13" rx="2.1" />
+          </svg>
         </div>
         {showLabels && (
           <div className="flex min-w-0 flex-1 flex-col">
