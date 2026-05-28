@@ -6,38 +6,69 @@ import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
 import { markDirtyByAccountDate, runAttributionJob } from "@/modules/placement-attribution/server";
+import { resolvePermission } from "@/modules/permissions/server";
+import { writeAuditLog } from "@/lib/audit/log";
 import { overrideInputSchema } from "./schema";
 import { revalidatePath } from "next/cache";
 
-export async function createOverride(input: unknown) {
+/**
+ * 校验当前用户具备 live_account 模块写权限（跟 schedule-today 同口径）。
+ * emergency 后门直接通过；否则要求 resolvePermission(uid, "live_account").can_edit。
+ */
+async function requireScheduleWrite(): Promise<{
+  authUserId: string;
+  dingtalkUserId: string;
+}> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) throw new Error("UNAUTHORIZED");
   const currentUser = await getCurrentDingtalkUser();
   if (currentUser.kind !== "ok") throw new Error("AUTH_USER_NOT_SYNCED");
+  if (!currentUser.isEmergency) {
+    const perm = await resolvePermission(currentUser.dingtalkUserId, "live_account");
+    if (!perm.can_edit) throw new Error("FORBIDDEN");
+  }
+  return { authUserId: session.user.id, dingtalkUserId: currentUser.dingtalkUserId };
+}
 
+export async function createOverride(input: unknown) {
+  const { authUserId, dingtalkUserId } = await requireScheduleWrite();
   const parsed = overrideInputSchema.parse(input);
 
-  await db.insert(schedule_override).values({
-    account_id: parsed.account_id,
-    date: parsed.date,
-    dingtalk_user_id: parsed.dingtalk_user_id,
-    time_slots: parsed.time_slots,
-    reason: parsed.reason ?? null,
-    created_by: session.user.id,
-  });
+  const [row] = await db
+    .insert(schedule_override)
+    .values({
+      account_id: parsed.account_id,
+      date: parsed.date,
+      dingtalk_user_id: parsed.dingtalk_user_id,
+      time_slots: parsed.time_slots,
+      reason: parsed.reason ?? null,
+      created_by: authUserId,
+    })
+    .returning();
 
   await markDirtyByAccountDate(parsed.account_id, parsed.date);
   await runAttributionJob({ max_rows: 200 });
+
+  await writeAuditLog({
+    user_id: dingtalkUserId,
+    action: "SCHEDULE_OVERRIDE_CREATE",
+    target_type: "schedule_override",
+    target_id: row?.id ?? null,
+    after: {
+      account_id: parsed.account_id,
+      date: parsed.date,
+      dingtalk_user_id: parsed.dingtalk_user_id,
+      time_slots: parsed.time_slots,
+      reason: parsed.reason ?? null,
+    },
+  });
 
   revalidatePath("/live-accounts");
   revalidatePath("/placements");
 }
 
 export async function deleteOverride(id: string) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) throw new Error("UNAUTHORIZED");
-  const currentUser = await getCurrentDingtalkUser();
-  if (currentUser.kind !== "ok") throw new Error("AUTH_USER_NOT_SYNCED");
+  const { dingtalkUserId } = await requireScheduleWrite();
 
   const [removed] = await db
     .delete(schedule_override)
@@ -47,6 +78,20 @@ export async function deleteOverride(id: string) {
   if (removed) {
     await markDirtyByAccountDate(removed.account_id, removed.date);
     await runAttributionJob({ max_rows: 200 });
+
+    await writeAuditLog({
+      user_id: dingtalkUserId,
+      action: "SCHEDULE_OVERRIDE_DELETE",
+      target_type: "schedule_override",
+      target_id: id,
+      before: {
+        account_id: removed.account_id,
+        date: removed.date,
+        dingtalk_user_id: removed.dingtalk_user_id,
+        time_slots: removed.time_slots,
+        reason: removed.reason,
+      },
+    });
   }
 
   revalidatePath("/live-accounts");

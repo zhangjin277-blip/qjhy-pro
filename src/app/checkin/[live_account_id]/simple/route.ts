@@ -157,7 +157,12 @@ button:disabled{opacity:.5}
   }
   function esc(s){
     if (s==null) return "";
-    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+  // avatar URL 白名单：必须 http(s) 开头，否则丢
+  function safeUrl(u){
+    if (typeof u !== "string") return "";
+    return /^https?:[/][/]/i.test(u) ? u : "";
   }
 
   function setBusy(on){
@@ -177,8 +182,9 @@ button:disabled{opacity:.5}
 
   function avatarHtml(){
     var a = STATE.account;
-    if (a.avatar) {
-      return '<img src="'+esc(a.avatar)+'" alt="">';
+    var url = safeUrl(a.avatar);
+    if (url) {
+      return '<img src="'+esc(url)+'" alt="">';
     }
     var label = a.placement_label || a.account_name || "";
     return esc(label.slice(0,2));
