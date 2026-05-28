@@ -105,7 +105,7 @@ export async function insertManualSessionAction(args: {
     });
     return { ok: true };
   } catch (err) {
-    if (err instanceof ForceEndPermissionDenied) return { ok: false, error: "无权限补打卡" };
+    if (err instanceof ForceEndPermissionDenied) return { ok: false, error: "无权限补时长" };
     const msg = err instanceof Error ? err.message : "未知错误";
     if (msg === "ACCOUNT_NOT_FOUND") return { ok: false, error: "账号不存在" };
     if (msg === "ANCHOR_NOT_FOUND") return { ok: false, error: "主播不存在" };

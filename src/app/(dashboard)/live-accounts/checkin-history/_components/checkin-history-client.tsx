@@ -32,7 +32,7 @@ export function CheckinHistoryClient({
   const [data, setData] = useState<CheckinDayResult>(initialData);
   const [isPending, startTransition] = useTransition();
 
-  // 补打卡 dialog
+  // 补时长 dialog
   const [insertDialog, setInsertDialog] = useState<{
     liveAccountId: string;
     anchorDingtalkUserId: string;
@@ -237,7 +237,7 @@ export function CheckinHistoryClient({
               }}
               className="rounded border border-amber-300 bg-white px-3 py-1 text-[12px] font-medium text-amber-700 hover:bg-amber-50"
             >
-              + 补打卡
+              + 补时长
             </button>
           )}
           <button
@@ -275,7 +275,7 @@ export function CheckinHistoryClient({
             className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-3 text-sm font-semibold text-slate-800">补打卡（手动新增）</div>
+            <div className="mb-3 text-sm font-semibold text-slate-800">补时长（手动新增）</div>
             <div className="mb-3 rounded bg-slate-50 p-3 text-[11.5px] text-slate-500">
               主播当时忘扫码，admin 直接补一条已结束的开播记录。会写 audit_log；status =
               ended，closed_by = admin_insert。
@@ -448,7 +448,7 @@ export function CheckinHistoryClient({
                 disabled={isPending}
                 className="rounded bg-amber-600 px-3 py-1 text-[12px] font-medium text-white hover:bg-amber-700 disabled:opacity-50"
               >
-                {isPending ? "保存中..." : "确认补打卡"}
+                {isPending ? "保存中..." : "确认补时长"}
               </button>
             </div>
           </div>
