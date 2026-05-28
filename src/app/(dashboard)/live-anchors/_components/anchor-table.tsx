@@ -47,8 +47,7 @@ function AnchorAvatar({ name, business_line }: { name: string; business_line: st
 
   return (
     <div
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${gradient} text-sm font-semibold text-white shadow-sm`}
-      style={{ textShadow: "0 1px 0 rgba(0,0,0,0.15)" }}
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${gradient} text-sm font-semibold text-white shadow-sm [text-shadow:0_1px_0_rgba(0,0,0,0.15)]`}
     >
       {initial}
     </div>
@@ -131,18 +130,9 @@ export function AnchorTable({
   }
 
   return (
-    <div
-      className="min-w-0 max-w-full overflow-hidden rounded-lg shadow-sm"
-      style={{
-        background: "rgba(255, 255, 255, 0.92)",
-        border: "1px solid var(--border-subtle)",
-      }}
-    >
+    <div className="min-w-0 max-w-full overflow-hidden rounded-xl border border-slate-200/70 bg-white/92 shadow-sm backdrop-blur-sm">
       <div className="max-w-full overflow-auto">
-        <table
-          className="w-full border-collapse"
-          style={{ fontSize: "12.5px", fontVariantNumeric: "tabular-nums" }}
-        >
+        <table className="w-full border-collapse text-[12.5px] tabular-nums">
           <thead>
             <tr>
               {[
