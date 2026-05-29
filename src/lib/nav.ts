@@ -78,12 +78,6 @@ export const NAV: NavItem[] = [
       { key: "live-accounts", label: "直播账号", href: "/live-accounts", module: "live_account" },
       { key: "live-anchors", label: "主播档案", href: "/live-anchors", module: "live_anchor" },
       {
-        key: "live-today",
-        label: "今日排班",
-        href: "/live-accounts/schedule-today",
-        module: "live_account",
-      },
-      {
         key: "live-schedule",
         label: "默认排班",
         href: "/live-accounts/schedule-overview",
