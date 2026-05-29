@@ -1,6 +1,6 @@
 import "server-only";
 import { createReadStream } from "node:fs";
-import { mkdir, writeFile as fsWriteFile } from "node:fs/promises";
+import { mkdir, writeFile as fsWriteFile, stat } from "node:fs/promises";
 import { dirname, join, resolve, basename } from "node:path";
 
 export interface PathInput {
@@ -125,7 +125,20 @@ export async function writeFile(nasRoot: string, relPath: string, data: Buffer):
   await fsWriteFile(full, data);
 }
 
-export function getDownloadStream(nasRoot: string, relPath: string): NodeJS.ReadableStream {
+/** 返回文件字节数，供 Range 请求计算区间用 */
+export async function statFile(nasRoot: string, relPath: string): Promise<{ size: number }> {
   const full = assertInsideNas(nasRoot, relPath);
+  const s = await stat(full);
+  return { size: s.size };
+}
+
+/** range 给定时返回 [start, end] 闭区间的字节流（206），否则整文件流（200） */
+export function getDownloadStream(
+  nasRoot: string,
+  relPath: string,
+  range?: { start: number; end: number },
+): NodeJS.ReadableStream {
+  const full = assertInsideNas(nasRoot, relPath);
+  if (range) return createReadStream(full, { start: range.start, end: range.end });
   return createReadStream(full);
 }

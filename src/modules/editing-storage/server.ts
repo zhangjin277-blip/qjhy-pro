@@ -15,6 +15,7 @@ export {
   type PokerSlgPathInput,
   writeFile,
   getDownloadStream,
+  statFile,
   type PathInput,
   type FishPathInput,
 } from "./nas";

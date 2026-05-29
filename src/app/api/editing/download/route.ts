@@ -4,7 +4,7 @@ import { editing_task } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/page-auth";
 import { resolvePermission } from "@/modules/permissions/server";
-import { getDownloadStream } from "@/modules/editing-storage/server";
+import { getDownloadStream, statFile } from "@/modules/editing-storage/server";
 
 export const runtime = "nodejs";
 
@@ -57,23 +57,66 @@ export async function GET(req: NextRequest) {
     const NAS = process.env.EDITING_NAS_PATH;
     if (!NAS) return new NextResponse("NAS not configured", { status: 500 });
 
-    const stream = getDownloadStream(NAS, relPath);
-
-    // Convert Node Readable to Web ReadableStream
-    const { Readable } = await import("node:stream");
-    const webStream = Readable.toWeb(stream as never) as ReadableStream;
-
     const inline = req.nextUrl.searchParams.get("inline") === "1";
     const disposition = inline
       ? `inline; filename="${filename}"`
       : `attachment; filename="${filename}"`;
     const contentType = inline ? guessVideoMime(filename) : "application/octet-stream";
 
+    const { size } = await statFile(NAS, relPath);
+    const { Readable } = await import("node:stream");
+
+    // 解析 Range 请求头 —— inline 预览（视频拖动）必需，否则浏览器无法 seek
+    const rangeHeader = req.headers.get("range");
+    const rangeMatch = rangeHeader ? /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim()) : null;
+    if (rangeMatch) {
+      const hasStart = rangeMatch[1] !== "";
+      const hasEnd = rangeMatch[2] !== "";
+      let start: number;
+      let end: number;
+      if (!hasStart && !hasEnd) {
+        // "bytes=-" 无意义
+        start = NaN;
+        end = NaN;
+      } else if (!hasStart) {
+        // 后缀范围 "bytes=-N" → 最后 N 个字节
+        start = size - Number(rangeMatch[2]);
+        end = size - 1;
+      } else {
+        start = Number(rangeMatch[1]);
+        end = hasEnd ? Number(rangeMatch[2]) : size - 1;
+      }
+      start = Math.max(0, start);
+      if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= size) {
+        return new NextResponse("Range Not Satisfiable", {
+          status: 416,
+          headers: { "Content-Range": `bytes */${size}` },
+        });
+      }
+      end = Math.min(end, size - 1);
+      const stream = getDownloadStream(NAS, relPath, { start, end });
+      const webStream = Readable.toWeb(stream as never) as ReadableStream;
+      return new NextResponse(webStream, {
+        status: 206,
+        headers: {
+          "Content-Disposition": disposition,
+          "Content-Type": contentType,
+          "Accept-Ranges": "bytes",
+          "Content-Range": `bytes ${start}-${end}/${size}`,
+          "Content-Length": String(end - start + 1),
+        },
+      });
+    }
+
+    const stream = getDownloadStream(NAS, relPath);
+    const webStream = Readable.toWeb(stream as never) as ReadableStream;
+
     return new NextResponse(webStream, {
       headers: {
         "Content-Disposition": disposition,
         "Content-Type": contentType,
         "Accept-Ranges": "bytes",
+        "Content-Length": String(size),
       },
     });
   } catch (e) {
