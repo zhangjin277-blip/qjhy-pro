@@ -347,18 +347,18 @@ export async function queryWeeklyGantt(args: {
   weekEnd: string; // YYYY-MM-DD（周日）
   whereClause?: SQL;
 }): Promise<GanttRow[]> {
+  // 完成口径：审核通过即算（reviewed_at 非空 = status ready/published），不再要求已发布
   const filters: (SQL | undefined)[] = [
     args.whereClause,
-    eq(editing_task.status, "published"),
     isNotNull(editing_task.editor_user_id),
-    isNotNull(editing_task.published_at),
+    isNotNull(editing_task.reviewed_at),
     isNull(editing_task.deleted_at),
     gte(
-      sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
       sql`${args.weekStart}::date`,
     ),
     lte(
-      sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
       sql`${args.weekEnd}::date`,
     ),
   ];
@@ -368,7 +368,7 @@ export async function queryWeeklyGantt(args: {
       editor_user_id: editing_task.editor_user_id,
       editor_name: dingtalk_user.name,
       product: live_account.product,
-      published_date: sql<string>`((${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date)::text`,
+      published_date: sql<string>`((${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date)::text`,
       count: sql<number>`count(*)::int`,
     })
     .from(editing_task)
@@ -379,7 +379,7 @@ export async function queryWeeklyGantt(args: {
       editing_task.editor_user_id,
       dingtalk_user.name,
       live_account.product,
-      sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
     );
 
   // 按 editor 聚合成 GanttRow[]
@@ -451,18 +451,18 @@ export async function queryMonthlyProductShare(args: {
   monthEnd: string; // YYYY-MM-{last day}
   whereClause?: SQL;
 }): Promise<MonthlyProductShare[]> {
+  // 完成口径：审核通过即算（reviewed_at 非空），不再要求已发布
   const filters: (SQL | undefined)[] = [
     args.whereClause,
-    eq(editing_task.status, "published"),
     isNotNull(editing_task.editor_user_id),
-    isNotNull(editing_task.published_at),
+    isNotNull(editing_task.reviewed_at),
     isNull(editing_task.deleted_at),
     gte(
-      sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
       sql`${args.monthStart}::date`,
     ),
     lte(
-      sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
       sql`${args.monthEnd}::date`,
     ),
   ];
@@ -556,7 +556,7 @@ export async function queryEditorMonthlyStats(args: {
   monthEnd: string;
   whereClause?: SQL;
 }): Promise<EditorMonthlyStat[]> {
-  // 完成数：本月 published 且 editor_user_id = X
+  // 完成数：本月审核通过（reviewed_at 非空 = ready/published）且 editor_user_id = X
   const completedRows = await db
     .select({
       editor_user_id: editing_task.editor_user_id,
@@ -568,14 +568,14 @@ export async function queryEditorMonthlyStats(args: {
     .where(
       and(
         args.whereClause,
-        eq(editing_task.status, "published"),
+        isNotNull(editing_task.reviewed_at),
         isNotNull(editing_task.editor_user_id),
         gte(
-          sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+          sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
           sql`${args.monthStart}::date`,
         ),
         lte(
-          sql`(${editing_task.published_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+          sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
           sql`${args.monthEnd}::date`,
         ),
         isNull(editing_task.deleted_at),
