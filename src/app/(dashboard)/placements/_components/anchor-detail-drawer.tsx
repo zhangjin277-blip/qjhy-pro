@@ -8,7 +8,7 @@ import type {
   ScheduleRow,
   ScheduleYesterdayHourly,
 } from "@/modules/placement/server";
-import { fetchAccountHourly, fetchAnchorSchedule, fetchAnchorCheckin } from "../actions";
+import { fetchAccountHourly, fetchAnchorCheckin } from "../actions";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 
 interface AnchorDetailDrawerProps {
@@ -62,11 +62,6 @@ export function AnchorDetailDrawer({
   const [openPkg, setOpenPkg] = useState<string | null>(null);
   const [hourlyMap, setHourlyMap] = useState<Record<string, HourlyState>>({});
   const [selectedScheduleKey, setSelectedScheduleKey] = useState<string | null>(null);
-  const [scheduleState, setScheduleState] = useState<ScheduleState>({
-    rows: [],
-    yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
-    loading: false,
-  });
   const [checkinState, setCheckinState] = useState<ScheduleState>({
     rows: [],
     yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
@@ -78,11 +73,6 @@ export function AnchorDetailDrawer({
     setOpenPkg(null);
     setHourlyMap({});
     setSelectedScheduleKey(null);
-    setScheduleState({
-      rows: [],
-      yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
-      loading: false,
-    });
     setCheckinState({
       rows: [],
       yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
@@ -92,18 +82,7 @@ export function AnchorDetailDrawer({
 
   useEffect(() => {
     if (!open || !anchor) return;
-    setScheduleState((state) => ({ ...state, loading: true }));
-    fetchAnchorSchedule(filter, anchor.anchor_label)
-      .then((data) => setScheduleState({ ...data, loading: false }))
-      .catch(() =>
-        setScheduleState({
-          rows: [],
-          yesterdayHourly: { byAccount: {}, cutoffHour: 24 },
-          loading: false,
-        }),
-      );
-
-    // 同步拉一份"按开播记录"归因
+    // 按开播打卡归因
     setCheckinState((state) => ({ ...state, loading: true }));
     fetchAnchorCheckin(filter, anchor.anchor_label)
       .then((rows) =>
@@ -123,22 +102,15 @@ export function AnchorDetailDrawer({
   }, [open, anchor, filter]);
 
   useEffect(() => {
-    if (scheduleState.loading || checkinState.loading) return;
+    if (checkinState.loading) return;
     setSelectedScheduleKey((current) => {
-      // selectedKey 形如 `${subKey}|${scheduleKey(row)}` — 检查是否还在任一 section
-      if (
-        current &&
-        (scheduleState.rows.some((r) => `schedule|${scheduleKey(r)}` === current) ||
-          checkinState.rows.some((r) => `checkin|${scheduleKey(r)}` === current))
-      ) {
+      if (current && checkinState.rows.some((r) => `checkin|${scheduleKey(r)}` === current)) {
         return current;
       }
-      // 默认选第一个非空 section 的第一行
-      if (scheduleState.rows[0]) return `schedule|${scheduleKey(scheduleState.rows[0])}`;
       if (checkinState.rows[0]) return `checkin|${scheduleKey(checkinState.rows[0])}`;
       return null;
     });
-  }, [scheduleState.rows, scheduleState.loading, checkinState.rows, checkinState.loading]);
+  }, [checkinState.rows, checkinState.loading]);
 
   // 单包主播：打开抽屉自动展开唯一包
   useEffect(() => {
@@ -307,17 +279,11 @@ export function AnchorDetailDrawer({
         {/* CONTENT */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <ScheduleTimelineSection
-            title="主播 × 投放时段（排班 + 开播打卡 双视图）"
+            title="主播 × 投放时段（按开播打卡归因）"
             countLabel="时段"
             selectedKey={selectedScheduleKey}
             onSelect={(key) => setSelectedScheduleKey(key)}
             sections={[
-              {
-                key: "schedule",
-                title: "按排班归因",
-                emptyText: "暂无可归因排班时段",
-                state: scheduleState,
-              },
               {
                 key: "checkin",
                 title: "按开播打卡归因",
