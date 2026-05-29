@@ -55,11 +55,11 @@ export function FilterBar({ products, editors, anchors, accounts, onNewTask }: F
   const selectedAccounts = sp.get("accounts")?.split(",").filter(Boolean) ?? [];
   const selectedEditors = sp.get("editors")?.split(",").filter(Boolean) ?? [];
   const selectedAnchors = sp.get("anchors")?.split(",").filter(Boolean) ?? [];
-  const range = (sp.get("range") ?? "today") as "today" | "7d" | "30d" | "custom";
+  const range = (sp.get("range") ?? "7d") as "today" | "7d" | "30d" | "custom";
   const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
   const customFrom = sp.get("from") ?? todayStr;
   const customTo = sp.get("to") ?? todayStr;
-  const rangeIsDefault = range === "today";
+  const rangeIsDefault = range === "7d";
 
   // 产品下拉第三栏（账号）：按 product 分组账号，跟随中栏 hover 的产品
   const accountsByProduct = (() => {
@@ -99,7 +99,7 @@ export function FilterBar({ products, editors, anchors, accounts, onNewTask }: F
 
   function setRange(next: "today" | "7d" | "30d") {
     const params = new URLSearchParams(sp.toString());
-    if (next === "today") params.delete("range");
+    if (next === "7d") params.delete("range");
     else params.set("range", next);
     params.delete("from");
     params.delete("to");

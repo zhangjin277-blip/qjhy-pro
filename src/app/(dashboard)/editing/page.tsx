@@ -37,7 +37,7 @@ export default async function EditingBoardPage({
   const where = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
-  const range = typeof sp.range === "string" ? sp.range : "today";
+  const range = typeof sp.range === "string" ? sp.range : "7d";
   const customFrom = typeof sp.from === "string" ? sp.from : null;
   const customTo = typeof sp.to === "string" ? sp.to : null;
 
@@ -102,7 +102,7 @@ export default async function EditingBoardPage({
 
   const accounts = accountRows.map((a) => ({
     id: a.id,
-    name: a.placement_label ?? a.account_name,
+    name: a.account_name, // 账号昵称（非 placement_label 投放包名）
     product: a.product ?? "其他",
   }));
 
