@@ -8,10 +8,11 @@ export interface FilterBarProps {
   products: ProductOption[];
   editors: EditorOption[];
   anchors: { id: string; name: string; businessLine: string }[];
+  accounts: { id: string; name: string; product: string }[];
   onNewTask: () => void;
 }
 
-export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarProps) {
+export function FilterBar({ products, editors, anchors, accounts, onNewTask }: FilterBarProps) {
   const router = useRouter();
   const sp = useSearchParams();
   const [productOpen, setProductOpen] = useState(false);
@@ -20,6 +21,7 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
   const [anchorQuery, setAnchorQuery] = useState("");
   const [dateOpen, setDateOpen] = useState(false);
   const [productHoverGroup, setProductHoverGroup] = useState<string | null>(null);
+  const [productHoverItem, setProductHoverItem] = useState<string | null>(null);
   const [anchorHoverGroup, setAnchorHoverGroup] = useState<string | null>(null);
 
   // 按 category 分组产品
@@ -50,6 +52,7 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
   })();
 
   const selectedProducts = sp.get("products")?.split(",").filter(Boolean) ?? [];
+  const selectedAccounts = sp.get("accounts")?.split(",").filter(Boolean) ?? [];
   const selectedEditors = sp.get("editors")?.split(",").filter(Boolean) ?? [];
   const selectedAnchors = sp.get("anchors")?.split(",").filter(Boolean) ?? [];
   const range = (sp.get("range") ?? "today") as "today" | "7d" | "30d" | "custom";
@@ -57,6 +60,24 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
   const customFrom = sp.get("from") ?? todayStr;
   const customTo = sp.get("to") ?? todayStr;
   const rangeIsDefault = range === "today";
+
+  // 产品下拉第三栏（账号）：按 product 分组账号，跟随中栏 hover 的产品
+  const accountsByProduct = (() => {
+    const m = new Map<string, typeof accounts>();
+    for (const a of accounts) {
+      const arr = m.get(a.product);
+      if (arr) arr.push(a);
+      else m.set(a.product, [a]);
+    }
+    return m;
+  })();
+  const activeCategory = productHoverGroup ?? productGroups[0]?.category;
+  const activeCatItems = productGroups.find((g) => g.category === activeCategory)?.items ?? [];
+  const activeProductName =
+    productHoverItem && activeCatItems.some((p) => p.productName === productHoverItem)
+      ? productHoverItem
+      : activeCatItems[0]?.productName;
+  const colAccounts = activeProductName ? (accountsByProduct.get(activeProductName) ?? []) : [];
 
   const rangeLabel =
     range === "today"
@@ -108,13 +129,22 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
             setDateOpen(false);
           }}
           className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition ${
-            selectedProducts.length > 0
+            selectedProducts.length > 0 || selectedAccounts.length > 0
               ? "border-blue-500 bg-blue-50 text-blue-600"
               : "border-border bg-white hover:border-blue-500 hover:text-blue-600"
           }`}
         >
           <span className="text-muted-foreground">产品</span>
-          <span>{selectedProducts.length > 0 ? `已选 ${selectedProducts.length}` : "全部"}</span>
+          <span>
+            {selectedProducts.length || selectedAccounts.length
+              ? `已选 ${[
+                  selectedProducts.length ? `${selectedProducts.length} 产品` : "",
+                  selectedAccounts.length ? `${selectedAccounts.length} 账号` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}`
+              : "全部"}
+          </span>
           <span className="text-[9px] text-muted-foreground">▼</span>
         </button>
         {productOpen && (
@@ -126,11 +156,14 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
                 {/* 左栏：category */}
                 <div className="w-[110px] border-r border-border py-1">
                   {productGroups.map((g) => {
-                    const active = (productHoverGroup ?? productGroups[0]?.category) === g.category;
+                    const active = activeCategory === g.category;
                     return (
                       <div
                         key={g.category}
-                        onMouseEnter={() => setProductHoverGroup(g.category)}
+                        onMouseEnter={() => {
+                          setProductHoverGroup(g.category);
+                          setProductHoverItem(null);
+                        }}
                         className={`cursor-pointer px-3 py-1.5 text-sm ${
                           active ? "bg-slate-50 text-blue-600" : "text-slate-700 hover:bg-slate-50"
                         }`}
@@ -140,18 +173,21 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
                     );
                   })}
                 </div>
-                {/* 右栏：products */}
-                <div className="min-w-[160px] py-1">
-                  {(
-                    productGroups.find(
-                      (g) => g.category === (productHoverGroup ?? productGroups[0]?.category),
-                    )?.items ?? []
-                  ).map((p) => {
+                {/* 中栏：products */}
+                <div className="min-w-[150px] border-r border-border py-1">
+                  {activeCatItems.map((p) => {
                     const checked = selectedProducts.includes(p.productName);
+                    const acctSel = (accountsByProduct.get(p.productName) ?? []).filter((a) =>
+                      selectedAccounts.includes(a.id),
+                    ).length;
+                    const hovered = activeProductName === p.productName;
                     return (
                       <label
                         key={p.productName}
-                        className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-slate-50"
+                        onMouseEnter={() => setProductHoverItem(p.productName)}
+                        className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 ${
+                          hovered ? "bg-slate-50" : "hover:bg-slate-50"
+                        }`}
                       >
                         <input
                           type="checkbox"
@@ -164,9 +200,45 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
                           }}
                         />
                         <span className="text-sm">{p.productName}</span>
+                        {acctSel > 0 && (
+                          <span className="ml-auto text-[11px] font-medium text-blue-500">
+                            {acctSel}
+                          </span>
+                        )}
                       </label>
                     );
                   })}
+                </div>
+                {/* 右栏：accounts（跟随中栏 hover 的产品） */}
+                <div className="max-h-72 min-w-[170px] overflow-auto py-1">
+                  <div className="truncate px-3 pb-1 pt-0.5 text-[11px] text-muted-foreground">
+                    {activeProductName ?? "产品"} · 账号
+                  </div>
+                  {colAccounts.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">该产品暂无账号</div>
+                  ) : (
+                    colAccounts.map((a) => {
+                      const checked = selectedAccounts.includes(a.id);
+                      return (
+                        <label
+                          key={a.id}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const next = checked
+                                ? selectedAccounts.filter((x) => x !== a.id)
+                                : [...selectedAccounts, a.id];
+                              updateParam("accounts", next);
+                            }}
+                          />
+                          <span className="text-sm">{a.name}</span>
+                        </label>
+                      );
+                    })
+                  )}
                 </div>
               </>
             )}

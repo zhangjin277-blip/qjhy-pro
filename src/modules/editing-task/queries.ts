@@ -41,6 +41,7 @@ import { alias } from "drizzle-orm/pg-core";
 export interface BoardFilter {
   whereClause?: SQL;
   productNames?: string[];
+  accountIds?: string[];
   anchorIds?: string[];
   editorUserIds?: string[];
   dateFrom: string; // 必填
@@ -51,6 +52,7 @@ export async function listForBoard(args: BoardFilter): Promise<BoardCard[]> {
   const filters: (SQL | undefined)[] = [args.whereClause];
   filters.push(isNull(editing_task.deleted_at));
   if (args.productNames?.length) filters.push(inArray(live_account.product, args.productNames));
+  if (args.accountIds?.length) filters.push(inArray(editing_task.live_account_id, args.accountIds));
   if (args.anchorIds?.length) filters.push(inArray(editing_task.anchor_id, args.anchorIds));
   if (args.editorUserIds?.length)
     filters.push(inArray(editing_task.editor_user_id, args.editorUserIds));
@@ -266,6 +268,7 @@ export async function listForTable(args: TableFilter): Promise<BoardCard[]> {
   const filters: (SQL | undefined)[] = [args.whereClause];
   filters.push(isNull(editing_task.deleted_at));
   if (args.productNames?.length) filters.push(inArray(live_account.product, args.productNames));
+  if (args.accountIds?.length) filters.push(inArray(editing_task.live_account_id, args.accountIds));
   if (args.anchorIds?.length) filters.push(inArray(editing_task.anchor_id, args.anchorIds));
   if (args.editorUserIds?.length)
     filters.push(inArray(editing_task.editor_user_id, args.editorUserIds));

@@ -34,6 +34,7 @@ interface Props {
   editors: EditorOption[];
   products: ProductOption[];
   anchors: { id: string; name: string; businessLine: string }[];
+  accounts: { id: string; name: string; product: string }[];
   permissions: { canEdit: boolean; isAdmin: boolean };
   fishCoverage: FishCoverage;
   todaySummary: TodaySummary;
@@ -46,6 +47,7 @@ export function Board({
   editors,
   products,
   anchors,
+  accounts,
   permissions,
   fishCoverage,
   todaySummary,
@@ -62,6 +64,7 @@ export function Board({
         products={products}
         editors={editors}
         anchors={anchors}
+        accounts={accounts}
         onNewTask={() => setNewOpen(true)}
       />
       <TodayStatsPanel

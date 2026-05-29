@@ -12,6 +12,7 @@ import {
 import { listEditors } from "@/modules/editing-editor/server";
 import { listProducts } from "@/modules/product-config/server";
 import { listAnchorOptions } from "@/modules/live-anchor/server";
+import { listAccounts } from "@/modules/live-account/server";
 import { Board } from "./_components/board";
 
 export default async function EditingBoardPage({
@@ -66,25 +67,44 @@ export default async function EditingBoardPage({
     typeof sp.editors === "string" ? sp.editors.split(",").filter(Boolean) : undefined;
   const anchorIds =
     typeof sp.anchors === "string" ? sp.anchors.split(",").filter(Boolean) : undefined;
+  const accountIds =
+    typeof sp.accounts === "string" ? sp.accounts.split(",").filter(Boolean) : undefined;
 
-  const [cards, editors, products, anchors, fishCoverage, summary, anchorDist, editorLoad] =
-    await Promise.all([
-      listForBoard({
-        whereClause: where,
-        dateFrom,
-        dateTo,
-        productNames,
-        editorUserIds,
-        anchorIds,
-      }),
-      listEditors(),
-      listProducts(),
-      listAnchorOptions(),
-      queryFishCoverageToday(),
-      queryTodaySummary({ whereClause: where }),
-      queryTodayAnchorDist({ whereClause: where }),
-      queryTodayEditorLoad({ whereClause: where }),
-    ]);
+  const [
+    cards,
+    editors,
+    products,
+    anchors,
+    accountRows,
+    fishCoverage,
+    summary,
+    anchorDist,
+    editorLoad,
+  ] = await Promise.all([
+    listForBoard({
+      whereClause: where,
+      dateFrom,
+      dateTo,
+      productNames,
+      accountIds,
+      editorUserIds,
+      anchorIds,
+    }),
+    listEditors(),
+    listProducts(),
+    listAnchorOptions(),
+    listAccounts({}, undefined, true),
+    queryFishCoverageToday(),
+    queryTodaySummary({ whereClause: where }),
+    queryTodayAnchorDist({ whereClause: where }),
+    queryTodayEditorLoad({ whereClause: where }),
+  ]);
+
+  const accounts = accountRows.map((a) => ({
+    id: a.id,
+    name: a.placement_label ?? a.account_name,
+    product: a.product ?? "其他",
+  }));
 
   return (
     <Board
@@ -92,6 +112,7 @@ export default async function EditingBoardPage({
       editors={editors}
       products={products}
       anchors={anchors}
+      accounts={accounts}
       permissions={{ canEdit: perm.can_edit, isAdmin: perm.can_admin }}
       fishCoverage={fishCoverage}
       todaySummary={summary}
