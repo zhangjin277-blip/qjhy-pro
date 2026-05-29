@@ -7,7 +7,9 @@ import {
   queryAnchorLabels,
   queryKpiSummary,
   querySubAccountsAll,
+  queryCheckinByAccount,
   resolvePlacementScope,
+  type CheckinSlot,
 } from "@/modules/placement/server";
 import { resolveFilter } from "@/modules/placement";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
@@ -15,6 +17,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import { DatasetTabs } from "./_components/dataset-tabs";
 import { SummaryTable } from "./_components/summary-table";
+import { SummaryCards } from "./_components/summary-cards";
 import { TrendChartWrapper } from "./_components/trend-chart-wrapper";
 import { FilterBar } from "./_components/filter-bar";
 import { CsvExportButton } from "./_components/csv-export-button";
@@ -56,6 +59,7 @@ export default async function PlacementsPage({
   ]);
 
   const showChart = sp.chart === "1";
+  const view = sp.view === "table" ? "table" : "cards"; // 默认卡片
 
   interface CsvCol {
     key: string;
@@ -63,9 +67,12 @@ export default async function PlacementsPage({
   }
 
   async function buildViewData() {
-    const [rows, subAccounts] = await Promise.all([
+    const [rows, subAccounts, checkinByLabel] = await Promise.all([
       querySummaryExt(filter),
       querySubAccountsAll(filter),
+      view === "cards"
+        ? queryCheckinByAccount(filter)
+        : Promise.resolve<Record<string, CheckinSlot[]>>({}),
     ]);
     const csvRows = rows as unknown as Record<string, unknown>[];
     const csvColumns: CsvCol[] = [
@@ -76,11 +83,20 @@ export default async function PlacementsPage({
       { key: "payment", label: "付费" },
     ];
     const csvFilename = `投放-主播汇总-${filter.date_from}_${filter.date_to}.csv`;
-    // filter 变化时整组件 remount（清空 expanded / hourlyMap 客户端缓存）
-    const filterKey = `${filter.date_from}|${filter.date_to}|${(filter.dataset_ids ?? []).join(",")}|${filter.search ?? ""}|${filter.anchor_label ?? ""}`;
-    const tableContent = (
-      <SummaryTable key={filterKey} rows={rows} subAccounts={subAccounts} filter={filter} />
-    );
+    // filter / 视图变化时整组件 remount（清空 expanded / hourlyMap 客户端缓存）
+    const filterKey = `${view}|${filter.date_from}|${filter.date_to}|${(filter.dataset_ids ?? []).join(",")}|${filter.search ?? ""}|${filter.anchor_label ?? ""}`;
+    const tableContent =
+      view === "cards" ? (
+        <SummaryCards
+          key={filterKey}
+          rows={rows}
+          subAccounts={subAccounts}
+          checkinByLabel={checkinByLabel}
+          filter={filter}
+        />
+      ) : (
+        <SummaryTable key={filterKey} rows={rows} subAccounts={subAccounts} filter={filter} />
+      );
     return { tableContent, csvRows, csvColumns, csvFilename };
   }
 
@@ -99,6 +115,7 @@ export default async function PlacementsPage({
         }
         actions={
           <>
+            <ViewToggleLink view={view} sp={sp as Record<string, string>} />
             <ChartToggleLink showChart={showChart} sp={sp as Record<string, string>} />
             <CsvExportButton rows={csvRows} filename={csvFilename} columns={csvColumns} />
           </>
@@ -141,6 +158,23 @@ function ChartToggleLink({ showChart, sp }: { showChart: boolean; sp: Record<str
       className={cn(buttonVariants({ size: "sm", variant: showChart ? "secondary" : "outline" }))}
     >
       {showChart ? "收起图表" : "趋势图表"}
+    </a>
+  );
+}
+
+function ViewToggleLink({ view, sp }: { view: "cards" | "table"; sp: Record<string, string> }) {
+  const usp = new URLSearchParams(sp);
+  if (view === "cards") {
+    usp.set("view", "table");
+  } else {
+    usp.delete("view"); // 回默认（卡片）
+  }
+  return (
+    <a
+      href={`/placements?${usp.toString()}`}
+      className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+    >
+      {view === "cards" ? "表格视图" : "卡片视图"}
     </a>
   );
 }

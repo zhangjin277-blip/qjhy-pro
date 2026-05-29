@@ -392,6 +392,85 @@ export async function queryAnchorCheckin(
   });
 }
 
+export interface CheckinSlot {
+  anchorName: string | null;
+  slotStart: string; // "HH:MM"
+  slotEnd: string;
+  cost: number;
+  acts: number;
+}
+
+/**
+ * 批量：每个投放包(placement_label)在筛选范围内的开播主播时段 + 分得消耗。
+ * 卡片视图右栏用——逻辑同 queryAnchorCheckin，但不限定单个主播，一次查全部账号。
+ */
+export async function queryCheckinByAccount(
+  filter: BoardFilter,
+): Promise<Record<string, CheckinSlot[]>> {
+  const result = await db.execute(sql`
+    WITH sess AS (
+      SELECT
+        l.id,
+        l.live_account_id AS account_id,
+        l.start_at,
+        COALESCE(l.end_at, now()) AS end_at,
+        a.placement_label,
+        du.name AS anchor_name
+      FROM live_session_log l
+      JOIN live_account a ON a.id = l.live_account_id
+      LEFT JOIN dingtalk_user du ON du.user_id = l.anchor_dingtalk_user_id
+      WHERE a.placement_label IS NOT NULL
+        AND l.start_at::date >= ${filter.date_from}::date
+        AND l.start_at::date <= ${filter.date_to}::date
+    ),
+    agg AS (
+      SELECT
+        s.id AS sid,
+        SUM(p.cost_yuan)::float    AS cost,
+        SUM(p.activations)::int    AS acts
+      FROM sess s
+      LEFT JOIN placement_row p
+        ON p.live_account_id = s.account_id
+       AND (p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes')::timestamptz >= s.start_at
+       AND (p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes')::timestamptz < s.end_at
+        ${datasetClause(filter.dataset_ids)}
+      GROUP BY s.id
+    )
+    SELECT
+      s.placement_label,
+      to_char(s.start_at, 'HH24:MI')  AS slot_start,
+      to_char(s.end_at, 'HH24:MI')    AS slot_end,
+      s.anchor_name,
+      COALESCE(agg.cost, 0)::float    AS cost,
+      COALESCE(agg.acts, 0)::int      AS acts
+    FROM sess s
+    LEFT JOIN agg ON agg.sid = s.id
+    ORDER BY s.placement_label, s.start_at
+  `);
+
+  const raw = result as unknown as {
+    placement_label: string;
+    slot_start: string;
+    slot_end: string;
+    anchor_name: string | null;
+    cost: number;
+    acts: number;
+  }[];
+
+  const byLabel: Record<string, CheckinSlot[]> = {};
+  for (const r of raw) {
+    const arr = byLabel[r.placement_label] ?? (byLabel[r.placement_label] = []);
+    arr.push({
+      anchorName: r.anchor_name,
+      slotStart: r.slot_start,
+      slotEnd: r.slot_end,
+      cost: Number(r.cost),
+      acts: Number(r.acts),
+    });
+  }
+  return byLabel;
+}
+
 export interface TrendPoint {
   anchor: string;
   date: string;
