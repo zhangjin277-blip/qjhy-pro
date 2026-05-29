@@ -64,19 +64,51 @@ function PlatformBadge({ platforms }: { platforms: string[] }) {
   );
 }
 
-/** 24h 迷你时间条：标出该主播开播时段位置 */
-function TimeBar({ slotStart, slotEnd }: { slotStart: string; slotEnd: string }) {
-  const start = parseHour(slotStart);
-  let end = parseHour(slotEnd);
-  if (end <= start) end += 24; // 跨午夜
-  const left = Math.max(0, Math.min(100, (start / 24) * 100));
-  const width = Math.max(2, Math.min(100 - left, ((end - start) / 24) * 100));
+interface Segment {
+  slotStart: string;
+  slotEnd: string;
+}
+
+interface MergedAnchor {
+  anchorName: string | null;
+  cost: number;
+  segments: Segment[];
+}
+
+/** 同一主播的多个开播时段合并成一条：消耗累加、时段汇总 */
+function mergeByAnchor(slots: CheckinSlot[]): MergedAnchor[] {
+  const map = new Map<string, MergedAnchor>();
+  for (const s of slots) {
+    const key = s.anchorName ?? "—";
+    let m = map.get(key);
+    if (!m) {
+      m = { anchorName: s.anchorName, cost: 0, segments: [] };
+      map.set(key, m);
+    }
+    m.cost += s.cost;
+    m.segments.push({ slotStart: s.slotStart, slotEnd: s.slotEnd });
+  }
+  return [...map.values()];
+}
+
+/** 24h 迷你时间条：标出该主播的全部开播时段（多段） */
+function TimeBar({ segments }: { segments: Segment[] }) {
   return (
     <div className="relative h-[7px] overflow-hidden rounded-[4px] bg-slate-100">
-      <span
-        className="absolute top-0 h-full rounded-[4px] bg-gradient-to-r from-[#3b82f6] to-[#1677ff]"
-        style={{ left: `${left}%`, width: `${width}%` }}
-      />
+      {segments.map((seg, i) => {
+        const start = parseHour(seg.slotStart);
+        let end = parseHour(seg.slotEnd);
+        if (end <= start) end += 24; // 跨午夜
+        const left = Math.max(0, Math.min(100, (start / 24) * 100));
+        const width = Math.max(2, Math.min(100 - left, ((end - start) / 24) * 100));
+        return (
+          <span
+            key={i}
+            className="absolute top-0 h-full rounded-[4px] bg-gradient-to-r from-[#3b82f6] to-[#1677ff]"
+            style={{ left: `${left}%`, width: `${width}%` }}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -134,6 +166,7 @@ export function SummaryCards({ rows, subAccounts, checkinByLabel, filter }: Summ
           const delta = r.prev_cost > 0 ? ((r.cost - r.prev_cost) / r.prev_cost) * 100 : null;
           const deltaUp = delta != null && delta > 0;
           const slots = checkinByLabel[label] ?? [];
+          const mergedAnchors = mergeByAnchor(slots);
 
           return (
             <div
@@ -237,30 +270,30 @@ export function SummaryCards({ rows, subAccounts, checkinByLabel, filter }: Summ
                 <div className="flex items-center justify-between text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground/80">
                   <span>开播主播</span>
                   <span
-                    className={`tabular-nums ${slots.length ? "text-blue-600" : "text-slate-400"}`}
+                    className={`tabular-nums ${mergedAnchors.length ? "text-blue-600" : "text-slate-400"}`}
                   >
-                    {slots.length}
+                    {mergedAnchors.length}
                   </span>
                 </div>
-                {slots.length === 0 ? (
+                {mergedAnchors.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-4 text-center text-[11px] text-slate-400">
                     暂无开播记录
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2.5">
-                    {slots.map((s, i) => (
+                    {mergedAnchors.map((m, i) => (
                       <div key={i} className="flex flex-col gap-1">
                         <div className="flex items-center gap-2 text-[11.5px]">
                           <span className="truncate font-semibold text-foreground">
-                            {s.anchorName ?? "—"}
+                            {m.anchorName ?? "—"}
                           </span>
                           <span className="ml-auto shrink-0 font-semibold tabular-nums text-blue-600">
-                            {fmtMoney(s.cost)}
+                            {fmtMoney(m.cost)}
                           </span>
                         </div>
-                        <TimeBar slotStart={s.slotStart} slotEnd={s.slotEnd} />
+                        <TimeBar segments={m.segments} />
                         <div className="text-[9.5px] tabular-nums text-muted-foreground/80">
-                          {s.slotStart} – {s.slotEnd}
+                          {m.segments.map((s) => `${s.slotStart}–${s.slotEnd}`).join(" · ")}
                         </div>
                       </div>
                     ))}
