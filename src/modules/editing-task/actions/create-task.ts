@@ -1,5 +1,4 @@
 "use server";
-import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { editing_task } from "@/db/schema";
 import { requireUser } from "@/lib/auth/page-auth";
@@ -7,48 +6,15 @@ import { writeEvent } from "../event-writer";
 import { CreateTaskInput } from "../schema";
 import { notifyUrgentTaskCreated } from "../notify";
 
-export type CreateTaskResult =
-  | { taskId: number }
-  | {
-      ok: false;
-      reason: "duplicate";
-      existing: { id: number; status: string; createdAt: string }[];
-    };
+export interface CreateTaskResult {
+  taskId: number;
+}
 
+// 注：任务级（账号+日期+主播）判重已移除——同一主播一天可建多个任务（多条素材）。
+// 真正的去重靠上传源文件时的 MD5 文件内容判重（upload-source.ts）。
 export async function createTask(input: unknown): Promise<CreateTaskResult> {
   const data = CreateTaskInput.parse(input);
   const { userId } = await requireUser();
-
-  if (!data.force) {
-    const existing = await db
-      .select({
-        id: editing_task.id,
-        status: editing_task.status,
-        created_at: editing_task.created_at,
-      })
-      .from(editing_task)
-      .where(
-        and(
-          eq(editing_task.live_account_id, data.liveAccountId),
-          eq(editing_task.material_date, new Date(data.materialDate)),
-          data.anchorId
-            ? eq(editing_task.anchor_id, data.anchorId)
-            : isNull(editing_task.anchor_id),
-        ),
-      );
-
-    if (existing.length > 0) {
-      return {
-        ok: false,
-        reason: "duplicate",
-        existing: existing.map((e) => ({
-          id: e.id,
-          status: e.status,
-          createdAt: e.created_at.toISOString(),
-        })),
-      };
-    }
-  }
 
   const rows = await db
     .insert(editing_task)
