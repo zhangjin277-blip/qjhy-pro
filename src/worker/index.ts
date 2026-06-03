@@ -11,9 +11,11 @@ import { runEditingCleanup } from "./jobs/editing-cleanup";
 import { runAnchorPenaltyJob } from "./jobs/anchor-penalty";
 
 // Phase 1: 钉钉同步
+// ⚠️ 必须错开整点（02:00:00）：钉钉 /topapi/v2/department/listsub 在整点被全网应用挤爆
+// QPS（errcode=88 限流），整点调用必失败、新员工同步不进来。用 02:17 避开整点高峰。
 registerJob({
   name: "sync-dingtalk",
-  schedule: "0 2 * * *",
+  schedule: "17 2 * * *",
   task: syncDingtalk,
 });
 
