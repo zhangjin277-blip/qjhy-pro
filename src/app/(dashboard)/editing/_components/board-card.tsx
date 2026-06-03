@@ -52,13 +52,13 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
           e.stopPropagation();
           onSelect(card.id);
         }}
-        className={`absolute left-2 top-2 flex h-[18px] w-[18px] cursor-pointer items-center justify-center rounded border-[1.5px] transition-colors ${
+        className={`absolute left-2 top-2 flex h-5 w-5 cursor-pointer items-center justify-center rounded-[5px] border-2 shadow-sm transition-colors ${
           selected
             ? "border-[var(--selection-primary)] bg-[var(--selection-primary)]"
-            : "border-slate-300 bg-white hover:border-[var(--selection-primary)]"
+            : "border-slate-400 bg-white hover:border-[var(--selection-primary)] hover:bg-blue-50"
         }`}
       >
-        {selected && <span className="text-[12px] font-bold leading-none text-white">✓</span>}
+        {selected && <span className="text-[13px] font-bold leading-none text-white">✓</span>}
       </div>
       <div className="pl-7">
         <div className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-slate-800">

@@ -22,17 +22,19 @@ export function groupBoardCards(
   }
 
   const groups: DateGroup[] = [];
+  // 顺序：紧急置顶 → 日期组 → 不合格素材垫底（废弃料优先级最低）
   if (urgent.length > 0)
-    groups.push({ label: "🔴 紧急任务", cards: urgent, defaultOpen: true, variant: "urgent" });
+    groups.push({ label: "🔴 紧急任务", cards: urgent, defaultOpen: false, variant: "urgent" });
+
+  groups.push(...groupByDate(rest, dateField).map((g) => ({ ...g, variant: "default" as const })));
+
   if (disqualified.length > 0)
     groups.push({
       label: "❌ 不合格素材",
       cards: disqualified,
-      defaultOpen: true,
+      defaultOpen: false,
       variant: "disqualified",
     });
-
-  groups.push(...groupByDate(rest, dateField).map((g) => ({ ...g, variant: "default" as const })));
   return groups;
 }
 
@@ -69,6 +71,6 @@ export function groupByDate(
     .map((label) => ({
       label,
       cards: buckets.get(label) ?? [],
-      defaultOpen: label.startsWith("今天"),
+      defaultOpen: false, // 默认全部折叠（标题显示数量，点开才看卡片）
     }));
 }
