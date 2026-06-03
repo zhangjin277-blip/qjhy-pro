@@ -132,6 +132,17 @@ export async function statFile(nasRoot: string, relPath: string): Promise<{ size
   return { size: s.size };
 }
 
+/** 目标路径是否已存在（防止序号撞车时覆盖已有素材） */
+export async function fileExists(nasRoot: string, relPath: string): Promise<boolean> {
+  const full = assertInsideNas(nasRoot, relPath);
+  try {
+    await stat(full);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** range 给定时返回 [start, end] 闭区间的字节流（206），否则整文件流（200） */
 export function getDownloadStream(
   nasRoot: string,

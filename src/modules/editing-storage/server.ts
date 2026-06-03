@@ -16,6 +16,7 @@ export {
   writeFile,
   getDownloadStream,
   statFile,
+  fileExists,
   type PathInput,
   type FishPathInput,
 } from "./nas";

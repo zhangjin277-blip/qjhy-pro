@@ -12,6 +12,7 @@ import {
   isFishProduct,
   isPokerSlgProduct,
   writeFile as nasWriteFile,
+  fileExists as nasFileExists,
 } from "@/modules/editing-storage/server";
 import { z } from "zod";
 import { assertTransition } from "../state-machine";
@@ -82,20 +83,23 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
       .where(
         and(
           eq(editing_task.material_date, task.material_date),
-          sql`${live_account.room_id} = ${roomId}`,
+          sql`${live_account.room_id} IS NOT DISTINCT FROM ${roomId}`,
           eq(editing_task.anchor_id, anchorId),
         ),
       );
-    const sequenceNumber = (countRows[0]?.existingCount ?? 0) + 1;
-    relPath = buildFishEditedPath({
-      taskId: task.id,
-      product: task.product ?? "未分类",
-      materialDate: materialDateStr,
-      originalName: data.fileName,
-      roomName: task.room_name,
-      anchorName: task.anchor_name,
-      sequenceNumber,
-    });
+    let sequenceNumber = (countRows[0]?.existingCount ?? 0) + 1;
+    const fishPath = (seq: number) =>
+      buildFishEditedPath({
+        taskId: task.id,
+        product: task.product ?? "未分类",
+        materialDate: materialDateStr,
+        originalName: data.fileName,
+        roomName: task.room_name,
+        anchorName: task.anchor_name as string,
+        sequenceNumber: seq,
+      });
+    relPath = fishPath(sequenceNumber);
+    while (await nasFileExists(NAS, relPath)) relPath = fishPath(++sequenceNumber);
     displayName = relPath.split("/").pop() ?? data.fileName;
   } else if (isPokerSlgProduct(task.product)) {
     // 斗地主 / 三国冰河时代：YYYYMMDD-{产品}-{直播间}-NN.ext
@@ -109,18 +113,21 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
       .where(
         and(
           eq(editing_task.material_date, task.material_date),
-          sql`${live_account.room_id} = ${roomId}`,
+          sql`${live_account.room_id} IS NOT DISTINCT FROM ${roomId}`,
         ),
       );
-    const sequenceNumber = (countRows[0]?.existingCount ?? 0) + 1;
-    relPath = buildPokerSlgEditedPath({
-      taskId: task.id,
-      product: task.product ?? "未分类",
-      materialDate: materialDateStr,
-      originalName: data.fileName,
-      roomName: task.room_name,
-      sequenceNumber,
-    });
+    let sequenceNumber = (countRows[0]?.existingCount ?? 0) + 1;
+    const pokerPath = (seq: number) =>
+      buildPokerSlgEditedPath({
+        taskId: task.id,
+        product: task.product ?? "未分类",
+        materialDate: materialDateStr,
+        originalName: data.fileName,
+        roomName: task.room_name,
+        sequenceNumber: seq,
+      });
+    relPath = pokerPath(sequenceNumber);
+    while (await nasFileExists(NAS, relPath)) relPath = pokerPath(++sequenceNumber);
     displayName = relPath.split("/").pop() ?? data.fileName;
   } else {
     relPath = buildEditedPath({
