@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createTask } from "@/modules/editing-task";
 import { searchLiveAccounts, type AccountSearchResult } from "../actions";
 import type { ProductOption } from "@/modules/product-config";
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function NewTaskDialog({ onClose }: Props) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<AccountSearchResult[]>([]);
   const [selected, setSelected] = useState<AccountSearchResult | null>(null);
@@ -100,7 +102,7 @@ export function NewTaskDialog({ onClose }: Props) {
     setSubmitting(false);
     if (succeeded > 0) {
       onClose();
-      location.reload();
+      router.refresh(); // 软刷新看板数据，保留成功提示，不整页 reload
     }
   }
 
@@ -124,13 +126,21 @@ export function NewTaskDialog({ onClose }: Props) {
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+      <div
+        className="fixed inset-0 z-40 bg-black/30"
+        onClick={() => {
+          if (!submitting) onClose(); // 上传中不允许点遮罩关闭，防误触中断
+        }}
+      />
       <div className="fixed left-1/2 top-1/2 z-50 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-2xl">
         <header className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">新建剪辑任务</h2>
           <button
-            onClick={onClose}
-            className="text-2xl leading-none text-slate-400 hover:text-slate-700"
+            onClick={() => {
+              if (!submitting) onClose();
+            }}
+            disabled={submitting}
+            className="text-2xl leading-none text-slate-400 hover:text-slate-700 disabled:opacity-40"
           >
             ×
           </button>
