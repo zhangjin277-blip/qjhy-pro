@@ -907,3 +907,42 @@ export async function queryTodayEditorLoad(args: {
     }))
     .sort((a, b) => b.assigned + b.completed - (a.assigned + a.completed));
 }
+
+export interface TaskAccountDist {
+  accountId: string;
+  accountName: string;
+  product: string;
+}
+
+/**
+ * 当前日期范围 + 权限 scope 内「有剪辑任务的直播账号」，按产品 + 账号名排序。
+ * 剪辑工作台账号筛选面板用（按产品平铺分组、点击筛选）。
+ */
+export async function queryTaskAccounts(args: {
+  whereClause?: SQL;
+  dateFrom: string;
+  dateTo: string;
+}): Promise<TaskAccountDist[]> {
+  const rows = await db
+    .selectDistinct({
+      account_id: editing_task.live_account_id,
+      account_name: live_account.account_name,
+      product: live_account.product,
+    })
+    .from(editing_task)
+    .innerJoin(live_account, eq(live_account.id, editing_task.live_account_id))
+    .where(
+      and(
+        args.whereClause,
+        isNull(editing_task.deleted_at),
+        gte(editing_task.material_date, new Date(args.dateFrom)),
+        lte(editing_task.material_date, new Date(args.dateTo)),
+      ),
+    )
+    .orderBy(live_account.product, live_account.account_name);
+  return rows.map((r) => ({
+    accountId: r.account_id,
+    accountName: r.account_name ?? "(未知账号)",
+    product: r.product ?? "未分类",
+  }));
+}

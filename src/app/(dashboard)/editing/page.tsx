@@ -8,11 +8,11 @@ import {
   queryTodaySummary,
   queryTodayAnchorDist,
   queryTodayEditorLoad,
+  queryTaskAccounts,
 } from "@/modules/editing-task/server";
 import { listEditors } from "@/modules/editing-editor/server";
 import { listProducts } from "@/modules/product-config/server";
 import { listAnchorOptions } from "@/modules/live-anchor/server";
-import { listAccounts } from "@/modules/live-account/server";
 import { Board } from "./_components/board";
 
 export default async function EditingBoardPage({
@@ -93,7 +93,7 @@ export default async function EditingBoardPage({
     listEditors(),
     listProducts(),
     listAnchorOptions(),
-    listAccounts({}, undefined, true),
+    queryTaskAccounts({ whereClause: where, dateFrom, dateTo }),
     queryFishCoverageToday(),
     queryTodaySummary({ whereClause: where }),
     queryTodayAnchorDist({ whereClause: where }),
@@ -101,9 +101,9 @@ export default async function EditingBoardPage({
   ]);
 
   const accounts = accountRows.map((a) => ({
-    id: a.id,
-    name: a.account_name, // 账号昵称（非 placement_label 投放包名）
-    product: a.product ?? "其他",
+    id: a.accountId,
+    name: a.accountName,
+    product: a.product,
   }));
 
   return (

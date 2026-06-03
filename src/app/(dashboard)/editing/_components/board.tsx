@@ -20,6 +20,7 @@ import { ViewTabs } from "./view-tabs";
 import { TaskDrawer } from "./task-drawer";
 import { NewTaskDialog } from "./new-task-dialog";
 import { TodayStatsPanel } from "./today-stats-panel";
+import { AccountDistPanel } from "./account-dist-panel";
 
 const COLUMNS: { status: EditingTaskStatus; label: string; dotColorClass: string }[] = [
   { status: "uploaded", label: "待剪辑", dotColorClass: "bg-blue-500" },
@@ -64,9 +65,9 @@ export function Board({
         products={products}
         editors={editors}
         anchors={anchors}
-        accounts={accounts}
         onNewTask={() => setNewOpen(true)}
       />
+      <AccountDistPanel accounts={accounts} />
       <TodayStatsPanel
         summary={todaySummary}
         anchorDist={anchorDist}
