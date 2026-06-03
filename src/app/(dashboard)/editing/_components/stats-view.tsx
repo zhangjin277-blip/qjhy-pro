@@ -88,9 +88,8 @@ export function StatsView({
               <tr>
                 <th className="px-4 py-3 text-left font-semibold text-slate-500">剪辑师</th>
                 <th className="px-4 py-3 text-right font-semibold text-slate-500">
-                  完成数（通过）
+                  完成数（交片）
                 </th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-500">交片</th>
                 <th className="px-4 py-3 text-right font-semibold text-slate-500">被回退</th>
                 <th className="px-4 py-3 text-right font-semibold text-slate-500">回退率</th>
               </tr>
@@ -98,32 +97,23 @@ export function StatsView({
             <tbody>
               {editorStats.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400">
+                  <td colSpan={4} className="py-8 text-center text-slate-400">
                     本月暂无数据
                   </td>
                 </tr>
               ) : (
-                editorStats.map((e) => {
-                  const backlog = e.submitted - e.completed;
-                  return (
-                    <tr key={e.editorUserId} className="border-t border-border">
-                      <td className="px-4 py-3 font-medium">{e.editorName}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{e.completed}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {e.submitted}
-                        {backlog > 0 && (
-                          <span className="ml-1 text-[11px] text-amber-600">积压{backlog}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-amber-600">
-                        {e.rejected}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {(e.rejectionRate * 100).toFixed(1)}%
-                      </td>
-                    </tr>
-                  );
-                })
+                editorStats.map((e) => (
+                  <tr key={e.editorUserId} className="border-t border-border">
+                    <td className="px-4 py-3 font-medium">{e.editorName}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{e.completed}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-amber-600">
+                      {e.rejected}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {(e.rejectionRate * 100).toFixed(1)}%
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>

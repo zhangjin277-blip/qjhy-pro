@@ -72,10 +72,9 @@ export interface GanttProductBreakdown {
 export interface GanttRow {
   editorUserId: string;
   editorName: string;
-  total: number; // 完成数 = 审核通过(reviewed_at)总数
-  submitted: number; // 交片数 = edited_uploaded_at 总数（用于露出积压：submitted > total = 有片在审没通过）
-  daily: GanttCell[]; // 每天审核通过数
-  products: GanttProductBreakdown[]; // 按产品拆（按审核通过）
+  total: number; // 完成数 = 交片(edited_uploaded_at)总数
+  daily: GanttCell[]; // 每天交片数
+  products: GanttProductBreakdown[]; // 按产品拆（按交片）
 }
 
 export interface MonthlyProductShare {
@@ -98,8 +97,7 @@ export interface StatusCounts {
 export interface EditorMonthlyStat {
   editorUserId: string;
   editorName: string;
-  completed: number; // 本月审核通过(reviewed_at)且 editor = self
-  submitted: number; // 本月交片(edited_uploaded_at)且 editor = self（露出积压）
+  completed: number; // 本月交片(edited_uploaded_at)且 editor = self
   rejected: number; // 本月 review_rejected 事件，针对 self 的任务
   rejectionRate: number; // rejected / max(completed, 1)
 }

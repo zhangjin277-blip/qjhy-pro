@@ -348,18 +348,18 @@ export async function queryWeeklyGantt(args: {
   weekEnd: string; // YYYY-MM-DD（周日）
   whereClause?: SQL;
 }): Promise<GanttRow[]> {
-  // 完成口径：审核通过即算（reviewed_at 非空 = status ready/published），不再要求已发布
+  // 完成口径：按「交片(edited_uploaded_at = 上传成品)那天」算剪辑师产出
   const filters: (SQL | undefined)[] = [
     args.whereClause,
     isNotNull(editing_task.editor_user_id),
-    isNotNull(editing_task.reviewed_at),
+    isNotNull(editing_task.edited_uploaded_at),
     isNull(editing_task.deleted_at),
     gte(
-      sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`(${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date`,
       sql`${args.weekStart}::date`,
     ),
     lte(
-      sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`(${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date`,
       sql`${args.weekEnd}::date`,
     ),
   ];
@@ -369,7 +369,7 @@ export async function queryWeeklyGantt(args: {
       editor_user_id: editing_task.editor_user_id,
       editor_name: dingtalk_user.name,
       product: live_account.product,
-      published_date: sql<string>`((${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date)::text`,
+      published_date: sql<string>`((${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date)::text`,
       count: sql<number>`count(*)::int`,
     })
     .from(editing_task)
@@ -380,41 +380,8 @@ export async function queryWeeklyGantt(args: {
       editing_task.editor_user_id,
       dingtalk_user.name,
       live_account.product,
-      sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`(${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date`,
     );
-
-  // 交片数（edited_uploaded_at 落在本周）：露出「交了片但还没审核通过」的剪辑师 + 标积压
-  const submittedRows = await db
-    .select({
-      editor_user_id: editing_task.editor_user_id,
-      editor_name: dingtalk_user.name,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(editing_task)
-    .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
-    .where(
-      and(
-        args.whereClause,
-        isNotNull(editing_task.editor_user_id),
-        isNotNull(editing_task.edited_uploaded_at),
-        isNull(editing_task.deleted_at),
-        gte(
-          sql`(${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date`,
-          sql`${args.weekStart}::date`,
-        ),
-        lte(
-          sql`(${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date`,
-          sql`${args.weekEnd}::date`,
-        ),
-      ),
-    )
-    .groupBy(editing_task.editor_user_id, dingtalk_user.name);
-
-  const submittedMap = new Map<string, { name: string; count: number }>();
-  for (const r of submittedRows) {
-    if (!r.editor_user_id) continue;
-    submittedMap.set(r.editor_user_id, { name: r.editor_name ?? "(未知)", count: r.count });
-  }
 
   // 按 editor 聚合成 GanttRow[]
   const editorMap = new Map<
@@ -453,18 +420,6 @@ export async function queryWeeklyGantt(args: {
     pd.set(date, (pd.get(date) ?? 0) + count);
   }
 
-  // 把「只交片、本周还没审核通过」的剪辑师也补进来（daily/products 为空，total=0）
-  for (const [uid, info] of submittedMap) {
-    if (!editorMap.has(uid)) {
-      editorMap.set(uid, {
-        editorUserId: uid,
-        editorName: info.name,
-        dailyMap: new Map(),
-        productMap: new Map(),
-      });
-    }
-  }
-
   return Array.from(editorMap.values())
     .map((entry) => {
       const daily = Array.from(entry.dailyMap.entries()).map(([date, count]) => ({
@@ -481,12 +436,11 @@ export async function queryWeeklyGantt(args: {
         editorUserId: entry.editorUserId,
         editorName: entry.editorName,
         total,
-        submitted: submittedMap.get(entry.editorUserId)?.count ?? 0,
         daily,
         products,
       };
     })
-    .sort((a, b) => b.total - a.total || b.submitted - a.submitted);
+    .sort((a, b) => b.total - a.total);
 }
 
 /**
@@ -498,18 +452,18 @@ export async function queryMonthlyProductShare(args: {
   monthEnd: string; // YYYY-MM-{last day}
   whereClause?: SQL;
 }): Promise<MonthlyProductShare[]> {
-  // 完成口径：审核通过即算（reviewed_at 非空），不再要求已发布
+  // 完成口径：按交片(edited_uploaded_at = 上传成品)日算
   const filters: (SQL | undefined)[] = [
     args.whereClause,
     isNotNull(editing_task.editor_user_id),
-    isNotNull(editing_task.reviewed_at),
+    isNotNull(editing_task.edited_uploaded_at),
     isNull(editing_task.deleted_at),
     gte(
-      sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`(${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date`,
       sql`${args.monthStart}::date`,
     ),
     lte(
-      sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+      sql`(${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date`,
       sql`${args.monthEnd}::date`,
     ),
   ];
@@ -603,35 +557,8 @@ export async function queryEditorMonthlyStats(args: {
   monthEnd: string;
   whereClause?: SQL;
 }): Promise<EditorMonthlyStat[]> {
-  // 完成数：本月审核通过（reviewed_at 非空 = ready/published）且 editor_user_id = X
+  // 完成数：本月交片（edited_uploaded_at = 上传成品）且 editor_user_id = X
   const completedRows = await db
-    .select({
-      editor_user_id: editing_task.editor_user_id,
-      editor_name: dingtalk_user.name,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(editing_task)
-    .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
-    .where(
-      and(
-        args.whereClause,
-        isNotNull(editing_task.reviewed_at),
-        isNotNull(editing_task.editor_user_id),
-        gte(
-          sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
-          sql`${args.monthStart}::date`,
-        ),
-        lte(
-          sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
-          sql`${args.monthEnd}::date`,
-        ),
-        isNull(editing_task.deleted_at),
-      ),
-    )
-    .groupBy(editing_task.editor_user_id, dingtalk_user.name);
-
-  // 交片数：本月 edited_uploaded_at 且 editor = X（露出交了片但还没审核通过的人 + 标积压）
-  const submittedRows = await db
     .select({
       editor_user_id: editing_task.editor_user_id,
       editor_name: dingtalk_user.name,
@@ -685,41 +612,19 @@ export async function queryEditorMonthlyStats(args: {
 
   const rejectedMap = new Map(rejectedRows.map((r) => [r.editor_user_id ?? "", r.count]));
 
-  // 合并完成 + 交片两套剪辑师（交片但未通过的人也要露出）
-  const stat = new Map<string, { name: string; completed: number; submitted: number }>();
-  for (const r of completedRows) {
-    if (!r.editor_user_id) continue;
-    stat.set(r.editor_user_id, {
-      name: r.editor_name ?? "(未知)",
-      completed: r.count,
-      submitted: 0,
-    });
-  }
-  for (const r of submittedRows) {
-    if (!r.editor_user_id) continue;
-    const e = stat.get(r.editor_user_id);
-    if (e) e.submitted = r.count;
-    else
-      stat.set(r.editor_user_id, {
-        name: r.editor_name ?? "(未知)",
-        completed: 0,
-        submitted: r.count,
-      });
-  }
-
-  return Array.from(stat.entries())
-    .map(([editorUserId, e]) => {
-      const rejected = rejectedMap.get(editorUserId) ?? 0;
+  return completedRows
+    .filter((r): r is typeof r & { editor_user_id: string } => r.editor_user_id !== null)
+    .map((r) => {
+      const rejected = rejectedMap.get(r.editor_user_id) ?? 0;
       return {
-        editorUserId,
-        editorName: e.name,
-        completed: e.completed,
-        submitted: e.submitted,
+        editorUserId: r.editor_user_id,
+        editorName: r.editor_name ?? "(未知)",
+        completed: r.count,
         rejected,
-        rejectionRate: e.completed > 0 ? rejected / e.completed : 0,
+        rejectionRate: r.count > 0 ? rejected / r.count : 0,
       };
     })
-    .sort((a, b) => b.completed - a.completed || b.submitted - a.submitted);
+    .sort((a, b) => b.completed - a.completed);
 }
 
 /**
