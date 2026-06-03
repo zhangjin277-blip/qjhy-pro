@@ -48,6 +48,7 @@ export const editing_task = pgTable(
     source_files: jsonb("source_files").$type<string[]>().notNull().default([]),
     source_file_names: jsonb("source_file_names").$type<string[]>().notNull().default([]),
     source_uploaded_at: timestamp("source_uploaded_at", { withTimezone: true }),
+    source_duration_sec: integer("source_duration_sec"), // 素材时长（秒），上传时前端读取；老任务为 null
     editor_user_id: text("editor_user_id").references(() => dingtalk_user.user_id),
     editing_started_at: timestamp("editing_started_at", { withTimezone: true }),
     edited_files: jsonb("edited_files").$type<string[]>().notNull().default([]),

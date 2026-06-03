@@ -75,6 +75,7 @@ export async function listForBoard(args: BoardFilter): Promise<BoardCard[]> {
       material_date: editing_task.material_date,
       created_at: editing_task.created_at,
       source_uploaded_at: editing_task.source_uploaded_at,
+      source_duration_sec: editing_task.source_duration_sec,
       editing_started_at: editing_task.editing_started_at,
       edited_uploaded_at: editing_task.edited_uploaded_at,
       reviewed_at: editing_task.reviewed_at,
@@ -113,6 +114,7 @@ function toBoardCard(r: {
   material_date: Date;
   created_at: Date;
   source_uploaded_at: Date | null;
+  source_duration_sec: number | null;
   editing_started_at: Date | null;
   edited_uploaded_at: Date | null;
   reviewed_at: Date | null;
@@ -137,6 +139,7 @@ function toBoardCard(r: {
     materialDate: r.material_date.toISOString().slice(0, 10),
     enteredStatusAt: enteredAt.toISOString(),
     publishedAt: r.published_at?.toISOString() ?? null,
+    sourceDurationSec: r.source_duration_sec,
     isDisqualified: r.is_disqualified,
     disqualifiedReason: r.disqualified_reason,
     priority: (r.priority === "urgent"
@@ -194,6 +197,7 @@ export async function getTask(taskId: number): Promise<TaskDetail | null> {
       material_date: editing_task.material_date,
       created_at: editing_task.created_at,
       source_uploaded_at: editing_task.source_uploaded_at,
+      source_duration_sec: editing_task.source_duration_sec,
       editing_started_at: editing_task.editing_started_at,
       edited_uploaded_at: editing_task.edited_uploaded_at,
       reviewed_at: editing_task.reviewed_at,
@@ -292,6 +296,7 @@ export async function listForTable(args: TableFilter): Promise<BoardCard[]> {
       material_date: editing_task.material_date,
       created_at: editing_task.created_at,
       source_uploaded_at: editing_task.source_uploaded_at,
+      source_duration_sec: editing_task.source_duration_sec,
       editing_started_at: editing_task.editing_started_at,
       edited_uploaded_at: editing_task.edited_uploaded_at,
       reviewed_at: editing_task.reviewed_at,

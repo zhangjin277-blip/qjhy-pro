@@ -17,6 +17,7 @@ export interface BoardCard {
   // status 入列时间，用于停留时长计算
   enteredStatusAt: string;
   publishedAt: string | null;
+  sourceDurationSec: number | null; // 素材时长（秒），老任务为 null
   isDisqualified: boolean;
   disqualifiedReason: string | null;
   priority: EditingTaskPriority;

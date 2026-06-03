@@ -3,6 +3,13 @@ import type { BoardCard } from "@/modules/editing-task";
 import { formatDwellTime, dwellSeverity } from "../_lib/dwell";
 import { QuickAssignChip } from "./quick-assign-chip";
 
+/** 秒 → m:ss（素材时长） */
+function fmtDuration(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 interface Props {
   card: BoardCard;
   selected: boolean;
@@ -94,6 +101,14 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
               title="重复素材"
             >
               ♻️ 重复
+            </span>
+          )}
+          {card.sourceDurationSec != null && (
+            <span
+              className="ml-auto flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-slate-600"
+              title="素材时长"
+            >
+              ⏱ {fmtDuration(card.sourceDurationSec)}
             </span>
           )}
         </div>

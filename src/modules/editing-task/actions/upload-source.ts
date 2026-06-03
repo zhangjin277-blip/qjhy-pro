@@ -20,6 +20,12 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
   const file = formData.get("file") as File | null;
   if (!file) throw new Error("missing file");
   const data = UploadSourceInput.parse({ taskId, fileName: file.name });
+  // 素材时长（秒）由前端读取后随上传传入；累加到 source_duration_sec（多素材=总时长）
+  const durationRaw = formData.get("durationSec");
+  const durationSec =
+    durationRaw != null && Number.isFinite(Number(durationRaw)) && Number(durationRaw) > 0
+      ? Math.round(Number(durationRaw))
+      : null;
   const { userId } = await requireUser();
 
   const [task] = await db
@@ -30,6 +36,7 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
       anchor_id: editing_task.anchor_id,
       status: editing_task.status,
       product: live_account.product,
+      source_duration_sec: editing_task.source_duration_sec,
       source_files: editing_task.source_files,
       source_file_names: editing_task.source_file_names,
       source_file_hashes: editing_task.source_file_hashes,
@@ -178,6 +185,10 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
       source_file_names: [...(task.source_file_names ?? []), displayName],
       source_file_hashes: [...(task.source_file_hashes ?? []), md5],
       source_uploaded_at: new Date(),
+      source_duration_sec:
+        durationSec != null
+          ? (task.source_duration_sec ?? 0) + durationSec
+          : task.source_duration_sec,
     })
     .where(eq(editing_task.id, task.id));
 

@@ -26,10 +26,29 @@ export function NewTaskDialog({ onClose }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
+  // 前端读取视频时长（秒），失败返回 null（不阻塞上传）
+  function readVideoDurationSec(f: File): Promise<number | null> {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(f);
+      const v = document.createElement("video");
+      v.preload = "metadata";
+      const done = (val: number | null) => {
+        URL.revokeObjectURL(url);
+        resolve(val);
+      };
+      v.onloadedmetadata = () =>
+        done(Number.isFinite(v.duration) && v.duration > 0 ? Math.round(v.duration) : null);
+      v.onerror = () => done(null);
+      v.src = url;
+    });
+  }
+
   async function uploadFileToTask(taskId: number, f: File): Promise<void> {
+    const durationSec = await readVideoDurationSec(f);
     const fd = new FormData();
     fd.append("taskId", String(taskId));
     fd.append("file", f);
+    if (durationSec != null) fd.append("durationSec", String(durationSec));
     const res = await fetch("/api/editing/upload-source", { method: "POST", body: fd });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
