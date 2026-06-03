@@ -175,6 +175,48 @@ function KpiCard({
 
 /* ──────────────────── 主曲线 ──────────────────── */
 
+type TrendGran = "day" | "week" | "month";
+
+/** 把日明细按粒度聚合（前端求和，不去重）。日：原样；周：归 ISO 周一；月：按 YYYY-MM */
+function aggregateTrend(
+  rows: DrawerDailyRow[],
+  key: DrawerMetric,
+  gran: TrendGran,
+): { label: string; value: number | null }[] {
+  if (gran === "day") {
+    return rows.map((r) => ({
+      label: r.date.slice(5),
+      value: typeof r.values[key] === "number" ? (r.values[key] as number) : null,
+    }));
+  }
+  const map = new Map<string, { label: string; sum: number; has: boolean }>();
+  for (const r of rows) {
+    let bucketKey: string;
+    let label: string;
+    if (gran === "month") {
+      bucketKey = r.date.slice(0, 7); // YYYY-MM
+      label = bucketKey;
+    } else {
+      const d = new Date(r.date + "T00:00:00Z");
+      const dow = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() - dow + 1); // 归到本周一
+      bucketKey = d.toISOString().slice(0, 10);
+      label = bucketKey.slice(5); // MM-DD（周一）
+    }
+    let g = map.get(bucketKey);
+    if (!g) {
+      g = { label, sum: 0, has: false };
+      map.set(bucketKey, g);
+    }
+    const v = r.values[key];
+    if (typeof v === "number") {
+      g.sum += v;
+      g.has = true;
+    }
+  }
+  return Array.from(map.values()).map((g) => ({ label: g.label, value: g.has ? g.sum : null }));
+}
+
 function TrendChart({
   selectedKpi,
   curRows,
@@ -186,6 +228,7 @@ function TrendChart({
   prevRows: DrawerDailyRow[];
   loading: boolean;
 }): React.JSX.Element {
+  const [gran, setGran] = useState<TrendGran>("day");
   if (loading) return <Skeleton className="h-[260px] w-full rounded-md" />;
   if (selectedKpi.not_applicable) {
     return (
@@ -198,76 +241,93 @@ function TrendChart({
   const key = selectedKpi.key;
   const unit = selectedKpi.unit;
 
-  const data = curRows.map((r, i) => ({
-    date: r.date.slice(5),
-    cur: typeof r.values[key] === "number" ? (r.values[key] as number) : null,
-    cmp:
-      prevRows[i] && typeof prevRows[i].values[key] === "number"
-        ? (prevRows[i].values[key] as number)
-        : null,
+  const curAgg = aggregateTrend(curRows, key, gran);
+  const prevAgg = aggregateTrend(prevRows, key, gran);
+  const data = curAgg.map((c, i) => ({
+    date: c.label,
+    cur: c.value,
+    cmp: prevAgg[i]?.value ?? null,
   }));
 
   return (
-    <div className="h-[240px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
-          <defs>
-            <linearGradient id="dashboard-cur-area" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--chart-current)" stopOpacity={0.18} />
-              <stop offset="100%" stopColor="var(--chart-current)" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="2 4" vertical={false} />
-          <XAxis
-            dataKey="date"
-            tick={{ fontSize: 11, fill: "var(--chart-axis)" }}
-            tickLine={false}
-            axisLine={{ stroke: "var(--chart-grid)" }}
-            minTickGap={20}
-          />
-          <YAxis
-            tick={{ fontSize: 11, fill: "var(--chart-axis)" }}
-            tickLine={false}
-            axisLine={false}
-            width={56}
-            tickFormatter={(v) => formatMetricValue(v, unit)}
-          />
-          <Tooltip
-            contentStyle={{
-              background: "var(--popover)",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              fontSize: 12,
-            }}
-            labelStyle={{ color: "var(--foreground)", fontWeight: 500, marginBottom: 4 }}
-            formatter={(value, name) => [
-              typeof value === "number" ? formatMetricValue(value, unit) : "—",
-              name === "cur" ? "本周期" : "前同期",
-            ]}
-          />
-          <Area
-            type="monotone"
-            dataKey="cur"
-            stroke="var(--chart-current)"
-            strokeWidth={2}
-            fill="url(#dashboard-cur-area)"
-            dot={false}
-            activeDot={{ r: 4, fill: "var(--chart-current)" }}
-            isAnimationActive={false}
-            connectNulls
-          />
-          <Line
-            type="monotone"
-            dataKey="cmp"
-            stroke="var(--chart-compare)"
-            strokeWidth={2}
-            strokeDasharray="6 4"
-            dot={false}
-            isAnimationActive={false}
-            connectNulls
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+    <div>
+      <div className="mb-2 flex gap-1">
+        {(["day", "week", "month"] as const).map((g) => (
+          <button
+            key={g}
+            type="button"
+            onClick={() => setGran(g)}
+            className={`rounded px-2.5 py-0.5 text-[11.5px] transition ${
+              gran === g
+                ? "bg-primary/10 font-medium text-primary"
+                : "text-muted-foreground hover:bg-slate-100"
+            }`}
+          >
+            {g === "day" ? "日" : g === "week" ? "周" : "月"}
+          </button>
+        ))}
+      </div>
+      <div className="h-[240px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="dashboard-cur-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--chart-current)" stopOpacity={0.18} />
+                <stop offset="100%" stopColor="var(--chart-current)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="2 4" vertical={false} />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 11, fill: "var(--chart-axis)" }}
+              tickLine={false}
+              axisLine={{ stroke: "var(--chart-grid)" }}
+              minTickGap={20}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: "var(--chart-axis)" }}
+              tickLine={false}
+              axisLine={false}
+              width={56}
+              tickFormatter={(v) => formatMetricValue(v, unit)}
+            />
+            <Tooltip
+              contentStyle={{
+                background: "var(--popover)",
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                fontSize: 12,
+              }}
+              labelStyle={{ color: "var(--foreground)", fontWeight: 500, marginBottom: 4 }}
+              formatter={(value, name) => [
+                typeof value === "number" ? formatMetricValue(value, unit) : "—",
+                name === "cur" ? "本周期" : "前同期",
+              ]}
+            />
+            <Area
+              type="monotone"
+              dataKey="cur"
+              stroke="var(--chart-current)"
+              strokeWidth={2}
+              fill="url(#dashboard-cur-area)"
+              dot={false}
+              activeDot={{ r: 4, fill: "var(--chart-current)" }}
+              isAnimationActive={false}
+              connectNulls
+            />
+            <Line
+              type="monotone"
+              dataKey="cmp"
+              stroke="var(--chart-compare)"
+              strokeWidth={2}
+              strokeDasharray="6 4"
+              dot={false}
+              isAnimationActive={false}
+              connectNulls
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
