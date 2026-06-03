@@ -46,16 +46,29 @@ export function Column({
   editors,
   onDropToColumn,
 }: Props) {
-  const field = status === "published" ? "publishedAt" : "materialDate";
+  // 分列日期口径：
+  //   待剪辑 → 素材日期（看素材积压，今天批量传的老素材不会被堆成"今天"）
+  //   剪辑中/审核/待发布 → 进入该状态的日期（领取日/成品日/审核通过日，工作发生那天）
+  //   已发布 → 发布日期
+  const field =
+    status === "uploaded"
+      ? "materialDate"
+      : status === "published"
+        ? "publishedAt"
+        : "enteredStatusAt";
   const groups = groupBoardCards(cards, field);
   const [dragOver, setDragOver] = useState(false);
   const accent = STATUS_ACCENT[status];
 
-  // 今日 / 逾期 概览（按素材日期，跟当前日期筛选范围内的卡片算）
+  // 今日 / 逾期 概览（用与分组相同的字段算，跟当前日期筛选范围内的卡片）
   // 已发布列是终态、不算逾期，只在前 4 列显示该胶囊。
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
-  const todayCount = cards.filter((c) => c.materialDate === today).length;
-  const overdueCount = cards.filter((c) => c.materialDate < today).length;
+  const dateOf = (c: BoardCard) => {
+    const v = c[field];
+    return typeof v === "string" && v ? v.slice(0, 10) : today;
+  };
+  const todayCount = cards.filter((c) => dateOf(c) === today).length;
+  const overdueCount = cards.filter((c) => dateOf(c) < today).length;
   const showSummary = status !== "published";
 
   return (
