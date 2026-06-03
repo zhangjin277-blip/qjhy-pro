@@ -2,12 +2,14 @@
 import { useState } from "react";
 import type { BoardCard } from "@/modules/editing-task";
 import { Card } from "./board-card";
+import type { ColumnAccent } from "./board-column";
 
 interface Props {
   label: string;
   cards: BoardCard[];
   defaultOpen: boolean;
   variant?: "urgent" | "disqualified" | "default";
+  accent: ColumnAccent;
   selectedIds: Set<number>;
   onSelect: (id: number) => void;
   onOpenDrawer: (id: number) => void;
@@ -21,6 +23,7 @@ export function Group({
   cards,
   defaultOpen,
   variant,
+  accent,
   selectedIds,
   onSelect,
   onOpenDrawer,
@@ -32,19 +35,37 @@ export function Group({
   const remaining = cards.length - visible.length;
 
   const isSpecial = variant === "urgent" || variant === "disqualified";
-  const headClass = isSpecial
-    ? "text-red-600 hover:text-red-700"
-    : "text-slate-400 hover:text-blue-600";
 
   return (
-    <div className="mb-2">
+    <div className="mb-0.5">
       <button
         onClick={() => setOpen(!open)}
-        className={`flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-[11px] font-semibold uppercase tracking-wider hover:bg-[var(--selection-bg)] ${headClass}`}
+        className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-[13px] hover:bg-slate-50"
       >
-        <span className={`text-[9px] transition-transform ${open ? "" : "-rotate-90"}`}>▼</span>
-        <span>{label}</span>
-        <span className="ml-auto text-[11px] font-medium text-slate-400">{cards.length}</span>
+        <span
+          className={`text-[9px] text-slate-300 transition-transform ${open ? "" : "-rotate-90"}`}
+        >
+          ▼
+        </span>
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ backgroundColor: isSpecial ? "#f53f3f" : accent.solid }}
+        />
+        <span
+          className={isSpecial ? "font-bold text-[var(--change-up)]" : "font-medium text-slate-600"}
+        >
+          {label}
+        </span>
+        <span
+          className="ml-auto min-w-[22px] rounded-md border px-1.5 text-center text-[12px] font-bold tabular-nums"
+          style={
+            isSpecial
+              ? { color: "#f53f3f", backgroundColor: "#fff1f0", borderColor: "#fecaca" }
+              : { color: accent.text, backgroundColor: accent.lightBg, borderColor: accent.border }
+          }
+        >
+          {cards.length}
+        </span>
       </button>
       {open && (
         <div>
