@@ -6,7 +6,6 @@ import type {
   EditingTaskStatus,
   FishCoverage,
   TodaySummary,
-  TodayAnchorDist,
   TodayEditorLoad,
 } from "@/modules/editing-task";
 import { claimTask, resetEditing, reviewApprove } from "@/modules/editing-task";
@@ -39,7 +38,6 @@ interface Props {
   permissions: { canEdit: boolean; isAdmin: boolean };
   fishCoverage: FishCoverage;
   todaySummary: TodaySummary;
-  anchorDist: TodayAnchorDist[];
   editorLoad: TodayEditorLoad[];
 }
 
@@ -52,7 +50,6 @@ export function Board({
   permissions,
   fishCoverage,
   todaySummary,
-  anchorDist,
   editorLoad,
 }: Props) {
   const [openTaskId, setOpenTaskId] = useState<number | null>(null);
@@ -68,12 +65,7 @@ export function Board({
         onNewTask={() => setNewOpen(true)}
       />
       <AccountDistPanel accounts={accounts} />
-      <TodayStatsPanel
-        summary={todaySummary}
-        anchorDist={anchorDist}
-        editorLoad={editorLoad}
-        fishCoverage={fishCoverage}
-      />
+      <TodayStatsPanel summary={todaySummary} editorLoad={editorLoad} fishCoverage={fishCoverage} />
       <Workspace cards={initialCards} editors={editors} onOpenDrawer={setOpenTaskId} />
       <FloatingActionBar editors={editors} />
       {openTaskId !== null && (

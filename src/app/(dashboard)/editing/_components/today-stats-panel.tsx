@@ -1,93 +1,76 @@
 "use client";
-import type {
-  TodaySummary,
-  TodayAnchorDist,
-  TodayEditorLoad,
-  FishCoverage,
-} from "@/modules/editing-task";
+import type { TodaySummary, TodayEditorLoad, FishCoverage } from "@/modules/editing-task";
 import { FishCoveragePanel } from "./fish-coverage-panel";
 
 interface Props {
   summary: TodaySummary;
-  anchorDist: TodayAnchorDist[];
   editorLoad: TodayEditorLoad[];
   fishCoverage: FishCoverage;
 }
 
-export function TodayStatsPanel({ summary, anchorDist, editorLoad, fishCoverage }: Props) {
+export function TodayStatsPanel({ summary, editorLoad, fishCoverage }: Props) {
+  const kpis = [
+    { label: "上传", value: summary.uploadedToday },
+    { label: "派单", value: summary.assignedToday },
+    { label: "审核", value: summary.reviewToday },
+    { label: "通过", value: summary.approvedToday },
+    { label: "发布", value: summary.publishedToday },
+  ];
+
   return (
-    <div className="grid grid-cols-12 gap-3">
-      {/* 今日汇总 - 5 列 */}
-      <section className="col-span-12 rounded-xl border border-border-subtle bg-white p-3 lg:col-span-5">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-          今日汇总
-        </h3>
-        <div className="grid grid-cols-5 gap-2">
-          <Stat label="上传" value={summary.uploadedToday} color="text-blue-600" />
-          <Stat label="派单" value={summary.assignedToday} color="text-amber-600" />
-          <Stat label="审核" value={summary.reviewToday} color="text-purple-600" />
-          <Stat label="通过" value={summary.approvedToday} color="text-cyan-600" />
-          <Stat label="发布" value={summary.publishedToday} color="text-green-600" />
+    <div className="space-y-3">
+      {/* 今日汇总：横向 KPI 条 */}
+      <section className="flex rounded-xl border border-border-subtle bg-white">
+        {kpis.map((k, i) => (
+          <div
+            key={k.label}
+            className={`flex-1 py-3 text-center ${
+              i < kpis.length - 1 ? "border-r border-border-subtle" : ""
+            }`}
+          >
+            <div className="text-2xl font-bold tabular-nums text-slate-900">{k.value}</div>
+            <div className="mt-1 text-[11.5px] text-slate-500">{k.label}</div>
+          </div>
+        ))}
+      </section>
+
+      {/* 剪辑师负载 + 今日完成度 并排 */}
+      <div className="flex flex-col gap-3 lg:flex-row">
+        <section className="rounded-xl border border-border-subtle bg-white p-3 lg:w-[300px] lg:shrink-0">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            剪辑师负载
+          </h3>
+          {editorLoad.length === 0 ? (
+            <p className="text-xs text-slate-400">今日暂无派单</p>
+          ) : (
+            <div className="space-y-1.5">
+              {editorLoad.map((e) => {
+                const pct = e.assigned > 0 ? Math.round((e.completed / e.assigned) * 100) : 0;
+                return (
+                  <div key={e.editorUserId} className="flex items-center gap-2 text-[12.5px]">
+                    <span className="min-w-[54px] truncate font-medium text-slate-700">
+                      {e.editorName}
+                    </span>
+                    <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                      <span
+                        className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-[#5aa2ff] to-[var(--primary)]"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="min-w-[88px] text-right text-[11.5px] tabular-nums text-slate-500">
+                      派 {e.assigned} · 完成 {e.completed}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <div className="min-w-0 flex-1">
+          <FishCoveragePanel coverage={fishCoverage} />
         </div>
-      </section>
-
-      {/* 剪辑师负载 - 4 列 */}
-      <section className="col-span-12 rounded-xl border border-border-subtle bg-white p-3 lg:col-span-4">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-          剪辑师负载
-        </h3>
-        {editorLoad.length === 0 ? (
-          <p className="text-xs text-slate-400">今日暂无派单</p>
-        ) : (
-          <div className="max-h-32 space-y-1 overflow-auto text-xs">
-            {editorLoad.map((e) => (
-              <div key={e.editorUserId} className="flex justify-between">
-                <span className="font-medium">{e.editorName}</span>
-                <span className="text-slate-500">
-                  派 <b className="text-amber-600">{e.assigned}</b> · 完成{" "}
-                  <b className="text-green-600">{e.completed}</b>
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* 主播分布 - 3 列 */}
-      <section className="col-span-12 rounded-xl border border-border-subtle bg-white p-3 lg:col-span-3">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-          主播分布
-        </h3>
-        {anchorDist.length === 0 ? (
-          <p className="text-xs text-slate-400">今日暂无任务</p>
-        ) : (
-          <div className="flex max-h-32 flex-wrap gap-1 overflow-auto">
-            {anchorDist.map((a, i) => (
-              <span
-                key={`${a.anchorId ?? "none"}-${a.product}-${i}`}
-                className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
-                title={`${a.product} · ${a.anchorName}`}
-              >
-                {a.anchorName} <b className="text-blue-600">×{a.count}</b>
-              </span>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* 捕鱼今日完成度（跨整行） */}
-      <div className="col-span-12">
-        <FishCoveragePanel coverage={fishCoverage} />
       </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="text-center">
-      <div className={`text-xl font-bold tabular-nums ${color}`}>{value}</div>
-      <div className="text-[11px] text-slate-500">{label}</div>
     </div>
   );
 }

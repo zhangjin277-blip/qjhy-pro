@@ -6,7 +6,6 @@ import {
   buildEditingScopeWhere,
   queryFishCoverageToday,
   queryTodaySummary,
-  queryTodayAnchorDist,
   queryTodayEditorLoad,
   queryTaskAccounts,
 } from "@/modules/editing-task/server";
@@ -70,35 +69,25 @@ export default async function EditingBoardPage({
   const accountIds =
     typeof sp.accounts === "string" ? sp.accounts.split(",").filter(Boolean) : undefined;
 
-  const [
-    cards,
-    editors,
-    products,
-    anchors,
-    accountRows,
-    fishCoverage,
-    summary,
-    anchorDist,
-    editorLoad,
-  ] = await Promise.all([
-    listForBoard({
-      whereClause: where,
-      dateFrom,
-      dateTo,
-      productNames,
-      accountIds,
-      editorUserIds,
-      anchorIds,
-    }),
-    listEditors(),
-    listProducts(),
-    listAnchorOptions(),
-    queryTaskAccounts({ whereClause: where, dateFrom, dateTo }),
-    queryFishCoverageToday(),
-    queryTodaySummary({ whereClause: where }),
-    queryTodayAnchorDist({ whereClause: where }),
-    queryTodayEditorLoad({ whereClause: where }),
-  ]);
+  const [cards, editors, products, anchors, accountRows, fishCoverage, summary, editorLoad] =
+    await Promise.all([
+      listForBoard({
+        whereClause: where,
+        dateFrom,
+        dateTo,
+        productNames,
+        accountIds,
+        editorUserIds,
+        anchorIds,
+      }),
+      listEditors(),
+      listProducts(),
+      listAnchorOptions(),
+      queryTaskAccounts({ whereClause: where, dateFrom, dateTo }),
+      queryFishCoverageToday(),
+      queryTodaySummary({ whereClause: where }),
+      queryTodayEditorLoad({ whereClause: where }),
+    ]);
 
   const accounts = accountRows.map((a) => ({
     id: a.accountId,
@@ -116,7 +105,6 @@ export default async function EditingBoardPage({
       permissions={{ canEdit: perm.can_edit, isAdmin: perm.can_admin }}
       fishCoverage={fishCoverage}
       todaySummary={summary}
-      anchorDist={anchorDist}
       editorLoad={editorLoad}
     />
   );

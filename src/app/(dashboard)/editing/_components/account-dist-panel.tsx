@@ -10,7 +10,7 @@ interface AccountDistPanelProps {
 export function AccountDistPanel({ accounts }: AccountDistPanelProps) {
   const router = useRouter();
   const sp = useSearchParams();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true); // 默认收起，省空间
 
   const selected = sp.get("accounts")?.split(",").filter(Boolean) ?? [];
 
