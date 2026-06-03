@@ -5,7 +5,7 @@ interface Props {
   coverage: FishCoverage;
 }
 
-/** 今日完成度：进度环概览 + 只列「未上传要催的人」（变体 C） */
+/** 捕鱼系上传覆盖度（跟看板日期筛选走）：进度环概览 + 只列「未上传的人」（变体 C） */
 export function FishCoveragePanel({ coverage }: Props) {
   if (coverage.total === 0) return null;
 
@@ -42,7 +42,7 @@ export function FishCoveragePanel({ coverage }: Props) {
         </div>
         <div className="min-w-0">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            今日完成度
+            上传覆盖度
           </h3>
           <div className="mt-1 text-[12px] text-slate-600">
             {allDone ? (
@@ -50,7 +50,7 @@ export function FishCoveragePanel({ coverage }: Props) {
             ) : (
               <>
                 还有 <b className="text-[var(--change-up)] tabular-nums">{coverage.missing} 人</b>{" "}
-                未上传 · 下面是要催的人
+                未上传素材
               </>
             )}
           </div>

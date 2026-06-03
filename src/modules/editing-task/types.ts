@@ -72,9 +72,10 @@ export interface GanttProductBreakdown {
 export interface GanttRow {
   editorUserId: string;
   editorName: string;
-  total: number;
-  daily: GanttCell[]; // 每天合计
-  products: GanttProductBreakdown[]; // 按产品拆
+  total: number; // 完成数 = 审核通过(reviewed_at)总数
+  submitted: number; // 交片数 = edited_uploaded_at 总数（用于露出积压：submitted > total = 有片在审没通过）
+  daily: GanttCell[]; // 每天审核通过数
+  products: GanttProductBreakdown[]; // 按产品拆（按审核通过）
 }
 
 export interface MonthlyProductShare {
@@ -97,7 +98,8 @@ export interface StatusCounts {
 export interface EditorMonthlyStat {
   editorUserId: string;
   editorName: string;
-  completed: number; // 本月 published 且 editor = self
+  completed: number; // 本月审核通过(reviewed_at)且 editor = self
+  submitted: number; // 本月交片(edited_uploaded_at)且 editor = self（露出积压）
   rejected: number; // 本月 review_rejected 事件，针对 self 的任务
   rejectionRate: number; // rejected / max(completed, 1)
 }
@@ -117,11 +119,11 @@ export interface AnchorMonthlyStat {
 // ---- 今日统计面板 ----
 
 export interface TodaySummary {
-  uploadedToday: number; // 今天 source_uploaded_at 是今天
-  assignedToday: number; // 今天 editing_started_at 是今天
-  reviewToday: number; // 今天 edited_uploaded_at 是今天
-  approvedToday: number; // 今天 reviewed_at 是今天
-  publishedToday: number; // 今天 published_at 是今天
+  uploadedToday: number; // 区间内 source_uploaded_at 落在 [dateFrom, dateTo]
+  assignedToday: number; // 区间内 editing_started_at
+  reviewToday: number; // 区间内 edited_uploaded_at（交片）
+  approvedToday: number; // 区间内 reviewed_at（审核通过）
+  publishedToday: number; // 区间内 published_at
 }
 
 export interface TodayAnchorDist {
@@ -134,8 +136,9 @@ export interface TodayAnchorDist {
 export interface TodayEditorLoad {
   editorUserId: string;
   editorName: string;
-  assigned: number; // 今天派给该剪辑师的（editing_started_at = today AND editor = X）
-  completed: number; // 今天该剪辑师完成（edited_uploaded_at = today AND editor = X）
+  assigned: number; // 派：区间内 editing_started_at（领取/派单）且 editor = X
+  submitted: number; // 交片：区间内 edited_uploaded_at 且 editor = X
+  approved: number; // 通过：区间内 reviewed_at（审核通过=完成口径）且 editor = X
 }
 
 // ---- 捕鱼系今日完成度 ----

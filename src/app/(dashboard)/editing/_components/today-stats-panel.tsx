@@ -41,11 +41,13 @@ export function TodayStatsPanel({ summary, editorLoad, fishCoverage }: Props) {
             剪辑师负载
           </h3>
           {editorLoad.length === 0 ? (
-            <p className="text-xs text-slate-400">今日暂无派单</p>
+            <p className="text-xs text-slate-400">该时段暂无派单</p>
           ) : (
             <div className="space-y-1.5">
               {editorLoad.map((e) => {
-                const pct = e.assigned > 0 ? Math.round((e.completed / e.assigned) * 100) : 0;
+                // 进度条 = 审核通过 / 派单（完成口径=审核通过）
+                const pct = e.assigned > 0 ? Math.round((e.approved / e.assigned) * 100) : 0;
+                const backlog = e.submitted - e.approved; // 交片了但还没审核通过的积压
                 return (
                   <div key={e.editorUserId} className="flex items-center gap-2 text-[12.5px]">
                     <span className="min-w-[54px] truncate font-medium text-slate-700">
@@ -57,8 +59,11 @@ export function TodayStatsPanel({ summary, editorLoad, fishCoverage }: Props) {
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="min-w-[88px] text-right text-[11.5px] tabular-nums text-slate-500">
-                      派 {e.assigned} · 完成 {e.completed}
+                    <span className="min-w-[128px] text-right text-[11.5px] tabular-nums text-slate-500">
+                      派 {e.assigned} · 交片 {e.submitted} · 通过 {e.approved}
+                      {backlog > 0 && (
+                        <span className="ml-1 text-[var(--change-up)]">积压{backlog}</span>
+                      )}
                     </span>
                   </div>
                 );

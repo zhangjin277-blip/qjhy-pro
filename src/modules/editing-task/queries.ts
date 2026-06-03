@@ -34,6 +34,7 @@ import {
   isNull,
   lte,
   sql,
+  type AnyColumn,
   type SQL,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -382,6 +383,39 @@ export async function queryWeeklyGantt(args: {
       sql`(${editing_task.reviewed_at} AT TIME ZONE 'Asia/Shanghai')::date`,
     );
 
+  // 交片数（edited_uploaded_at 落在本周）：露出「交了片但还没审核通过」的剪辑师 + 标积压
+  const submittedRows = await db
+    .select({
+      editor_user_id: editing_task.editor_user_id,
+      editor_name: dingtalk_user.name,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(editing_task)
+    .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
+    .where(
+      and(
+        args.whereClause,
+        isNotNull(editing_task.editor_user_id),
+        isNotNull(editing_task.edited_uploaded_at),
+        isNull(editing_task.deleted_at),
+        gte(
+          sql`(${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+          sql`${args.weekStart}::date`,
+        ),
+        lte(
+          sql`(${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+          sql`${args.weekEnd}::date`,
+        ),
+      ),
+    )
+    .groupBy(editing_task.editor_user_id, dingtalk_user.name);
+
+  const submittedMap = new Map<string, { name: string; count: number }>();
+  for (const r of submittedRows) {
+    if (!r.editor_user_id) continue;
+    submittedMap.set(r.editor_user_id, { name: r.editor_name ?? "(未知)", count: r.count });
+  }
+
   // 按 editor 聚合成 GanttRow[]
   const editorMap = new Map<
     string,
@@ -419,6 +453,18 @@ export async function queryWeeklyGantt(args: {
     pd.set(date, (pd.get(date) ?? 0) + count);
   }
 
+  // 把「只交片、本周还没审核通过」的剪辑师也补进来（daily/products 为空，total=0）
+  for (const [uid, info] of submittedMap) {
+    if (!editorMap.has(uid)) {
+      editorMap.set(uid, {
+        editorUserId: uid,
+        editorName: info.name,
+        dailyMap: new Map(),
+        productMap: new Map(),
+      });
+    }
+  }
+
   return Array.from(editorMap.values())
     .map((entry) => {
       const daily = Array.from(entry.dailyMap.entries()).map(([date, count]) => ({
@@ -435,11 +481,12 @@ export async function queryWeeklyGantt(args: {
         editorUserId: entry.editorUserId,
         editorName: entry.editorName,
         total,
+        submitted: submittedMap.get(entry.editorUserId)?.count ?? 0,
         daily,
         products,
       };
     })
-    .sort((a, b) => b.total - a.total);
+    .sort((a, b) => b.total - a.total || b.submitted - a.submitted);
 }
 
 /**
@@ -583,6 +630,33 @@ export async function queryEditorMonthlyStats(args: {
     )
     .groupBy(editing_task.editor_user_id, dingtalk_user.name);
 
+  // 交片数：本月 edited_uploaded_at 且 editor = X（露出交了片但还没审核通过的人 + 标积压）
+  const submittedRows = await db
+    .select({
+      editor_user_id: editing_task.editor_user_id,
+      editor_name: dingtalk_user.name,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(editing_task)
+    .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
+    .where(
+      and(
+        args.whereClause,
+        isNotNull(editing_task.edited_uploaded_at),
+        isNotNull(editing_task.editor_user_id),
+        gte(
+          sql`(${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+          sql`${args.monthStart}::date`,
+        ),
+        lte(
+          sql`(${editing_task.edited_uploaded_at} AT TIME ZONE 'Asia/Shanghai')::date`,
+          sql`${args.monthEnd}::date`,
+        ),
+        isNull(editing_task.deleted_at),
+      ),
+    )
+    .groupBy(editing_task.editor_user_id, dingtalk_user.name);
+
   // 被回退数：本月 review_rejected 事件，按 task 当前 editor_user_id 分组
   const rejectedRows = await db
     .select({
@@ -611,19 +685,41 @@ export async function queryEditorMonthlyStats(args: {
 
   const rejectedMap = new Map(rejectedRows.map((r) => [r.editor_user_id ?? "", r.count]));
 
-  return completedRows
-    .filter((r): r is typeof r & { editor_user_id: string } => r.editor_user_id !== null)
-    .map((r) => {
-      const rejected = rejectedMap.get(r.editor_user_id) ?? 0;
+  // 合并完成 + 交片两套剪辑师（交片但未通过的人也要露出）
+  const stat = new Map<string, { name: string; completed: number; submitted: number }>();
+  for (const r of completedRows) {
+    if (!r.editor_user_id) continue;
+    stat.set(r.editor_user_id, {
+      name: r.editor_name ?? "(未知)",
+      completed: r.count,
+      submitted: 0,
+    });
+  }
+  for (const r of submittedRows) {
+    if (!r.editor_user_id) continue;
+    const e = stat.get(r.editor_user_id);
+    if (e) e.submitted = r.count;
+    else
+      stat.set(r.editor_user_id, {
+        name: r.editor_name ?? "(未知)",
+        completed: 0,
+        submitted: r.count,
+      });
+  }
+
+  return Array.from(stat.entries())
+    .map(([editorUserId, e]) => {
+      const rejected = rejectedMap.get(editorUserId) ?? 0;
       return {
-        editorUserId: r.editor_user_id,
-        editorName: r.editor_name ?? "(未知)",
-        completed: r.count,
+        editorUserId,
+        editorName: e.name,
+        completed: e.completed,
+        submitted: e.submitted,
         rejected,
-        rejectionRate: r.count > 0 ? rejected / r.count : 0,
+        rejectionRate: e.completed > 0 ? rejected / e.completed : 0,
       };
     })
-    .sort((a, b) => b.completed - a.completed);
+    .sort((a, b) => b.completed - a.completed || b.submitted - a.submitted);
 }
 
 /**
@@ -683,22 +779,25 @@ export async function queryAnchorMonthlyStats(args: {
     .sort((a, b) => b.total - a.total);
 }
 
-// ---- 捕鱼系今日完成度 ----
+// ---- 捕鱼系上传覆盖度 ----
 
 /**
- * 查询今日「捕鱼系」账号的上传完成情况。
+ * 查询日期区间内「捕鱼系」账号的上传覆盖情况（跟看板日期筛选走）。
  *
  * 逻辑（基于开播记录，不再用排班）：
- * 1. 从 live_session_log 查 start_at 在今天（Asia/Shanghai 时区）的 session
+ * 1. 从 live_session_log 查 start_at 落在 [dateFrom, dateTo]（Asia/Shanghai 时区）的 session
  * 2. Join live_account 过滤 product ILIKE '%捕鱼%'
- * 3. 查今日已上传（source_uploaded_at IS NOT NULL）的 editing_task
- * 4. 以 (live_account_id, anchor_dingtalk_user_id) 为维度做完成度对比
+ * 3. 查区间内 material_date 已上传（source_uploaded_at IS NOT NULL）的 editing_task
+ * 4. 以 (live_account_id, anchor_dingtalk_user_id) 为维度做覆盖度对比
  * 5. 同一 (account_id, anchor_dingtalk_user_id) 可能有多场 session，去重后只计一个
  */
-export async function queryFishCoverageToday(): Promise<FishCoverage> {
-  const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
+export async function queryFishCoverage(args: {
+  dateFrom: string;
+  dateTo: string;
+}): Promise<FishCoverage> {
+  const { dateFrom, dateTo } = args;
 
-  // 1) 查今日捕鱼账号的开播记录（按 Asia/Shanghai 时区切日期）
+  // 1) 查区间内捕鱼账号的开播记录（按 Asia/Shanghai 时区切日期）
   const sessionRows = await db.execute<{
     account_id: string;
     dingtalk_user_id: string;
@@ -712,7 +811,7 @@ export async function queryFishCoverageToday(): Promise<FishCoverage> {
       la.product
     FROM live_session_log sl
     JOIN live_account la ON la.id = sl.live_account_id
-    WHERE (sl.start_at AT TIME ZONE 'Asia/Shanghai')::date = ${todayStr}::date
+    WHERE (sl.start_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN ${dateFrom}::date AND ${dateTo}::date
       AND la.product ILIKE ${"%" + "捕鱼" + "%"}
       AND sl.anchor_dingtalk_user_id IS NOT NULL
   `);
@@ -732,11 +831,11 @@ export async function queryFishCoverageToday(): Promise<FishCoverage> {
   );
 
   if (scheduled.length === 0) {
-    return { date: todayStr, total: 0, uploaded: 0, missing: 0, items: [] };
+    return { date: dateFrom, total: 0, uploaded: 0, missing: 0, items: [] };
   }
   const fishAccountIds = [...new Set(scheduled.map((s) => s.account_id))];
 
-  // 3) 查今日已上传且未被标记不合格的捕鱼系任务（不合格视为未完成）
+  // 3) 查区间内已上传且未被标记不合格的捕鱼系任务（不合格视为未完成）
   const uploadedTasks = await db
     .select({
       id: editing_task.id,
@@ -746,7 +845,7 @@ export async function queryFishCoverageToday(): Promise<FishCoverage> {
     .from(editing_task)
     .where(
       and(
-        sql`${editing_task.material_date}::date = ${todayStr}::date`,
+        sql`${editing_task.material_date}::date BETWEEN ${dateFrom}::date AND ${dateTo}::date`,
         isNotNull(editing_task.source_uploaded_at),
         isNull(editing_task.deleted_at),
         eq(editing_task.is_disqualified, false),
@@ -781,7 +880,7 @@ export async function queryFishCoverageToday(): Promise<FishCoverage> {
   });
 
   return {
-    date: todayStr,
+    date: dateFrom,
     total: items.length,
     uploaded: items.filter((i) => i.uploaded).length,
     missing: items.filter((i) => !i.uploaded).length,
@@ -791,16 +890,23 @@ export async function queryFishCoverageToday(): Promise<FishCoverage> {
 
 // ---- 今日统计面板 ----
 
-export async function queryTodaySummary(args: { whereClause?: SQL }): Promise<TodaySummary> {
+export async function queryTodaySummary(args: {
+  whereClause?: SQL;
+  dateFrom: string;
+  dateTo: string;
+}): Promise<TodaySummary> {
   const tz = "Asia/Shanghai";
+  const { dateFrom, dateTo } = args;
+  const inRange = (col: AnyColumn) =>
+    sql`(${col} AT TIME ZONE ${tz})::date BETWEEN ${dateFrom}::date AND ${dateTo}::date`;
 
   const [r] = await db
     .select({
-      uploaded: sql<number>`count(*) FILTER (WHERE (${editing_task.source_uploaded_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date)::int`,
-      assigned: sql<number>`count(*) FILTER (WHERE (${editing_task.editing_started_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date)::int`,
-      review: sql<number>`count(*) FILTER (WHERE (${editing_task.edited_uploaded_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date)::int`,
-      approved: sql<number>`count(*) FILTER (WHERE (${editing_task.reviewed_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date)::int`,
-      published: sql<number>`count(*) FILTER (WHERE (${editing_task.published_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date)::int`,
+      uploaded: sql<number>`count(*) FILTER (WHERE ${inRange(editing_task.source_uploaded_at)})::int`,
+      assigned: sql<number>`count(*) FILTER (WHERE ${inRange(editing_task.editing_started_at)})::int`,
+      review: sql<number>`count(*) FILTER (WHERE ${inRange(editing_task.edited_uploaded_at)})::int`,
+      approved: sql<number>`count(*) FILTER (WHERE ${inRange(editing_task.reviewed_at)})::int`,
+      published: sql<number>`count(*) FILTER (WHERE ${inRange(editing_task.published_at)})::int`,
     })
     .from(editing_task)
     .where(and(args.whereClause, isNull(editing_task.deleted_at)));
@@ -848,64 +954,59 @@ export async function queryTodayAnchorDist(args: {
 
 export async function queryTodayEditorLoad(args: {
   whereClause?: SQL;
+  dateFrom: string;
+  dateTo: string;
 }): Promise<TodayEditorLoad[]> {
   const tz = "Asia/Shanghai";
+  const { dateFrom, dateTo } = args;
+  const inRange = (col: AnyColumn) =>
+    sql`(${col} AT TIME ZONE ${tz})::date BETWEEN ${dateFrom}::date AND ${dateTo}::date`;
 
-  const assignedRows = await db
+  // 单次扫描，三个区间口径用 FILTER 一次算出：派(领取) / 交片 / 通过(审核)
+  const rows = await db
     .select({
       editor_user_id: editing_task.editor_user_id,
-      count: sql<number>`count(*)::int`,
+      assigned: sql<number>`count(*) FILTER (WHERE ${inRange(editing_task.editing_started_at)})::int`,
+      submitted: sql<number>`count(*) FILTER (WHERE ${inRange(editing_task.edited_uploaded_at)})::int`,
+      approved: sql<number>`count(*) FILTER (WHERE ${inRange(editing_task.reviewed_at)})::int`,
     })
     .from(editing_task)
     .where(
       and(
         args.whereClause,
         isNotNull(editing_task.editor_user_id),
-        sql`(${editing_task.editing_started_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date`,
         isNull(editing_task.deleted_at),
       ),
     )
     .groupBy(editing_task.editor_user_id);
 
-  const completedRows = await db
-    .select({
-      editor_user_id: editing_task.editor_user_id,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(editing_task)
-    .where(
-      and(
-        args.whereClause,
-        isNotNull(editing_task.editor_user_id),
-        sql`(${editing_task.edited_uploaded_at} AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date`,
-        isNull(editing_task.deleted_at),
-      ),
-    )
-    .groupBy(editing_task.editor_user_id);
-
-  const userIds = new Set([
-    ...assignedRows.map((r) => r.editor_user_id).filter((x): x is string => !!x),
-    ...completedRows.map((r) => r.editor_user_id).filter((x): x is string => !!x),
-  ]);
-  if (userIds.size === 0) return [];
+  // 区间内有任意动作（派/交片/通过）的剪辑师才露出
+  const active = rows.filter(
+    (r): r is typeof r & { editor_user_id: string } =>
+      !!r.editor_user_id && (r.assigned > 0 || r.submitted > 0 || r.approved > 0),
+  );
+  if (active.length === 0) return [];
 
   const userNames = await db
     .select({ user_id: dingtalk_user.user_id, name: dingtalk_user.name })
     .from(dingtalk_user)
-    .where(inArray(dingtalk_user.user_id, Array.from(userIds)));
+    .where(
+      inArray(
+        dingtalk_user.user_id,
+        active.map((r) => r.editor_user_id),
+      ),
+    );
   const nameMap = new Map(userNames.map((u) => [u.user_id, u.name]));
 
-  const assignedMap = new Map(assignedRows.map((r) => [r.editor_user_id ?? "", r.count]));
-  const completedMap = new Map(completedRows.map((r) => [r.editor_user_id ?? "", r.count]));
-
-  return Array.from(userIds)
-    .map((id) => ({
-      editorUserId: id,
-      editorName: nameMap.get(id) ?? "(未知)",
-      assigned: assignedMap.get(id) ?? 0,
-      completed: completedMap.get(id) ?? 0,
+  return active
+    .map((r) => ({
+      editorUserId: r.editor_user_id,
+      editorName: nameMap.get(r.editor_user_id) ?? "(未知)",
+      assigned: r.assigned,
+      submitted: r.submitted,
+      approved: r.approved,
     }))
-    .sort((a, b) => b.assigned + b.completed - (a.assigned + a.completed));
+    .sort((a, b) => b.assigned + b.submitted - (a.assigned + a.submitted));
 }
 
 export interface TaskAccountDist {

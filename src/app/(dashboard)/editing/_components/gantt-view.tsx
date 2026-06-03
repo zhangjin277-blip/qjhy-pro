@@ -79,6 +79,12 @@ export function GanttView({
         </div>
       </div>
 
+      {/* 图例 */}
+      <p className="text-[11px] text-slate-400">
+        绿色格子 = 当天<b className="text-slate-500">审核通过</b>数（完成口径）；合计下方
+        <b className="text-amber-600">交片·积压</b>= 已交片但还没审核通过的量
+      </p>
+
       {/* 周甘特表格 */}
       <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
         <table className="w-full text-sm">
@@ -98,7 +104,7 @@ export function GanttView({
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={dates.length + 2} className="py-12 text-center text-slate-400">
-                  本周暂无完成
+                  本周暂无数据
                 </td>
               </tr>
             ) : (
@@ -133,7 +139,14 @@ export function GanttView({
                         </td>
                       );
                     })}
-                    <td className="px-4 py-3 text-right font-bold text-blue-600">{r.total}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="font-bold tabular-nums text-blue-600">{r.total}</div>
+                      {r.submitted > r.total && (
+                        <div className="text-[10px] tabular-nums text-amber-600">
+                          交片{r.submitted}·积压{r.submitted - r.total}
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 );
 

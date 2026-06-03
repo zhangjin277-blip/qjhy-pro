@@ -4,7 +4,7 @@ import { resolvePermission } from "@/modules/permissions/server";
 import {
   listForBoard,
   buildEditingScopeWhere,
-  queryFishCoverageToday,
+  queryFishCoverage,
   queryTodaySummary,
   queryTodayEditorLoad,
   queryTaskAccounts,
@@ -84,9 +84,9 @@ export default async function EditingBoardPage({
       listProducts(),
       listAnchorOptions(),
       queryTaskAccounts({ whereClause: where, dateFrom, dateTo }),
-      queryFishCoverageToday(),
-      queryTodaySummary({ whereClause: where }),
-      queryTodayEditorLoad({ whereClause: where }),
+      queryFishCoverage({ dateFrom, dateTo }),
+      queryTodaySummary({ whereClause: where, dateFrom, dateTo }),
+      queryTodayEditorLoad({ whereClause: where, dateFrom, dateTo }),
     ]);
 
   const accounts = accountRows.map((a) => ({
