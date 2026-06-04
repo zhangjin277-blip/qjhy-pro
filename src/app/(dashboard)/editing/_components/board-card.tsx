@@ -109,44 +109,44 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
             </span>
           )}
         </div>
-        <div className="mt-2 flex items-center border-t border-dashed border-border-default pt-2 text-xs">
+        <div className="mt-2 flex items-center gap-1.5 border-t border-dashed border-border-default pt-2 text-xs">
           {card.editorName ? (
-            <span className="flex items-center gap-1.5">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-[var(--selection-primary)] text-[10px] font-semibold text-white">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-[var(--selection-primary)] text-[10px] font-semibold text-white">
                 {card.editorName.slice(0, 1)}
               </span>
-              <span className="font-medium text-slate-800">{card.editorName}</span>
+              <span className="truncate font-medium text-slate-800">{card.editorName}</span>
             </span>
           ) : (
             <QuickAssignChip taskId={card.id} editors={editors} />
           )}
+          {(card.hasSource || card.hasEdited) && (
+            <span className="ml-auto flex shrink-0 gap-1">
+              {card.hasSource && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPreview("source");
+                  }}
+                  className="flex items-center gap-0.5 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-600 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+                >
+                  ▶素材
+                </button>
+              )}
+              {card.hasEdited && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPreview("edited");
+                  }}
+                  className="flex items-center gap-0.5 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-600 transition-colors hover:border-green-300 hover:bg-green-50 hover:text-green-600"
+                >
+                  ▶成品
+                </button>
+              )}
+            </span>
+          )}
         </div>
-        {(card.hasSource || card.hasEdited) && (
-          <div className="mt-2 flex gap-1.5">
-            {card.hasSource && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPreview("source");
-                }}
-                className="flex flex-1 items-center justify-center gap-1 rounded-md border border-slate-200 bg-slate-50 py-1 text-[11px] font-medium text-slate-600 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
-              >
-                ▶ 素材
-              </button>
-            )}
-            {card.hasEdited && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPreview("edited");
-                }}
-                className="flex flex-1 items-center justify-center gap-1 rounded-md border border-slate-200 bg-slate-50 py-1 text-[11px] font-medium text-slate-600 transition-colors hover:border-green-300 hover:bg-green-50 hover:text-green-600"
-              >
-                ▶ 成品
-              </button>
-            )}
-          </div>
-        )}
       </div>
       {preview &&
         typeof document !== "undefined" &&
