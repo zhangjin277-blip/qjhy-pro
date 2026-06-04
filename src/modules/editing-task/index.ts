@@ -11,7 +11,7 @@ export type {
   MonthlyProductShare,
   StatusCounts,
   EditorMonthlyStat,
-  AnchorMonthlyStat,
+  AnchorMonthlyCoverage,
   FishCoverageItem,
   FishCoverage,
   TodaySummary,

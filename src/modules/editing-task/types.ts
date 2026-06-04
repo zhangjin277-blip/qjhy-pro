@@ -103,16 +103,14 @@ export interface EditorMonthlyStat {
   rejectionRate: number; // rejected / max(completed, 1)
 }
 
-export interface AnchorMonthlyStat {
+export interface AnchorMonthlyCoverage {
   anchorId: string;
   anchorName: string;
-  total: number;
-  uploaded: number;
-  editing: number;
-  review: number;
-  ready: number;
-  published: number;
-  completionRate: number; // published / max(total, 1)
+  products: string; // 该主播本月开播的捕鱼系产品（" / " 拼接）
+  expected: number; // 应上传 = 开播天数（account×日期 去重）
+  uploaded: number; // 实际上传 = 有合格素材的开播日数
+  missing: number; // 未传 = expected - uploaded
+  coverageRate: number; // uploaded / max(expected, 1)
 }
 
 // ---- 今日统计面板 ----

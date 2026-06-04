@@ -1,6 +1,10 @@
 "use client";
 import { useRouter } from "next/navigation";
-import type { StatusCounts, EditorMonthlyStat, AnchorMonthlyStat } from "@/modules/editing-task";
+import type {
+  StatusCounts,
+  EditorMonthlyStat,
+  AnchorMonthlyCoverage,
+} from "@/modules/editing-task";
 import { ViewTabs } from "./view-tabs";
 
 interface Props {
@@ -8,7 +12,7 @@ interface Props {
   monthLabel: string;
   statusCounts: StatusCounts;
   editorStats: EditorMonthlyStat[];
-  anchorStats: AnchorMonthlyStat[];
+  anchorCoverage: AnchorMonthlyCoverage[];
 }
 
 const STATUS_LABEL: Record<keyof StatusCounts, { label: string; color: string }> = {
@@ -24,7 +28,7 @@ export function StatsView({
   monthLabel,
   statusCounts,
   editorStats,
-  anchorStats,
+  anchorCoverage,
 }: Props) {
   const router = useRouter();
 
@@ -120,45 +124,70 @@ export function StatsView({
         </div>
       </section>
 
-      {/* 主播月度统计 */}
+      {/* 主播月度上传覆盖度（基于开播记录，只算捕鱼系） */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-slate-500">主播月度统计（{monthLabel}）</h2>
+        <h2 className="mb-1 text-sm font-semibold text-slate-500">
+          主播月度上传覆盖度（{monthLabel}）
+        </h2>
+        <p className="mb-3 text-[11px] text-slate-400">
+          基于开播记录：每开播 1 天应上传 1 条素材。应上传 = 开播天数；实际 =
+          有合格素材的开播日；只算捕鱼系。
+        </p>
         <div className="overflow-hidden rounded-xl border border-border bg-white">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold text-slate-500">主播</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-500">总任务</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-500">待剪辑</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-500">剪辑中</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-500">审核/待发布</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-500">已发布</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-500">完成率</th>
+                <th className="px-4 py-3 text-left font-semibold text-slate-500">产品</th>
+                <th className="px-4 py-3 text-right font-semibold text-slate-500">应上传</th>
+                <th className="px-4 py-3 text-right font-semibold text-slate-500">实际上传</th>
+                <th className="px-4 py-3 text-right font-semibold text-slate-500">未传</th>
+                <th className="px-4 py-3 text-left font-semibold text-slate-500">覆盖率</th>
               </tr>
             </thead>
             <tbody>
-              {anchorStats.length === 0 ? (
+              {anchorCoverage.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400">
-                    本月暂无数据
+                  <td colSpan={6} className="py-8 text-center text-slate-400">
+                    本月暂无开播记录
                   </td>
                 </tr>
               ) : (
-                anchorStats.map((a) => (
-                  <tr key={a.anchorId} className="border-t border-border">
-                    <td className="px-4 py-3 font-medium">{a.anchorName}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{a.total}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{a.uploaded}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{a.editing}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{a.review + a.ready}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-green-600">
-                      {a.published}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {(a.completionRate * 100).toFixed(1)}%
-                    </td>
-                  </tr>
-                ))
+                anchorCoverage.map((a) => {
+                  const pct = Math.round(a.coverageRate * 100);
+                  const barColor =
+                    pct >= 100 ? "bg-green-500" : pct >= 60 ? "bg-amber-500" : "bg-red-500";
+                  return (
+                    <tr key={a.anchorId} className="border-t border-border">
+                      <td className="px-4 py-3 font-medium">{a.anchorName}</td>
+                      <td className="px-4 py-3 text-[12px] text-slate-500">{a.products}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{a.expected}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-green-600">
+                        {a.uploaded}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {a.missing > 0 ? (
+                          <span className="text-[var(--change-up)]">{a.missing}</span>
+                        ) : (
+                          <span className="text-slate-300">0</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="relative h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
+                            <span
+                              className={`absolute left-0 top-0 h-full rounded-full ${barColor}`}
+                              style={{ width: `${Math.min(pct, 100)}%` }}
+                            />
+                          </div>
+                          <span className="min-w-[40px] text-right text-[12px] tabular-nums text-slate-600">
+                            {pct}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -3,7 +3,7 @@ import { resolvePermission } from "@/modules/permissions/server";
 import {
   queryStatusCounts,
   queryEditorMonthlyStats,
-  queryAnchorMonthlyStats,
+  queryAnchorMonthlyCoverage,
   buildEditingScopeWhere,
 } from "@/modules/editing-task/server";
 import { StatsView } from "../_components/stats-view";
@@ -32,10 +32,11 @@ export default async function StatsPage({
   const where = await buildEditingScopeWhere({ scope: perm.scope, userId });
   const m = getMonthRange(offset);
 
-  const [statusCounts, editorStats, anchorStats] = await Promise.all([
+  const [statusCounts, editorStats, anchorCoverage] = await Promise.all([
     queryStatusCounts({ whereClause: where }),
     queryEditorMonthlyStats({ monthStart: m.start, monthEnd: m.end, whereClause: where }),
-    queryAnchorMonthlyStats({ monthStart: m.start, monthEnd: m.end, whereClause: where }),
+    // 主播覆盖度基于开播记录、只算捕鱼系，全局（与看板捕鱼覆盖度面板一致）
+    queryAnchorMonthlyCoverage({ monthStart: m.start, monthEnd: m.end }),
   ]);
 
   return (
@@ -44,7 +45,7 @@ export default async function StatsPage({
       monthLabel={m.label}
       statusCounts={statusCounts}
       editorStats={editorStats}
-      anchorStats={anchorStats}
+      anchorCoverage={anchorCoverage}
     />
   );
 }

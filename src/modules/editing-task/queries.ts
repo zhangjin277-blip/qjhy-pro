@@ -15,7 +15,7 @@ import type {
   MonthlyProductShare,
   StatusCounts,
   EditorMonthlyStat,
-  AnchorMonthlyStat,
+  AnchorMonthlyCoverage,
   FishCoverage,
   FishCoverageItem,
   TodaySummary,
@@ -633,60 +633,78 @@ export async function queryEditorMonthlyStats(args: {
 }
 
 /**
- * 主播月度统计：按 material_date 过滤，按 anchor 聚合各状态数量。
+ * 主播月度上传覆盖度（基于开播记录 live_session_log，只算捕鱼系）：
+ * - 应上传 = 该主播本月开播天数（account×anchor×日期 去重，每开播日应出 1 条素材）
+ * - 实际上传 = 这些开播日里实际有合格素材上传的天数（material_date 命中同一天）
+ * - 覆盖率 = 实际 / 应上传
  */
-export async function queryAnchorMonthlyStats(args: {
+export async function queryAnchorMonthlyCoverage(args: {
   monthStart: string;
   monthEnd: string;
-  whereClause?: SQL;
-}): Promise<AnchorMonthlyStat[]> {
-  const rows = await db
-    .select({
-      anchor_id: editing_task.anchor_id,
-      anchor_name: anchorUser.name,
-      status: editing_task.status,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(editing_task)
-    .leftJoin(anchorUser, eq(anchorUser.user_id, editing_task.anchor_id))
-    .where(
-      and(
-        args.whereClause,
-        isNotNull(editing_task.anchor_id),
-        gte(sql`(${editing_task.material_date})::date`, sql`${args.monthStart}::date`),
-        lte(sql`(${editing_task.material_date})::date`, sql`${args.monthEnd}::date`),
-        isNull(editing_task.deleted_at),
-      ),
+}): Promise<AnchorMonthlyCoverage[]> {
+  const result = await db.execute<{
+    anchor_id: string;
+    anchor_name: string | null;
+    products: string | null;
+    expected: number;
+    uploaded: number;
+  }>(sql`
+    WITH sessions AS (
+      SELECT DISTINCT
+        sl.live_account_id AS account_id,
+        sl.anchor_dingtalk_user_id AS anchor_id,
+        (sl.start_at AT TIME ZONE 'Asia/Shanghai')::date AS d,
+        la.product
+      FROM live_session_log sl
+      JOIN live_account la ON la.id = sl.live_account_id
+      WHERE (sl.start_at AT TIME ZONE 'Asia/Shanghai')::date
+              BETWEEN ${args.monthStart}::date AND ${args.monthEnd}::date
+        AND la.product ILIKE ${"%捕鱼%"}
+        AND sl.anchor_dingtalk_user_id IS NOT NULL
+    ),
+    uploaded AS (
+      SELECT DISTINCT
+        et.live_account_id AS account_id,
+        et.anchor_id,
+        (et.material_date)::date AS d
+      FROM editing_task et
+      WHERE (et.material_date)::date BETWEEN ${args.monthStart}::date AND ${args.monthEnd}::date
+        AND et.source_uploaded_at IS NOT NULL
+        AND et.deleted_at IS NULL
+        AND et.is_disqualified = false
     )
-    .groupBy(editing_task.anchor_id, anchorUser.name, editing_task.status);
+    SELECT
+      s.anchor_id,
+      du.name AS anchor_name,
+      string_agg(DISTINCT s.product, ' / ') AS products,
+      COUNT(*)::int AS expected,
+      COUNT(u.account_id)::int AS uploaded
+    FROM sessions s
+    LEFT JOIN uploaded u
+      ON u.account_id = s.account_id AND u.anchor_id = s.anchor_id AND u.d = s.d
+    LEFT JOIN dingtalk_user du ON du.user_id = s.anchor_id
+    GROUP BY s.anchor_id, du.name
+    ORDER BY expected DESC, uploaded DESC
+  `);
 
-  // 按 anchor 聚合
-  const byAnchor = new Map<string, AnchorMonthlyStat>();
-  for (const r of rows) {
-    if (!r.anchor_id) continue;
-    let s = byAnchor.get(r.anchor_id);
-    if (!s) {
-      s = {
-        anchorId: r.anchor_id,
-        anchorName: r.anchor_name ?? "(未命名)",
-        total: 0,
-        uploaded: 0,
-        editing: 0,
-        review: 0,
-        ready: 0,
-        published: 0,
-        completionRate: 0,
-      };
-      byAnchor.set(r.anchor_id, s);
-    }
-    s.total += r.count;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (r.status in s) (s as any)[r.status] += r.count;
-  }
-
-  return Array.from(byAnchor.values())
-    .map((s) => ({ ...s, completionRate: s.total > 0 ? s.published / s.total : 0 }))
-    .sort((a, b) => b.total - a.total);
+  const rows = Array.from(
+    result as unknown as Iterable<{
+      anchor_id: string;
+      anchor_name: string | null;
+      products: string | null;
+      expected: number;
+      uploaded: number;
+    }>,
+  );
+  return rows.map((r) => ({
+    anchorId: r.anchor_id,
+    anchorName: r.anchor_name ?? "(未命名)",
+    products: r.products ?? "",
+    expected: Number(r.expected),
+    uploaded: Number(r.uploaded),
+    missing: Number(r.expected) - Number(r.uploaded),
+    coverageRate: Number(r.expected) > 0 ? Number(r.uploaded) / Number(r.expected) : 0,
+  }));
 }
 
 // ---- 捕鱼系上传覆盖度 ----
