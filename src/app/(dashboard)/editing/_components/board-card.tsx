@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import type { BoardCard } from "@/modules/editing-task";
 import { QuickAssignChip } from "./quick-assign-chip";
 import { VideoPreviewModal } from "./video-preview-modal";
@@ -147,19 +148,24 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
           </div>
         )}
       </div>
-      {preview && (
-        <div
-          draggable={false}
-          onClick={(e) => e.stopPropagation()}
-          onDragStart={(e) => e.stopPropagation()}
-        >
-          <VideoPreviewModal
-            src={`/api/editing/download?taskId=${card.id}&kind=${preview}&index=0&inline=1`}
-            fileName={`${card.liveAccountName} ${preview === "source" ? "素材" : "成品"}`}
-            onClose={() => setPreview(null)}
-          />
-        </div>
-      )}
+      {preview &&
+        typeof document !== "undefined" &&
+        createPortal(
+          // 用 portal 渲染到 body：脱离卡片的 backdrop-blur 包含块 + overflow-hidden，
+          // 否则 fixed 遮罩会被限制在卡片内变小。stopPropagation 防 portal 事件冒泡到卡片 onClick。
+          <div
+            draggable={false}
+            onClick={(e) => e.stopPropagation()}
+            onDragStart={(e) => e.stopPropagation()}
+          >
+            <VideoPreviewModal
+              src={`/api/editing/download?taskId=${card.id}&kind=${preview}&index=0&inline=1`}
+              fileName={`${card.liveAccountName} ${preview === "source" ? "素材" : "成品"}`}
+              onClose={() => setPreview(null)}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
