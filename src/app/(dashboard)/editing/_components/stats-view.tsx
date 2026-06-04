@@ -133,65 +133,51 @@ export function StatsView({
           基于开播记录：每开播 1 天应上传 1 条素材。应上传 = 开播天数；实际 =
           有合格素材的开播日；只算捕鱼系。
         </p>
-        <div className="overflow-hidden rounded-xl border border-border bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold text-slate-500">主播</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-500">产品</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-500">应上传</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-500">实际上传</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-500">未传</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-500">覆盖率</th>
-              </tr>
-            </thead>
-            <tbody>
-              {anchorCoverage.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-400">
-                    本月暂无开播记录
-                  </td>
-                </tr>
-              ) : (
-                anchorCoverage.map((a) => {
-                  const pct = Math.round(a.coverageRate * 100);
-                  const barColor =
-                    pct >= 100 ? "bg-green-500" : pct >= 60 ? "bg-amber-500" : "bg-red-500";
-                  return (
-                    <tr key={a.anchorId} className="border-t border-border">
-                      <td className="px-4 py-3 font-medium">{a.anchorName}</td>
-                      <td className="px-4 py-3 text-[12px] text-slate-500">{a.products}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{a.expected}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-green-600">
-                        {a.uploaded}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {a.missing > 0 ? (
-                          <span className="text-[var(--change-up)]">{a.missing}</span>
-                        ) : (
-                          <span className="text-slate-300">0</span>
+        {anchorCoverage.length === 0 ? (
+          <div className="rounded-xl border border-border bg-white py-8 text-center text-sm text-slate-400">
+            本月暂无开播记录
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+            {[...anchorCoverage]
+              .sort((a, b) => b.missing - a.missing || b.expected - a.expected)
+              .map((a) => {
+                const pct = Math.round(a.coverageRate * 100);
+                const color = pct >= 100 ? "#22c55e" : pct >= 60 ? "#f59e0b" : "#ef4444";
+                return (
+                  <div
+                    key={a.anchorId}
+                    className="flex items-center gap-3 rounded-xl border border-border-subtle bg-white p-2.5"
+                  >
+                    {/* 进度环 */}
+                    <div
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+                      style={{ background: `conic-gradient(${color} ${pct}%, #eceff5 0)` }}
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white">
+                        <span className="text-[11px] font-bold tabular-nums" style={{ color }}>
+                          {pct}%
+                        </span>
+                      </div>
+                    </div>
+                    {/* 信息 */}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-semibold text-slate-800">
+                        {a.anchorName}
+                      </div>
+                      <div className="truncate text-[10.5px] text-slate-400">{a.products}</div>
+                      <div className="mt-0.5 text-[11.5px] tabular-nums text-slate-500">
+                        应 {a.expected} · 实 <b className="text-green-600">{a.uploaded}</b>
+                        {a.missing > 0 && (
+                          <span className="text-[var(--change-up)]"> · 欠 {a.missing}</span>
                         )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="relative h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
-                            <span
-                              className={`absolute left-0 top-0 h-full rounded-full ${barColor}`}
-                              style={{ width: `${Math.min(pct, 100)}%` }}
-                            />
-                          </div>
-                          <span className="min-w-[40px] text-right text-[12px] tabular-nums text-slate-600">
-                            {pct}%
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
       </section>
     </div>
   );

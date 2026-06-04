@@ -661,6 +661,12 @@ export async function queryAnchorMonthlyCoverage(args: {
               BETWEEN ${args.monthStart}::date AND ${args.monthEnd}::date
         AND la.product ILIKE ${"%捕鱼%"}
         AND sl.anchor_dingtalk_user_id IS NOT NULL
+        -- 只算真主播：部门名含「主播」（排除运营「三组」「直播一部」等）
+        AND EXISTS (
+          SELECT 1 FROM dingtalk_user du
+          JOIN dingtalk_dept dd ON dd.dept_id IN (SELECT jsonb_array_elements_text(du.dept_ids))
+          WHERE du.user_id = sl.anchor_dingtalk_user_id AND dd.name LIKE ${"%主播%"}
+        )
     ),
     uploaded AS (
       SELECT DISTINCT
@@ -742,6 +748,12 @@ export async function queryFishCoverage(args: {
     WHERE (sl.start_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN ${dateFrom}::date AND ${dateTo}::date
       AND la.product ILIKE ${"%" + "捕鱼" + "%"}
       AND sl.anchor_dingtalk_user_id IS NOT NULL
+      -- 只算真主播：部门名含「主播」（排除运营）
+      AND EXISTS (
+        SELECT 1 FROM dingtalk_user du
+        JOIN dingtalk_dept dd ON dd.dept_id IN (SELECT jsonb_array_elements_text(du.dept_ids))
+        WHERE du.user_id = sl.anchor_dingtalk_user_id AND dd.name LIKE ${"%主播%"}
+      )
   `);
 
   const scheduled: {
