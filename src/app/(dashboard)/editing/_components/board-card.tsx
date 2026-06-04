@@ -1,6 +1,8 @@
 "use client";
+import { useState } from "react";
 import type { BoardCard } from "@/modules/editing-task";
 import { QuickAssignChip } from "./quick-assign-chip";
+import { VideoPreviewModal } from "./video-preview-modal";
 
 /** 秒 → m:ss（素材时长） */
 function fmtDuration(sec: number): string {
@@ -18,6 +20,7 @@ interface Props {
 }
 
 export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props) {
+  const [preview, setPreview] = useState<"source" | "edited" | null>(null);
   return (
     <div
       draggable
@@ -59,12 +62,15 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
       </div>
       <div className="pl-7">
         <div className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <span>{card.liveAccountName}</span>
+          <span className="min-w-0 truncate">{card.liveAccountName}</span>
           {card.priority === "urgent" && (
-            <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+            <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
               🔴 紧急
             </span>
           )}
+          <span className="ml-auto shrink-0 text-xs font-medium tabular-nums text-slate-500">
+            {card.materialDate.slice(5)}
+          </span>
         </div>
         <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
           {card.anchorName && <span>主播 {card.anchorName}</span>}
@@ -102,7 +108,7 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
             </span>
           )}
         </div>
-        <div className="mt-2 flex items-center justify-between border-t border-dashed border-border-default pt-2 text-xs">
+        <div className="mt-2 flex items-center border-t border-dashed border-border-default pt-2 text-xs">
           {card.editorName ? (
             <span className="flex items-center gap-1.5">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-[var(--selection-primary)] text-[10px] font-semibold text-white">
@@ -113,11 +119,47 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
           ) : (
             <QuickAssignChip taskId={card.id} editors={editors} />
           )}
-          <span className="font-medium tabular-nums text-slate-700">
-            {card.materialDate.slice(5)}
-          </span>
         </div>
+        {(card.hasSource || card.hasEdited) && (
+          <div className="mt-2 flex gap-1.5">
+            {card.hasSource && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPreview("source");
+                }}
+                className="flex flex-1 items-center justify-center gap-1 rounded-md border border-slate-200 bg-slate-50 py-1 text-[11px] font-medium text-slate-600 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+              >
+                ▶ 素材
+              </button>
+            )}
+            {card.hasEdited && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPreview("edited");
+                }}
+                className="flex flex-1 items-center justify-center gap-1 rounded-md border border-slate-200 bg-slate-50 py-1 text-[11px] font-medium text-slate-600 transition-colors hover:border-green-300 hover:bg-green-50 hover:text-green-600"
+              >
+                ▶ 成品
+              </button>
+            )}
+          </div>
+        )}
       </div>
+      {preview && (
+        <div
+          draggable={false}
+          onClick={(e) => e.stopPropagation()}
+          onDragStart={(e) => e.stopPropagation()}
+        >
+          <VideoPreviewModal
+            src={`/api/editing/download?taskId=${card.id}&kind=${preview}&index=0&inline=1`}
+            fileName={`${card.liveAccountName} ${preview === "source" ? "素材" : "成品"}`}
+            onClose={() => setPreview(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -18,6 +18,8 @@ export interface BoardCard {
   enteredStatusAt: string;
   publishedAt: string | null;
   sourceDurationSec: number | null; // 素材时长（秒），老任务为 null
+  hasSource: boolean; // 有素材文件（source_uploaded_at 非空）
+  hasEdited: boolean; // 有成品文件（edited_uploaded_at 非空）
   isDisqualified: boolean;
   disqualifiedReason: string | null;
   priority: EditingTaskPriority;

@@ -140,6 +140,8 @@ function toBoardCard(r: {
     enteredStatusAt: enteredAt.toISOString(),
     publishedAt: r.published_at?.toISOString() ?? null,
     sourceDurationSec: r.source_duration_sec,
+    hasSource: r.source_uploaded_at != null,
+    hasEdited: r.edited_uploaded_at != null,
     isDisqualified: r.is_disqualified,
     disqualifiedReason: r.disqualified_reason,
     priority: (r.priority === "urgent"
