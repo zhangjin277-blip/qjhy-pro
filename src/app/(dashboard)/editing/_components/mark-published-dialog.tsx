@@ -5,11 +5,11 @@ import { toast } from "sonner";
 
 interface Props {
   taskId: number;
-  isAdmin: boolean;
+  isAdmin?: boolean; // 已不再用于发布跳过（保留兼容调用方）
   onDone?: () => void;
 }
 
-export function MarkPublishedDialog({ taskId, isAdmin, onDone }: Props) {
+export function MarkPublishedDialog({ taskId, onDone }: Props) {
   const [step, setStep] = useState<"idle" | "need_video">("idle");
   const [videoId, setVideoId] = useState("");
 
@@ -22,7 +22,7 @@ export function MarkPublishedDialog({ taskId, isAdmin, onDone }: Props) {
         location.reload();
       } else {
         setStep("need_video");
-        toast.warning("未匹配到抖音视频，请手填");
+        toast.warning("未匹配到抖音视频，可手填 ID 或直接发布");
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "发布失败");
@@ -45,25 +45,23 @@ export function MarkPublishedDialog({ taskId, isAdmin, onDone }: Props) {
       <input
         value={videoId}
         onChange={(e) => setVideoId(e.target.value)}
-        placeholder="抖音视频 ID（aweme_id）"
+        placeholder="抖音视频 ID（aweme_id，可选）"
         className="rounded border border-border px-2 py-1 text-sm"
       />
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           disabled={!videoId.trim()}
           onClick={() => attempt(videoId.trim())}
           className="rounded bg-blue-500 px-3 py-1.5 text-sm text-white disabled:opacity-50"
         >
-          确认绑定
+          填 ID 绑定
         </button>
-        {isAdmin && (
-          <button
-            onClick={() => attempt(null)}
-            className="rounded border border-border px-3 py-1.5 text-sm text-slate-500"
-          >
-            跳过手填（admin）
-          </button>
-        )}
+        <button
+          onClick={() => attempt(null)}
+          className="rounded bg-green-500 px-3 py-1.5 text-sm text-white hover:bg-green-600"
+        >
+          直接发布（不绑定）
+        </button>
         <button onClick={() => setStep("idle")} className="text-sm text-slate-500">
           取消
         </button>

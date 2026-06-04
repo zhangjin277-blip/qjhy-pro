@@ -106,8 +106,8 @@ export interface EditorMonthlyStat {
 export interface AnchorMonthlyCoverage {
   anchorId: string;
   anchorName: string;
-  products: string; // 该主播本月开播的捕鱼系产品（" / " 拼接）
-  expected: number; // 应上传 = 开播天数（account×日期 去重）
+  product: string; // 单个捕鱼系产品（每行 = 一个 主播×产品）
+  expected: number; // 应上传 = 该产品下开播天数（account×日期 去重）
   uploaded: number; // 实际上传 = 有合格素材的开播日数
   missing: number; // 未传 = expected - uploaded
   coverageRate: number; // uploaded / max(expected, 1)

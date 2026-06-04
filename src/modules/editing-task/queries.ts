@@ -645,7 +645,7 @@ export async function queryAnchorMonthlyCoverage(args: {
   const result = await db.execute<{
     anchor_id: string;
     anchor_name: string | null;
-    products: string | null;
+    product: string;
     expected: number;
     uploaded: number;
   }>(sql`
@@ -682,22 +682,22 @@ export async function queryAnchorMonthlyCoverage(args: {
     SELECT
       s.anchor_id,
       du.name AS anchor_name,
-      string_agg(DISTINCT s.product, ' / ') AS products,
+      s.product AS product,
       COUNT(*)::int AS expected,
       COUNT(u.account_id)::int AS uploaded
     FROM sessions s
     LEFT JOIN uploaded u
       ON u.account_id = s.account_id AND u.anchor_id = s.anchor_id AND u.d = s.d
     LEFT JOIN dingtalk_user du ON du.user_id = s.anchor_id
-    GROUP BY s.anchor_id, du.name
-    ORDER BY expected DESC, uploaded DESC
+    GROUP BY s.anchor_id, du.name, s.product
+    ORDER BY s.product, expected DESC, uploaded DESC
   `);
 
   const rows = Array.from(
     result as unknown as Iterable<{
       anchor_id: string;
       anchor_name: string | null;
-      products: string | null;
+      product: string;
       expected: number;
       uploaded: number;
     }>,
@@ -705,7 +705,7 @@ export async function queryAnchorMonthlyCoverage(args: {
   return rows.map((r) => ({
     anchorId: r.anchor_id,
     anchorName: r.anchor_name ?? "(未命名)",
-    products: r.products ?? "",
+    product: r.product,
     expected: Number(r.expected),
     uploaded: Number(r.uploaded),
     missing: Number(r.expected) - Number(r.uploaded),

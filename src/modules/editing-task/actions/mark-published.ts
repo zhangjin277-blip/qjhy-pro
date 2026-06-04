@@ -7,7 +7,6 @@ import { writeEvent } from "../event-writer";
 import { assertTransition } from "../state-machine";
 import { MarkPublishedInput } from "../schema";
 import { matchDouyinVideo } from "./match-douyin-video";
-import { resolvePermission } from "@/modules/permissions/server";
 
 type MarkResult =
   | { ok: true; videoId: string | null; autoMatched: boolean }
@@ -50,11 +49,7 @@ export async function markPublished(input: unknown): Promise<MarkResult> {
       }
     }
   } else if (data.videoId === null) {
-    // admin 强制跳过 — 校验权限
-    const perm = await resolvePermission(userId, "editing_workflow");
-    if (!perm.can_admin) {
-      throw new Error("仅 admin 可跳过 video_id 手填");
-    }
+    // 跳过手填 → 直接发布、不绑定抖音视频（任何人可用，抖音 ID 非必填）
     videoId = null;
   } else {
     // 手填

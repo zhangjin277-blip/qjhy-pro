@@ -138,47 +138,107 @@ export function StatsView({
             本月暂无开播记录
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
-            {[...anchorCoverage]
-              .sort((a, b) => b.missing - a.missing || b.expected - a.expected)
-              .map((a) => {
+          <CoverageColumns rows={anchorCoverage} />
+        )}
+      </section>
+    </div>
+  );
+}
+
+const PRODUCT_PALETTE = [
+  { solid: "#3b82f6", light: "#eff6ff", text: "#2563eb" },
+  { solid: "#a855f7", light: "#faf5ff", text: "#9333ea" },
+  { solid: "#06b6d4", light: "#ecfeff", text: "#0891b2" },
+  { solid: "#f59e0b", light: "#fffbeb", text: "#d97706" },
+  { solid: "#22c55e", light: "#f0fdf4", text: "#16a34a" },
+];
+const FALLBACK_PALETTE = { solid: "#64748b", light: "#f1f5f9", text: "#475569" };
+
+function covColor(pct: number): string {
+  return pct >= 100 ? "#22c55e" : pct >= 60 ? "#f59e0b" : "#ef4444";
+}
+
+/** 方案 C · 产品分列看板：每个捕鱼产品一列，列内主播按欠传降序 */
+function CoverageColumns({ rows }: { rows: AnchorMonthlyCoverage[] }) {
+  const groups = (() => {
+    const m = new Map<string, AnchorMonthlyCoverage[]>();
+    for (const r of rows) {
+      const arr = m.get(r.product) ?? [];
+      arr.push(r);
+      m.set(r.product, arr);
+    }
+    return Array.from(m.entries())
+      .map(([product, items]) => {
+        const exp = items.reduce((s, x) => s + x.expected, 0);
+        const up = items.reduce((s, x) => s + x.uploaded, 0);
+        return {
+          product,
+          items: [...items].sort((a, b) => b.missing - a.missing || b.expected - a.expected),
+          overall: exp > 0 ? Math.round((up / exp) * 100) : 0,
+        };
+      })
+      .sort((a, b) => b.items.length - a.items.length);
+  })();
+
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {groups.map((g, gi) => {
+        const c = PRODUCT_PALETTE[gi % PRODUCT_PALETTE.length] ?? FALLBACK_PALETTE;
+        return (
+          <div
+            key={g.product}
+            className="rounded-2xl border border-border-subtle bg-white p-3 shadow-[0_10px_28px_-22px_rgba(40,55,120,0.5)]"
+            style={{ borderTop: `3px solid ${c.solid}` }}
+          >
+            <div className="mb-2.5 flex items-center justify-between">
+              <span
+                className="rounded-lg px-2.5 py-1 text-[13px] font-bold"
+                style={{ backgroundColor: c.light, color: c.text }}
+              >
+                {g.product}
+              </span>
+              <span
+                className="text-[13px] font-extrabold tabular-nums"
+                style={{ color: covColor(g.overall) }}
+              >
+                {g.overall}%
+              </span>
+            </div>
+            <div className="flex flex-col">
+              {g.items.map((a) => {
                 const pct = Math.round(a.coverageRate * 100);
-                const color = pct >= 100 ? "#22c55e" : pct >= 60 ? "#f59e0b" : "#ef4444";
+                const rc = covColor(pct);
                 return (
                   <div
-                    key={a.anchorId}
-                    className="flex items-center gap-3 rounded-xl border border-border-subtle bg-white p-2.5"
+                    key={`${a.anchorId}-${a.product}`}
+                    className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-slate-50"
                   >
-                    {/* 进度环 */}
                     <div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
-                      style={{ background: `conic-gradient(${color} ${pct}%, #eceff5 0)` }}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                      style={{ background: `conic-gradient(${rc} ${pct}%, #eceff5 0)` }}
                     >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white">
-                        <span className="text-[11px] font-bold tabular-nums" style={{ color }}>
-                          {pct}%
+                      <div className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-white">
+                        <span className="text-[9px] font-bold tabular-nums" style={{ color: rc }}>
+                          {pct}
                         </span>
                       </div>
                     </div>
-                    {/* 信息 */}
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-semibold text-slate-800">
-                        {a.anchorName}
-                      </div>
-                      <div className="truncate text-[10.5px] text-slate-400">{a.products}</div>
-                      <div className="mt-0.5 text-[11.5px] tabular-nums text-slate-500">
-                        应 {a.expected} · 实 <b className="text-green-600">{a.uploaded}</b>
-                        {a.missing > 0 && (
-                          <span className="text-[var(--change-up)]"> · 欠 {a.missing}</span>
-                        )}
-                      </div>
-                    </div>
+                    <span className="flex-1 truncate text-[13px] font-medium text-slate-700">
+                      {a.anchorName}
+                    </span>
+                    <span className="shrink-0 text-[11.5px] tabular-nums text-slate-400">
+                      {a.uploaded}/{a.expected}
+                      {a.missing > 0 && (
+                        <span className="ml-1 text-[var(--change-up)]">欠{a.missing}</span>
+                      )}
+                    </span>
                   </div>
                 );
               })}
+            </div>
           </div>
-        )}
-      </section>
+        );
+      })}
     </div>
   );
 }
