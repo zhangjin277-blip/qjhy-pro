@@ -57,12 +57,8 @@ export function Group({
           {label}
         </span>
         <span
-          className="ml-auto min-w-[22px] rounded-md border px-1.5 text-center text-[12px] font-bold tabular-nums"
-          style={
-            isSpecial
-              ? { color: "#f53f3f", backgroundColor: "#fff1f0", borderColor: "#fecaca" }
-              : { color: accent.text, backgroundColor: accent.lightBg, borderColor: accent.border }
-          }
+          className="ml-auto min-w-[22px] rounded-md px-1.5 text-center text-[12px] font-bold tabular-nums text-white"
+          style={{ backgroundColor: isSpecial ? "#f53f3f" : accent.solid }}
         >
           {cards.length}
         </span>

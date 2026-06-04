@@ -95,48 +95,57 @@ export function Column({
           // ignore malformed drag data
         }
       }}
-      className={`flex min-h-[620px] flex-col rounded-2xl border bg-white p-3 pt-3.5 transition-colors ${
-        dragOver ? "border-blue-500 ring-2 ring-blue-200" : "border-border-subtle"
+      className={`flex min-h-[620px] flex-col overflow-hidden rounded-xl border bg-white transition-colors ${
+        dragOver ? "ring-2 ring-blue-200" : ""
       } shadow-[0_10px_30px_-22px_rgba(40,55,120,0.5)]`}
-      style={{ borderTop: `3px solid ${accent.solid}` }}
+      style={{ borderColor: dragOver ? "#3b82f6" : accent.border }}
     >
-      <div className="mb-1 flex items-center justify-between px-0.5">
-        <span
-          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[13.5px] font-bold"
-          style={{ backgroundColor: accent.lightBg, color: accent.text }}
-        >
-          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: accent.solid }} />
+      {/* 实色头部条 */}
+      <div
+        className="flex items-center justify-between px-3.5 py-2.5"
+        style={{ backgroundColor: accent.solid }}
+      >
+        <span className="flex items-center gap-1.5 text-[14px] font-bold text-white">
+          <span className="h-1.5 w-1.5 rounded-full bg-white/85" />
           {label}
         </span>
-        <span className="text-[13px] font-extrabold tabular-nums text-slate-900">
+        <span className="rounded-full bg-white/25 px-2.5 py-0.5 text-[12.5px] font-bold tabular-nums text-white">
           {cards.length}
         </span>
       </div>
+      {/* 今日 / 逾期 胶囊 */}
       {showSummary && (
-        <div className="mb-2 px-1 text-[11px] text-slate-400">
-          今日 <b style={{ color: accent.text }}>{todayCount}</b>
+        <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
+          <span
+            className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+            style={{ backgroundColor: accent.lightBg, color: accent.text }}
+          >
+            今日 {todayCount}
+          </span>
           {overdueCount > 0 && (
-            <>
-              {" · "}
-              <span className="text-[var(--change-up)]">逾期 {overdueCount}</span>
-            </>
+            <span className="rounded-full bg-[#fff1f0] px-2 py-0.5 text-[11px] font-semibold text-[var(--change-up)]">
+              逾期 {overdueCount}
+            </span>
           )}
         </div>
       )}
-      {groups.map((g) => (
-        <Group
-          key={g.label}
-          label={g.label}
-          cards={g.cards}
-          defaultOpen={g.defaultOpen}
-          variant={g.variant}
-          accent={accent}
-          selectedIds={selectedIds}
-          onSelect={onSelect}
-          onOpenDrawer={onOpenDrawer}
-          editors={editors}
-        />
-      ))}
+      {/* 正文 */}
+      <div className="flex-1 px-2.5 pb-3 pt-2">
+        {groups.map((g) => (
+          <Group
+            key={g.label}
+            label={g.label}
+            cards={g.cards}
+            defaultOpen={g.defaultOpen}
+            variant={g.variant}
+            accent={accent}
+            selectedIds={selectedIds}
+            onSelect={onSelect}
+            onOpenDrawer={onOpenDrawer}
+            editors={editors}
+          />
+        ))}
+      </div>
     </div>
   );
 }
