@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import type { BoardCard } from "@/modules/editing-task";
 import { Card } from "./board-card";
 import type { ColumnAccent } from "./board-column";
@@ -40,7 +40,13 @@ export function Group({
     <div className="mb-0.5">
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-[13px] hover:bg-slate-50"
+        style={
+          {
+            "--rb": isSpecial ? "#fdecec" : `${accent.solid}14`,
+            "--rbh": isSpecial ? "#f9d2d2" : `${accent.solid}29`,
+          } as CSSProperties
+        }
+        className="flex w-full items-center gap-2 rounded-lg bg-[var(--rb)] px-2 py-2 text-[13px] transition-colors hover:bg-[var(--rbh)]"
       >
         <span
           className={`text-[9px] text-slate-300 transition-transform ${open ? "" : "-rotate-90"}`}

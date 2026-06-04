@@ -1,6 +1,5 @@
 "use client";
 import type { BoardCard } from "@/modules/editing-task";
-import { formatDwellTime, dwellSeverity } from "../_lib/dwell";
 import { QuickAssignChip } from "./quick-assign-chip";
 
 /** 秒 → m:ss（素材时长） */
@@ -19,15 +18,6 @@ interface Props {
 }
 
 export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props) {
-  const dwell = formatDwellTime(card.enteredStatusAt);
-  const severity = dwellSeverity(card.enteredStatusAt);
-  const dwellClass =
-    severity === "danger"
-      ? "text-red-500 font-semibold"
-      : severity === "warn"
-        ? "text-amber-600 font-medium"
-        : "text-slate-400";
-
   return (
     <div
       draggable
@@ -47,7 +37,7 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
           ? "border-[var(--selection-primary)] bg-[var(--selection-bg)] ring-2 ring-[var(--selection-ring)]"
           : card.priority === "urgent"
             ? "border-red-300 hover:border-red-400"
-            : "border-border-subtle hover:border-[var(--hover-ring)]"
+            : "border-slate-300 hover:border-slate-400"
       }`}
     >
       {card.priority === "urgent" && (
@@ -123,8 +113,8 @@ export function Card({ card, selected, onSelect, onOpenDrawer, editors }: Props)
           ) : (
             <QuickAssignChip taskId={card.id} editors={editors} />
           )}
-          <span className={`tabular-nums ${dwellClass}`}>
-            {card.materialDate.slice(5)} · {dwell}
+          <span className="font-medium tabular-nums text-slate-700">
+            {card.materialDate.slice(5)}
           </span>
         </div>
       </div>
