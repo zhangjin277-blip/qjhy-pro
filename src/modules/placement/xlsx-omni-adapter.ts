@@ -18,7 +18,11 @@ import type { ParseResult, ParsedRow } from "./xlsx-adapter";
  * 入库流程依赖现有 ingest.ts 的 excel-upload 路径（写 placement_cumulative_raw
  * 再重算 placement_row），跨次上传天然做差分。
  */
-const COL_ACCOUNT = "账户备注";
+// 账户标签列：平台改过列名，按优先级取第一个非空：
+//   渠道报表账户备注（=旧「账户备注」=placement_label，捕鱼大作战报表带这列，精确匹配）
+//   账户备注（更旧格式兜底）
+//   直播间（途游休闲捕鱼报表只有这列，值是简称）
+const COL_ACCOUNT_ALIASES = ["渠道报表账户备注", "账户备注", "直播间"];
 const COL_COST = "消耗";
 const COL_ACTIVATIONS = "新增";
 const COL_PAYMENT = "首日付费";
@@ -130,13 +134,19 @@ export function parseOmniXlsx(buffer: Buffer | ArrayBuffer, filename: string): P
       continue;
     }
 
-    const accountRaw = row[COL_ACCOUNT];
-    if (!accountRaw) {
-      errors.push({ row, reason: "缺少账户备注列" });
+    let accountName = "";
+    for (const col of COL_ACCOUNT_ALIASES) {
+      const v = row[col];
+      if (v !== null && v !== undefined && String(v).trim() !== "") {
+        accountName = String(v).trim();
+        break;
+      }
+    }
+    if (!accountName) {
+      errors.push({ row, reason: "缺少账户标签列（渠道报表账户备注/账户备注/直播间）" });
       continue;
     }
-    const accountName = String(accountRaw).trim();
-    if (!accountName || accountName === "--" || accountName === "-") continue;
+    if (accountName === "--" || accountName === "-") continue;
 
     rows.push({
       account_name: accountName,
