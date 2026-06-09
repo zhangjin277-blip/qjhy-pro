@@ -1,5 +1,4 @@
 "use server";
-import { createHash } from "node:crypto";
 import { db } from "@/db/client";
 import { editing_task, live_account, live_room, dingtalk_user, live_anchor } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
@@ -11,22 +10,29 @@ import {
   buildPokerSlgSourcePath,
   isFishProduct,
   isPokerSlgProduct,
-  writeFile as nasWriteFile,
   fileExists as nasFileExists,
+  moveTemp as nasMoveTemp,
+  removeTemp as nasRemoveTemp,
 } from "@/modules/editing-storage/server";
 import { UploadSourceInput } from "../schema";
 
-export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
-  const taskId = Number(formData.get("taskId"));
-  const file = formData.get("file") as File | null;
-  if (!file) throw new Error("missing file");
-  const data = UploadSourceInput.parse({ taskId, fileName: file.name });
+/**
+ * 文件已由 route 层（parseUploadToTemp）流式落盘到 NAS 临时文件并算好 md5。
+ * 本函数只负责：判重 → 计算正式路径 → moveTemp（rename 临时文件到正式位置）。
+ * 不再把文件读进内存（原 `Buffer.from(await file.arrayBuffer())` 会 OOM）。
+ */
+export interface UploadSourceParams {
+  taskId: number;
+  fileName: string;
+  md5: string;
+  tmpRelPath: string;
+  durationSec?: number | null;
+}
+
+export async function uploadSource(params: UploadSourceParams): Promise<{ ok: true }> {
+  const data = UploadSourceInput.parse(params);
   // 素材时长（秒）由前端读取后随上传传入；累加到 source_duration_sec（多素材=总时长）
-  const durationRaw = formData.get("durationSec");
-  const durationSec =
-    durationRaw != null && Number.isFinite(Number(durationRaw)) && Number(durationRaw) > 0
-      ? Math.round(Number(durationRaw))
-      : null;
+  const durationSec = data.durationSec ?? null;
   const { userId } = await requireUser();
 
   const [task] = await db
@@ -59,8 +65,7 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
   const NAS = process.env.EDITING_NAS_PATH;
   if (!NAS) throw new Error("EDITING_NAS_PATH not configured");
 
-  const buf = Buffer.from(await file.arrayBuffer());
-  const md5 = createHash("md5").update(buf).digest("hex");
+  const md5 = data.md5;
 
   // Check if this MD5 already exists in any task's source_file_hashes
   const dupRows = await db
@@ -105,6 +110,8 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
         payload: { duplicate_of: oldTask.id, md5 },
       });
     }
+    // 复用已有文件，临时文件不再需要
+    await nasRemoveTemp(NAS, data.tmpRelPath);
   } else if (isFishProduct(task.product) && task.anchor_name && task.anchor_id) {
     // 捕鱼系特殊命名：YYYYMMDD-直播间-主播-NN
     // 计算同日期 + 直播间（room_id） + 主播下已有素材总数
@@ -141,7 +148,7 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
       sequenceNumber++;
       relPath = fishPath(sequenceNumber);
     }
-    await nasWriteFile(NAS, relPath, buf);
+    await nasMoveTemp(NAS, data.tmpRelPath, relPath);
   } else if (isPokerSlgProduct(task.product)) {
     // 斗地主 / 三国冰河时代：YYYYMMDD-{产品}-{直播间}-NN.ext（无主播段）
     // room_id 用 IS NOT DISTINCT FROM：NULL 也能正确同组递增（否则 NULL=NULL 永不匹配 → 序号恒 1 → 撞车覆盖）
@@ -179,7 +186,7 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
         sequenceNumber,
       });
     }
-    await nasWriteFile(NAS, relPath, buf);
+    await nasMoveTemp(NAS, data.tmpRelPath, relPath);
   } else {
     // 普通路径
     relPath = buildSourcePath({
@@ -188,7 +195,7 @@ export async function uploadSource(formData: FormData): Promise<{ ok: true }> {
       materialDate: materialDateStr,
       originalName: data.fileName,
     });
-    await nasWriteFile(NAS, relPath, buf);
+    await nasMoveTemp(NAS, data.tmpRelPath, relPath);
   }
 
   // 规则化命名（捕鱼系 / 斗地主 / 三冰）：UI / 下载文件名用规则化的 basename

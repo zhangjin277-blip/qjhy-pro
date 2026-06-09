@@ -1,5 +1,4 @@
 "use server";
-import { createHash } from "node:crypto";
 import { db } from "@/db/client";
 import { editing_task, live_account, live_room, dingtalk_user, live_anchor } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
@@ -11,8 +10,8 @@ import {
   buildPokerSlgEditedPath,
   isFishProduct,
   isPokerSlgProduct,
-  writeFile as nasWriteFile,
   fileExists as nasFileExists,
+  moveTemp as nasMoveTemp,
 } from "@/modules/editing-storage/server";
 import { z } from "zod";
 import { assertTransition } from "../state-machine";
@@ -21,13 +20,23 @@ import { notifyUrgentEditedUploaded } from "../notify";
 const Input = z.object({
   taskId: z.number().int().positive(),
   fileName: z.string().min(1).max(255),
+  md5: z.string().regex(/^[a-f0-9]{32}$/),
+  tmpRelPath: z.string().min(1),
 });
 
-export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
-  const taskId = Number(formData.get("taskId"));
-  const file = formData.get("file") as File | null;
-  if (!file) throw new Error("missing file");
-  const data = Input.parse({ taskId, fileName: file.name });
+/**
+ * 文件已由 route 层（parseUploadToTemp）流式落盘到 NAS 临时文件并算好 md5。
+ * 本函数计算正式路径后 moveTemp（rename）到位，不把文件读进内存（原方案会 OOM）。
+ */
+export interface UploadEditedParams {
+  taskId: number;
+  fileName: string;
+  md5: string;
+  tmpRelPath: string;
+}
+
+export async function uploadEdited(params: UploadEditedParams): Promise<{ ok: true }> {
+  const data = Input.parse(params);
   const { userId } = await requireUser();
 
   const [task] = await db
@@ -63,8 +72,7 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
   const NAS = process.env.EDITING_NAS_PATH;
   if (!NAS) throw new Error("EDITING_NAS_PATH not configured");
 
-  const buf = Buffer.from(await file.arrayBuffer());
-  const md5 = createHash("md5").update(buf).digest("hex");
+  const md5 = data.md5;
 
   const materialDateStr = task.material_date.toISOString().slice(0, 10);
   let relPath: string;
@@ -137,7 +145,7 @@ export async function uploadEdited(formData: FormData): Promise<{ ok: true }> {
       originalName: data.fileName,
     });
   }
-  await nasWriteFile(NAS, relPath, buf);
+  await nasMoveTemp(NAS, data.tmpRelPath, relPath);
 
   // 始终追加，避免回退后再传覆盖原成品
   const isFirstTransition = task.status === "editing";

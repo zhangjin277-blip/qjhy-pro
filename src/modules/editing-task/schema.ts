@@ -11,8 +11,11 @@ export const CreateTaskInput = z.object({
 
 export const UploadSourceInput = z.object({
   taskId: z.number().int().positive(),
-  // 文件本身用 formData 传，这里只校验元数据
   fileName: z.string().min(1).max(255),
+  // 文件已由 route 层流式落盘到 NAS 临时文件；这里只接收元数据 + 临时路径 + md5
+  md5: z.string().regex(/^[a-f0-9]{32}$/),
+  tmpRelPath: z.string().min(1),
+  durationSec: z.number().int().positive().nullable().optional(),
 });
 
 export const AssignEditorInput = z.object({

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Readable } from "node:stream";
 import { db } from "@/db/client";
 import { editing_task } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -64,7 +65,6 @@ export async function GET(req: NextRequest) {
     const contentType = inline ? guessVideoMime(filename) : "application/octet-stream";
 
     const { size } = await statFile(NAS, relPath);
-    const { Readable } = await import("node:stream");
 
     // 解析 Range 请求头 —— inline 预览（视频拖动）必需，否则浏览器无法 seek
     const rangeHeader = req.headers.get("range");
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
       }
       end = Math.min(end, size - 1);
       const stream = getDownloadStream(NAS, relPath, { start, end });
-      const webStream = Readable.toWeb(stream as never) as ReadableStream;
+      const webStream = nodeStreamToWeb(stream);
       return new NextResponse(webStream, {
         status: 206,
         headers: {
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
     }
 
     const stream = getDownloadStream(NAS, relPath);
-    const webStream = Readable.toWeb(stream as never) as ReadableStream;
+    const webStream = nodeStreamToWeb(stream);
 
     return new NextResponse(webStream, {
       headers: {
@@ -123,6 +123,61 @@ export async function GET(req: NextRequest) {
     const msg = e instanceof Error ? e.message : String(e);
     return new NextResponse(msg, { status: 500 });
   }
+}
+
+/**
+ * Node fs 流 → Web ReadableStream 的健壮桥接。
+ *
+ * 取代 `Readable.toWeb`：后者在客户端中断（视频预览关闭 / 拖动进度条触发新 Range
+ * 请求取消旧请求）时，Web 流的 controller 已关闭，但底层 fs 流仍在 push data →
+ * `controller.enqueue` 抛 "Invalid state: Controller is already closed" →
+ * uncaughtException（线上单次运行累计 7.8 万次，fd/内存泄漏）。
+ *
+ * 本实现：① cancel() 时销毁底层 fs 流；② enqueue 包 try/catch 兜底竞态；
+ * ③ 用 desiredSize + pause/resume 做背压，避免大文件全读进内存。
+ */
+function nodeStreamToWeb(node: NodeJS.ReadableStream): ReadableStream<Uint8Array> {
+  const nodeReadable = node as Readable;
+  let canceled = false;
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      nodeReadable.on("data", (chunk: Buffer) => {
+        if (canceled) return;
+        try {
+          controller.enqueue(new Uint8Array(chunk));
+        } catch {
+          // controller 已关闭：停止并销毁底层流，避免 enqueue-after-close
+          canceled = true;
+          nodeReadable.destroy();
+          return;
+        }
+        if ((controller.desiredSize ?? 1) <= 0) nodeReadable.pause();
+      });
+      nodeReadable.on("end", () => {
+        if (canceled) return;
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
+      });
+      nodeReadable.on("error", (err) => {
+        if (canceled) return;
+        try {
+          controller.error(err);
+        } catch {
+          /* already errored */
+        }
+      });
+    },
+    pull() {
+      nodeReadable.resume();
+    },
+    cancel() {
+      canceled = true;
+      nodeReadable.destroy();
+    },
+  });
 }
 
 function guessVideoMime(name: string): string {
