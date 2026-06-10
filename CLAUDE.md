@@ -116,6 +116,10 @@ pnpm typecheck && pnpm lint && pnpm test       # 应全过
 docker exec qjhy-postgres psql -U qjhy -d qjhy -c "SELECT COUNT(*) FROM dingtalk_user;"  # 应 146+
 ```
 
+## Git 工作方式（2026-06-10 定）
+
+**直接在 main 上开发，不开分支、不开 worktree。** 单人项目 + NAS 直部署，分支只会制造「忘合并」事故（2026-06-09 曾因 worktree 分支未合并导致 main 落后线上 18 个 commit）。即使 skill/默认流程建议用 worktree，也跳过。
+
 ## 开发流程
 
 新功能用 superpowers 流程：
