@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { Readable } from "node:stream";
 import { db } from "@/db/client";
 import { editing_task } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/page-auth";
 import { resolvePermission } from "@/modules/permissions/server";
+import { buildEditingScopeWhere } from "@/modules/editing-task/server";
 import { getDownloadStream, statFile } from "@/modules/editing-storage/server";
 
 export const runtime = "nodejs";
@@ -25,6 +26,8 @@ export async function GET(req: NextRequest) {
       return new NextResponse("Bad Request", { status: 400 });
     }
 
+    // scope 过滤直接进查询：scope 外的任务返回 404（与不存在不可区分，防 IDOR 遍历探测）
+    const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
     const [task] = await db
       .select({
         source_files: editing_task.source_files,
@@ -34,7 +37,7 @@ export async function GET(req: NextRequest) {
         cover_image: editing_task.cover_image,
       })
       .from(editing_task)
-      .where(eq(editing_task.id, taskId));
+      .where(and(eq(editing_task.id, taskId), scopeWhere));
 
     if (!task) return new NextResponse("Not Found", { status: 404 });
 

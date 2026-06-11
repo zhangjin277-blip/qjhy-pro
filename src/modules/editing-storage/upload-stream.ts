@@ -2,7 +2,7 @@ import "server-only";
 import busboy from "busboy";
 import { createHash, randomBytes } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, rename, unlink } from "node:fs/promises";
+import { mkdir, open, rename, unlink } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { dirname, join, resolve } from "node:path";
 
@@ -56,7 +56,9 @@ export async function parseUploadToTemp(req: Request, nasRoot: string): Promise<
   let sawFile = false;
   const hash = createHash("md5");
 
-  const bb = busboy({ headers: { "content-type": contentType } });
+  // defParamCharset: busboy 默认按 latin1 解码 filename=，浏览器发的是裸 UTF-8 字节，
+  // 不显式指定 utf8 中文文件名会变 "æµè¯.mp4" 乱码（formData() 旧方案没这个问题）
+  const bb = busboy({ headers: { "content-type": contentType }, defParamCharset: "utf8" });
   const ws = createWriteStream(tmpFull);
   const nodeReq = Readable.fromWeb(req.body as never);
 
@@ -72,6 +74,12 @@ export async function parseUploadToTemp(req: Request, nasRoot: string): Promise<
         fields[name] = val;
       });
       bb.on("file", (_name, stream, info) => {
+        if (sawFile) {
+          // 第二个 file part：两个流写同一 ws 会内容拼接损坏 + md5/bytes 混算，整个上传拒绝
+          stream.resume(); // 丢弃数据，避免 busboy 卡住
+          reject(new Error("一次上传只支持单个文件"));
+          return;
+        }
         sawFile = true;
         fileName = info.filename ?? "";
         mimeType = info.mimeType ?? "";
@@ -98,6 +106,7 @@ export async function parseUploadToTemp(req: Request, nasRoot: string): Promise<
       nodeReq.pipe(bb);
     });
   } catch (err) {
+    nodeReq.destroy(); // 停止继续消费请求体（reject 后管道可能还在后台 pump）
     ws.destroy();
     await unlink(tmpFull).catch(() => undefined);
     throw err;
@@ -119,8 +128,65 @@ export async function moveTemp(nasRoot: string, fromRel: string, toRel: string):
   await rename(from, to);
 }
 
-/** 删除临时文件（去重命中时不需要保留；幂等，文件不存在不报错）。 */
-export async function removeTemp(nasRoot: string, relPath: string): Promise<void> {
+/**
+ * 排他移动：目标已存在时抛 EEXIST，绝不覆盖。
+ *
+ * rename 对已存在目标是静默覆盖 —— 两个并发上传算出同一序号时，
+ * 「fileExists 检查 → rename」之间的 TOCTOU 窗口会让后到者吃掉先到者的文件。
+ * 这里先 open(to, "wx")（O_CREAT|O_EXCL）占位：CIFS/NFS 由服务端原子裁决，
+ * 并发时只有一个能创建成功，从根上关死竞态。占位成功后 rename 覆盖的是
+ * 自己的占位空文件（同 mount 原子）；rename 失败则回收占位。
+ */
+export async function moveTempExclusive(
+  nasRoot: string,
+  fromRel: string,
+  toRel: string,
+): Promise<void> {
+  const from = fullInside(nasRoot, fromRel);
+  const to = fullInside(nasRoot, toRel);
+  await mkdir(dirname(to), { recursive: true });
+  const fh = await open(to, "wx"); // 目标已存在 → 抛 EEXIST，调用方换序号重试
+  await fh.close();
+  try {
+    await rename(from, to);
+  } catch (err) {
+    await unlink(to).catch(() => undefined); // rename 失败回收占位文件
+    throw err;
+  }
+}
+
+/**
+ * 按序号重试的排他落盘：buildPath(seq) 生成目标路径，EEXIST 时 seq++ 直到成功。
+ * 返回实际使用的相对路径。上限 500 次防御性兜底（正常一天不可能有 500 个同组文件）。
+ */
+export async function moveTempWithSeq(
+  nasRoot: string,
+  tmpRelPath: string,
+  buildPath: (seq: number) => string,
+  startSeq: number,
+): Promise<string> {
+  let seq = startSeq;
+  for (let attempt = 0; attempt < 500; attempt++) {
+    const relPath = buildPath(seq);
+    try {
+      await moveTempExclusive(nasRoot, tmpRelPath, relPath);
+      return relPath;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+        seq++;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("sequence allocation exhausted (500 attempts)");
+}
+
+/** 删除 NAS 相对路径文件（幂等，不存在不报错）。临时文件清理 / DB 写失败后的补偿删除共用。 */
+export async function removeFile(nasRoot: string, relPath: string): Promise<void> {
   const full = fullInside(nasRoot, relPath);
   await unlink(full).catch(() => undefined);
 }
+
+/** 删除临时文件（去重命中时不需要保留）。 */
+export const removeTemp = removeFile;

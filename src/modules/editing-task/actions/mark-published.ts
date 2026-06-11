@@ -1,9 +1,10 @@
 "use server";
 import { db } from "@/db/client";
 import { editing_task, live_account } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { requireUser } from "@/lib/auth/page-auth";
+import { and, eq, isNull } from "drizzle-orm";
 import { writeEvent } from "../event-writer";
+import { requireEditingWriter } from "../authz";
+import { buildEditingScopeWhere } from "../scope";
 import { assertTransition } from "../state-machine";
 import { MarkPublishedInput } from "../schema";
 import { matchDouyinVideo } from "./match-douyin-video";
@@ -18,7 +19,8 @@ type MarkResult =
 
 export async function markPublished(input: unknown): Promise<MarkResult> {
   const data = MarkPublishedInput.parse(input);
-  const { userId } = await requireUser();
+  const { userId, perm } = await requireEditingWriter();
+  const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   const [t] = await db
     .select({
@@ -27,7 +29,7 @@ export async function markPublished(input: unknown): Promise<MarkResult> {
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
-    .where(eq(editing_task.id, data.taskId));
+    .where(and(eq(editing_task.id, data.taskId), isNull(editing_task.deleted_at), scopeWhere));
   if (!t) throw new Error("task not found");
   assertTransition(t.status, "published");
 
@@ -41,9 +43,19 @@ export async function markPublished(input: unknown): Promise<MarkResult> {
     } else {
       // 抖音平台走自动匹配
       const match = await matchDouyinVideo(data.taskId);
-      if (match) {
+      if (match && match.alreadyBoundToTaskId == null) {
         videoId = match.videoId;
         autoMatched = true;
+      } else if (match) {
+        // 候选视频已被其他任务绑定（查询排除 + 这里双保险）：不能静默双绑，降级为手动确认
+        return {
+          ok: false,
+          reason: "need_video_id",
+          suggestion: {
+            videoId: match.videoId,
+            alreadyBoundToTaskId: match.alreadyBoundToTaskId,
+          },
+        };
       } else {
         return { ok: false, reason: "need_video_id", suggestion: null };
       }
@@ -56,21 +68,29 @@ export async function markPublished(input: unknown): Promise<MarkResult> {
     videoId = data.videoId;
   }
 
-  await db
-    .update(editing_task)
-    .set({
-      status: "published",
-      published_by_user_id: userId,
-      published_at: new Date(),
-      video_id: videoId,
-    })
-    .where(eq(editing_task.id, data.taskId));
+  // UPDATE 带前状态守卫：两人同时点发布只有一个生效（防重复 published 事件 + 覆盖发布人）
+  await db.transaction(async (tx) => {
+    const rows = await tx
+      .update(editing_task)
+      .set({
+        status: "published",
+        published_by_user_id: userId,
+        published_at: new Date(),
+        video_id: videoId,
+      })
+      .where(and(eq(editing_task.id, data.taskId), eq(editing_task.status, t.status)))
+      .returning({ id: editing_task.id });
+    if (rows.length === 0) throw new Error("任务状态已变化，请刷新");
 
-  await writeEvent({
-    taskId: data.taskId,
-    eventType: "published",
-    actorUserId: userId,
-    payload: { video_id: videoId, auto_matched: autoMatched },
+    await writeEvent(
+      {
+        taskId: data.taskId,
+        eventType: "published",
+        actorUserId: userId,
+        payload: { video_id: videoId, auto_matched: autoMatched },
+      },
+      tx,
+    );
   });
 
   return { ok: true, videoId, autoMatched };

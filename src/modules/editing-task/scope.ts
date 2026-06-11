@@ -12,11 +12,12 @@ import { eq, or, sql, type SQL } from "drizzle-orm";
  * - self: created_by_user_id == me
  *         OR editor_user_id == me
  *         OR live_account.agent_dingtalk_user_id == me（负责账号）
- *         OR anchor_profile.dingtalk_user_id == me（自己是主播）
+ *         OR anchor_id == me（自己是主播）
  * - team: self 条件 UNION 自己作为 leader 的部门成员负责的账号
  *
  * 注意：live_account 里运营字段是 agent_dingtalk_user_id（不是 operator_user_id）。
- *       anchor_profile 里主播对应钉钉用户的字段是 dingtalk_user_id（无 live_anchor 中间表）。
+ *       editing_task.anchor_id 现存钉钉 user_id（FK 已 drop，见 queries.ts 注释），
+ *       直接与 userId 对等比较 —— 不能再经 anchor_profile.anchor_id 中转（平台主播 ID，永不相等）。
  */
 export async function buildEditingScopeWhere(args: {
   scope: Scope;
@@ -34,9 +35,7 @@ export async function buildEditingScopeWhere(args: {
     sql`${editing_task.live_account_id} IN (
       SELECT id FROM live_account WHERE agent_dingtalk_user_id = ${userId}
     )`,
-    sql`${editing_task.anchor_id} IN (
-      SELECT anchor_id FROM anchor_profile WHERE dingtalk_user_id = ${userId}
-    )`,
+    eq(editing_task.anchor_id, userId),
   );
 
   if (scope === "self") return selfCondition;

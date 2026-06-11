@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/db/client";
 import { editing_task, live_account, douyin_video_snapshot } from "@/db/schema";
-import { and, desc, eq, gte, ne } from "drizzle-orm";
+import { and, asc, eq, gte, ne, sql } from "drizzle-orm";
 
 export interface DouyinMatch {
   videoId: string;
@@ -16,9 +16,12 @@ export interface DouyinMatch {
  * 1. 取 task 的 anchor_id + edited_uploaded_at + live_account.platform。
  * 2. platform !== '抖音' → null（非抖音账号无需绑定）。
  * 3. 在 douyin_video_snapshot 中，按 anchor_id 找
- *    publish_time >= edited_uploaded_at 且 is_secret=0（公开）的最近视频。
- *    同一 item_id 可能有多个 snapshot_date 快照行，取 publish_time 最大的去重后首条。
- * 4. 检查该 item_id 是否已被其他任务绑定（editing_task.video_id）。
+ *    publish_time >= edited_uploaded_at 且 is_secret=0（公开）的视频，
+ *    排除已被其他任务绑定的 item_id（防同一视频双绑 → 统计重复计入），
+ *    按 publish_time ASC 取「交片后最早发布」的一条 —— 主播交片后又发了
+ *    多条视频时，最早那条才最可能对应本任务（DESC 取最新会系统性绑错）。
+ *    同一 item_id 可能有多个 snapshot_date 快照行，应用层去重。
+ * 4. 双保险再查该 item_id 是否已被其他任务绑定（query 排除与 bind 之间有竞态窗口）。
  *
  * Join 路径：
  *   editing_task.anchor_id ──→ douyin_video_snapshot.anchor_id
@@ -44,8 +47,8 @@ export async function matchDouyinVideo(taskId: number): Promise<DouyinMatch | nu
   if (!task.anchor_id) return null;
   if (task.platform !== "抖音") return null;
 
-  // ── Step 2: 找时间窗内公开视频 ───────────────────────────────────────────
-  // publish_time >= edited_uploaded_at，is_secret=0，按 publish_time desc。
+  // ── Step 2: 找时间窗内公开且未被绑定的视频 ───────────────────────────────
+  // publish_time >= edited_uploaded_at，is_secret=0，按 publish_time asc。
   // limit(10) 后在应用层去重 item_id（同视频多快照，publish_time 相同，排序幂等）。
   const windowStart = task.edited_uploaded_at;
 
@@ -60,25 +63,30 @@ export async function matchDouyinVideo(taskId: number): Promise<DouyinMatch | nu
         eq(douyin_video_snapshot.anchor_id, task.anchor_id),
         eq(douyin_video_snapshot.is_secret, 0),
         gte(douyin_video_snapshot.publish_time, windowStart),
+        // 排除已被其他任务绑定的视频（video_id 无唯一约束，靠这里防双绑）
+        sql`NOT EXISTS (
+          SELECT 1 FROM editing_task t
+          WHERE t.video_id = ${douyin_video_snapshot.item_id} AND t.id <> ${taskId}
+        )`,
       ),
     )
-    .orderBy(desc(douyin_video_snapshot.publish_time))
+    .orderBy(asc(douyin_video_snapshot.publish_time))
     .limit(10);
 
   if (videos.length === 0) return null;
 
-  // 应用层去重 item_id，保留 publish_time 最大行（因已 desc 排序，首次出现即最大）
+  // 应用层去重 item_id，保留 publish_time 最小行（因已 asc 排序，首次出现即最早）
   const seen = new Set<string>();
   let best: { item_id: string; publish_time: Date } | null = null;
   for (const v of videos) {
     if (!seen.has(v.item_id)) {
       seen.add(v.item_id);
-      if (!best) best = v; // 第一个（publish_time 最大）即为目标
+      if (!best) best = v; // 第一个（publish_time 最早）即为目标
     }
   }
   if (!best) return null;
 
-  // ── Step 3: 检查是否已被其他任务绑定 ─────────────────────────────────────
+  // ── Step 3: 双保险 —— 查询排除与调用方绑定之间仍有竞态窗口 ───────────────
   const [alreadyBound] = await db
     .select({ id: editing_task.id })
     .from(editing_task)

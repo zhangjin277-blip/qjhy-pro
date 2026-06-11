@@ -1,16 +1,19 @@
 "use server";
 import { db } from "@/db/client";
 import { editing_task, dingtalk_user } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
-import { requireUser } from "@/lib/auth/page-auth";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { writeEvent } from "../event-writer";
+import { requireEditingWriter } from "../authz";
+import { buildEditingScopeWhere } from "../scope";
 import { AssignEditorInput } from "../schema";
 import { assertTransition } from "../state-machine";
 
 export async function assignEditor(input: unknown): Promise<{ updated: number; skipped: number }> {
   const data = AssignEditorInput.parse(input);
-  const { userId } = await requireUser();
+  const { userId, perm } = await requireEditingWriter();
+  const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
+  // scope 外 / 已软删的任务直接选不出来 → 计入 skipped
   const tasks = await db
     .select({
       id: editing_task.id,
@@ -18,7 +21,9 @@ export async function assignEditor(input: unknown): Promise<{ updated: number; s
       prev_editor: editing_task.editor_user_id,
     })
     .from(editing_task)
-    .where(inArray(editing_task.id, data.taskIds));
+    .where(
+      and(inArray(editing_task.id, data.taskIds), isNull(editing_task.deleted_at), scopeWhere),
+    );
 
   // 查新剪辑师 + 旧剪辑师的名字（便于写到 event payload）
   const involvedIds = new Set<string>([data.editorUserId]);
@@ -31,49 +36,67 @@ export async function assignEditor(input: unknown): Promise<{ updated: number; s
   const toName = nameMap.get(data.editorUserId) ?? data.editorUserId;
 
   let updated = 0;
-  let skipped = 0;
+  let skipped = data.taskIds.length - tasks.length;
 
   for (const t of tasks) {
     if (t.status === "uploaded") {
-      // 派单：uploaded → editing
+      // 派单：uploaded → editing。UPDATE 带前状态守卫，并发抢单/重复派单时 0 行 → skipped
       assertTransition("uploaded", "editing");
-      await db
-        .update(editing_task)
-        .set({
-          editor_user_id: data.editorUserId,
-          editing_started_at: new Date(),
-          status: "editing",
-        })
-        .where(eq(editing_task.id, t.id));
+      const ok = await db.transaction(async (tx) => {
+        const rows = await tx
+          .update(editing_task)
+          .set({
+            editor_user_id: data.editorUserId,
+            editing_started_at: new Date(),
+            status: "editing",
+          })
+          .where(and(eq(editing_task.id, t.id), eq(editing_task.status, "uploaded")))
+          .returning({ id: editing_task.id });
+        if (rows.length === 0) return false;
 
-      await writeEvent({
-        taskId: t.id,
-        eventType: "assigned",
-        actorUserId: userId,
-        payload: { from: "unassigned", to: data.editorUserId, to_name: toName },
+        await writeEvent(
+          {
+            taskId: t.id,
+            eventType: "assigned",
+            actorUserId: userId,
+            payload: { from: "unassigned", to: data.editorUserId, to_name: toName },
+          },
+          tx,
+        );
+        return true;
       });
-      updated++;
+      if (ok) updated++;
+      else skipped++;
     } else if (t.status === "editing") {
       // 改派：editing 状态保持，只换 editor
-      await db
-        .update(editing_task)
-        .set({
-          editor_user_id: data.editorUserId,
-        })
-        .where(eq(editing_task.id, t.id));
+      const ok = await db.transaction(async (tx) => {
+        const rows = await tx
+          .update(editing_task)
+          .set({
+            editor_user_id: data.editorUserId,
+          })
+          .where(and(eq(editing_task.id, t.id), eq(editing_task.status, "editing")))
+          .returning({ id: editing_task.id });
+        if (rows.length === 0) return false;
 
-      await writeEvent({
-        taskId: t.id,
-        eventType: "reassigned",
-        actorUserId: userId,
-        payload: {
-          from: t.prev_editor,
-          from_name: t.prev_editor ? (nameMap.get(t.prev_editor) ?? t.prev_editor) : null,
-          to: data.editorUserId,
-          to_name: toName,
-        },
+        await writeEvent(
+          {
+            taskId: t.id,
+            eventType: "reassigned",
+            actorUserId: userId,
+            payload: {
+              from: t.prev_editor,
+              from_name: t.prev_editor ? (nameMap.get(t.prev_editor) ?? t.prev_editor) : null,
+              to: data.editorUserId,
+              to_name: toName,
+            },
+          },
+          tx,
+        );
+        return true;
       });
-      updated++;
+      if (ok) updated++;
+      else skipped++;
     } else {
       skipped++;
     }

@@ -1,38 +1,45 @@
 "use server";
 import { db } from "@/db/client";
 import { editing_task } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { requireUser } from "@/lib/auth/page-auth";
+import { and, eq, isNull } from "drizzle-orm";
 import { writeEvent } from "../event-writer";
+import { requireEditingWriter } from "../authz";
+import { buildEditingScopeWhere } from "../scope";
 import { SetPriorityInput } from "../schema";
 
 export async function setPriority(input: unknown): Promise<{ ok: true }> {
   const data = SetPriorityInput.parse(input);
-  const { userId } = await requireUser();
+  const { userId, perm } = await requireEditingWriter();
+  const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   const [t] = await db
     .select({ priority: editing_task.priority, urgent_reason: editing_task.urgent_reason })
     .from(editing_task)
-    .where(eq(editing_task.id, data.taskId));
+    .where(and(eq(editing_task.id, data.taskId), isNull(editing_task.deleted_at), scopeWhere));
   if (!t) throw new Error("task not found");
 
-  await db
-    .update(editing_task)
-    .set({
-      priority: data.priority,
-      urgent_reason: data.priority === "urgent" ? (data.urgentReason ?? null) : null,
-    })
-    .where(eq(editing_task.id, data.taskId));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(editing_task)
+      .set({
+        priority: data.priority,
+        urgent_reason: data.priority === "urgent" ? (data.urgentReason ?? null) : null,
+      })
+      .where(eq(editing_task.id, data.taskId));
 
-  await writeEvent({
-    taskId: data.taskId,
-    eventType: "priority_changed",
-    actorUserId: userId,
-    payload: {
-      from: t.priority,
-      to: data.priority,
-      urgent_reason: data.priority === "urgent" ? (data.urgentReason ?? null) : null,
-    },
+    await writeEvent(
+      {
+        taskId: data.taskId,
+        eventType: "priority_changed",
+        actorUserId: userId,
+        payload: {
+          from: t.priority,
+          to: data.priority,
+          urgent_reason: data.priority === "urgent" ? (data.urgentReason ?? null) : null,
+        },
+      },
+      tx,
+    );
   });
 
   return { ok: true };

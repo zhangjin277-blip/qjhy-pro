@@ -1,10 +1,22 @@
 "use server";
-import { getTask, listEvents } from "@/modules/editing-task/server";
+import { getTask, listEvents, buildEditingScopeWhere } from "@/modules/editing-task/server";
 import { db } from "@/db/client";
-import { live_account, live_session_log, dingtalk_user } from "@/db/schema";
+import { editing_task, live_account, live_session_log, dingtalk_user } from "@/db/schema";
 import { and, asc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
+import { requireUser } from "@/lib/auth/page-auth";
+import { resolvePermission } from "@/modules/permissions/server";
 
 export async function loadTaskDetail(taskId: number) {
+  // 登录 + scope 校验：scope 外的任务返回 null（与不存在不可区分，防 IDOR 探测详情）
+  const { userId } = await requireUser();
+  const perm = await resolvePermission(userId, "editing_workflow");
+  const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
+  const [visible] = await db
+    .select({ id: editing_task.id })
+    .from(editing_task)
+    .where(and(eq(editing_task.id, taskId), scopeWhere));
+  if (!visible) return { task: null, events: [] };
+
   const [task, events] = await Promise.all([getTask(taskId), listEvents(taskId)]);
   return { task, events };
 }
@@ -17,6 +29,7 @@ export interface AccountSearchResult {
 }
 
 export async function searchLiveAccounts(query: string): Promise<AccountSearchResult[]> {
+  await requireUser(); // 登录校验：账号名/主播排班属内部数据，不能匿名搜
   if (!query || query.length < 1) return [];
 
   const accounts = await db

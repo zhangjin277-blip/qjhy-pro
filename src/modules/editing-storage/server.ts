@@ -20,4 +20,12 @@ export {
   type PathInput,
   type FishPathInput,
 } from "./nas";
-export { parseUploadToTemp, moveTemp, removeTemp, type ParsedUpload } from "./upload-stream";
+export {
+  parseUploadToTemp,
+  moveTemp,
+  moveTempExclusive,
+  moveTempWithSeq,
+  removeTemp,
+  removeFile,
+  type ParsedUpload,
+} from "./upload-stream";

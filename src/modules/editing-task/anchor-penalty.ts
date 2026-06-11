@@ -16,12 +16,15 @@ export interface PenaltyResult {
  * 幂等：anchor_score_log 有 unique(anchor_id, stat_date, reason) 约束，重跑安全。
  */
 export async function runDailyPenalty(targetDate?: string): Promise<PenaltyResult> {
-  // 默认昨天（本机时间减 24h）
-  const yesterday = targetDate ? new Date(targetDate) : new Date(Date.now() - 86400000);
-  yesterday.setHours(0, 0, 0, 0);
-  const dateStr = yesterday.toISOString().slice(0, 10);
-
-  const periodStart = new Date(yesterday.getFullYear(), yesterday.getMonth(), 1);
+  // 默认昨天：按北京时间取日历日期（与 SQL 的 AT TIME ZONE 'Asia/Shanghai' 对齐）。
+  // 不能用 setHours(本地) + toISOString(UTC) 混搭 —— 容器 TZ 非 UTC 时 dateStr 错一天，
+  // 且 material_date 匹配不到任何行（uploadedSet 恒空 → 全员误扣分）
+  const dateStr =
+    targetDate ??
+    new Date(Date.now() - 86400000).toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
+  // stat_date / period_start 沿用「日历日期 = UTC 零点 Date」存储约定（与 material_date 一致）
+  const yesterday = new Date(`${dateStr}T00:00:00Z`);
+  const periodStart = new Date(`${dateStr.slice(0, 7)}-01T00:00:00Z`);
 
   // ── 1. 查昨天有开播记录的捕鱼系主播 ──────────────────────────────────────────
   // live_session_log.anchor_dingtalk_user_id → anchor_profile.dingtalk_user_id → anchor_id
@@ -49,12 +52,13 @@ export async function runDailyPenalty(targetDate?: string): Promise<PenaltyResul
   }
 
   // ── 2. 查昨天已上传素材的主播 ─────────────────────────────────────────────────
+  // material_date 用 ::date 与日期串比较（不依赖 Date 对象逐毫秒相等，TZ 无关）
   const uploadedRows = await db
     .select({ anchor_id: editing_task.anchor_id })
     .from(editing_task)
     .where(
       and(
-        eq(editing_task.material_date, yesterday),
+        sql`${editing_task.material_date}::date = ${dateStr}::date`,
         isNotNull(editing_task.source_uploaded_at),
         isNotNull(editing_task.anchor_id),
         isNull(editing_task.deleted_at),

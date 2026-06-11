@@ -8,8 +8,12 @@ export default async function EditingTablePage() {
   const perm = await resolvePermission(userId, "editing_workflow");
   const where = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
-  const today = new Date().toISOString().slice(0, 10);
-  const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  // 北京时间口径（与看板 page.tsx 一致）：toISOString 是 UTC，北京凌晨 0-8 点会把
+  // dateTo 算成昨天，当天新建的任务在默认视图直接看不到
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
+  const monthAgo = new Date(Date.now() - 30 * 86400000).toLocaleDateString("sv-SE", {
+    timeZone: "Asia/Shanghai",
+  });
 
   const rows = await listForTable({
     whereClause: where,
