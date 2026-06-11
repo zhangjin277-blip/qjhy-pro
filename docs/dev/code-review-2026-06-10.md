@@ -3,19 +3,26 @@
 > 三路并行 subagent 审查全项目功能性 bug 的发现清单与修复进度。
 > 修复中途暂停（用户指示「晚点弄」）。恢复方法见文末。
 
-## 当前进度（暂停时快照）
+## 修复完成（2026-06-11）
 
-| 域 | 状态 |
-|---|---|
-| worker 域 | ✅ 基本完成，已改 4 文件留在工作区（typecheck+175 测试全过），**还差 sync-kuaishou-members.ts 逐行容错** |
-| 剪辑域（editing） | ❌ 未动手（agent 停在读文件阶段） |
-| 投放域（placement） | ❌ 未动手 |
+三域全部修复完毕，按域分三个 commit：
 
-工作区已改文件（未 commit）：
-- `src/worker/jobs/handlers/sync-kuaishou-history-live.ts` — 逐行 try/catch 容错
-- `src/worker/jobs/handlers/sync-kuaishou-today-live.ts` — 同上
-- `src/worker/jobs/sync-dingtalk.ts` — deactivate 80% 下限保护
-- `src/app/(dashboard)/live-accounts/checkin-history/actions.ts` — listAnchorsForCorrection 补鉴权
+| 域 | Commit | 内容 |
+|---|---|---|
+| worker 域 | `151cf7e` | 快手三同步逐行容错 / 钉钉 80% 下限保护 / 补打卡鉴权 |
+| 投放域 | `ad0add3` | 归因时区 / 删batch触发归因 / job 循环 / 排班标脏 / batch 防卡 parsing |
+| 剪辑域 | `77303ad` | P0 秒传清理误删 / 12 action 越权补齐 / IDOR / 并发竞态守卫 / 时区统一 |
+
+验证：typecheck ✅ / lint ✅ / 27 测试文件 198 通过（新增 23 个用例）。
+
+### 遗留决策点（未修，需用户拍板）
+
+1. **create-task 仅 requireUser**，未加 can_edit + scope（delete-task/delete-cover 已有更强校验）
+2. **历史悬空数据**：修复前秒传产生的 duplicate_of 指向已物理删除任务的 id 未回填清理
+3. **软删任务 30 天内仍可下载**（scope 内）——保留原行为，视为「找回文件」合理场景
+4. **worker cron 时区**：容器 UTC，注释的 Shanghai 时刻实际偏 8 小时；anchor-penalty 日期算法已修为不依赖容器 TZ，现在设 TZ=Asia/Shanghai 是安全的，但会改变任务实际触发时刻
+5. 投放设计决策类 4 项：累计回退 reset 语义 / Omni 同备注合并 / batch 归属漂移 / stub 投票污染
+6. **部署提醒**：本轮 web 和 worker 都有改动，NAS 部署需要两个镜像都重建
 
 ---
 
@@ -73,12 +80,3 @@
 4. legacy builder（DOCKER_BUILDKIT=0）推进到 `apk add chromium` 失败——alpine arm64 仓库 gtk+3.0/cairo 包依赖不齐（exit 7，cairo_device_destroy symbol not found），非本项目代码问题。
 
 晚点的修法选项：① 等 alpine 仓库修复重试；② Dockerfile.worker 的 chromium 层 pin 包版本；③ 本地干脆 `docker stop qjhy-worker` 改用 `pnpm worker`（CLAUDE.md 推荐的开发方式）。
-
-## 恢复修复的方法
-
-对 Claude 说「继续修上次代码审查的问题」即可。建议拆三路并行 subagent，按上面清单+文件域分工：
-- 剪辑域：src/modules/editing-task/** + editing-storage/** + api/editing/** + (dashboard)/editing/** + worker/jobs/editing-cleanup.ts
-- 投放域：src/modules/placement/** + placement-attribution/** + (dashboard)/placements/** + live-anchor/account-bindings.ts
-- worker 域：只剩 sync-kuaishou-members.ts 逐行容错
-
-要求：不破坏双入口约定、能补测试的补测试、typecheck/lint/test 全过、统一 commit。
