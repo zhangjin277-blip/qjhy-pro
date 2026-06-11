@@ -238,15 +238,24 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
 
   const dirty = useMemo(() => {
     if (!detail) return false;
+    const flagOf = (v: boolean | null | undefined): FlagState =>
+      v === true ? "on" : v === false ? "off" : "default";
     for (const m of MODULE_KEYS) {
       const ov = detail.overrides.find((x) => x.module === m);
       const initial: WorkingScope = ov?.scope ? (ov.scope as Scope) : "default";
       if (working[m] !== initial) return true;
+      // 编辑/导出/管理开关的变化也算变更（之前漏了，导致只改开关时按钮恒显示「无变更」）
+      const wf = workingFlags[m];
+      if (wf) {
+        if (wf.can_edit !== flagOf(ov?.can_edit)) return true;
+        if (wf.can_export !== flagOf(ov?.can_export)) return true;
+        if (wf.can_admin !== flagOf(ov?.can_admin)) return true;
+      }
     }
     if (workingPosition !== detail.effective_position) return true;
     if (delegatedDirty) return true;
     return false;
-  }, [detail, working, workingPosition, delegatedDirty]);
+  }, [detail, working, workingFlags, workingPosition, delegatedDirty]);
 
   const positionDirty = useMemo(() => {
     if (!detail) return false;

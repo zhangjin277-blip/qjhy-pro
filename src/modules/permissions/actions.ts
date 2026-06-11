@@ -133,7 +133,14 @@ export async function upsertOverrideBatch(input: unknown): Promise<{ ok: true; c
 
   let count = 0;
   for (const entry of data.entries) {
-    if (entry.scope === null) {
+    // scope=null（数据范围用默认）且三个开关也全是 null（用默认）且无委托 → 该 module
+    // 无任何覆盖内容，删除 override 行。
+    // 注意不能只看 scope：scope 用默认但单独设了编辑/导出/管理开关是合法配置
+    // （schema scope 列可空，resolve 对 null scope 不抬范围、null flag 回落岗位默认）。
+    const hasFlagOverride =
+      entry.can_edit !== null || entry.can_export !== null || entry.can_admin !== null;
+    const hasDelegated = delegatedExplicit && delegatedValue !== null;
+    if (entry.scope === null && !hasFlagOverride && !hasDelegated) {
       await db
         .delete(auth_permission_override)
         .where(
@@ -162,7 +169,6 @@ export async function upsertOverrideBatch(input: unknown): Promise<{ ok: true; c
       .onConflictDoUpdate({
         target: [auth_permission_override.user_id, auth_permission_override.module],
         // 仅 update 调用方实际传了的 can_* 字段（undefined = 不动）。
-        // entry.scope 在 batch 里是必填（null 已在上面 delete 分支处理），所以总要 update。
         set: {
           scope: entry.scope,
           reason: data.reason,
