@@ -1,6 +1,5 @@
-import { CookiePanel } from "./_components/cookie-panel";
-import { QueueStatus } from "./_components/queue-status";
-import { ManualRerun } from "./_components/manual-rerun";
+import { MatrixPanel } from "./_components/matrix-panel";
+import { LogTable } from "./_components/log-table";
 
 export default function CrawlerAdminPage(): React.JSX.Element {
   return (
@@ -8,9 +7,8 @@ export default function CrawlerAdminPage(): React.JSX.Element {
       <div className="flex items-center gap-1 border-b border-slate-200 pb-1">
         <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">采集监控</span>
       </div>
-      <ManualRerun />
-      <QueueStatus />
-      <CookiePanel />
+      <MatrixPanel />
+      <LogTable />
     </div>
   );
 }

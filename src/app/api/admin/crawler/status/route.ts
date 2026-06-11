@@ -1,7 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { sql } from "drizzle-orm";
 import { requireAdmin } from "@/lib/admin-guard";
+
+/** 每 5~10 分钟的高频任务默认不进流水（?all=1 才带上），否则 LIMIT 内全是它们 */
+const HIGH_FREQ_FILTER = sql.raw(
+  `name NOT IN ('crawler:sync_kuaishou_live_snapshot', 'crawler:sync_kuaishou_today_live')`,
+);
 
 interface JobRow extends Record<string, unknown> {
   id: string;
@@ -17,8 +22,9 @@ interface JobRow extends Record<string, unknown> {
   output: Record<string, unknown> | null;
 }
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   await requireAdmin();
+  const includeHighFreq = req.nextUrl.searchParams.get("all") === "1";
 
   // 直接 SQL 读 pgboss.job — 比 boss.getQueueSize 信息丰富，且避开 server barrel 的 puppeteer 链
   // 日期 fallback：date > fromDate~toDate > created_on 当天（按上海时区）
@@ -46,8 +52,9 @@ export async function GET(): Promise<NextResponse> {
     FROM pgboss.job
     WHERE name LIKE 'crawler:%'
       AND created_on > now() - interval '24 hours'
+      AND (${includeHighFreq} OR ${HIGH_FREQ_FILTER})
     ORDER BY created_on DESC
-    LIMIT 50
+    LIMIT 80
   `)) as unknown as JobRow[];
 
   // 状态汇总
