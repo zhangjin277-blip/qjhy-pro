@@ -10,7 +10,7 @@
  * listsimple 接口字段精简：仅有 userid + name (+ 可选 unionid)。
  * mobile / title 等需要 Phase 3 用 /topapi/v2/user/get 单独补。
  */
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { dingtalk_dept, dingtalk_user } from "@/db/schema";
@@ -47,14 +47,38 @@ export async function syncDingtalk(): Promise<void> {
     console.log(`[sync-dingtalk] synced ${userCount} users`);
 
     // 3. 标记不在最新列表的 user 为 inactive（不删除）
+    //    下限保护：本轮拉到的人数若低于现有 active 人数的 SAFE_DEACTIVATE_RATIO，
+    //    判定为钉钉瞬时空返回 / 部门拉取不完整，跳过 deactivate 并告警，
+    //    避免把在职员工批量误标离职（误标后当天起按未登录/无权限处理）。
     if (users.length > 0) {
       const seenIds = users.map((u) => u.userid);
-      await db.execute(
-        sql`UPDATE dingtalk_user SET active = false, synced_at = NOW() WHERE user_id NOT IN (${sql.join(
-          seenIds.map((i) => sql`${i}`),
-          sql`, `,
-        )}) AND active = true`,
-      );
+
+      const activeRows = await db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(dingtalk_user)
+        .where(eq(dingtalk_user.active, true));
+      const activeCount = activeRows[0]?.count ?? 0;
+
+      // 本轮人数 < 现有在职人数的 80% → 视为异常，跳过 deactivate
+      const SAFE_DEACTIVATE_RATIO = 0.8;
+      if (activeCount > 0 && seenIds.length < activeCount * SAFE_DEACTIVATE_RATIO) {
+        console.warn(
+          `[sync-dingtalk] 跳过离职标记：本轮拉到 ${seenIds.length} 人，低于现有在职 ${activeCount} 人的 ${SAFE_DEACTIVATE_RATIO * 100}%`,
+        );
+        await notifyError(
+          new Error(
+            `钉钉同步异常：本轮仅拉到 ${seenIds.length} 人，低于现有在职 ${activeCount} 人的 ${SAFE_DEACTIVATE_RATIO * 100}%，已跳过离职标记以防批量误标。请检查钉钉接口 / 通讯录。`,
+          ),
+          { context: "sync-dingtalk deactivate floor", fetched: seenIds.length, activeCount },
+        );
+      } else {
+        await db.execute(
+          sql`UPDATE dingtalk_user SET active = false, synced_at = NOW() WHERE user_id NOT IN (${sql.join(
+            seenIds.map((i) => sql`${i}`),
+            sql`, `,
+          )}) AND active = true`,
+        );
+      }
     }
 
     // 4. 同步经纪人映射

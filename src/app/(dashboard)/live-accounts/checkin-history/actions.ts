@@ -56,6 +56,9 @@ export async function forceEndSessionAction(args: {
 export async function listAnchorsForCorrection(): Promise<
   { id: string; realName: string; externalName: string | null }[]
 > {
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind !== "ok") return [];
+
   const rows = await db
     .select({
       id: dingtalk_user.user_id,

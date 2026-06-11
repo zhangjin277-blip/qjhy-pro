@@ -19,6 +19,32 @@ interface SyncResult {
   productInferred: number;
 }
 
+interface RowFailure {
+  id: unknown;
+  error: string;
+}
+
+/**
+ * 逐行容错后的失败汇总：
+ * - 部分失败 → notifyCrawlerError 告警，不中断（其余行已入库）
+ * - 全部失败 → 抛错，由外层 catch 统一告警 + rethrow，让 pg-boss 标记任务失败并重试
+ */
+async function reportRowFailures(
+  job: string,
+  failures: RowFailure[],
+  total: number,
+): Promise<void> {
+  const sample = failures
+    .slice(0, 3)
+    .map((f) => `${String(f.id)}: ${f.error}`)
+    .join("; ");
+  const detail = `${job}: ${failures.length}/${total} 条写入失败，其余已入库。样本: ${sample}`;
+  if (total > 0 && failures.length === total) {
+    throw new Error(detail);
+  }
+  await notifyCrawlerError({ type: "job_failed", detail });
+}
+
 /**
  * 拉快手公会「成员管理」全量 → UPSERT kuaishou_member（公会基础数据，独立于 live_account）。
  * 主播明细页直接展示这张表；live_account 的 stub 通过单独的「匹配脚本」按昵称从这张表填字段。
@@ -60,74 +86,87 @@ export async function syncKuaishouMembersHandler(): Promise<SyncResult> {
     let updated = 0;
     let brokerUnmatched = 0;
     let productInferred = 0;
+    const failures: RowFailure[] = [];
 
     for (const raw of rawMembers) {
-      const mapped = mapKuaishouMember(raw, nameMap, aliasMap);
-      if (mapped.product) productInferred++;
-      if (!mapped.agent_dingtalk_user_id && mapped.raw_payload.broker_name_raw) {
-        brokerUnmatched++;
+      try {
+        const mapped = mapKuaishouMember(raw, nameMap, aliasMap);
+        if (mapped.product) productInferred++;
+        if (!mapped.agent_dingtalk_user_id && mapped.raw_payload.broker_name_raw) {
+          brokerUnmatched++;
+        }
+
+        const userId = mapped.platform_account_id;
+        const values = {
+          user_id: userId,
+          member_name: mapped.account_name,
+          avatar: mapped.avatar,
+          fans_count: mapped.raw_payload.fans_count,
+          broker_name_raw: mapped.raw_payload.broker_name_raw,
+          agent_dingtalk_user_id: mapped.agent_dingtalk_user_id,
+          inferred_product: mapped.product,
+          content_category: mapped.raw_payload.content_category_raw,
+          joined_at: mapped.raw_payload.joined_at,
+          contract_expire_at: mapped.raw_payload.contract_expire_at,
+          renewal_status: mapped.raw_payload.renewal_status,
+          contract_renew_type: mapped.raw_payload.contract_renew_type,
+          last_live_time: mapped.raw_payload.last_live_time
+            ? new Date(mapped.raw_payload.last_live_time)
+            : null,
+          last_photo_time: mapped.raw_payload.last_photo_time
+            ? new Date(mapped.raw_payload.last_photo_time)
+            : null,
+          living_url: typeof raw.livingUrl === "string" ? raw.livingUrl : null,
+          raw: raw as unknown as Record<string, unknown>,
+          synced_at: new Date(),
+          updated_at: new Date(),
+        };
+
+        const result = await db
+          .insert(kuaishou_member)
+          .values(values)
+          .onConflictDoUpdate({
+            target: kuaishou_member.user_id,
+            set: {
+              member_name: values.member_name,
+              avatar: values.avatar,
+              fans_count: values.fans_count,
+              broker_name_raw: values.broker_name_raw,
+              agent_dingtalk_user_id: values.agent_dingtalk_user_id,
+              inferred_product: values.inferred_product,
+              content_category: values.content_category,
+              joined_at: values.joined_at,
+              contract_expire_at: values.contract_expire_at,
+              renewal_status: values.renewal_status,
+              contract_renew_type: values.contract_renew_type,
+              last_live_time: values.last_live_time,
+              last_photo_time: values.last_photo_time,
+              living_url: values.living_url,
+              raw: values.raw,
+              synced_at: values.synced_at,
+              updated_at: values.updated_at,
+            },
+          })
+          .returning({ id: kuaishou_member.user_id, created_at: kuaishou_member.created_at });
+
+        // 简易判断：created_at 在最近 5s 内 = 新插入
+        const row = result[0];
+        if (row && Date.now() - row.created_at.getTime() < 5000) {
+          inserted++;
+        } else {
+          updated++;
+        }
+      } catch (rowErr) {
+        // 单条解析 / 写库失败（脏字段、字段超长等）→ 记录后继续，不中断整批
+        const msg = rowErr instanceof Error ? rowErr.message : String(rowErr);
+        failures.push({ id: raw.userId, error: msg });
+        console.error(`[sync-kuaishou-members] row failed (userId=${String(raw.userId)}): ${msg}`);
       }
+    }
 
-      const userId = mapped.platform_account_id;
-      const values = {
-        user_id: userId,
-        member_name: mapped.account_name,
-        avatar: mapped.avatar,
-        fans_count: mapped.raw_payload.fans_count,
-        broker_name_raw: mapped.raw_payload.broker_name_raw,
-        agent_dingtalk_user_id: mapped.agent_dingtalk_user_id,
-        inferred_product: mapped.product,
-        content_category: mapped.raw_payload.content_category_raw,
-        joined_at: mapped.raw_payload.joined_at,
-        contract_expire_at: mapped.raw_payload.contract_expire_at,
-        renewal_status: mapped.raw_payload.renewal_status,
-        contract_renew_type: mapped.raw_payload.contract_renew_type,
-        last_live_time: mapped.raw_payload.last_live_time
-          ? new Date(mapped.raw_payload.last_live_time)
-          : null,
-        last_photo_time: mapped.raw_payload.last_photo_time
-          ? new Date(mapped.raw_payload.last_photo_time)
-          : null,
-        living_url: typeof raw.livingUrl === "string" ? raw.livingUrl : null,
-        raw: raw as unknown as Record<string, unknown>,
-        synced_at: new Date(),
-        updated_at: new Date(),
-      };
-
-      const result = await db
-        .insert(kuaishou_member)
-        .values(values)
-        .onConflictDoUpdate({
-          target: kuaishou_member.user_id,
-          set: {
-            member_name: values.member_name,
-            avatar: values.avatar,
-            fans_count: values.fans_count,
-            broker_name_raw: values.broker_name_raw,
-            agent_dingtalk_user_id: values.agent_dingtalk_user_id,
-            inferred_product: values.inferred_product,
-            content_category: values.content_category,
-            joined_at: values.joined_at,
-            contract_expire_at: values.contract_expire_at,
-            renewal_status: values.renewal_status,
-            contract_renew_type: values.contract_renew_type,
-            last_live_time: values.last_live_time,
-            last_photo_time: values.last_photo_time,
-            living_url: values.living_url,
-            raw: values.raw,
-            synced_at: values.synced_at,
-            updated_at: values.updated_at,
-          },
-        })
-        .returning({ id: kuaishou_member.user_id, created_at: kuaishou_member.created_at });
-
-      // 简易判断：created_at 在最近 5s 内 = 新插入
-      const row = result[0];
-      if (row && Date.now() - row.created_at.getTime() < 5000) {
-        inserted++;
-      } else {
-        updated++;
-      }
+    // 有失败行：汇总告警；全部失败才视为任务失败（rethrow → pg-boss 重试）
+    if (failures.length > 0) {
+      await reportRowFailures("sync-kuaishou-members", failures, rawMembers.length);
     }
 
     const summary: SyncResult = {

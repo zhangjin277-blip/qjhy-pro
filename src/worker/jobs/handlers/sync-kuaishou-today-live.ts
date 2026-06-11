@@ -18,6 +18,32 @@ interface SyncResult {
   newMembers: number; // today-live 出现但 kuaishou_member 表里没有 → 补 stub
 }
 
+interface RowFailure {
+  id: unknown;
+  error: string;
+}
+
+/**
+ * 逐行容错后的失败汇总：
+ * - 部分失败 → notifyCrawlerError 告警，不中断（其余行已入库）
+ * - 全部失败 → 抛错，由外层 catch 统一告警 + rethrow，让 pg-boss 标记任务失败并重试
+ */
+async function reportRowFailures(
+  job: string,
+  failures: RowFailure[],
+  total: number,
+): Promise<void> {
+  const sample = failures
+    .slice(0, 3)
+    .map((f) => `${String(f.id)}: ${f.error}`)
+    .join("; ");
+  const detail = `${job}: ${failures.length}/${total} 条写入失败，其余已入库。样本: ${sample}`;
+  if (total > 0 && failures.length === total) {
+    throw new Error(detail);
+  }
+  await notifyCrawlerError({ type: "job_failed", detail });
+}
+
 /**
  * 同步 today/list 到 kuaishou_live_session（data_source='today'，实时数据）。
  * 每 30 分钟跑一次，只覆盖 data_source='today' 的 row（避免覆盖已升级为 history 的权威数据）。
@@ -58,64 +84,77 @@ export async function syncKuaishouTodayLiveSessionsHandler(): Promise<SyncResult
     let inserted = 0;
     let updated = 0;
     let skippedHistory = 0;
+    const failures: RowFailure[] = [];
 
     for (const r of list) {
-      // 先看现有 row 是否已被 history 升级
-      const existing = await db
-        .select({
-          data_source: kuaishou_live_session.data_source,
-        })
-        .from(kuaishou_live_session)
-        .where(eq(kuaishou_live_session.live_stream_id, BigInt(r.liveId)))
-        .limit(1);
-      if (existing[0]?.data_source === "history") {
-        skippedHistory++;
-        continue;
-      }
+      try {
+        // 先看现有 row 是否已被 history 升级
+        const existing = await db
+          .select({
+            data_source: kuaishou_live_session.data_source,
+          })
+          .from(kuaishou_live_session)
+          .where(eq(kuaishou_live_session.live_stream_id, BigInt(r.liveId)))
+          .limit(1);
+        if (existing[0]?.data_source === "history") {
+          skippedHistory++;
+          continue;
+        }
 
-      const values = mapRowToValues(r);
-      const result = await db
-        .insert(kuaishou_live_session)
-        .values(values)
-        .onConflictDoUpdate({
-          target: kuaishou_live_session.live_stream_id,
-          set: {
-            member_name: values.member_name,
-            head_img: values.head_img,
-            broker_id: values.broker_id,
-            broker_name: values.broker_name,
-            fans_cnt: values.fans_cnt,
-            live_type: values.live_type,
-            title: values.title,
-            cover_url: values.cover_url,
-            live_detail: values.live_detail,
-            start_datetime: values.start_datetime,
-            end_datetime: values.end_datetime,
-            live_duration_ms: values.live_duration_ms,
-            play_user_cnt: values.play_user_cnt,
-            max_concurrent_user_num: values.max_concurrent_user_num,
-            valid_acu: values.valid_acu,
-            per_play_time_avg_ms: values.per_play_time_avg_ms,
-            like_cnt: values.like_cnt,
-            comment_cnt: values.comment_cnt,
-            share_cnt: values.share_cnt,
-            send_gift_uv: values.send_gift_uv,
-            live_amt: values.live_amt,
-            report_num: values.report_num,
-            today_extra: values.today_extra,
-            data_source: "today",
-            raw: values.raw,
-            synced_at: values.synced_at,
-            updated_at: values.updated_at,
-          },
-        })
-        .returning({
-          live_stream_id: kuaishou_live_session.live_stream_id,
-          created_at: kuaishou_live_session.created_at,
-        });
-      const row = result[0];
-      if (row && Date.now() - row.created_at.getTime() < 5000) inserted++;
-      else updated++;
+        const values = mapRowToValues(r);
+        const result = await db
+          .insert(kuaishou_live_session)
+          .values(values)
+          .onConflictDoUpdate({
+            target: kuaishou_live_session.live_stream_id,
+            set: {
+              member_name: values.member_name,
+              head_img: values.head_img,
+              broker_id: values.broker_id,
+              broker_name: values.broker_name,
+              fans_cnt: values.fans_cnt,
+              live_type: values.live_type,
+              title: values.title,
+              cover_url: values.cover_url,
+              live_detail: values.live_detail,
+              start_datetime: values.start_datetime,
+              end_datetime: values.end_datetime,
+              live_duration_ms: values.live_duration_ms,
+              play_user_cnt: values.play_user_cnt,
+              max_concurrent_user_num: values.max_concurrent_user_num,
+              valid_acu: values.valid_acu,
+              per_play_time_avg_ms: values.per_play_time_avg_ms,
+              like_cnt: values.like_cnt,
+              comment_cnt: values.comment_cnt,
+              share_cnt: values.share_cnt,
+              send_gift_uv: values.send_gift_uv,
+              live_amt: values.live_amt,
+              report_num: values.report_num,
+              today_extra: values.today_extra,
+              data_source: "today",
+              raw: values.raw,
+              synced_at: values.synced_at,
+              updated_at: values.updated_at,
+            },
+          })
+          .returning({
+            live_stream_id: kuaishou_live_session.live_stream_id,
+            created_at: kuaishou_live_session.created_at,
+          });
+        const row = result[0];
+        if (row && Date.now() - row.created_at.getTime() < 5000) inserted++;
+        else updated++;
+      } catch (rowErr) {
+        // 单条解析 / 写库失败（脏 liveId、字段超长等）→ 记录后继续，不中断整批
+        const msg = rowErr instanceof Error ? rowErr.message : String(rowErr);
+        failures.push({ id: r.liveId, error: msg });
+        console.error(`[today-live] row failed (liveId=${String(r.liveId)}): ${msg}`);
+      }
+    }
+
+    // 有失败行：汇总告警；全部失败才视为任务失败（rethrow → pg-boss 重试）
+    if (failures.length > 0) {
+      await reportRowFailures("sync-kuaishou-today-live", failures, list.length);
     }
 
     // 主播打卡兜底（暂禁用）：today-live API 偶尔不返回实际在播主播（数据延迟/未签约），
