@@ -9,6 +9,7 @@ import {
   type ScheduleRow,
   type DeleteBatchResult,
 } from "@/modules/placement/server";
+import { runAttributionJob } from "@/modules/placement-attribution/server";
 import { requireModuleEdit } from "@/lib/admin-guard";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { writeAuditLog } from "@/lib/audit";
@@ -42,6 +43,13 @@ export async function fetchAnchorCheckin(
 export async function deleteBatchAction(batchId: string): Promise<DeleteBatchResult> {
   const { userId } = await requireModuleEdit("placement");
   const result = await deleteBatchAndRecompute(batchId);
+  // 重算行 import_batch_id=null，带 batch 过滤选不到 → 必须全量扫 dirty。
+  // job 内部分批循环到没有剩余 dirty 行；失败不阻塞删除本身（04:00 cron 兜底）。
+  try {
+    await runAttributionJob();
+  } catch (err) {
+    console.error("[placements] post-delete attribution failed:", err);
+  }
   await writeAuditLog({
     user_id: userId,
     action: "PLACEMENT_BATCH_DELETE",

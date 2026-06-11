@@ -7,7 +7,19 @@ const PRESET_DAYS: Record<string, number> = {
   last30: 30,
 };
 
-function isoDate(d: Date): string {
+// placement_row.date 存的是北京日历日，而生产容器/Node 跑 UTC：
+// 预设必须按 Asia/Shanghai 取「今天」，否则北京 0:00-8:00 之间 toISOString() 会错位到前一天。
+const SHANGHAI_DATE_FMT = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" });
+
+/** now 时刻对应的北京日历日（YYYY-MM-DD；en-CA locale 恰好输出 ISO 格式） */
+function shanghaiDate(now: Date): string {
+  return SHANGHAI_DATE_FMT.format(now);
+}
+
+/** 对 YYYY-MM-DD 做整日加减（纯日历运算，与时区无关） */
+function addDays(isoDay: string, days: number): string {
+  const d = new Date(`${isoDay}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -15,6 +27,7 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function resolveFilter(
   searchParams: Record<string, string | string[] | undefined>,
+  now: Date = new Date(),
 ): BoardFilter {
   const fromQ = searchParams.from as string | undefined;
   const toQ = searchParams.to as string | undefined;
@@ -28,19 +41,17 @@ export function resolveFilter(
   } else {
     const preset = (searchParams.preset as string) ?? "today";
     const days = PRESET_DAYS[preset] ?? 7;
-    const today = new Date();
-    const to = new Date(today);
-    const from = new Date(today);
+    const today = shanghaiDate(now);
     if (preset === "today") {
-      // both = today
+      dateFrom = today;
+      dateTo = today;
     } else if (preset === "yesterday") {
-      from.setDate(from.getDate() - 1);
-      to.setDate(to.getDate() - 1);
+      dateFrom = addDays(today, -1);
+      dateTo = dateFrom;
     } else {
-      from.setDate(from.getDate() - days);
+      dateFrom = addDays(today, -days);
+      dateTo = today;
     }
-    dateFrom = isoDate(from);
-    dateTo = isoDate(to);
   }
 
   const dsParam = searchParams.ds as string | undefined;

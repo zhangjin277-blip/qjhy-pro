@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { db } from "@/db/client";
-import { placement_row } from "@/db/schema/placements";
+import { placement_row, placement_import_batch } from "@/db/schema/placements";
 import { account_anchor_default } from "@/db/schema/account-anchor-default";
 import { schedule_override } from "@/db/schema/schedule-override";
 import { live_account } from "@/db/schema/live-account";
@@ -13,6 +13,8 @@ const TEST_DATASET = "test_attribution_job";
 
 beforeEach(async () => {
   await db.execute(sql`DELETE FROM placement_row`);
+  await db.execute(sql`DELETE FROM placement_cumulative_raw`);
+  await db.execute(sql`DELETE FROM placement_import_batch`);
   await db.execute(sql`DELETE FROM schedule_override`);
   // 清掉所有 id 以 'test-' 开头的测试专用 account_anchor_default
   await db.execute(sql`DELETE FROM account_anchor_default WHERE id LIKE 'test-%'`);
@@ -217,7 +219,7 @@ describe("runAttributionJob", () => {
     expect(row?.attributed_dingtalk_user_id).toBeNull();
   });
 
-  it("max_rows=1 — 超出 limit 的行不被处理", async () => {
+  it("max_rows=1 作为批大小 — 内部循环处理完全部 dirty 行", async () => {
     const accs = await db
       .select()
       .from(live_account)
@@ -269,13 +271,59 @@ describe("runAttributionJob", () => {
       },
     ]);
 
-    // max_rows=1 → 只处理 1 行
+    // max_rows=1 只是单轮批大小：job 内部分批循环，直到没有剩余 dirty 行
+    // （历史坑：单轮 LIMIT 截断后剩余行要等次日 04:00 cron，主播聚合一直显示 0）
     const result = await runAttributionJob({ max_rows: 1 });
-    expect(result.processed).toBe(1);
+    expect(result.processed).toBe(3);
 
-    // 还剩 2 条 dirty
     const allRows = await db.select().from(placement_row);
     const dirtyCount = allRows.filter((r) => r.attribution_dirty).length;
-    expect(dirtyCount).toBe(2);
+    expect(dirtyCount).toBe(0);
+  });
+
+  it("batch_id 过滤 + max_rows=1 — 循环处理完该 batch 全部行，不动其它 batch", async () => {
+    const accs = await db
+      .select()
+      .from(live_account)
+      .where(isNotNull(live_account.placement_label))
+      .limit(1);
+    const acc = accs.at(0);
+    if (!acc) return;
+
+    const [batchA] = await db
+      .insert(placement_import_batch)
+      .values({ source: "excel-upload", dataset_id: TEST_DATASET, status: "completed" })
+      .returning();
+    const [batchB] = await db
+      .insert(placement_import_batch)
+      .values({ source: "excel-upload", dataset_id: TEST_DATASET, status: "completed" })
+      .returning();
+    if (!batchA || !batchB) throw new Error("failed to create test batches");
+
+    const baseRow = {
+      date: TEST_DATE,
+      dataset_id: TEST_DATASET,
+      live_account_id: acc.id,
+      cost_yuan: "100",
+      activations: 1,
+      payment_yuan: "10",
+      start_download: 0,
+      finish_download: 0,
+      attribution_dirty: true,
+      raw: {},
+    };
+    // batchA 两行、batchB 一行，全部 dirty
+    await db.insert(placement_row).values([
+      { ...baseRow, hour: 10, import_batch_id: batchA.id },
+      { ...baseRow, hour: 11, import_batch_id: batchA.id },
+      { ...baseRow, hour: 12, import_batch_id: batchB.id },
+    ]);
+
+    const result = await runAttributionJob({ batch_id: batchA.id, max_rows: 1 });
+    expect(result.processed).toBe(2);
+
+    const allRows = await db.select().from(placement_row);
+    const stillDirty = allRows.filter((r) => r.attribution_dirty).map((r) => r.hour);
+    expect(stillDirty).toEqual([12]);
   });
 });

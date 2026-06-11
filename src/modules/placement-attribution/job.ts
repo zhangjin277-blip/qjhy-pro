@@ -23,9 +23,29 @@ export async function runAttributionJob(opts?: { batch_id?: string; max_rows?: n
   }
 }
 
+/**
+ * 内部分批循环：每轮最多取 max_rows（默认 1000）条 dirty 行处理，
+ * 直到当前过滤条件下没有剩余 dirty 行——调用方不需要再自己循环。
+ * （历史坑：单轮 LIMIT 截断后剩余行要等次日 04:00 cron，主播聚合一直显示 0）
+ */
 async function _runAttributionJobInner(opts?: { batch_id?: string; max_rows?: number }) {
-  const maxRows = opts?.max_rows ?? 1000;
+  const batchSize = opts?.max_rows ?? 1000;
+  let processed = 0;
+  while (true) {
+    const batch = await processDirtyBatch(opts?.batch_id, batchSize);
+    processed += batch.processed;
+    // selected=0 才算清空。processed=0 但 selected>0 说明这批行被并发 job
+    // 抢先处理掉了（写回守卫没命中），继续下一轮重新 SELECT 直到确认无剩余。
+    if (batch.selected === 0) break;
+  }
+  return { processed };
+}
 
+/** 处理一批 dirty 行；返回本轮 SELECT 到的行数与真正完成写回的行数。 */
+async function processDirtyBatch(
+  batchId: string | undefined,
+  batchSize: number,
+): Promise<{ selected: number; processed: number }> {
   const dirtyRows = await db
     .select({
       id: placement_row.id,
@@ -35,16 +55,15 @@ async function _runAttributionJobInner(opts?: { batch_id?: string; max_rows?: nu
     })
     .from(placement_row)
     .where(
-      opts?.batch_id
-        ? and(
-            eq(placement_row.attribution_dirty, true),
-            eq(placement_row.import_batch_id, opts.batch_id),
-          )
+      batchId
+        ? and(eq(placement_row.attribution_dirty, true), eq(placement_row.import_batch_id, batchId))
         : eq(placement_row.attribution_dirty, true),
     )
-    .limit(maxRows);
+    // 稳定顺序：无 ORDER BY 时 LIMIT 取行随机，分批循环可能反复跳行
+    .orderBy(placement_row.date, placement_row.hour, placement_row.id)
+    .limit(batchSize);
 
-  if (dirtyRows.length === 0) return { processed: 0 };
+  if (dirtyRows.length === 0) return { selected: 0, processed: 0 };
 
   // 按 (account_id, date) 分组
   const groups = new Map<string, { account_id: string; date: string; rows: typeof dirtyRows }>();
@@ -136,7 +155,10 @@ async function _runAttributionJobInner(opts?: { batch_id?: string; max_rows?: nu
         overrides,
       });
 
-      await db
+      // 防 lost update：只在行仍是 dirty 时写回。SELECT 后若用户改了排班
+      // （markDirty 重新置脏 + 并发 job 用新排班算完置 dirty=false），
+      // 本次基于旧排班的结果守卫不命中，直接丢弃，避免旧结果覆盖新归因。
+      const updated = await db
         .update(placement_row)
         .set({
           attributed_dingtalk_user_id: result.user,
@@ -144,10 +166,11 @@ async function _runAttributionJobInner(opts?: { batch_id?: string; max_rows?: nu
           attribution_dirty: false,
           attribution_computed_at: sql`now()`,
         })
-        .where(eq(placement_row.id, row.id));
-      processed++;
+        .where(and(eq(placement_row.id, row.id), eq(placement_row.attribution_dirty, true)))
+        .returning({ id: placement_row.id });
+      processed += updated.length;
     }
   }
 
-  return { processed };
+  return { selected: dirtyRows.length, processed };
 }

@@ -139,135 +139,162 @@ export async function ingestRows(input: IngestInput) {
   //   → 写 cumulative_raw（按 subaccount 维度保留全量累计），
   //     然后对涉及的 (dataset, account, date) 重算 placement_row 全天增量
   let inserted = 0;
-  await db.transaction(async (tx) => {
-    // (a) UPSERT cumulative_raw（保留每次上传的累计原始值，按 subaccount 维度）
-    for (const r of matched) {
-      await tx
-        .insert(placement_cumulative_raw)
-        .values({
-          date: r.date,
-          hour: r.hour,
-          dataset_id: r.dataset_id,
-          live_account_id: r.account_key,
-          subaccount_name: r.subaccount_key,
-          cost_yuan: String(r.cost_yuan),
-          activations: r.activations,
-          payment_yuan: String(r.payment_yuan),
-          start_download: r.start_download,
-          finish_download: r.finish_download,
-          raw: r.raw,
-          import_batch_id: batch.id,
-        })
-        .onConflictDoUpdate({
-          target: [
-            placement_cumulative_raw.date,
-            placement_cumulative_raw.hour,
-            placement_cumulative_raw.dataset_id,
-            placement_cumulative_raw.live_account_id,
-            placement_cumulative_raw.subaccount_name,
-          ],
-          // Omni 累计快照单调递增：用 GREATEST 取最大值，避免乱序上传倒退。
-          // 比如先上传 17:00 推送（hour=16，累计 X1），再上传 16:40 推送（同 hour=16，
-          // 累计 X2 < X1），如果直接覆盖会让 hour=16 累计变小 → 差分错乱。
-          // GREATEST 保留更新更"晚时刻"的累计（同 hour 多次推送以最大累计为准）。
-          set: {
-            cost_yuan: sql`GREATEST(${placement_cumulative_raw.cost_yuan}, ${String(r.cost_yuan)}::numeric)`,
-            activations: sql`GREATEST(${placement_cumulative_raw.activations}, ${r.activations})`,
-            payment_yuan: sql`GREATEST(${placement_cumulative_raw.payment_yuan}, ${String(r.payment_yuan)}::numeric)`,
-            start_download: sql`GREATEST(${placement_cumulative_raw.start_download}, ${r.start_download})`,
-            finish_download: sql`GREATEST(${placement_cumulative_raw.finish_download}, ${r.finish_download})`,
+  await db
+    .transaction(async (tx) => {
+      // (a) UPSERT cumulative_raw（保留每次上传的累计原始值，按 subaccount 维度）
+      for (const r of matched) {
+        await tx
+          .insert(placement_cumulative_raw)
+          .values({
+            date: r.date,
+            hour: r.hour,
+            dataset_id: r.dataset_id,
+            live_account_id: r.account_key,
+            subaccount_name: r.subaccount_key,
+            cost_yuan: String(r.cost_yuan),
+            activations: r.activations,
+            payment_yuan: String(r.payment_yuan),
+            start_download: r.start_download,
+            finish_download: r.finish_download,
             raw: r.raw,
             import_batch_id: batch.id,
-            updated_at: sql`now()`,
-          },
-        });
-    }
+          })
+          .onConflictDoUpdate({
+            target: [
+              placement_cumulative_raw.date,
+              placement_cumulative_raw.hour,
+              placement_cumulative_raw.dataset_id,
+              placement_cumulative_raw.live_account_id,
+              placement_cumulative_raw.subaccount_name,
+            ],
+            // Omni 累计快照单调递增：用 GREATEST 取最大值，避免乱序上传倒退。
+            // 比如先上传 17:00 推送（hour=16，累计 X1），再上传 16:40 推送（同 hour=16，
+            // 累计 X2 < X1），如果直接覆盖会让 hour=16 累计变小 → 差分错乱。
+            // GREATEST 保留更新更"晚时刻"的累计（同 hour 多次推送以最大累计为准）。
+            set: {
+              cost_yuan: sql`GREATEST(${placement_cumulative_raw.cost_yuan}, ${String(r.cost_yuan)}::numeric)`,
+              activations: sql`GREATEST(${placement_cumulative_raw.activations}, ${r.activations})`,
+              payment_yuan: sql`GREATEST(${placement_cumulative_raw.payment_yuan}, ${String(r.payment_yuan)}::numeric)`,
+              start_download: sql`GREATEST(${placement_cumulative_raw.start_download}, ${r.start_download})`,
+              finish_download: sql`GREATEST(${placement_cumulative_raw.finish_download}, ${r.finish_download})`,
+              raw: r.raw,
+              import_batch_id: batch.id,
+              updated_at: sql`now()`,
+            },
+          });
+      }
 
-    // (b) 收集涉及的 (dataset_id, account_key, date) 三元组
-    const triples = new Set<string>();
-    for (const r of matched) {
-      triples.add(`${r.dataset_id}|${r.account_key}|${r.date}`);
-    }
+      // (b) 收集涉及的 (dataset_id, account_key, date) 三元组
+      const triples = new Set<string>();
+      for (const r of matched) {
+        triples.add(`${r.dataset_id}|${r.account_key}|${r.date}`);
+      }
 
-    // (c) 对每个三元组重算 placement_row
-    for (const triple of triples) {
-      const [tDataset, tAccount, tDate] = triple.split("|") as [string, string, string];
+      // (c) 对每个三元组重算 placement_row
+      for (const triple of triples) {
+        const [tDataset, tAccount, tDate] = triple.split("|") as [string, string, string];
 
-      // 拉该 (dataset, account, date) 在 cumulative_raw 的所有 subaccount × 小时
-      const cumRowsRaw = await tx
-        .select()
-        .from(placement_cumulative_raw)
-        .where(
-          and(
-            eq(placement_cumulative_raw.dataset_id, tDataset),
-            eq(placement_cumulative_raw.live_account_id, tAccount),
-            eq(placement_cumulative_raw.date, tDate),
-          ),
-        );
+        // 拉该 (dataset, account, date) 在 cumulative_raw 的所有 subaccount × 小时
+        const cumRowsRaw = await tx
+          .select()
+          .from(placement_cumulative_raw)
+          .where(
+            and(
+              eq(placement_cumulative_raw.dataset_id, tDataset),
+              eq(placement_cumulative_raw.live_account_id, tAccount),
+              eq(placement_cumulative_raw.date, tDate),
+            ),
+          );
 
-      const cumRows: RawCumulativeRow[] = cumRowsRaw.map((c) => ({
-        date: c.date,
-        hour: c.hour,
-        dataset_id: c.dataset_id,
-        account_key: c.live_account_id,
-        subaccount_key: c.subaccount_name,
-        cost_yuan: Number(c.cost_yuan),
-        activations: c.activations,
-        payment_yuan: Number(c.payment_yuan),
-        start_download: c.start_download,
-        finish_download: c.finish_download,
-        raw: c.raw,
-      }));
+        const cumRows: RawCumulativeRow[] = cumRowsRaw.map((c) => ({
+          date: c.date,
+          hour: c.hour,
+          dataset_id: c.dataset_id,
+          account_key: c.live_account_id,
+          subaccount_key: c.subaccount_name,
+          cost_yuan: Number(c.cost_yuan),
+          activations: c.activations,
+          payment_yuan: Number(c.payment_yuan),
+          start_download: c.start_download,
+          finish_download: c.finish_download,
+          raw: c.raw,
+        }));
 
-      // 按 subaccount 分组做差分
-      const incRows = computeIncrements(cumRows);
+        // 按 subaccount 分组做差分
+        const incRows = computeIncrements(cumRows);
 
-      // SUM 各 subaccount 的增量到 (date, hour) 维度
-      const hourlyMap = new Map<number, RawCumulativeRow>();
-      for (const r of incRows) {
-        const existing = hourlyMap.get(r.hour);
-        if (!existing) {
-          hourlyMap.set(r.hour, { ...r });
-        } else {
-          existing.cost_yuan += r.cost_yuan;
-          existing.activations += r.activations;
-          existing.payment_yuan += r.payment_yuan;
-          existing.start_download += r.start_download;
-          existing.finish_download += r.finish_download;
+        // SUM 各 subaccount 的增量到 (date, hour) 维度
+        const hourlyMap = new Map<number, RawCumulativeRow>();
+        for (const r of incRows) {
+          const existing = hourlyMap.get(r.hour);
+          if (!existing) {
+            hourlyMap.set(r.hour, { ...r });
+          } else {
+            existing.cost_yuan += r.cost_yuan;
+            existing.activations += r.activations;
+            existing.payment_yuan += r.payment_yuan;
+            existing.start_download += r.start_download;
+            existing.finish_download += r.finish_download;
+          }
+        }
+
+        // DELETE 该 (dataset, account, date) 在 placement_row 的所有 hour
+        await tx
+          .delete(placement_row)
+          .where(
+            and(
+              eq(placement_row.dataset_id, tDataset),
+              eq(placement_row.live_account_id, tAccount),
+              eq(placement_row.date, tDate),
+            ),
+          );
+
+        // INSERT 重算后的增量
+        for (const r of hourlyMap.values()) {
+          await tx.insert(placement_row).values({
+            date: r.date,
+            hour: r.hour,
+            dataset_id: r.dataset_id,
+            live_account_id: r.account_key,
+            cost_yuan: String(r.cost_yuan),
+            activations: r.activations,
+            payment_yuan: String(r.payment_yuan),
+            start_download: r.start_download,
+            finish_download: r.finish_download,
+            attribution_dirty: true,
+            raw: r.raw,
+            import_batch_id: batch.id,
+          });
+          inserted++;
         }
       }
-
-      // DELETE 该 (dataset, account, date) 在 placement_row 的所有 hour
-      await tx
-        .delete(placement_row)
-        .where(
-          and(
-            eq(placement_row.dataset_id, tDataset),
-            eq(placement_row.live_account_id, tAccount),
-            eq(placement_row.date, tDate),
-          ),
-        );
-
-      // INSERT 重算后的增量
-      for (const r of hourlyMap.values()) {
-        await tx.insert(placement_row).values({
-          date: r.date,
-          hour: r.hour,
-          dataset_id: r.dataset_id,
-          live_account_id: r.account_key,
-          cost_yuan: String(r.cost_yuan),
-          activations: r.activations,
-          payment_yuan: String(r.payment_yuan),
-          start_download: r.start_download,
-          finish_download: r.finish_download,
-          attribution_dirty: true,
-          raw: r.raw,
-          import_batch_id: batch.id,
-        });
-        inserted++;
+    })
+    .catch(async (txErr: unknown) => {
+      // 事务失败（如并发上传同 (dataset, account, date) 撞 placement_row unique）时
+      // 必须把 batch 收尾成 failed，否则永远卡在 'parsing'
+      const reason = txErr instanceof Error ? txErr.message : String(txErr);
+      errorLog.push({ reason: `ingest 事务失败：${reason}` });
+      try {
+        await db
+          .update(placement_import_batch)
+          .set({
+            status: "failed",
+            rows_skipped: input.rows.length + input.parse_errors.length,
+            error_log: errorLog,
+          })
+          .where(eq(placement_import_batch.id, batch.id));
+      } catch (updateErr) {
+        console.error("[ingest] failed to mark batch as failed:", updateErr);
       }
-    }
-  });
+      await notifyDingtalk({
+        title: "投放上传 batch 报错",
+        detail: `batch=${batch.id} file=${input.file_name ?? "(无)"} dataset=${input.dataset_id}\n${reason}`,
+        context: { error_count: errorLog.length },
+      }).catch((notifyErr: unknown) => {
+        console.error("[ingest] notify failed:", notifyErr);
+      });
+      throw txErr;
+    });
 
   // 7. 判定最终状态
   const finalSkipped = input.rows.length - matched.length + input.parse_errors.length;

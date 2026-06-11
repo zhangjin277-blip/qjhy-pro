@@ -332,8 +332,10 @@ export async function queryAnchorCheckin(
       FROM sess s
       LEFT JOIN placement_row p
         ON p.live_account_id = s.account_id
-       AND (p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes')::timestamptz >= s.start_at
-       AND (p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes')::timestamptz < s.end_at
+       -- p.date/p.hour 是北京日历值，DB 跑 UTC：必须 AT TIME ZONE 'Asia/Shanghai' 按北京墙钟
+       -- 解释成真实时刻再与 start_at/end_at（timestamptz）比较，否则错位 8 小时
+       AND ((p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes') AT TIME ZONE 'Asia/Shanghai') >= s.start_at
+       AND ((p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes') AT TIME ZONE 'Asia/Shanghai') < s.end_at
         ${datasetClause(filter.dataset_ids)}
       GROUP BY s.id
     )
@@ -431,8 +433,10 @@ export async function queryCheckinByAccount(
       FROM sess s
       LEFT JOIN placement_row p
         ON p.live_account_id = s.account_id
-       AND (p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes')::timestamptz >= s.start_at
-       AND (p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes')::timestamptz < s.end_at
+       -- p.date/p.hour 是北京日历值，DB 跑 UTC：必须 AT TIME ZONE 'Asia/Shanghai' 按北京墙钟
+       -- 解释成真实时刻再与 start_at/end_at（timestamptz）比较，否则错位 8 小时
+       AND ((p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes') AT TIME ZONE 'Asia/Shanghai') >= s.start_at
+       AND ((p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes') AT TIME ZONE 'Asia/Shanghai') < s.end_at
         ${datasetClause(filter.dataset_ids)}
       GROUP BY s.id
     )

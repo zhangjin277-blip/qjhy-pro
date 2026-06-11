@@ -4,9 +4,28 @@ import { account_anchor_default, live_account, dingtalk_user } from "@/db/schema
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { resolvePermission } from "@/modules/permissions/server";
+import {
+  markDirtyByAccountDateRange,
+  runAttributionJob,
+} from "@/modules/placement-attribution/server";
 import { AppError } from "@/lib/errors";
 import { eq, and, isNull, or, sql } from "drizzle-orm";
 import { UpsertBindingInput, DeleteBindingInput, ListBindingsInput } from "./schema";
+
+/**
+ * 默认排班变更影响投放归因：把 effective 区间内已入库的 placement_row 标脏，
+ * 并异步触发归因 job（job 内部分批循环；失败有 04:00 cron 兜底）。
+ */
+async function remarkAttributionForWindows(
+  windows: { account_id: string; effective_from: string; effective_to: string | null }[],
+) {
+  for (const w of windows) {
+    await markDirtyByAccountDateRange(w.account_id, w.effective_from, w.effective_to);
+  }
+  runAttributionJob().catch((err: unknown) => {
+    console.error("[account-bindings] attribution job failed:", err);
+  });
+}
 
 async function requireBindingEdit(): Promise<{ userId: string }> {
   const ctx = await getCurrentDingtalkUser();
@@ -96,6 +115,24 @@ export async function upsertBinding(input: unknown) {
     after: result,
   });
 
+  // 新旧 effective 区间都要重算：编辑可能改了 account / 时段 / 生效窗
+  const windows: { account_id: string; effective_from: string; effective_to: string | null }[] = [];
+  if (beforeRow) {
+    windows.push({
+      account_id: beforeRow.account_id,
+      effective_from: beforeRow.effective_from,
+      effective_to: beforeRow.effective_to,
+    });
+  }
+  if (result) {
+    windows.push({
+      account_id: result.account_id,
+      effective_from: result.effective_from,
+      effective_to: result.effective_to,
+    });
+  }
+  await remarkAttributionForWindows(windows);
+
   return result;
 }
 
@@ -119,6 +156,14 @@ export async function deleteBinding(input: unknown) {
     before,
   });
 
+  await remarkAttributionForWindows([
+    {
+      account_id: before.account_id,
+      effective_from: before.effective_from,
+      effective_to: before.effective_to,
+    },
+  ]);
+
   return { ok: true } as const;
 }
 
@@ -126,6 +171,11 @@ export async function deleteBinding(input: unknown) {
  * 获取某账号当日有效的所有 bindings（用于排班矩阵 + 后续归因）。
  */
 export async function getActiveBindingsForAccount(account_id: string, date: string) {
+  // "use server" 导出可被客户端直接 RPC 调用，至少要求已登录已同步（emergency 视为已登录）
+  const ctx = await getCurrentDingtalkUser();
+  if (ctx.kind === "unauth") throw new AppError("AUTH_NOT_LOGGED_IN", "未登录", 401);
+  if (ctx.kind === "user_not_synced")
+    throw new AppError("AUTH_USER_NOT_SYNCED", "钉钉账号未同步", 403);
   return db
     .select()
     .from(account_anchor_default)
