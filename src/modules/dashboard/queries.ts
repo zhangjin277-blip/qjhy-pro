@@ -204,6 +204,93 @@ async function fetchCorePeriod(
   };
 }
 
+/**
+ * KPI 卡走势小图数据：近 N 天（含今天）每天 5 指标值，缺日补 0。
+ * 固定窗口、与用户所选区间无关 —— 走势图表达的是"最近的节奏"。
+ */
+async function fetchCoreTrend(
+  scope: DashboardScope,
+  days = 14,
+): Promise<Record<keyof CoreKpiResponse, number[]>> {
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
+  const from = shiftDate(today, -(days - 1));
+  const fromUnix = Math.floor(new Date(from + "T00:00:00").getTime() / 1000);
+  const scopeF = scopeAnchorWhere(scope);
+
+  const [dailyRows, flowCpsRows, flowMgRows, joinRows, firstRows] = await Promise.all([
+    db.execute(sql`
+      SELECT date::text AS d,
+        COALESCE(SUM(total_fan_ticket), 0)::numeric AS fan,
+        COUNT(DISTINCT anchor_id) FILTER (WHERE live_duration_1d > 0) AS act
+      FROM anchor_daily
+      WHERE date >= ${from} AND date <= ${today} AND ${scopeF}
+      GROUP BY date
+    `),
+    db.execute(sql`
+      SELECT agp.date::text AS d,
+        SUM(
+          (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
+          + COALESCE(agp.promote_download_pay_amount_1d, 0)
+        )::numeric AS v
+      FROM anchor_game_promo_daily agp
+      JOIN anchor_profile ap ON ap.anchor_id = agp.anchor_id
+      WHERE ap.is_threekingdoms = FALSE AND agp.biz_mode = 'cps_all'
+        AND agp.date >= ${from} AND agp.date <= ${today}
+        AND ${scopeAnchorWhere(scope, sql`agp.anchor_id`)}
+      GROUP BY agp.date
+    `),
+    db.execute(sql`
+      SELECT mg.date::text AS d, SUM(mg.before_divided_income)::numeric AS v
+      FROM anchor_minigame_daily mg
+      JOIN anchor_profile ap ON ap.anchor_id = mg.anchor_id
+      WHERE ap.is_threekingdoms = TRUE
+        AND mg.date >= ${from} AND mg.date <= ${today}
+        AND ${scopeAnchorWhere(scope, sql`mg.anchor_id`)}
+      GROUP BY mg.date
+    `),
+    db.execute(sql`
+      SELECT to_char(to_timestamp(join_time) AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD') AS d,
+        COUNT(*) AS v
+      FROM anchor_profile
+      WHERE is_archived = FALSE AND join_time IS NOT NULL AND join_time >= ${fromUnix} AND ${scopeF}
+      GROUP BY d
+    `),
+    db.execute(sql`
+      SELECT to_char(to_timestamp(first_live_time_in_faction) AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD') AS d,
+        COUNT(*) AS v
+      FROM anchor_profile
+      WHERE is_archived = FALSE AND first_live_time_in_faction IS NOT NULL
+        AND first_live_time_in_faction > 0 AND first_live_time_in_faction >= ${fromUnix} AND ${scopeF}
+      GROUP BY d
+    `),
+  ]);
+
+  const dates: string[] = [];
+  for (let i = 0; i < days; i++) dates.push(shiftDate(from, i));
+
+  const toMap = (rows: unknown, key: string): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (const r of rows as Record<string, unknown>[]) {
+      m.set(String(r.d), Number(r[key] ?? 0));
+    }
+    return m;
+  };
+  const fanMap = toMap(dailyRows, "fan");
+  const actMap = toMap(dailyRows, "act");
+  const cpsMap = toMap(flowCpsRows, "v");
+  const mgMap = toMap(flowMgRows, "v");
+  const joinMap = toMap(joinRows, "v");
+  const firstMap = toMap(firstRows, "v");
+
+  return {
+    total_fan_ticket: dates.map((d) => fanMap.get(d) ?? 0),
+    flow: dates.map((d) => (cpsMap.get(d) ?? 0) + (mgMap.get(d) ?? 0)),
+    active_anchor_count: dates.map((d) => actMap.get(d) ?? 0),
+    new_anchor_count: dates.map((d) => joinMap.get(d) ?? 0),
+    first_live_anchor_count: dates.map((d) => firstMap.get(d) ?? 0),
+  };
+}
+
 export async function getCoreKpis(
   dateFrom: string,
   dateTo: string,
@@ -217,10 +304,11 @@ export async function getCoreKpis(
   const prevWeekFrom = shiftDate(dateFrom, -7);
   const prevWeekTo = shiftDate(dateTo, -7);
 
-  const [current, prevDay, prevWeek] = await Promise.all([
+  const [current, prevDay, prevWeek, trend] = await Promise.all([
     fetchCorePeriod(dateFrom, dateTo, scope),
     fetchCorePeriod(prevDayFrom, prevDayTo, scope),
     fetchCorePeriod(prevWeekFrom, prevWeekTo, scope),
+    fetchCoreTrend(scope),
   ]);
 
   return {
@@ -228,26 +316,31 @@ export async function getCoreKpis(
       current: current.total_fan_ticket,
       prev_day: prevDay.total_fan_ticket,
       prev_week: prevWeek.total_fan_ticket,
+      trend: trend.total_fan_ticket,
     },
     flow: {
       current: current.flow,
       prev_day: prevDay.flow,
       prev_week: prevWeek.flow,
+      trend: trend.flow,
     },
     active_anchor_count: {
       current: current.active_anchor_count,
       prev_day: prevDay.active_anchor_count,
       prev_week: prevWeek.active_anchor_count,
+      trend: trend.active_anchor_count,
     },
     new_anchor_count: {
       current: current.new_anchor_count,
       prev_day: prevDay.new_anchor_count,
       prev_week: prevWeek.new_anchor_count,
+      trend: trend.new_anchor_count,
     },
     first_live_anchor_count: {
       current: current.first_live_anchor_count,
       prev_day: prevDay.first_live_anchor_count,
       prev_week: prevWeek.first_live_anchor_count,
+      trend: trend.first_live_anchor_count,
     },
   };
 }

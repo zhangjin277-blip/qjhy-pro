@@ -54,6 +54,8 @@ export interface CoreKpiValue {
   prev_day: number | null;
   /** 上周同期 */
   prev_week: number | null;
+  /** 近 14 天按天序列（与所选区间无关，KPI 卡走势小图用），缺日补 0 */
+  trend?: number[];
 }
 
 export interface CoreKpiResponse {

@@ -67,7 +67,8 @@ export function DashboardBoard(): React.JSX.Element {
       to: toIsoDate(new Date(now.getTime() - 86400_000)),
     };
   });
-  const [metric, setMetric] = useState<Section2Metric>("total_fan_ticket");
+  // 默认流水（2026-06-12 应用户要求，流水 tab 也排在最前）
+  const [metric, setMetric] = useState<Section2Metric>("flow");
   const [data, setData] = useState<DashboardOverviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

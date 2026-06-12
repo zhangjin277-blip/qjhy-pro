@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils/cn";
 import type { CoreKpiResponse, CoreKpiValue } from "@/modules/dashboard";
 import { formatChineseNumber, formatVsPrevShort, splitChineseNumber } from "./format";
+import { Sparkline } from "./sparkline";
 
 export type TimePreset = "yesterday" | "last7" | "last30" | "this_month" | "last_month" | "custom";
 
@@ -132,6 +133,20 @@ function KpiCard({
           />
         )}
       </div>
+      {value.trend && value.trend.length >= 2 && (
+        <div className="mt-2.5">
+          <Sparkline
+            data={value.trend}
+            width={220}
+            height={34}
+            stroke="#1677ff"
+            fill
+            strokeWidth={2}
+            className="w-full"
+          />
+          <div className="mt-0.5 text-right text-[10px] text-[#c9cdd4]">近 14 天</div>
+        </div>
+      )}
     </button>
   );
 }

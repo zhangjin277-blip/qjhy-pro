@@ -9,19 +9,15 @@ import type {
   ProjectKey,
   Section2Metric,
 } from "@/modules/dashboard";
-import {
-  formatChineseNumber,
-  formatTotalLine,
-  formatVsPrevRatio,
-  splitChineseNumber,
-} from "./format";
+import { formatChineseNumber, formatVsPrevRatio, splitChineseNumber } from "./format";
 import { Sparkline } from "./sparkline";
 
 type BreakdownItem = DashboardOverviewResponse["breakdown"][number];
 
+// 顺序即展示顺序：流水在最前（2026-06-12 应用户要求）
 const METRIC_TABS: { id: Section2Metric; label: string }[] = [
-  { id: "total_fan_ticket", label: "音浪" },
   { id: "flow", label: "流水" },
+  { id: "total_fan_ticket", label: "音浪" },
   { id: "active_anchor_count", label: "开播主播数" },
   { id: "new_anchor_count", label: "新入驻主播数" },
   { id: "first_live_anchor_count", label: "首次开播主播数" },
@@ -34,17 +30,34 @@ const METRIC_TABS: { id: Section2Metric; label: string }[] = [
 
 const PROJECT_LABEL: Record<ProjectKey, string> = {
   ddz: "斗地主",
-  three: "三国",
+  three: "三国冰河时代",
+};
+const PROJECT_CAT: Record<ProjectKey, string> = {
+  ddz: "棋牌系",
+  three: "SLG",
+};
+/** 项目主题色（与 product_config accent 一致）：[深, 浅] 渐变端点 */
+const PROJECT_GRADIENT: Record<ProjectKey, [string, string]> = {
+  ddz: ["#b48a3c", "#d4a853"],
+  three: ["#7e4bd0", "#a855f7"],
+};
+const PROJECT_DOT: Record<ProjectKey, string> = {
+  ddz: "#d4a853",
+  three: "#a855f7",
 };
 
-/** 按钮 onClick 标识 */
+const GROUP_META: { key: Exclude<GroupKey, "all">; label: string; color: string; bar: string }[] = [
+  { key: "online", label: "线上", color: "#1677ff", bar: "#1677ff" },
+  { key: "offline", label: "线下", color: "#ff7d00", bar: "#ff7d00" },
+  { key: "other", label: "其他", color: "#a9b0bc", bar: "#c9cdd4" },
+];
+
 export interface BreakdownClick {
   metric: Section2Metric;
   project: ProjectKey;
   group: GroupKey;
 }
 
-/** 主播数类（数量级小，不需缩写）*/
 function isAnchorCountMetric(metric: Section2Metric): boolean {
   return (
     metric === "active_anchor_count" ||
@@ -52,335 +65,206 @@ function isAnchorCountMetric(metric: Section2Metric): boolean {
     metric === "first_live_anchor_count"
   );
 }
-
-/** 大数量「人」类（曝光/UV/安装·激活，需要缩写到万）*/
 function isLargePersonMetric(metric: Section2Metric): boolean {
   return metric === "install_or_activate" || metric === "show_uv" || metric === "watch_uv";
 }
 
 function splitForMetric(metric: Section2Metric, value: number): { body: string; unit: string } {
   if (isAnchorCountMetric(metric)) {
-    // 「开播主播数 / 新入驻主播数」数小，直接显示
     return { body: value.toLocaleString("zh-CN"), unit: "人" };
   }
   if (isLargePersonMetric(metric)) {
-    // 「曝光 / 进直播间UV / 安装·激活」大数字缩写 + 「人」
     const split = splitChineseNumber(value);
     return { body: split.body, unit: split.unit ? `${split.unit} 人` : "人" };
   }
-  // 音浪 / 各类流水：缩写到万/亿，无「人」单位
   return splitChineseNumber(value);
 }
 
-/**
- * install_or_activate 在 ddz cell 显示「安装」、在 three 显示「激活」；
- * 其他 metric 用 METRIC_TABS 的 label
- */
-function metricLabelForCell(metric: Section2Metric, project: ProjectKey): string {
-  if (metric === "install_or_activate") {
-    return project === "ddz" ? "安装" : "激活";
-  }
-  const tab = METRIC_TABS.find((t) => t.id === metric);
-  return tab?.label ?? metric;
+/** install_or_activate 在 ddz 显示「安装」、three 显示「激活」 */
+function metricLabelFor(metric: Section2Metric, project: ProjectKey): string {
+  if (metric === "install_or_activate") return project === "ddz" ? "安装" : "激活";
+  return METRIC_TABS.find((t) => t.id === metric)?.label ?? metric;
 }
 
-/**
- * 单格（项目 × 分组）：项目名 + group pill + 主数字 28px + 同比 + sparkline
- *
- * NOTE: 项目名仅在「总」列展示；线上/线下/其他列只展示 pill。
- */
-function GroupCell({
+function VsText({ vs }: { vs: { kind: string; text: string } }): React.JSX.Element {
+  return (
+    <span
+      className={cn(
+        vs.kind === "up" && "text-change-up",
+        vs.kind === "down" && "text-change-down",
+        (vs.kind === "flat" || vs.kind === "none") && "text-[#86909c]",
+      )}
+    >
+      {vs.text}
+    </span>
+  );
+}
+
+/** 项目色大总卡：大数字 + 环比 + 主播数 + 底部走势水波 */
+function HeroCard({
   metric,
-  project,
-  group,
-  cell,
-  showProjectName,
-  withDivider,
+  pb,
   onClick,
 }: {
   metric: Section2Metric;
-  project: ProjectKey;
-  group: GroupKey;
-  cell: GroupCellValue;
-  showProjectName: boolean;
-  withDivider: boolean;
+  pb: ProjectBreakdown;
   onClick: (c: BreakdownClick) => void;
 }): React.JSX.Element {
+  const cell = pb.total;
   const notApplicable = cell.not_applicable === true;
+  const [from, to] = PROJECT_GRADIENT[pb.project];
   const { body, unit } = splitForMetric(metric, cell.value);
   const vs = formatVsPrevRatio(cell.vs_prev);
-  const cellLabel = metricLabelForCell(metric, project);
-
-  const pillClass =
-    group === "all"
-      ? "bg-[#f2f3f5] text-[#86909c]"
-      : group === "online"
-        ? "bg-[#e8f3ff] text-primary"
-        : group === "offline"
-          ? "bg-[#fff7e8] text-[#ff7d00]"
-          : "bg-[#f2f3f5] text-[#86909c]";
-
-  const pillLabel: Record<GroupKey, string> = {
-    all: "总",
-    online: "线上",
-    offline: "线下",
-    other: "其他",
-  };
 
   return (
     <button
       type="button"
-      onClick={() => onClick({ metric, project, group })}
       disabled={notApplicable}
+      onClick={() => onClick({ metric, project: pb.project, group: "all" })}
       className={cn(
-        "px-3 py-1 text-left transition-colors rounded-md",
-        "hover:bg-[var(--hover-bg)] hover:ring-1 hover:ring-inset hover:ring-[var(--hover-ring)] hover:shadow-sm",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-        withDivider && "border-l border-[#f2f3f5]",
-        notApplicable && "opacity-60 cursor-not-allowed hover:bg-transparent hover:ring-0",
+        "relative overflow-hidden rounded-xl p-4 pb-2 text-left text-white transition-transform",
+        "hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        notApplicable && "cursor-not-allowed opacity-60",
       )}
-      aria-label={`${PROJECT_LABEL[project]} ${pillLabel[group]} ${cellLabel} 详情`}
+      style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
+      aria-label={`${PROJECT_LABEL[pb.project]} 总 ${metricLabelFor(metric, pb.project)} 详情`}
     >
-      <div className="flex items-center gap-1.5 mb-2 min-h-[20px]">
-        {showProjectName ? (
-          <span className="text-[12px] font-medium text-[#4e5969]">{PROJECT_LABEL[project]}</span>
-        ) : null}
-        <span className={cn("text-[11px] px-2 py-[2px] rounded font-normal", pillClass)}>
-          {pillLabel[group]}
-        </span>
-        {metric === "install_or_activate" ? (
-          <span className="text-[10px] text-[#86909c] ml-1">{cellLabel}</span>
-        ) : null}
+      <div className="text-[12px] opacity-85">总{metricLabelFor(metric, pb.project)}</div>
+      {notApplicable ? (
+        <div className="mt-1 text-[32px] font-bold leading-[1.15]">—</div>
+      ) : (
+        <div className="mt-1 font-bold leading-[1.15] tracking-[-0.02em] tabular-nums">
+          <span className="text-[32px]">{body}</span>
+          {unit ? <span className="ml-0.5 text-[15px] font-medium opacity-90">{unit}</span> : null}
+        </div>
+      )}
+      <div className="mt-1 text-[11.5px] opacity-90">
+        {notApplicable ? (
+          "不适用"
+        ) : (
+          <>
+            较前 7 日 {vs.text} · {cell.anchor_count} 名主播
+          </>
+        )}
+      </div>
+      {/* 底部走势水波（真实 sparkline，白色半透明面积） */}
+      {!notApplicable && cell.sparkline.length >= 2 && (
+        <div className="pointer-events-none mt-1.5 -mx-4 -mb-2 opacity-60">
+          <Sparkline
+            data={cell.sparkline}
+            width={320}
+            height={36}
+            stroke="rgba(255,255,255,0.9)"
+            fillColor="rgba(255,255,255,0.35)"
+            strokeWidth={1.5}
+            className="block w-full"
+          />
+        </div>
+      )}
+    </button>
+  );
+}
+
+/** 线上/线下/其他 卫星小卡：数值 + 环比 + 占比条 */
+function SatCard({
+  metric,
+  pb,
+  group,
+  onClick,
+}: {
+  metric: Section2Metric;
+  pb: ProjectBreakdown;
+  group: Exclude<GroupKey, "all">;
+  onClick: (c: BreakdownClick) => void;
+}): React.JSX.Element {
+  const meta = GROUP_META.find((g) => g.key === group);
+  const cell: GroupCellValue = pb[group];
+  const notApplicable = cell.not_applicable === true || pb.total.not_applicable === true;
+  const sum = pb.online.value + pb.offline.value + pb.other.value;
+  const pct = sum > 0 ? (cell.value / sum) * 100 : 0;
+  const { body, unit } = splitForMetric(metric, cell.value);
+  const vs = formatVsPrevRatio(cell.vs_prev);
+
+  return (
+    <button
+      type="button"
+      disabled={notApplicable}
+      onClick={() => onClick({ metric, project: pb.project, group })}
+      className={cn(
+        "rounded-xl border border-[#eef1f7] bg-gradient-to-b from-[#fbfcfe] to-[#f8fafd] p-3.5 text-left",
+        "transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_20px_-12px_rgba(22,119,255,0.3)]",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        notApplicable && "cursor-not-allowed opacity-50 hover:translate-y-0 hover:shadow-none",
+      )}
+      aria-label={`${PROJECT_LABEL[pb.project]} ${meta?.label} ${metricLabelFor(metric, pb.project)} 详情`}
+    >
+      <div className="flex items-center gap-1.5 text-[12px] text-[#86909c]">
+        <span
+          className="inline-block h-[7px] w-[7px] rounded-full"
+          style={{ background: meta?.color }}
+        />
+        {meta?.label}
       </div>
       {notApplicable ? (
-        <div className="leading-[1.15] tracking-[-0.01em] font-semibold tabular-nums text-[#c9cdd4]">
-          <span className="text-[28px]">—</span>
-        </div>
+        <div className="mt-1.5 text-[24px] font-bold text-[#c9cdd4]">—</div>
       ) : (
-        <div className="leading-[1.15] tracking-[-0.01em] font-semibold tabular-nums text-[#1d2129]">
-          <span className="text-[28px]">{body}</span>
+        <div className="mt-1.5 font-bold leading-[1.15] tabular-nums text-[#1d2129]">
+          <span className="text-[24px]">{body}</span>
           {unit ? (
-            <span className="text-[14px] font-medium text-[#4e5969] ml-0.5">{unit}</span>
+            <span className="ml-0.5 text-[13px] font-medium text-[#4e5969]">{unit}</span>
           ) : null}
         </div>
       )}
-      <div className="text-[11px] text-[#86909c] mt-1.5 flex items-center gap-2">
+      <div className="mt-1 text-[11px] text-[#86909c]">
         {notApplicable ? (
-          <span className="text-[#c9cdd4]">不适用</span>
+          "不适用"
         ) : (
           <>
-            <span>
-              较前 7 日{" "}
-              <span
-                className={cn(
-                  vs.kind === "up" && "text-change-up",
-                  vs.kind === "down" && "text-change-down",
-                  (vs.kind === "flat" || vs.kind === "none") && "text-[#86909c]",
-                )}
-              >
-                {vs.text}
-              </span>
-            </span>
-            <span className="ml-auto">
-              <Sparkline data={cell.sparkline} width={64} height={20} />
-            </span>
+            <VsText vs={vs} /> · 占 {pct.toFixed(0)}% · {cell.anchor_count} 主播
           </>
         )}
+      </div>
+      <div className="mt-2 h-[4px] overflow-hidden rounded-full bg-[#f0f2f7]">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: meta?.bar }} />
       </div>
     </button>
   );
 }
 
-/**
- * 占比 stacked bar（线上 / 线下 / 其他），段宽即占比；< 6% 段不显示百分比文字。
- */
-function StackedBar({
-  online,
-  offline,
-  other,
-  metric,
-  onClickSegment,
-  project,
-}: {
-  online: GroupCellValue;
-  offline: GroupCellValue;
-  other: GroupCellValue;
-  metric: Section2Metric;
-  project: ProjectKey;
-  onClickSegment: (c: BreakdownClick) => void;
-}): React.JSX.Element {
-  const sum = online.value + offline.value + other.value;
-  // 全 0 时画一条灰色满条
-  if (sum <= 0) {
-    return (
-      <div
-        className="h-9 rounded-md bg-[#f2f3f5] flex items-center justify-center text-[11px] text-[#86909c]"
-        role="img"
-        aria-label="暂无数据"
-      >
-        暂无数据
-      </div>
-    );
-  }
-  const segs: {
-    pct: number;
-    value: number;
-    anchorCount: number;
-    bg: string;
-    text: string;
-    group: GroupKey;
-  }[] = [
-    {
-      pct: (online.value / sum) * 100,
-      value: online.value,
-      anchorCount: online.anchor_count,
-      bg: "bg-primary",
-      text: "text-white",
-      group: "online",
-    },
-    {
-      pct: (offline.value / sum) * 100,
-      value: offline.value,
-      anchorCount: offline.anchor_count,
-      bg: "bg-[#ff7d00]",
-      text: "text-white",
-      group: "offline",
-    },
-    {
-      pct: (other.value / sum) * 100,
-      value: other.value,
-      anchorCount: other.anchor_count,
-      bg: "bg-[#c9cdd4]",
-      text: "text-[#4e5969]",
-      group: "other",
-    },
-  ];
-
-  return (
-    <div className="h-9 rounded-md overflow-hidden flex bg-[#f2f3f5]" role="img">
-      {segs.map((s) => (
-        <button
-          key={s.group}
-          type="button"
-          onClick={() => onClickSegment({ metric, project, group: s.group })}
-          className={cn(
-            "flex items-center justify-center text-[12px] font-semibold tracking-[-0.01em] transition-[filter] hover:brightness-105",
-            s.bg,
-            s.text,
-          )}
-          style={{ width: `${s.pct}%` }}
-          title={`${s.pct.toFixed(1)}%`}
-          aria-label={`${s.group} ${s.pct.toFixed(1)}%`}
-        >
-          {s.pct >= 6 ? `${s.pct.toFixed(1)}%` : ""}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/**
- * 单项目子区块：4 列 + stacked bar + 段下方人数/人均
- */
-function ProjectBlock({
+/** 单项目区块：项目头 + (大总卡 | 线上 | 线下 | 其他) */
+function ProjectRow({
   metric,
   pb,
-  withLeftBorder,
   onCellClick,
 }: {
   metric: Section2Metric;
   pb: ProjectBreakdown;
-  withLeftBorder: boolean;
   onCellClick: (c: BreakdownClick) => void;
 }): React.JSX.Element {
-  // 仅对「数值类」指标渲染占比条；「人数」类指标不需要 stacked bar（占比逻辑也成立但语义弱）
-  // 与 variant-3 一致：保留 stacked bar，但当 metric 为 person 时把单位改成「人」
-  const sumValue = pb.online.value + pb.offline.value + pb.other.value;
-  const totalAnchor = pb.total.anchor_count;
-  const projectNotApplicable = pb.total.not_applicable === true;
-
-  // 段下小字：N 主播 · X/人 — 人均口径在 person metric 下不太合适，回退为「N 人」
-  const subline = (cell: GroupCellValue): string => {
-    if (isAnchorCountMetric(metric)) {
-      return `${cell.anchor_count} 主播`;
-    }
-    if (cell.anchor_count <= 0) return "0 主播";
-    const per = cell.value / cell.anchor_count;
-    return `${cell.anchor_count} 主播 · ${formatChineseNumber(per)}/人`;
-  };
-
+  const sum = pb.online.value + pb.offline.value + pb.other.value;
   return (
-    <div className={cn(withLeftBorder && "border-l border-[#f2f3f5] pl-8")}>
-      <div className="grid grid-cols-4">
-        <GroupCell
-          metric={metric}
-          project={pb.project}
-          group="all"
-          cell={pb.total}
-          showProjectName
-          withDivider={false}
-          onClick={onCellClick}
+    <div className="rounded-xl border border-[#f0f2f7]">
+      <div className="flex items-center gap-2.5 px-4 pt-3">
+        <span
+          className="h-[9px] w-[9px] rounded-[3px]"
+          style={{ background: PROJECT_DOT[pb.project] }}
         />
-        <GroupCell
-          metric={metric}
-          project={pb.project}
-          group="online"
-          cell={pb.online}
-          showProjectName={false}
-          withDivider
-          onClick={onCellClick}
-        />
-        <GroupCell
-          metric={metric}
-          project={pb.project}
-          group="offline"
-          cell={pb.offline}
-          showProjectName={false}
-          withDivider
-          onClick={onCellClick}
-        />
-        <GroupCell
-          metric={metric}
-          project={pb.project}
-          group="other"
-          cell={pb.other}
-          showProjectName={false}
-          withDivider
-          onClick={onCellClick}
-        />
+        <span className="text-[14px] font-bold">{PROJECT_LABEL[pb.project]}</span>
+        <span className="rounded-[5px] bg-[#f3f5fb] px-2 py-0.5 text-[11px] text-[#86909c]">
+          {PROJECT_CAT[pb.project]}
+        </span>
+        <span className="ml-auto text-[11.5px] tabular-nums text-[#86909c]">
+          {pb.total.not_applicable
+            ? ""
+            : `合计 ${formatChineseNumber(sum)} · ${pb.total.anchor_count} 主播`}
+        </span>
       </div>
-
-      {projectNotApplicable ? (
-        <div className="px-3 mt-5">
-          <div
-            className="h-9 rounded-md bg-[#f2f3f5] flex items-center justify-center text-[11px] text-[#86909c]"
-            role="img"
-            aria-label="不适用"
-          >
-            不适用 · {PROJECT_LABEL[pb.project]} 暂未启用「短视频流水」
-          </div>
-        </div>
-      ) : (
-        <div className="px-3 mt-5">
-          <div className="flex items-center justify-between text-[11px] text-[#86909c] mb-1.5">
-            <span>线上 / 线下 / 其他 占比</span>
-            <span className="tabular-nums">{formatTotalLine(sumValue, totalAnchor)}</span>
-          </div>
-          <StackedBar
-            online={pb.online}
-            offline={pb.offline}
-            other={pb.other}
-            metric={metric}
-            project={pb.project}
-            onClickSegment={onCellClick}
-          />
-          <div className="flex justify-between text-[10px] text-[#86909c] mt-1 tabular-nums">
-            <span>{subline(pb.online)}</span>
-            <span>{subline(pb.offline)}</span>
-            <span>{subline(pb.other)}</span>
-          </div>
-        </div>
-      )}
+      <div className="grid grid-cols-[1.45fr_1fr_1fr_1fr] gap-3 p-3.5 pt-3">
+        <HeroCard metric={metric} pb={pb} onClick={onCellClick} />
+        <SatCard metric={metric} pb={pb} group="online" onClick={onCellClick} />
+        <SatCard metric={metric} pb={pb} group="offline" onClick={onCellClick} />
+        <SatCard metric={metric} pb={pb} group="other" onClick={onCellClick} />
+      </div>
     </div>
   );
 }
@@ -398,7 +282,6 @@ export function BreakdownSection({
   onMetricChange: (m: Section2Metric) => void;
   onCellClick: (c: BreakdownClick) => void;
 }): React.JSX.Element {
-  // 找当前 metric 对应的 breakdown item，找不到时降级到 0 占位
   const item: BreakdownItem | undefined = data?.breakdown.find((b) => b.metric === metric);
 
   const emptyCell: GroupCellValue = {
@@ -422,30 +305,23 @@ export function BreakdownSection({
 
   return (
     <section>
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <h2 className="text-[15px] font-semibold tracking-tight">业务细分</h2>
         <div className="flex items-center gap-4 text-[12px] text-[#86909c]">
-          <span className="flex items-center">
-            <span className="w-2 h-2 rounded-sm inline-block mr-1 align-middle bg-primary" />
-            线上
-          </span>
-          <span className="flex items-center">
-            <span className="w-2 h-2 rounded-sm inline-block mr-1 align-middle bg-[#ff7d00]" />
-            线下
-          </span>
-          <span className="flex items-center">
-            <span className="w-2 h-2 rounded-sm inline-block mr-1 align-middle bg-[#c9cdd4]" />
-            其他
-          </span>
+          {GROUP_META.map((g) => (
+            <span key={g.key} className="flex items-center">
+              <span
+                className="mr-1 inline-block h-2 w-2 rounded-sm align-middle"
+                style={{ background: g.color }}
+              />
+              {g.label}
+            </span>
+          ))}
         </div>
       </div>
 
-      <div className="rounded-xl bg-white px-4 pt-2 pb-5 shadow-[0_1px_0_0_rgba(0,0,0,0.02),0_4px_12px_-8px_rgba(0,0,0,0.04)]">
-        <div
-          className="flex items-center gap-6 text-[14px] border-b border-[#e5e6eb] overflow-x-auto"
-          role="tablist"
-          aria-label="指标"
-        >
+      <div className="rounded-xl bg-white px-4 pb-4 pt-4 shadow-[0_1px_0_0_rgba(0,0,0,0.02),0_4px_12px_-8px_rgba(0,0,0,0.04)]">
+        <div className="mb-4 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="指标">
           {METRIC_TABS.map((t) => {
             const active = metric === t.id;
             return (
@@ -456,10 +332,10 @@ export function BreakdownSection({
                 aria-selected={active}
                 onClick={() => onMetricChange(t.id)}
                 className={cn(
-                  "py-3 px-1 transition-colors whitespace-nowrap rounded",
+                  "whitespace-nowrap rounded-full px-3.5 py-1 text-[12.5px] transition-colors",
                   active
-                    ? "text-primary font-semibold shadow-[inset_0_-2px_0_var(--primary)]"
-                    : "text-[#1d2129] font-medium hover:text-primary",
+                    ? "bg-primary font-semibold text-white"
+                    : "bg-[#f3f5fb] text-[#4e5969] hover:bg-[#e8f3ff] hover:text-primary",
                 )}
               >
                 {t.label}
@@ -468,15 +344,14 @@ export function BreakdownSection({
           })}
         </div>
 
-        <div className="grid grid-cols-2 gap-8 pt-6">
-          <ProjectBlock metric={metric} pb={ddz} withLeftBorder={false} onCellClick={onCellClick} />
-          <ProjectBlock metric={metric} pb={three} withLeftBorder onCellClick={onCellClick} />
+        <div className="space-y-3">
+          <ProjectRow metric={metric} pb={ddz} onCellClick={onCellClick} />
+          <ProjectRow metric={metric} pb={three} onCellClick={onCellClick} />
         </div>
       </div>
 
-      <p className="text-[12px] text-[#86909c] mt-3 px-1">
-        ▸ 横向 stacked bar 展示项目内占比 · 段宽即占比 · 点击段可下钻到对应分组
-        {loading ? " · 加载中…" : ""}
+      <p className="mt-3 px-1 text-[12px] text-[#86909c]">
+        ▸ 点击任意卡片下钻该分组的主播明细{loading ? " · 加载中…" : ""}
       </p>
     </section>
   );
