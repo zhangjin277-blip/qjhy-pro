@@ -57,8 +57,8 @@ function toIsoDate(d: Date): string {
 }
 
 export function DashboardBoard(): React.JSX.Element {
-  // 默认 = 近 7 日（spec 要求；昨天数据可能未结算）
-  const [preset, setPreset] = useState<TimePreset>("last7");
+  // 默认 = 昨天（2026-06-12 应用户要求从近 7 日改回；单日的同比口径最直观）
+  const [preset, setPreset] = useState<TimePreset>("yesterday");
   // 自定义日期范围：默认初始化为「近 7 日」
   const [customRange, setCustomRange] = useState<{ from: string; to: string }>(() => {
     const now = new Date();
@@ -140,6 +140,8 @@ export function DashboardBoard(): React.JSX.Element {
         customTo={customRange.to}
         onCustomChange={setCustomRange}
         onCardClick={handleCardClick}
+        rangeFrom={range.from}
+        rangeTo={range.to}
       />
       <BreakdownSection
         data={data}

@@ -87,11 +87,13 @@ function KpiCard({
   label,
   metricKey,
   value,
+  singleDay,
   onClick,
 }: {
   label: string;
   metricKey: keyof CoreKpiResponse;
   value: CoreKpiValue;
+  singleDay: boolean;
   onClick: () => void;
 }): React.JSX.Element {
   const { body, unit } = formatPersonOrChinese(metricKey, value.current);
@@ -112,18 +114,23 @@ function KpiCard({
         {unit ? <span className="text-[20px] font-medium ml-1 text-[#4e5969]">{unit}</span> : null}
       </div>
       <div className="mt-3 space-y-1">
+        {/* 后端 prev_day = 往前推一个等长周期：单日时即前一日；多天时即上一周期。
+            多天区间不展示 prev_week（固定推 7 天）：近 7 日时与上一周期重合、
+            近 30 日/本月时与当前窗口重叠，对比无意义 */}
         <CompareRow
-          label="昨日同期"
+          label={singleDay ? "前一日" : "上一周期"}
           cur={value.current}
           prev={value.prev_day}
           metricKey={metricKey}
         />
-        <CompareRow
-          label="上周同期"
-          cur={value.current}
-          prev={value.prev_week}
-          metricKey={metricKey}
-        />
+        {singleDay && (
+          <CompareRow
+            label="上周同期"
+            cur={value.current}
+            prev={value.prev_week}
+            metricKey={metricKey}
+          />
+        )}
       </div>
     </button>
   );
@@ -138,6 +145,8 @@ export function CoreKpiSection({
   customTo,
   onCustomChange,
   onCardClick,
+  rangeFrom,
+  rangeTo,
 }: {
   core: CoreKpiResponse | null;
   loading: boolean;
@@ -147,7 +156,10 @@ export function CoreKpiSection({
   customTo: string;
   onCustomChange: (range: { from: string; to: string }) => void;
   onCardClick: (metricKey: keyof CoreKpiResponse) => void;
+  rangeFrom: string;
+  rangeTo: string;
 }): React.JSX.Element {
+  const singleDay = rangeFrom === rangeTo;
   return (
     <section className="glass-panel rounded-2xl px-4 py-5 md:px-4">
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
@@ -212,6 +224,7 @@ export function CoreKpiSection({
               label={def.label}
               metricKey={def.key}
               value={v}
+              singleDay={singleDay}
               onClick={() => onCardClick(def.key)}
             />
           );
