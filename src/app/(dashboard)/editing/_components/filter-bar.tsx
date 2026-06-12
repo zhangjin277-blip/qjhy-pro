@@ -18,7 +18,6 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
   const [editorOpen, setEditorOpen] = useState(false);
   const [anchorOpen, setAnchorOpen] = useState(false);
   const [anchorQuery, setAnchorQuery] = useState("");
-  const [dateOpen, setDateOpen] = useState(false);
   const [productHoverGroup, setProductHoverGroup] = useState<string | null>(null);
   const [anchorHoverGroup, setAnchorHoverGroup] = useState<string | null>(null);
 
@@ -52,25 +51,29 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
   const selectedProducts = sp.get("products")?.split(",").filter(Boolean) ?? [];
   const selectedEditors = sp.get("editors")?.split(",").filter(Boolean) ?? [];
   const selectedAnchors = sp.get("anchors")?.split(",").filter(Boolean) ?? [];
-  const range = (sp.get("range") ?? "7d") as "today" | "7d" | "30d" | "custom";
+  const range = (sp.get("range") ?? "7d") as "all" | "today" | "7d" | "30d" | "custom";
   const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
-  const customFrom = sp.get("from") ?? todayStr;
-  const customTo = sp.get("to") ?? todayStr;
-  const rangeIsDefault = range === "7d";
+  const daysAgo = (n: number): string =>
+    new Date(Date.now() - n * 86400_000).toLocaleDateString("sv-SE", {
+      timeZone: "Asia/Shanghai",
+    });
+
+  // 日期输入框显示当前生效区间（快捷档位换算成具体日期；全部时留空）
+  const displayFrom =
+    range === "custom"
+      ? (sp.get("from") ?? todayStr)
+      : range === "today"
+        ? todayStr
+        : range === "7d"
+          ? daysAgo(7)
+          : range === "30d"
+            ? daysAgo(30)
+            : "";
+  const displayTo =
+    range === "custom" ? (sp.get("to") ?? todayStr) : range === "all" ? "" : todayStr;
 
   const activeCategory = productHoverGroup ?? productGroups[0]?.category;
   const activeCatItems = productGroups.find((g) => g.category === activeCategory)?.items ?? [];
-
-  const rangeLabel =
-    range === "today"
-      ? "今天"
-      : range === "30d"
-        ? "近 30 天"
-        : range === "custom"
-          ? customFrom && customTo
-            ? `${customFrom.slice(5)} ~ ${customTo.slice(5)}`
-            : "自定义"
-          : "近 7 天";
 
   function updateParam(key: string, values: string[]) {
     const params = new URLSearchParams(sp.toString());
@@ -79,14 +82,13 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
     router.push(`?${params.toString()}`);
   }
 
-  function setRange(next: "today" | "7d" | "30d") {
+  function setRange(next: "all" | "today" | "7d" | "30d") {
     const params = new URLSearchParams(sp.toString());
     if (next === "7d") params.delete("range");
     else params.set("range", next);
     params.delete("from");
     params.delete("to");
     router.push(`?${params.toString()}`);
-    setDateOpen(false);
   }
 
   function setCustomRange(from: string, to: string) {
@@ -96,7 +98,6 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
     params.set("from", from);
     params.set("to", to);
     router.push(`?${params.toString()}`);
-    setDateOpen(false);
   }
 
   return (
@@ -108,7 +109,6 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
             setProductOpen(!productOpen);
             setEditorOpen(false);
             setAnchorOpen(false);
-            setDateOpen(false);
           }}
           className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition ${
             selectedProducts.length > 0
@@ -180,7 +180,6 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
             setAnchorOpen(!anchorOpen);
             setProductOpen(false);
             setEditorOpen(false);
-            setDateOpen(false);
           }}
           className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition ${
             selectedAnchors.length > 0
@@ -266,7 +265,6 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
             setEditorOpen(!editorOpen);
             setProductOpen(false);
             setAnchorOpen(false);
-            setDateOpen(false);
           }}
           className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition ${
             selectedEditors.length > 0
@@ -309,73 +307,46 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
         )}
       </div>
 
-      {/* 日期范围 */}
-      <div className="relative">
-        <button
-          onClick={() => {
-            setDateOpen(!dateOpen);
-            setProductOpen(false);
-            setEditorOpen(false);
-            setAnchorOpen(false);
+      {/* 日期：自定义区间 + 快捷档位平铺 */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground pl-1 text-sm">日期</span>
+        <input
+          type="date"
+          value={displayFrom}
+          onChange={(e) => {
+            if (e.target.value && displayTo) setCustomRange(e.target.value, displayTo);
           }}
-          className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition ${
-            !rangeIsDefault
-              ? "border-blue-500 bg-blue-50 text-blue-600"
-              : "border-border bg-white hover:border-blue-500 hover:text-blue-600"
-          }`}
-        >
-          <span className="text-muted-foreground">日期</span>
-          <span>{rangeLabel}</span>
-          <span className="text-[9px] text-muted-foreground">▼</span>
-        </button>
-        {dateOpen && (
-          <div className="absolute right-0 top-full z-10 mt-1 w-[260px] rounded-md border border-border bg-white p-2 shadow-lg">
-            {[
-              { key: "today" as const, label: "今天" },
-              { key: "7d" as const, label: "近 7 天" },
-              { key: "30d" as const, label: "近 30 天" },
-            ].map((opt) => (
-              <button
-                key={opt.key}
-                onClick={() => setRange(opt.key)}
-                className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-slate-50 ${
-                  range === opt.key ? "text-blue-600" : "text-slate-700"
-                }`}
-              >
-                <span>{opt.label}</span>
-                {range === opt.key && <span className="text-xs">✓</span>}
-              </button>
-            ))}
-            <div className="mt-1 border-t border-border pt-2">
-              <div className="px-2 pb-1 text-xs text-muted-foreground">自定义区间</div>
-              <div className="flex items-center gap-1 px-2">
-                <input
-                  type="date"
-                  defaultValue={customFrom}
-                  onChange={(e) => {
-                    const to = (document.getElementById("date-to") as HTMLInputElement | null)
-                      ?.value;
-                    if (to) setCustomRange(e.target.value, to);
-                  }}
-                  className="w-1/2 rounded border border-border px-1.5 py-1 text-xs"
-                />
-                <span className="text-xs text-muted-foreground">~</span>
-                <input
-                  id="date-to"
-                  type="date"
-                  defaultValue={customTo}
-                  onChange={(e) => {
-                    const inputs =
-                      document.querySelectorAll<HTMLInputElement>('input[type="date"]');
-                    const from = inputs[0]?.value;
-                    if (from) setCustomRange(from, e.target.value);
-                  }}
-                  className="w-1/2 rounded border border-border px-1.5 py-1 text-xs"
-                />
-              </div>
-            </div>
-          </div>
-        )}
+          className="rounded-md border border-border bg-white px-2 py-1.5 text-xs text-slate-700"
+        />
+        <span className="text-muted-foreground text-xs">~</span>
+        <input
+          type="date"
+          value={displayTo}
+          onChange={(e) => {
+            if (e.target.value && displayFrom) setCustomRange(displayFrom, e.target.value);
+          }}
+          className="rounded-md border border-border bg-white px-2 py-1.5 text-xs text-slate-700"
+        />
+        <div className="ml-1 inline-flex overflow-hidden rounded-md border border-border bg-white">
+          {[
+            { key: "all" as const, label: "全部" },
+            { key: "today" as const, label: "今天" },
+            { key: "7d" as const, label: "近 7 天" },
+            { key: "30d" as const, label: "近 30 天" },
+          ].map((opt, i) => (
+            <button
+              key={opt.key}
+              onClick={() => setRange(opt.key)}
+              className={`px-3 py-1.5 text-sm transition ${i > 0 ? "border-l border-border" : ""} ${
+                range === opt.key
+                  ? "bg-blue-500 font-medium text-white"
+                  : "text-slate-600 hover:bg-blue-50 hover:text-blue-600"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex-1" />

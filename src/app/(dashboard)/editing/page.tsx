@@ -55,6 +55,9 @@ export default async function EditingBoardPage({
   } else if (range === "custom" && customFrom && customTo) {
     dateFrom = customFrom;
     dateTo = customTo;
+  } else if (range === "all") {
+    dateFrom = "2000-01-01"; // 不限日期：下界取远古值
+    dateTo = today;
   } else {
     dateFrom = today;
     dateTo = today;
