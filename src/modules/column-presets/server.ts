@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/db/client";
 import { user_column_preset } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import type { PresetPlatform, UserColumnPreset } from "./types";
+import type { BrokerFilterSnapshot, PresetPlatform, UserColumnPreset } from "./types";
 
 function toRow(r: {
   id: number;
@@ -10,6 +10,7 @@ function toRow(r: {
   name: string;
   columns: string[];
   project: string;
+  broker_filter?: BrokerFilterSnapshot | null;
   created_at: Date;
   updated_at: Date;
 }): UserColumnPreset {
@@ -19,6 +20,7 @@ function toRow(r: {
     name: r.name,
     columns: r.columns,
     project: r.project ?? "all",
+    brokerFilter: r.broker_filter ?? null,
     created_at: r.created_at.toISOString(),
     updated_at: r.updated_at.toISOString(),
   };
@@ -47,10 +49,18 @@ export async function createUserPreset(
   name: string,
   columns: string[],
   project = "all",
+  brokerFilter: BrokerFilterSnapshot | null = null,
 ): Promise<UserColumnPreset> {
   const inserted = await db
     .insert(user_column_preset)
-    .values({ dingtalk_user_id: userId, platform, name, columns, project })
+    .values({
+      dingtalk_user_id: userId,
+      platform,
+      name,
+      columns,
+      project,
+      broker_filter: brokerFilter,
+    })
     .returning();
   const row = inserted[0];
   if (!row) throw new Error("insert returned no row");
@@ -60,12 +70,18 @@ export async function createUserPreset(
 export async function updateUserPreset(
   userId: string,
   id: number,
-  patch: { name?: string; columns?: string[]; project?: string },
+  patch: {
+    name?: string;
+    columns?: string[];
+    project?: string;
+    brokerFilter?: BrokerFilterSnapshot | null;
+  },
 ): Promise<UserColumnPreset | null> {
   const set: Record<string, unknown> = { updated_at: new Date() };
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.columns !== undefined) set.columns = patch.columns;
   if (patch.project !== undefined) set.project = patch.project;
+  if (patch.brokerFilter !== undefined) set.broker_filter = patch.brokerFilter;
   const [row] = await db
     .update(user_column_preset)
     .set(set)

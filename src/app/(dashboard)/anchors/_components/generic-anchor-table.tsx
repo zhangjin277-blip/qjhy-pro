@@ -461,6 +461,8 @@ export function GenericAnchorTable<TKey extends string, TRow>({
     const preset = config.systemPresets.find((p) => p.id === presetId);
     if (!preset) return;
     setActivePresetId(presetId);
+    // 内置预设不带经纪人筛选 → 切换时清空，保持「预设=整套视图」语义一致
+    setBrokerSel(EMPTY_BROKER_SEL);
     if (preset.appliesFilter) {
       setFilters((f) => ({ ...f, ...preset.appliesFilter }));
     }
@@ -495,6 +497,8 @@ export function GenericAnchorTable<TKey extends string, TRow>({
         ? { ...f, product: p.project ?? "all" }
         : { ...f, project: p.project ?? "all" },
     );
+    // 恢复预设保存的经纪人筛选（无则清空）
+    setBrokerSel(p.brokerFilter ?? EMPTY_BROKER_SEL);
   }
 
   async function saveAsNewPreset(columns?: TKey[]): Promise<void> {
@@ -512,6 +516,7 @@ export function GenericAnchorTable<TKey extends string, TRow>({
         name,
         columns: cols,
         project: filters.project ?? filters.product ?? "all",
+        brokerFilter: brokerActive ? brokerSel : null,
       }),
     });
     if (!res.ok) {
@@ -536,6 +541,7 @@ export function GenericAnchorTable<TKey extends string, TRow>({
       body: JSON.stringify({
         columns: cols,
         project: filters.project ?? filters.product ?? "all",
+        brokerFilter: brokerActive ? brokerSel : null,
       }),
     });
     if (!res.ok) {

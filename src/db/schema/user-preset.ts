@@ -18,6 +18,11 @@ export const user_column_preset = pgTable(
     name: text("name").notNull(),
     columns: jsonb("columns").notNull().$type<string[]>(),
     project: text("project").notNull().default("all"),
+    // 经纪人筛选快照（抖音运营/招募经纪人多选）；null = 不带筛选。快手预设恒 null
+    broker_filter: jsonb("broker_filter").$type<{
+      operate: string[];
+      recruit: string[];
+    } | null>(),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow(),
   },

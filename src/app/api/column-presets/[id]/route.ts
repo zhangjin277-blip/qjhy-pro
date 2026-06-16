@@ -37,6 +37,7 @@ export async function PUT(
     name: parsed.data.name,
     columns: parsed.data.columns,
     project: parsed.data.project,
+    brokerFilter: parsed.data.brokerFilter,
   });
   if (!updated) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   return NextResponse.json({ preset: updated });

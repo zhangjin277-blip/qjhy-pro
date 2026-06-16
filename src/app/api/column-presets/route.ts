@@ -44,6 +44,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       parsed.data.name,
       parsed.data.columns,
       parsed.data.project,
+      parsed.data.brokerFilter ?? null,
     );
     return NextResponse.json({ preset });
   } catch (e) {
