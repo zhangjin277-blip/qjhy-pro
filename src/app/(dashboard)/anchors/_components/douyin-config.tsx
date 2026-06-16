@@ -89,6 +89,12 @@ export const douyinConfig: PlatformConfig<DouyinColKey, AnchorListRow> = {
     date_to: yesterday(),
     project: "all",
   },
+  brokerFilter: {
+    operateLabel: "运营经纪人",
+    recruitLabel: "招募经纪人",
+    getOperate: (r) => r.broker_name ?? null,
+    getRecruit: (r) => r.recruit_broker_name ?? null,
+  },
   FiltersComponent: Filters,
 
   buildApiParams(filters) {

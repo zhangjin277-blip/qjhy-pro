@@ -18,6 +18,17 @@ export interface AnchorFilters {
   data_source?: "all" | "today" | "history";
 }
 
+/** 经纪人筛选选项（去重排序后的名字列表） */
+export interface BrokerOptions {
+  operate: string[];
+  recruit: string[];
+}
+/** 经纪人筛选当前选中（按名字多选；空数组 = 不限） */
+export interface BrokerSelection {
+  operate: string[];
+  recruit: string[];
+}
+
 /** parseApiResponse 的统一返回 shape — 不同 platform 用不同子集 */
 export interface ParsedAnchorResponse<TRow> {
   rows: TRow[];
@@ -128,10 +139,25 @@ export interface PlatformConfig<TKey extends string, TRow> {
 
   /** 默认 filters 值 */
   defaultFilters: AnchorFilters;
+  /**
+   * 经纪人客户端筛选（抖音：运营/招募经纪人）。提供则启用：
+   * GenericAnchorTable 从已加载 rows 提取去重选项，纯前端过滤（不重新请求 server）。
+   * 快手不提供 → 不渲染、不过滤。
+   */
+  brokerFilter?: {
+    operateLabel: string;
+    recruitLabel: string;
+    getOperate: (row: TRow) => string | null;
+    getRecruit: (row: TRow) => string | null;
+  };
   /** 顶部 filter UI（日期 / 搜索 / 项目 select 等） */
   FiltersComponent: ComponentType<{
     filters: AnchorFilters;
     onChange: (next: AnchorFilters) => void;
+    /** 经纪人筛选（仅 brokerFilter 启用的平台传入）：选项 + 当前选中 + 回调 */
+    brokerOptions?: BrokerOptions | null;
+    brokerSel?: BrokerSelection;
+    onBrokerChange?: (next: BrokerSelection) => void;
   }>;
 
   /** 把 GenericFilters → URLSearchParams（用于 fetch + URL replace） */

@@ -31,7 +31,14 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/compon
 import { cn } from "@/lib/utils/cn";
 import type { UserColumnPreset } from "@/modules/column-presets";
 import type { ColumnDef } from "./column-presets";
-import type { AnchorFilters, PlatformConfig } from "./platform-config";
+import type {
+  AnchorFilters,
+  BrokerOptions,
+  BrokerSelection,
+  PlatformConfig,
+} from "./platform-config";
+
+const EMPTY_BROKER_SEL: BrokerSelection = { operate: [], recruit: [] };
 
 const PAGE_SIZES = [15, 50, 100, 200] as const;
 type PageSize = (typeof PAGE_SIZES)[number];
@@ -46,6 +53,8 @@ export function GenericAnchorTable<TKey extends string, TRow>({
   const [filters, setFilters] = useState<AnchorFilters>(config.defaultFilters);
   const [rows, setRows] = useState<TRow[]>([]);
   const [previousRows, setPreviousRows] = useState<TRow[]>([]);
+  // 经纪人筛选（客户端，仅 config.brokerFilter 启用的平台）— 不进 filters，不触发 server 请求
+  const [brokerSel, setBrokerSel] = useState<BrokerSelection>(EMPTY_BROKER_SEL);
   const [serverKpi, setServerKpi] = useState<Record<string, number> | null>(null);
   const [periodDays, setPeriodDays] = useState(1);
   const [showCompare, setShowCompare] = useState(true);
@@ -309,8 +318,59 @@ export function GenericAnchorTable<TKey extends string, TRow>({
     return m;
   }, [previousRows, config.rowKey]);
 
+  // ── 经纪人筛选（客户端）：选项从当前 rows 去重；baseRows = 过滤后的行 ──────────
+  const brokerOptions = useMemo<BrokerOptions | null>(() => {
+    if (!config.brokerFilter) return null;
+    const op = new Set<string>();
+    const rc = new Set<string>();
+    for (const r of rows) {
+      const o = config.brokerFilter.getOperate(r);
+      const c = config.brokerFilter.getRecruit(r);
+      if (o) op.add(o);
+      if (c) rc.add(c);
+    }
+    const sortZh = (a: string, b: string): number => a.localeCompare(b, "zh-CN");
+    return { operate: [...op].sort(sortZh), recruit: [...rc].sort(sortZh) };
+  }, [rows, config]);
+
+  const brokerActive = brokerSel.operate.length > 0 || brokerSel.recruit.length > 0;
+
+  const baseRows = useMemo(() => {
+    const bf = config.brokerFilter;
+    if (!bf || !brokerActive) return rows;
+    const opSet = new Set(brokerSel.operate);
+    const rcSet = new Set(brokerSel.recruit);
+    return rows.filter((r) => {
+      if (brokerSel.operate.length > 0) {
+        const o = bf.getOperate(r);
+        if (!o || !opSet.has(o)) return false;
+      }
+      if (brokerSel.recruit.length > 0) {
+        const c = bf.getRecruit(r);
+        if (!c || !rcSet.has(c)) return false;
+      }
+      return true;
+    });
+  }, [rows, brokerSel, brokerActive, config]);
+
+  // KPI 对比的 previousRows 同步过滤到 baseRows 的行集合，保证「较前期」口径一致
+  const basePreviousRows = useMemo(() => {
+    if (!config.brokerFilter || !brokerActive) return previousRows;
+    const keySet = new Set(
+      baseRows.map((r) => String((r as Record<string, unknown>)[config.rowKey as string])),
+    );
+    return previousRows.filter((r) =>
+      keySet.has(String((r as Record<string, unknown>)[config.rowKey as string])),
+    );
+  }, [previousRows, baseRows, brokerActive, config]);
+
+  // 选经纪人后回到第 1 页
+  useEffect(() => {
+    setPage(1);
+  }, [brokerSel]);
+
   const sortedRows = useMemo(() => {
-    const copy = [...rows];
+    const copy = [...baseRows];
     copy.sort((a, b) => {
       const av = getSortVal(config, a, sortKey);
       const bv = getSortVal(config, b, sortKey);
@@ -324,7 +384,7 @@ export function GenericAnchorTable<TKey extends string, TRow>({
       return sortDir === "asc" ? cmp : -cmp;
     });
     return copy;
-  }, [rows, sortKey, sortDir, config]);
+  }, [baseRows, sortKey, sortDir, config]);
 
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -349,8 +409,8 @@ export function GenericAnchorTable<TKey extends string, TRow>({
           !!c && (c.fmt === "number" || c.fmt === "duration" || c.fmt === "percent"),
       )
       .map((c) => {
-        const cur = aggregate(rows, c.key, c.fmt);
-        const prev = aggregate(previousRows, c.key, c.fmt);
+        const cur = aggregate(baseRows, c.key, c.fmt);
+        const prev = aggregate(basePreviousRows, c.key, c.fmt);
         const compare = formatCompare(cur, prev, periodDays);
         const display =
           c.fmt === "percent"
@@ -380,7 +440,7 @@ export function GenericAnchorTable<TKey extends string, TRow>({
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config, kpiKeys, rows, previousRows, serverKpi, periodDays]);
+  }, [config, kpiKeys, baseRows, basePreviousRows, serverKpi, periodDays]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   function toggleSort(key: TKey): void {
@@ -577,7 +637,18 @@ export function GenericAnchorTable<TKey extends string, TRow>({
   return (
     <div className="min-w-0 max-w-full space-y-3">
       <DataToolbar
-        filters={<FiltersComponent filters={filters} onChange={setFilters} />}
+        // relative z-30：建立高于 sticky 表头(z-20)的 stacking context，
+        // 否则经纪人下拉浮层会被表头穿透遮挡
+        className="relative z-30"
+        filters={
+          <FiltersComponent
+            filters={filters}
+            onChange={setFilters}
+            brokerOptions={brokerOptions}
+            brokerSel={brokerSel}
+            onBrokerChange={setBrokerSel}
+          />
+        }
         actions={
           <>
             {config.compareMode !== "none" && (
@@ -709,7 +780,10 @@ export function GenericAnchorTable<TKey extends string, TRow>({
           )}
         </span>
         <span>
-          主播 <strong className="text-foreground">{rows.length}</strong>
+          主播 <strong className="text-foreground">{baseRows.length}</strong>
+          {brokerActive && rows.length !== baseRows.length ? (
+            <span className="text-muted-foreground/60"> / {rows.length}</span>
+          ) : null}
         </span>
         <span>
           列数 <strong className="text-foreground">{visibleColumns.length}</strong>
