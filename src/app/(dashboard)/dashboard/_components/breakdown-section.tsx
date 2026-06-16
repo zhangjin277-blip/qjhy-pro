@@ -122,40 +122,44 @@ function HeroCard({
       disabled={notApplicable}
       onClick={() => onClick({ metric, project: pb.project, group: "all" })}
       className={cn(
-        "relative overflow-hidden rounded-xl p-4 pb-2 text-left text-white transition-transform",
+        "relative flex items-center gap-2 overflow-hidden rounded-xl px-4 py-3 text-left text-white transition-transform",
         "hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
         notApplicable && "cursor-not-allowed opacity-60",
       )}
       style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
       aria-label={`${PROJECT_LABEL[pb.project]} 总 ${metricLabelFor(metric, pb.project)} 详情`}
     >
-      <div className="text-[12px] opacity-85">总{metricLabelFor(metric, pb.project)}</div>
-      {notApplicable ? (
-        <div className="mt-1 text-[32px] font-bold leading-[1.15]">—</div>
-      ) : (
-        <div className="mt-1 font-bold leading-[1.15] tracking-[-0.02em] tabular-nums">
-          <span className="text-[32px]">{body}</span>
-          {unit ? <span className="ml-0.5 text-[15px] font-medium opacity-90">{unit}</span> : null}
-        </div>
-      )}
-      <div className="mt-1 text-[11.5px] opacity-90">
+      <div className="min-w-0 flex-1">
+        <div className="text-[12px] opacity-85">总{metricLabelFor(metric, pb.project)}</div>
         {notApplicable ? (
-          "不适用"
+          <div className="mt-0.5 text-[30px] font-bold leading-[1.1]">—</div>
         ) : (
-          <>
-            较前 7 日 {vs.text} · {cell.anchor_count} 名主播
-          </>
+          <div className="mt-0.5 font-bold leading-[1.1] tracking-[-0.02em] tabular-nums">
+            <span className="text-[30px]">{body}</span>
+            {unit ? (
+              <span className="ml-0.5 text-[15px] font-medium opacity-90">{unit}</span>
+            ) : null}
+          </div>
         )}
+        <div className="mt-1 text-[11.5px] opacity-90">
+          {notApplicable ? (
+            "不适用"
+          ) : (
+            <>
+              较前 7 日 {vs.text} · {cell.anchor_count} 名主播
+            </>
+          )}
+        </div>
       </div>
-      {/* 底部走势水波（真实 sparkline，白色半透明面积） */}
+      {/* 右侧走势水波（真实 sparkline，白色半透明面积，贴底） */}
       {!notApplicable && cell.sparkline.length >= 2 && (
-        <div className="pointer-events-none mt-1.5 -mx-4 -mb-2 opacity-60">
+        <div className="pointer-events-none w-[42%] shrink-0 self-end opacity-55">
           <Sparkline
             data={cell.sparkline}
-            width={320}
-            height={36}
+            width={240}
+            height={50}
             stroke="rgba(255,255,255,0.9)"
-            fillColor="rgba(255,255,255,0.35)"
+            fillColor="rgba(255,255,255,0.3)"
             strokeWidth={1.5}
             className="block w-full"
           />
@@ -191,7 +195,7 @@ function SatCard({
       disabled={notApplicable}
       onClick={() => onClick({ metric, project: pb.project, group })}
       className={cn(
-        "rounded-xl border border-[#eef1f7] bg-gradient-to-b from-[#fbfcfe] to-[#f8fafd] p-3.5 text-left",
+        "rounded-xl border border-[#eef1f7] bg-gradient-to-b from-[#fbfcfe] to-[#f8fafd] p-3 text-left",
         "transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_20px_-12px_rgba(22,119,255,0.3)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
         notApplicable && "cursor-not-allowed opacity-50 hover:translate-y-0 hover:shadow-none",
@@ -206,12 +210,12 @@ function SatCard({
         {meta?.label}
       </div>
       {notApplicable ? (
-        <div className="mt-1.5 text-[24px] font-bold text-[#c9cdd4]">—</div>
+        <div className="mt-1 text-[22px] font-bold text-[#c9cdd4]">—</div>
       ) : (
-        <div className="mt-1.5 font-bold leading-[1.15] tabular-nums text-[#1d2129]">
-          <span className="text-[24px]">{body}</span>
+        <div className="mt-1 font-bold leading-[1.15] tabular-nums text-[#1d2129]">
+          <span className="text-[22px]">{body}</span>
           {unit ? (
-            <span className="ml-0.5 text-[13px] font-medium text-[#4e5969]">{unit}</span>
+            <span className="ml-0.5 text-[12px] font-medium text-[#4e5969]">{unit}</span>
           ) : null}
         </div>
       )}
@@ -243,8 +247,8 @@ function ProjectRow({
 }): React.JSX.Element {
   const sum = pb.online.value + pb.offline.value + pb.other.value;
   return (
-    <div className="rounded-xl border border-[#f0f2f7]">
-      <div className="flex items-center gap-2.5 px-4 pt-3">
+    <div className="rounded-xl border border-[#f0f2f7] p-3.5">
+      <div className="mb-3 flex items-center gap-2.5">
         <span
           className="h-[9px] w-[9px] rounded-[3px]"
           style={{ background: PROJECT_DOT[pb.project] }}
@@ -259,11 +263,13 @@ function ProjectRow({
             : `合计 ${formatChineseNumber(sum)} · ${pb.total.anchor_count} 主播`}
         </span>
       </div>
-      <div className="grid grid-cols-[1.45fr_1fr_1fr_1fr] gap-3 p-3.5 pt-3">
+      <div className="space-y-2.5">
         <HeroCard metric={metric} pb={pb} onClick={onCellClick} />
-        <SatCard metric={metric} pb={pb} group="online" onClick={onCellClick} />
-        <SatCard metric={metric} pb={pb} group="offline" onClick={onCellClick} />
-        <SatCard metric={metric} pb={pb} group="other" onClick={onCellClick} />
+        <div className="grid grid-cols-3 gap-2.5">
+          <SatCard metric={metric} pb={pb} group="online" onClick={onCellClick} />
+          <SatCard metric={metric} pb={pb} group="offline" onClick={onCellClick} />
+          <SatCard metric={metric} pb={pb} group="other" onClick={onCellClick} />
+        </div>
       </div>
     </div>
   );
@@ -344,7 +350,7 @@ export function BreakdownSection({
           })}
         </div>
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           <ProjectRow metric={metric} pb={ddz} onCellClick={onCellClick} />
           <ProjectRow metric={metric} pb={three} onCellClick={onCellClick} />
         </div>
