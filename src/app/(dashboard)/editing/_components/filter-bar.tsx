@@ -314,7 +314,12 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
           type="date"
           value={displayFrom}
           onChange={(e) => {
-            if (e.target.value && displayTo) setCustomRange(e.target.value, displayTo);
+            const from = e.target.value;
+            if (!from) return;
+            // 另一端为空（如「全部」档）兜底成今天，并 clamp 保证 from ≤ to
+            let to = displayTo || todayStr;
+            if (to < from) to = from;
+            setCustomRange(from, to);
           }}
           className="rounded-md border border-border bg-white px-2 py-1.5 text-xs text-slate-700"
         />
@@ -323,7 +328,11 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
           type="date"
           value={displayTo}
           onChange={(e) => {
-            if (e.target.value && displayFrom) setCustomRange(displayFrom, e.target.value);
+            const to = e.target.value;
+            if (!to) return;
+            let from = displayFrom || todayStr;
+            if (from > to) from = to;
+            setCustomRange(from, to);
           }}
           className="rounded-md border border-border bg-white px-2 py-1.5 text-xs text-slate-700"
         />
