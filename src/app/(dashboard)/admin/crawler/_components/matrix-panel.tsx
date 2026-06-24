@@ -510,7 +510,7 @@ export function MatrixPanel(): React.JSX.Element {
 function BackfillForm({ onDone }: { onDone: () => Promise<void> }): React.JSX.Element {
   const today = new Date().toISOString().slice(0, 10);
   const monthAgo = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
-  const [job, setJob] = useState<BackfillJob | "ks_history">("daily");
+  const [job, setJob] = useState<BackfillJob | "ks_history" | "ks_gift">("daily");
   const [from, setFrom] = useState(monthAgo);
   const [to, setTo] = useState(today);
   const [busy, setBusy] = useState(false);
@@ -519,7 +519,7 @@ function BackfillForm({ onDone }: { onDone: () => Promise<void> }): React.JSX.El
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-slate-50/60 px-3 py-2.5">
       <select
         value={job}
-        onChange={(e) => setJob(e.target.value as BackfillJob | "ks_history")}
+        onChange={(e) => setJob(e.target.value as BackfillJob | "ks_history" | "ks_gift")}
         className="bg-card h-8 rounded border border-input px-2 text-xs"
       >
         <option value="daily">主播日报</option>
@@ -527,6 +527,7 @@ function BackfillForm({ onDone }: { onDone: () => Promise<void> }): React.JSX.El
         <option value="portrait">主播肖像</option>
         <option value="minigame">小游戏</option>
         <option value="ks_history">快手·历史直播</option>
+        <option value="ks_gift">快手·补礼物数据（流水分时）</option>
       </select>
       <input
         type="date"
@@ -549,6 +550,9 @@ function BackfillForm({ onDone }: { onDone: () => Promise<void> }): React.JSX.El
             if (job === "ks_history") {
               await triggerKuaishouSync({ type: "history", fromDate: from, toDate: to });
               toast.success(`快手历史直播 ${from} ~ ${to} 已入队`);
+            } else if (job === "ks_gift") {
+              await triggerKuaishouSync({ type: "gift", fromDate: from, toDate: to });
+              toast.success(`快手补礼物数据 ${from} ~ ${to} 已入队（需先有历史直播场次）`);
             } else {
               const r = await backfillRange({ job, from, to, basecamp: "cs" });
               toast.success(`已入队 ${r.days} 天（${from} ~ ${to}）`);

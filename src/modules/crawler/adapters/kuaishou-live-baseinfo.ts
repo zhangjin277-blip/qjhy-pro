@@ -5,6 +5,9 @@ const JIGOU_BASE = "https://jigou.kuaishou.com";
 const SIX_BASE = "https://666.kuaishou.com";
 const LIST_ENDPOINT = "/rest/cp/org/live/list";
 const TREND_ENDPOINT = "/rest/live/mcn/live/monitor/trend";
+// jigou「数据分析 → 单直播分析 → 历史开播直播间 → 详情」的流水分时图接口。
+// 用数字 liveStreamId（= kuaishou_live_session.live_stream_id）拉整场分时，可回补历史。
+const HISTORY_TREND_ENDPOINT = "/rest/analysis/live/room/history/detail/data/trend";
 
 /** /rest/cp/org/live/list 返回的单条 — 含我们要的所有 ID + 当前累计 income */
 export interface KuaishouLiveListRow {
@@ -231,4 +234,76 @@ export async function fetchKuaishouLiveTrend(
     }
   }
   return out;
+}
+
+/** 历史分时趋势接口的单条点（tabType 维度），timestamp 毫秒 */
+interface HistoryTrendPointRaw {
+  timestamp: number;
+  value: number;
+}
+interface HistoryTrendResp {
+  result: number;
+  message?: string;
+  error_msg?: string;
+  data?: {
+    trends?: { tabType: string; tabName: string; trendData: HistoryTrendPointRaw[] }[];
+  };
+}
+
+/** 回补用的一分钟分时点：累计流水（cents）+ 在线 + 点赞 */
+export interface KuaishouHistoryTrendPoint {
+  ts: number; // 毫秒
+  income_cents: number; // LIVE_FLOW_AMT(元) × 100，累计
+  online: number | null; // ON_LINE_NUM
+  like: number | null; // LIKE_CNT（累计）
+}
+
+/**
+ * jigou: 拉一场【历史】直播的累计分时（流水分时图）。
+ * 走「历史开播直播间 → 详情」接口，用数字 liveStreamId（非 666 的字符串 ID），
+ * 对已结束场次同样返回整场曲线，故可用于断档期回补 kuaishou_live_trend。
+ *
+ * LIVE_FLOW_AMT = 直播流水（累计，单位元）→ ×100 转 cents，口径同 666 的 SUM_VALID_INCOME。
+ * 以 LIVE_FLOW_AMT 为驱动序列，在线/点赞按 timestamp 对齐合并。
+ */
+export async function fetchKuaishouHistoryTrend(
+  cookies: Record<string, string>,
+  liveStreamId: number,
+): Promise<KuaishouHistoryTrendPoint[] | null> {
+  let json: HistoryTrendResp;
+  try {
+    json = await ksPost<HistoryTrendResp>({
+      baseUrl: JIGOU_BASE,
+      endpoint: HISTORY_TREND_ENDPOINT,
+      payload: { liveStreamId },
+      cookies,
+      withApiPhBody: true,
+    });
+  } catch (e) {
+    if (e instanceof CookieExpiredError) throw e;
+    console.warn(`[ks-history-trend] fetch error ${liveStreamId}:`, (e as Error).message);
+    return null;
+  }
+  if (json.result !== 1) {
+    if (detectAuthFail(json.result, json.error_msg ?? json.message)) {
+      throw new CookieExpiredError(
+        `history trend cookie expired: result=${json.result} msg=${json.error_msg ?? json.message ?? ""}`,
+      );
+    }
+    console.warn(`[ks-history-trend] ${liveStreamId} result=${json.result}`);
+    return null;
+  }
+  const trends = json.data?.trends ?? [];
+  const series = (tab: string): HistoryTrendPointRaw[] =>
+    trends.find((t) => t.tabType === tab)?.trendData ?? [];
+  const amt = series("LIVE_FLOW_AMT");
+  if (amt.length === 0) return [];
+  const onlineByTs = new Map(series("ON_LINE_NUM").map((p) => [p.timestamp, Math.round(p.value)]));
+  const likeByTs = new Map(series("LIKE_CNT").map((p) => [p.timestamp, Math.round(p.value)]));
+  return amt.map((p) => ({
+    ts: p.timestamp,
+    income_cents: Math.round(p.value * 100),
+    online: onlineByTs.get(p.timestamp) ?? null,
+    like: likeByTs.get(p.timestamp) ?? null,
+  }));
 }

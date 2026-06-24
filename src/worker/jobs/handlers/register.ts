@@ -10,6 +10,7 @@ import { syncKuaishouMembersHandler } from "./sync-kuaishou-members";
 import { syncKuaishouHistoryLiveSessionsHandler } from "./sync-kuaishou-history-live";
 import { syncKuaishouTodayLiveSessionsHandler } from "./sync-kuaishou-today-live";
 import { syncKuaishouLiveSnapshotHandler } from "./sync-kuaishou-live-snapshot";
+import { backfillKuaishouTrendHandler } from "./backfill-kuaishou-trend";
 import { fetchVideoHandler } from "./fetch-video";
 import type PgBoss from "pg-boss";
 
@@ -96,6 +97,14 @@ export async function registerCrawlerHandlers(): Promise<void> {
     const job = jobs.at(0);
     if (job === undefined) return undefined;
     return await wrap(() => syncKuaishouLiveSnapshotHandler());
+  });
+  await boss.work(JOB_NAMES.BACKFILL_KUAISHOU_TREND, { batchSize: 1 }, async (jobs) => {
+    const job = jobs.at(0);
+    if (job === undefined) return undefined;
+    const data = (job.data ?? {}) as { fromDate?: string; toDate?: string };
+    return await wrap(() =>
+      backfillKuaishouTrendHandler({ fromDate: data.fromDate, toDate: data.toDate }),
+    );
   });
   await boss.work(JOB_NAMES.FETCH_VIDEO, { batchSize: 1 }, runFirst(fetchVideoHandler));
   console.log("[crawler] all 12 handlers registered");

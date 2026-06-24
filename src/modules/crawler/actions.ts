@@ -47,9 +47,9 @@ const JOB_MAP = {
   profile: JOB_NAMES.FETCH_PROFILE,
 };
 
-/** 手动触发快手同步（成员 / 历史直播 / 今日实时） */
+/** 手动触发快手同步（成员 / 历史直播 / 今日实时 / 历史流水分时回补=补礼物） */
 const TriggerKuaishouSyncInput = z.object({
-  type: z.enum(["members", "history", "today"]),
+  type: z.enum(["members", "history", "today", "gift"]),
   fromDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -67,8 +67,14 @@ export async function triggerKuaishouSync(input: unknown): Promise<{ ok: true }>
       ? JOB_NAMES.SYNC_KUAISHOU_MEMBERS
       : data.type === "history"
         ? JOB_NAMES.SYNC_KUAISHOU_HISTORY_LIVE
-        : JOB_NAMES.SYNC_KUAISHOU_TODAY_LIVE;
-  const payload = data.type === "history" ? { fromDate: data.fromDate, toDate: data.toDate } : {};
+        : data.type === "gift"
+          ? JOB_NAMES.BACKFILL_KUAISHOU_TREND
+          : JOB_NAMES.SYNC_KUAISHOU_TODAY_LIVE;
+  // history 与 gift 都按日期范围回补，带 from/to
+  const payload =
+    data.type === "history" || data.type === "gift"
+      ? { fromDate: data.fromDate, toDate: data.toDate }
+      : {};
   await enqueue(jobName, payload);
   await writeAuditLog({
     user_id: userId,

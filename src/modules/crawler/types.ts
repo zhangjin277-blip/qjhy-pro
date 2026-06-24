@@ -10,6 +10,7 @@ export const JOB_NAMES = {
   SYNC_KUAISHOU_HISTORY_LIVE: "crawler:sync_kuaishou_history_live", // 快手历史直播数据
   SYNC_KUAISHOU_TODAY_LIVE: "crawler:sync_kuaishou_today_live", // 快手今日实时直播数据
   SYNC_KUAISHOU_LIVE_SNAPSHOT: "crawler:sync_kuaishou_live_snapshot", // 快手在播 baseinfo 1 分钟级 snapshot
+  BACKFILL_KUAISHOU_TREND: "crawler:backfill_kuaishou_trend", // 快手历史流水分时回补（断档期补礼物数据）
   FETCH_VIDEO: "crawler:fetch_video", // 抖音线下运营组主播视频作品快照（每天 12:00）
 } as const;
 
