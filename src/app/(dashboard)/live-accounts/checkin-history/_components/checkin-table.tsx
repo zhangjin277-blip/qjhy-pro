@@ -29,6 +29,24 @@ function fmtTime(iso: string): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+/** MM-DD，用于在开始/结束时间上方标日期，区分跨天场次 */
+function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** 时间单元格：上方小字 MM-DD 日期 + 下方 HH:MM:SS */
+function TimeCell({ iso }: { iso: string | null }): React.JSX.Element {
+  if (!iso) return <span className="text-slate-400">—</span>;
+  return (
+    <span className="inline-flex flex-col leading-tight">
+      <span className="text-[10px] text-slate-400 tabular-nums">{fmtDate(iso)}</span>
+      <span className="font-mono text-slate-700 tabular-nums">{fmtTime(iso)}</span>
+    </span>
+  );
+}
+
 function fmtDuration(sec: number | null): string {
   if (sec == null) return "—";
   const h = Math.floor(sec / 3600);
@@ -143,6 +161,9 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
   }
   // 按 start_at 倒序
   flat.sort((a, b) => (a.session.start_at < b.session.start_at ? 1 : -1));
+  // 区分「正在开播」(in_progress) 与「已结束(历史)」，分组展示
+  const liveRows = flat.filter((r) => r.session.status === "in_progress");
+  const endedRows = flat.filter((r) => r.session.status !== "in_progress");
 
   function submit(): void {
     if (!dialog) return;
@@ -202,17 +223,140 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
     });
   }
 
+  const colCount = canForceEnd ? 14 : 13;
+
+  function renderRow(r: FlatRow): React.JSX.Element {
+    const badge = statusBadge(r.session);
+    const isLive = r.session.status === "in_progress";
+    return (
+      <tr
+        key={r.session.session_id}
+        className={`border-t border-slate-100 hover:bg-slate-50/60 ${isLive ? "bg-blue-50/40" : ""}`}
+      >
+        <td className="px-4 py-3 font-medium text-slate-800">{r.session.anchor_name}</td>
+        <td className="px-4 py-3 font-medium text-slate-800 truncate max-w-[220px]">
+          {r.account_name}
+        </td>
+        <td className="px-4 py-3 text-slate-600">{r.product}</td>
+        <td className="px-4 py-3 whitespace-nowrap">
+          <TimeCell iso={r.session.start_at} />
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap">
+          <TimeCell iso={r.session.end_at} />
+        </td>
+        <td className="px-4 py-3 font-mono text-slate-700 whitespace-nowrap tabular-nums">
+          {fmtDuration(r.session.duration_seconds)}
+        </td>
+        <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-emerald-700 min-w-[90px]">
+          {fmtYuan(r.session.income_cents)}
+        </td>
+        <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[88px]">
+          {fmtMoney(r.session.cost_yuan)}
+        </td>
+        <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[72px]">
+          {fmtInt(r.session.activations)}
+        </td>
+        <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[80px]">
+          {fmtPrice(r.session.cost_yuan, r.session.activations)}
+        </td>
+        <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[88px]">
+          {fmtMoney(r.session.payment_yuan)}
+        </td>
+        <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[72px]">
+          {fmtPrice(r.session.payment_yuan, r.session.activations)}
+        </td>
+        <td className="px-6 py-3 min-w-[100px]">
+          <span
+            className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}
+          >
+            {badge.text}
+          </span>
+        </td>
+        {canForceEnd && (
+          <td className="px-4 py-3 text-right whitespace-nowrap">
+            <div className="inline-flex items-center gap-1.5">
+              {isLive && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDialog({
+                      sessionId: r.session.session_id,
+                      anchorName: r.session.anchor_name,
+                      accountName: r.account_name,
+                      reason: "",
+                      error: null,
+                    })
+                  }
+                  className="rounded border border-red-300 bg-white px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50"
+                >
+                  强制下播
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() =>
+                  setTimeDialog({
+                    sessionId: r.session.session_id,
+                    anchorName: r.session.anchor_name,
+                    accountName: r.account_name,
+                    startAtLocal: isoToLocal(r.session.start_at),
+                    endAtLocal: r.session.end_at ? isoToLocal(r.session.end_at) : "",
+                    originalStatus: r.session.status,
+                    reason: "",
+                    error: null,
+                  })
+                }
+                className="rounded border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50"
+              >
+                改时间
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setCorrectDialog({
+                    sessionId: r.session.session_id,
+                    anchorName: r.session.anchor_name,
+                    accountName: r.account_name,
+                    newAnchorId: "",
+                    reason: "",
+                    error: null,
+                  })
+                }
+                className="rounded border border-blue-300 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-50"
+              >
+                改主播
+              </button>
+            </div>
+          </td>
+        )}
+      </tr>
+    );
+  }
+
+  function groupHeader(label: string, count: number, cls: string): React.JSX.Element {
+    return (
+      <tr>
+        <td
+          colSpan={colCount}
+          className={`px-4 py-1.5 text-[11px] font-semibold tracking-wide ${cls}`}
+        >
+          {label} · {count} 条
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="border-b border-slate-100 px-4 py-2 text-[12.5px] font-semibold text-slate-700">
         详细记录{" "}
         <span className="text-[11px] font-normal text-slate-400">
-          · {flat.length} 条 · 按开始时间倒序
+          · {flat.length} 条 · 开始时间倒序 · 进行中置顶
         </span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="max-h-[70vh] overflow-auto">
         <table className="w-full text-[12.5px] min-w-[1400px]">
-          <thead className="bg-slate-50 text-[11.5px] font-semibold text-slate-600 tracking-normal">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-[11.5px] font-semibold text-slate-600 tracking-normal shadow-[0_1px_0_rgba(0,0,0,0.06)]">
             <tr>
               <th className="px-4 py-3 text-left">主播</th>
               <th className="px-4 py-3 text-left">账号</th>
@@ -233,123 +377,25 @@ export function CheckinTable({ data, canForceEnd, onChanged }: Props): React.JSX
           <tbody>
             {flat.length === 0 ? (
               <tr>
-                <td
-                  colSpan={canForceEnd ? 14 : 13}
-                  className="px-3 py-6 text-center text-slate-400"
-                >
+                <td colSpan={colCount} className="px-3 py-6 text-center text-slate-400">
                   暂无记录
                 </td>
               </tr>
             ) : (
-              flat.map((r) => {
-                const badge = statusBadge(r.session);
-                const isLive = r.session.status === "in_progress";
-                return (
-                  <tr
-                    key={r.session.session_id}
-                    className="border-t border-slate-100 hover:bg-slate-50/60"
-                  >
-                    <td className="px-4 py-3 font-medium text-slate-800">
-                      {r.session.anchor_name}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-slate-800 truncate max-w-[220px]">
-                      {r.account_name}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{r.product}</td>
-                    <td className="px-4 py-3 font-mono text-slate-700 whitespace-nowrap tabular-nums">
-                      {fmtTime(r.session.start_at)}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-slate-700 whitespace-nowrap tabular-nums">
-                      {r.session.end_at ? fmtTime(r.session.end_at) : "—"}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-slate-700 whitespace-nowrap tabular-nums">
-                      {fmtDuration(r.session.duration_seconds)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-emerald-700 min-w-[90px]">
-                      {fmtYuan(r.session.income_cents)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[88px]">
-                      {fmtMoney(r.session.cost_yuan)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[72px]">
-                      {fmtInt(r.session.activations)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[80px]">
-                      {fmtPrice(r.session.cost_yuan, r.session.activations)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[88px]">
-                      {fmtMoney(r.session.payment_yuan)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums text-slate-700 min-w-[72px]">
-                      {fmtPrice(r.session.payment_yuan, r.session.activations)}
-                    </td>
-                    <td className="px-6 py-3 min-w-[100px]">
-                      <span
-                        className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}
-                      >
-                        {badge.text}
-                      </span>
-                    </td>
-                    {canForceEnd && (
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
-                          {isLive && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setDialog({
-                                  sessionId: r.session.session_id,
-                                  anchorName: r.session.anchor_name,
-                                  accountName: r.account_name,
-                                  reason: "",
-                                  error: null,
-                                })
-                              }
-                              className="rounded border border-red-300 bg-white px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50"
-                            >
-                              强制下播
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setTimeDialog({
-                                sessionId: r.session.session_id,
-                                anchorName: r.session.anchor_name,
-                                accountName: r.account_name,
-                                startAtLocal: isoToLocal(r.session.start_at),
-                                endAtLocal: r.session.end_at ? isoToLocal(r.session.end_at) : "",
-                                originalStatus: r.session.status,
-                                reason: "",
-                                error: null,
-                              })
-                            }
-                            className="rounded border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50"
-                          >
-                            改时间
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setCorrectDialog({
-                                sessionId: r.session.session_id,
-                                anchorName: r.session.anchor_name,
-                                accountName: r.account_name,
-                                newAnchorId: "",
-                                reason: "",
-                                error: null,
-                              })
-                            }
-                            className="rounded border border-blue-300 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-50"
-                          >
-                            改主播
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })
+              <>
+                {liveRows.length > 0 && (
+                  <>
+                    {groupHeader("🔵 正在开播", liveRows.length, "bg-blue-50 text-blue-700")}
+                    {liveRows.map(renderRow)}
+                  </>
+                )}
+                {endedRows.length > 0 && (
+                  <>
+                    {groupHeader("已结束（历史）", endedRows.length, "bg-slate-100 text-slate-500")}
+                    {endedRows.map(renderRow)}
+                  </>
+                )}
+              </>
             )}
           </tbody>
         </table>
