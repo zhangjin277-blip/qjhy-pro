@@ -84,6 +84,45 @@ export async function notifyDingtalk(payload: {
 }
 
 /**
+ * Cookie 失效提醒，走专用机器人 COOKIE_ALERT_DINGTALK_WEBHOOK。
+ *
+ * ⚠️ 该机器人配置了关键词「更新」——消息文本必须含「更新」否则钉钉拒收。
+ * 触发：抖音/快手 cookie 被标记 expired（active→expired 转换）时。
+ */
+export async function notifyCookieExpired(opts: {
+  platform: string; // 抖音 / 快手
+  basecamp: string; // cs / nc1 / nc2 / kuaishou
+}): Promise<void> {
+  const webhook = env.COOKIE_ALERT_DINGTALK_WEBHOOK;
+  if (!webhook) {
+    console.warn("[notify] COOKIE_ALERT_DINGTALK_WEBHOOK not configured, skip");
+    return;
+  }
+  const now = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+  const content = [
+    `【Cookie 更新提醒】`, // ★ 关键词「更新」必带
+    `平台：${opts.platform}（${opts.basecamp}）`,
+    `状态：Cookie 已失效，相关采集已暂停`,
+    `请尽快重新扫码更新 Cookie。`,
+    `时间：${now}`,
+  ].join("\n");
+
+  try {
+    const res = await fetch(webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ msgtype: "text", text: { content } }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      console.error("[notify] cookie-alert webhook returned", res.status, await res.text());
+    }
+  } catch (err) {
+    console.error("[notify] cookie-alert fetch failed:", err);
+  }
+}
+
+/**
  * 把任意错误转成钉钉通知。
  */
 export async function notifyError(err: unknown, context?: Record<string, unknown>): Promise<void> {

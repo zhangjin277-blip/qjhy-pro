@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "@/db/client";
 import { crawler_cookie_session } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { notifyCookieExpired } from "@/lib/notify";
 
 export type Basecamp = "cs" | "nc1" | "nc2" | "kuaishou";
 
@@ -26,10 +27,20 @@ export async function getActiveCookies(basecamp: Basecamp): Promise<Record<strin
 
 /** 标记 Cookie 失效（page-fetch 抛 CookieExpiredError 时调） */
 export async function markCookieExpired(basecamp: Basecamp): Promise<void> {
-  await db
+  // 只在 active→expired 转换时更新并通知，避免失效后每次重试都刷屏
+  const rows = await db
     .update(crawler_cookie_session)
     .set({ status: "expired", last_check_at: new Date(), updated_at: new Date() })
-    .where(eq(crawler_cookie_session.basecamp, basecamp));
+    .where(
+      and(
+        eq(crawler_cookie_session.basecamp, basecamp),
+        eq(crawler_cookie_session.status, "active"),
+      ),
+    )
+    .returning({ basecamp: crawler_cookie_session.basecamp });
+  if (rows.length === 0) return; // 已是 expired，不重复通知
+  const platform = basecamp === "kuaishou" ? "快手" : "抖音";
+  await notifyCookieExpired({ platform, basecamp });
 }
 
 /** admin 扫码续期后写入新 Cookie */

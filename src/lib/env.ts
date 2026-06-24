@@ -7,6 +7,8 @@ const envSchema = z.object({
   DINGTALK_CORP_ID: z.string().default(""),
   DINGTALK_BOT_WEBHOOK: z.string().url().or(z.literal("")).default(""),
   EDITING_DINGTALK_WEBHOOK: z.string().url().or(z.literal("")).default(""),
+  // Cookie 失效提醒专用机器人（关键字「更新」）—— 抖音/快手 cookie 需续期时通知
+  COOKIE_ALERT_DINGTALK_WEBHOOK: z.string().url().or(z.literal("")).default(""),
   AUTH_SECRET: z.string().min(16, "AUTH_SECRET must be at least 16 chars"),
   EMERGENCY_LOGIN_PASSWORD: z
     .string()
