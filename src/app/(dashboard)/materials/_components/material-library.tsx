@@ -250,6 +250,16 @@ export function MaterialLibrary({
       }
     });
   }
+  function moveAsset(id: number, folderId: number | null) {
+    startTransition(async () => {
+      try {
+        await updateAsset({ id, folderId });
+        router.refresh();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "移动失败");
+      }
+    });
+  }
   function handleDelete(id: number) {
     if (!confirm("确定删除这个素材？删除后不可恢复。")) return;
     startTransition(async () => {
@@ -473,11 +483,13 @@ export function MaterialLibrary({
       {detail && (
         <MaterialPreviewModal
           asset={detail}
+          folders={folders}
           isPending={isPending}
           onClose={() => setDetailId(null)}
           onToggleFav={() => toggleFav(detail.id)}
           onSaveTags={(tags) => saveTags(detail.id, tags)}
           onRename={(name) => renameAsset(detail.id, name)}
+          onMove={(folderId) => moveAsset(detail.id, folderId)}
           onDelete={() => handleDelete(detail.id)}
         />
       )}
@@ -823,21 +835,26 @@ function PreviewMedia({ asset }: { asset: AssetListItem }) {
 /* 居中预览弹窗 —— 与剪辑工作台一致（点外面 / Esc 关闭） */
 function MaterialPreviewModal({
   asset,
+  folders,
   isPending,
   onClose,
   onToggleFav,
   onSaveTags,
   onRename,
+  onMove,
   onDelete,
 }: {
   asset: AssetListItem;
+  folders: FolderTreeNode[];
   isPending: boolean;
   onClose: () => void;
   onToggleFav: () => void;
   onSaveTags: (tags: string[]) => void;
   onRename: (name: string) => void;
+  onMove: (folderId: number | null) => void;
   onDelete: () => void;
 }) {
+  const flatFolders = useMemo(() => flattenFolders(folders), [folders]);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(asset.name);
 
@@ -948,6 +965,23 @@ function MaterialPreviewModal({
             <span>
               下载 <b className="font-medium text-foreground">{asset.downloadCount}</b> 次
             </span>
+          </div>
+          {/* 归属目录（可改，传错了在这里移动） */}
+          <div className="mt-3 flex items-center gap-2">
+            <span className="shrink-0 text-xs font-semibold text-muted-foreground">归属目录</span>
+            <select
+              value={asset.folderId ?? "none"}
+              disabled={isPending}
+              onChange={(e) => onMove(e.target.value === "none" ? null : Number(e.target.value))}
+              className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-[13px] outline-none focus:border-primary disabled:opacity-60"
+            >
+              <option value="none">未分类</option>
+              {flatFolders.map((f) => (
+                <option key={f.id} value={String(f.id)}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="mt-3 mb-1.5 text-xs font-semibold text-muted-foreground">
             标签（回车添加）
