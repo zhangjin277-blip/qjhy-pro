@@ -102,6 +102,12 @@ export const NAV: NavItem[] = [
         href: "/editing",
         module: "editing_workflow",
       },
+      {
+        key: "editing-materials",
+        label: "素材库",
+        href: "/materials",
+        module: "editing_workflow",
+      },
     ],
   },
   {
