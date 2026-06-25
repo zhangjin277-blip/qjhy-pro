@@ -1265,16 +1265,17 @@ function UploadDialog({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const dirRef = useRef<HTMLInputElement>(null);
+  const dirRef = useRef<HTMLInputElement | null>(null);
 
-  // webkitdirectory 不在 React input 类型里，用 ref 设置（文件夹上传）
-  useEffect(() => {
-    const el = dirRef.current;
+  // webkitdirectory 不在 React input 类型里；弹窗打开时 input 才挂载，
+  // useEffect 在 input 未挂载时拿不到 ref，故用 callback ref 在节点挂载那刻设属性。
+  const setDirInput = (el: HTMLInputElement | null) => {
+    dirRef.current = el;
     if (el) {
       el.setAttribute("webkitdirectory", "");
       el.setAttribute("directory", "");
     }
-  }, []);
+  };
 
   async function doUpload(files: FileList) {
     setBusy(true);
@@ -1332,7 +1333,7 @@ function UploadDialog({
             }}
           />
           <input
-            ref={dirRef}
+            ref={setDirInput}
             type="file"
             multiple
             className="hidden"
