@@ -30,6 +30,15 @@ export const DeleteAssetInput = z.object({
   id: z.number().int().positive(),
 });
 
+export const BatchMoveInput = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(500),
+  folderId: z.number().int().positive().nullable(),
+});
+
+export const BatchDeleteInput = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(500),
+});
+
 export const ListAssetsInput = z.object({
   folderId: z.number().int().positive().nullable().optional(),
   type: MaterialTypeEnum.optional(),

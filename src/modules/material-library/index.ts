@@ -17,3 +17,5 @@ export { updateAsset } from "./actions/update-asset";
 export { deleteAsset } from "./actions/delete-asset";
 export { fetchAssets } from "./actions/list-assets";
 export { toggleFavorite } from "./actions/toggle-favorite";
+export { batchMoveAssets } from "./actions/batch-move";
+export { batchDeleteAssets } from "./actions/batch-delete";

@@ -25,14 +25,18 @@ export function buildMaterialPath(
   return join(MATERIAL_ROOT, type, yyyymm, `${md5.slice(0, 12)}-${safeFilename(originalName)}`);
 }
 
-/** 按文件名/MIME 推断素材类型；无法识别返回 null（上传拒绝）。 */
-export function detectMaterialType(fileName: string, mimeType: string): MaterialType | null {
+/** 按文件名/MIME 推断素材类型；未知（PSD/工程文件/压缩包等）归为 other，不拒收。 */
+export function detectMaterialType(fileName: string, mimeType: string): MaterialType {
   const lower = fileName.toLowerCase();
-  if (mimeType.startsWith("video/") || /\.(mp4|mov|webm|m4v|avi|mkv)$/.test(lower)) return "video";
+  // 设计/工程源文件：浏览器无法预览，归 other。PSD 的 MIME 是 image/*，必须先按扩展名拦下。
+  if (/\.(psd|psb|ai|eps|indd|sketch|fig|xd|aep|prproj|drp|c4d|blend|zip|rar|7z)$/.test(lower))
+    return "other";
+  if (mimeType.startsWith("video/") || /\.(mp4|mov|webm|m4v|avi|mkv|flv|wmv)$/.test(lower))
+    return "video";
   if (mimeType.startsWith("audio/") || /\.(mp3|wav|aac|m4a|flac|ogg)$/.test(lower)) return "audio";
-  if (mimeType.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp|svg)$/.test(lower))
+  if (mimeType.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp|svg|heic|tiff?)$/.test(lower))
     return "image";
-  return null;
+  return "other";
 }
 
 export function detectFormat(fileName: string): string {
@@ -68,10 +72,6 @@ export interface IngestResult {
  */
 export async function ingestMaterial(nasRoot: string, input: IngestInput): Promise<IngestResult> {
   const type = detectMaterialType(input.fileName, input.mimeType);
-  if (!type) {
-    await removeTemp(nasRoot, input.tmpRelPath).catch(() => undefined);
-    throw new Error(`不支持的文件类型：${input.fileName}`);
-  }
 
   // 去重：同 hash 未删素材已存在 → 复用（必须排除软删行，否则删后重传匹配到已删行但文件已没）
   const [existing] = await db

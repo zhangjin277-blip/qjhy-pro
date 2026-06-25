@@ -22,6 +22,10 @@ import {
   LayoutGrid,
   Heart,
   FileUp,
+  File as FileIcon,
+  FolderUp,
+  FolderInput,
+  Check,
   X,
   Loader2,
 } from "lucide-react";
@@ -45,6 +49,8 @@ import {
   renameFolder,
   deleteFolder,
   toggleFavorite,
+  batchMoveAssets,
+  batchDeleteAssets,
 } from "@/modules/material-library";
 import type { AssetListItem, FolderTreeNode, MaterialType } from "@/modules/material-library";
 
@@ -73,6 +79,12 @@ const TYPE_META: Record<
     tint: "from-emerald-50 to-emerald-100 text-emerald-500",
     chip: "bg-emerald-50 text-emerald-600",
   },
+  other: {
+    label: "文件",
+    icon: FileIcon,
+    tint: "from-slate-50 to-slate-100 text-slate-500",
+    chip: "bg-slate-100 text-slate-600",
+  },
 };
 
 const TYPE_TABS: { key: MaterialType | "all"; label: string }[] = [
@@ -80,6 +92,7 @@ const TYPE_TABS: { key: MaterialType | "all"; label: string }[] = [
   { key: "video", label: "视频" },
   { key: "audio", label: "音频" },
   { key: "image", label: "图片" },
+  { key: "other", label: "文件" },
 ];
 
 const AVATAR_COLORS = [
@@ -153,6 +166,7 @@ export function MaterialLibrary({
   );
   const [detailId, setDetailId] = useState<number | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(() => new Set());
 
   const detail = detailId != null ? (initialAssets.find((a) => a.id === detailId) ?? null) : null;
   const favCount = useMemo(() => initialAssets.filter((a) => a.favorited).length, [initialAssets]);
@@ -269,6 +283,53 @@ export function MaterialLibrary({
         router.refresh();
       } catch (e) {
         alert(e instanceof Error ? e.message : "删除失败");
+      }
+    });
+  }
+
+  // ——— 批量操作 ———
+  function toggleSelect(id: number) {
+    setSelected((p) => {
+      const n = new Set(p);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+  function selectAllVisible(ids: number[]) {
+    setSelected((p) => {
+      const allSelected = ids.length > 0 && ids.every((i) => p.has(i));
+      if (allSelected) return new Set();
+      return new Set(ids);
+    });
+  }
+  function clearSelection() {
+    setSelected(new Set());
+  }
+  function batchMove(folderId: number | null) {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    startTransition(async () => {
+      try {
+        await batchMoveAssets({ ids, folderId });
+        clearSelection();
+        router.refresh();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "批量移动失败");
+      }
+    });
+  }
+  function batchDelete() {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    if (!confirm(`确定删除选中的 ${ids.length} 个素材？删除后不可恢复。`)) return;
+    startTransition(async () => {
+      try {
+        await batchDeleteAssets({ ids });
+        clearSelection();
+        router.refresh();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "批量删除失败");
       }
     });
   }
@@ -409,6 +470,7 @@ export function MaterialLibrary({
                       t.key === "video" && "bg-blue-500",
                       t.key === "audio" && "bg-purple-500",
                       t.key === "image" && "bg-emerald-500",
+                      t.key === "other" && "bg-slate-400",
                     )}
                   />
                 )}
@@ -451,10 +513,65 @@ export function MaterialLibrary({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 px-6 pb-2 text-[13px] text-muted-foreground">
+        <div className="flex items-center gap-3 px-6 pb-2 text-[13px] text-muted-foreground">
           共 <span className="font-medium text-foreground">{filtered.length}</span> 个素材
           {isPending && <Loader2 className="size-3.5 animate-spin" />}
+          {filtered.length > 0 && (
+            <button
+              onClick={() => selectAllVisible(filtered.map((a) => a.id))}
+              className="ml-1 text-primary hover:underline"
+            >
+              {filtered.length > 0 && filtered.every((a) => selected.has(a.id))
+                ? "取消全选"
+                : "全选"}
+            </button>
+          )}
         </div>
+
+        {/* 批量操作栏 */}
+        {selected.size > 0 && (
+          <div className="mx-6 mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-accent px-4 py-2.5">
+            <span className="text-[13px] font-medium text-primary">已选 {selected.size} 个</span>
+            <div className="ml-auto flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <FolderInput className="size-4 text-muted-foreground" />
+                <select
+                  defaultValue=""
+                  disabled={isPending}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v) batchMove(v === "none" ? null : Number(v));
+                    e.target.value = "";
+                  }}
+                  className="h-8 rounded-md border bg-background px-2 text-[13px] outline-none focus:border-primary disabled:opacity-60"
+                >
+                  <option value="" disabled>
+                    移动到…
+                  </option>
+                  <option value="none">未分类</option>
+                  {flattenFolders(folders).map((f) => (
+                    <option key={f.id} value={String(f.id)}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={batchDelete}
+                disabled={isPending}
+                className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[13px] text-destructive hover:bg-destructive hover:text-white disabled:opacity-60"
+              >
+                <Trash2 className="size-3.5" /> 删除
+              </button>
+              <button
+                onClick={clearSelection}
+                className="rounded-md px-2.5 py-1.5 text-[13px] text-muted-foreground hover:text-foreground"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-6 pb-6">
           {filtered.length === 0 ? (
@@ -470,6 +587,9 @@ export function MaterialLibrary({
                 <MaterialCard
                   key={a.id}
                   asset={a}
+                  selected={selected.has(a.id)}
+                  selectionActive={selected.size > 0}
+                  onToggleSelect={() => toggleSelect(a.id)}
                   onOpen={() => setDetailId(a.id)}
                   onFav={() => toggleFav(a.id)}
                 />
@@ -695,10 +815,16 @@ function Thumb({ asset }: { asset: AssetListItem }) {
 
 function MaterialCard({
   asset,
+  selected,
+  selectionActive,
+  onToggleSelect,
   onOpen,
   onFav,
 }: {
   asset: AssetListItem;
+  selected: boolean;
+  selectionActive: boolean;
+  onToggleSelect: () => void;
   onOpen: () => void;
   onFav: () => void;
 }) {
@@ -708,13 +834,33 @@ function MaterialCard({
   return (
     <div
       onClick={onOpen}
-      className="group cursor-pointer overflow-hidden rounded-xl border bg-card transition-all hover:-translate-y-0.5 hover:shadow-md"
+      className={cn(
+        "group cursor-pointer overflow-hidden rounded-xl border bg-card transition-all hover:-translate-y-0.5 hover:shadow-md",
+        selected && "ring-2 ring-primary",
+      )}
     >
       <div className="relative">
         <Thumb asset={asset} />
+        {/* 选择复选框 */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect();
+          }}
+          className={cn(
+            "absolute left-2 top-2 z-20 grid size-5 place-items-center rounded border transition-opacity",
+            selected
+              ? "border-primary bg-primary text-white"
+              : "border-white/80 bg-black/30 text-transparent",
+            selected || selectionActive ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
+          aria-label="选择"
+        >
+          <Check className="size-3.5" />
+        </button>
         <span
           className={cn(
-            "absolute left-2 top-2 rounded-md px-2 py-0.5 text-[11px] font-semibold",
+            "absolute bottom-2 left-2 rounded-md px-2 py-0.5 text-[11px] font-semibold",
             meta.chip,
           )}
         >
@@ -820,6 +966,17 @@ function PreviewMedia({ asset }: { asset: AssetListItem }) {
         autoPlay
         className="max-h-[60vh] max-w-full rounded bg-black"
       />
+    );
+  }
+  if (asset.type === "other") {
+    return (
+      <div className="flex w-full max-w-md flex-col items-center gap-3 py-10 text-white/80">
+        <div className="grid size-20 place-items-center rounded-2xl bg-white/10">
+          <FileIcon className="size-9" />
+        </div>
+        <div className="text-sm">{(asset.format || "文件").toUpperCase()} 文件，无法在线预览</div>
+        <div className="text-xs text-white/50">下载后用对应软件打开（如 PSD 用 Photoshop）</div>
+      </div>
     );
   }
   return (
@@ -1108,11 +1265,22 @@ function UploadDialog({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const dirRef = useRef<HTMLInputElement>(null);
+
+  // webkitdirectory 不在 React input 类型里，用 ref 设置（文件夹上传）
+  useEffect(() => {
+    const el = dirRef.current;
+    if (el) {
+      el.setAttribute("webkitdirectory", "");
+      el.setAttribute("directory", "");
+    }
+  }, []);
 
   async function doUpload(files: FileList) {
     setBusy(true);
     setError(null);
-    const arr = Array.from(files);
+    // 过滤系统隐藏文件（.DS_Store / Thumbs.db / 以 . 开头）
+    const arr = Array.from(files).filter((f) => !f.name.startsWith(".") && f.name !== "Thumbs.db");
     setProgress({ done: 0, total: arr.length });
     let ok = 0;
     for (let i = 0; i < arr.length; i++) {
@@ -1156,7 +1324,17 @@ function UploadDialog({
             ref={fileRef}
             type="file"
             multiple
-            accept="video/*,audio/*,image/*"
+            accept="video/*,audio/*,image/*,.psd,.psb,.ai,.eps,.aep,.prproj,.zip,.rar,.7z"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length) doUpload(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={dirRef}
+            type="file"
+            multiple
             className="hidden"
             onChange={(e) => {
               if (e.target.files && e.target.files.length) doUpload(e.target.files);
@@ -1180,7 +1358,9 @@ function UploadDialog({
               <>
                 <FileUp className="mb-3 size-10 text-blue-400" />
                 <div className="text-sm font-medium text-foreground">点击选择文件（可多选）</div>
-                <div className="mt-1 text-xs">视频 mp4/mov · 音频 mp3/wav · 图片 jpg/png</div>
+                <div className="mt-1 text-xs">
+                  视频 / 音频 / 图片 / PSD 等源文件 · 也可整个文件夹上传
+                </div>
               </>
             )}
           </button>
@@ -1223,9 +1403,18 @@ function UploadDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             关闭
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => dirRef.current?.click()}
+            disabled={busy}
+            className="gap-1.5"
+          >
+            <FolderUp className="size-4" />
+            上传文件夹
+          </Button>
           <Button onClick={() => fileRef.current?.click()} disabled={busy} className="gap-1.5">
             <Upload className="size-4" />
-            选择文件上传
+            选择文件
           </Button>
         </DialogFooter>
       </DialogContent>

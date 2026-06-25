@@ -24,7 +24,7 @@ import { dingtalk_user } from "./dingtalk";
  *  - MD5 去重：上传时按 file_hash 查重，命中则复用已有素材。
  */
 
-export const MATERIAL_TYPES = ["video", "audio", "image"] as const;
+export const MATERIAL_TYPES = ["video", "audio", "image", "other"] as const;
 export type MaterialType = (typeof MATERIAL_TYPES)[number];
 
 export const material_folder = pgTable(
