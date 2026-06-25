@@ -46,6 +46,7 @@ import {
   updateAsset,
   deleteAsset,
   createFolder,
+  ensureFolderPath,
   renameFolder,
   deleteFolder,
   toggleFavorite,
@@ -1283,15 +1284,30 @@ function UploadDialog({
     // 过滤系统隐藏文件（.DS_Store / Thumbs.db / 以 . 开头）
     const arr = Array.from(files).filter((f) => !f.name.startsWith(".") && f.name !== "Thumbs.db");
     setProgress({ done: 0, total: arr.length });
+    const targetId = target === "none" ? null : Number(target);
+    // 文件夹上传时按 webkitRelativePath 还原目录结构；dirKey → 目标目录 id 缓存（避免重复建）
+    const dirCache = new Map<string, number | null>();
+    dirCache.set("", targetId);
     let ok = 0;
     for (let i = 0; i < arr.length; i++) {
       const file = arr[i];
       if (!file) continue;
       try {
+        // webkitRelativePath 形如 "造化仙府物料0708/2025立绘提报/慈航真人/x.png"，去掉文件名得目录段
+        const rel = file.webkitRelativePath || "";
+        const dirSegs = rel ? rel.split("/").slice(0, -1) : [];
+        const dirKey = dirSegs.join("/");
+        let folderId = dirCache.get(dirKey);
+        if (folderId === undefined) {
+          const fr = await ensureFolderPath({ parentId: targetId, segments: dirSegs });
+          folderId = fr.folderId;
+          dirCache.set(dirKey, folderId);
+        }
+
         const meta = await readMeta(file);
         const fd = new FormData();
         fd.append("file", file);
-        if (target !== "none") fd.append("folderId", target);
+        if (folderId != null) fd.append("folderId", String(folderId));
         fd.append("tags", JSON.stringify(tags));
         if (meta.durationSec) fd.append("durationSec", String(meta.durationSec));
         if (meta.width) fd.append("width", String(meta.width));

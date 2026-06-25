@@ -11,6 +11,7 @@ export {
 } from "./schema";
 
 export { createFolder } from "./actions/create-folder";
+export { ensureFolderPath } from "./actions/ensure-folder-path";
 export { renameFolder } from "./actions/rename-folder";
 export { deleteFolder } from "./actions/delete-folder";
 export { updateAsset } from "./actions/update-asset";
