@@ -1262,11 +1262,31 @@ function UploadDialog({
   const flat = useMemo(() => flattenFolders(folders), [folders]);
   const [target, setTarget] = useState<string>(defaultFolderId ? String(defaultFolderId) : "none");
   const [tags, setTags] = useState<string[]>([]);
+  const [staged, setStaged] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const dirRef = useRef<HTMLInputElement | null>(null);
+
+  // 打开弹窗时重置暂存与目录（每次打开干净开始）
+  useEffect(() => {
+    if (open) {
+      setStaged([]);
+      setError(null);
+      setTarget(defaultFolderId ? String(defaultFolderId) : "none");
+    }
+  }, [open, defaultFolderId]);
+
+  function stageFiles(list: FileList) {
+    const arr = Array.from(list).filter((f) => !f.name.startsWith(".") && f.name !== "Thumbs.db");
+    setStaged(arr);
+    setError(null);
+  }
+  const isFolderUpload = staged.some((f) => f.webkitRelativePath.includes("/"));
+  const rootFolderName = isFolderUpload
+    ? ((staged[0]?.webkitRelativePath ?? "").split("/")[0] ?? "")
+    : "";
 
   // webkitdirectory 不在 React input 类型里；弹窗打开时 input 才挂载，
   // useEffect 在 input 未挂载时拿不到 ref，故用 callback ref 在节点挂载那刻设属性。
@@ -1278,19 +1298,18 @@ function UploadDialog({
     }
   };
 
-  async function doUpload(files: FileList) {
+  async function startUpload() {
+    if (!staged.length) return;
     setBusy(true);
     setError(null);
-    // 过滤系统隐藏文件（.DS_Store / Thumbs.db / 以 . 开头）
-    const arr = Array.from(files).filter((f) => !f.name.startsWith(".") && f.name !== "Thumbs.db");
-    setProgress({ done: 0, total: arr.length });
+    setProgress({ done: 0, total: staged.length });
     const targetId = target === "none" ? null : Number(target);
     // 文件夹上传时按 webkitRelativePath 还原目录结构；dirKey → 目标目录 id 缓存（避免重复建）
     const dirCache = new Map<string, number | null>();
     dirCache.set("", targetId);
     let ok = 0;
-    for (let i = 0; i < arr.length; i++) {
-      const file = arr[i];
+    for (let i = 0; i < staged.length; i++) {
+      const file = staged[i];
       if (!file) continue;
       try {
         // webkitRelativePath 形如 "造化仙府物料0708/2025立绘提报/慈航真人/x.png"，去掉文件名得目录段
@@ -1319,12 +1338,13 @@ function UploadDialog({
       } catch (e) {
         setError(`${file.name}：${e instanceof Error ? e.message : "上传失败"}`);
       }
-      setProgress({ done: i + 1, total: arr.length });
+      setProgress({ done: i + 1, total: staged.length });
     }
     setBusy(false);
     if (ok > 0) {
       onDone();
       setTags([]);
+      setStaged([]);
       onOpenChange(false);
     }
     setProgress(null);
@@ -1344,7 +1364,7 @@ function UploadDialog({
             accept="video/*,audio/*,image/*,.psd,.psb,.ai,.eps,.aep,.prproj,.zip,.rar,.7z"
             className="hidden"
             onChange={(e) => {
-              if (e.target.files && e.target.files.length) doUpload(e.target.files);
+              if (e.target.files && e.target.files.length) stageFiles(e.target.files);
               e.target.value = "";
             }}
           />
@@ -1354,7 +1374,7 @@ function UploadDialog({
             multiple
             className="hidden"
             onChange={(e) => {
-              if (e.target.files && e.target.files.length) doUpload(e.target.files);
+              if (e.target.files && e.target.files.length) stageFiles(e.target.files);
               e.target.value = "";
             }}
           />
@@ -1362,7 +1382,10 @@ function UploadDialog({
             type="button"
             disabled={busy}
             onClick={() => fileRef.current?.click()}
-            className="grid w-full cursor-pointer place-items-center rounded-xl border-2 border-dashed px-5 py-9 text-center text-muted-foreground transition-colors hover:border-primary hover:bg-accent disabled:opacity-60"
+            className={cn(
+              "grid w-full cursor-pointer place-items-center rounded-xl border-2 border-dashed px-5 py-8 text-center text-muted-foreground transition-colors hover:border-primary hover:bg-accent disabled:opacity-60",
+              staged.length > 0 && "border-primary/50 bg-accent/40",
+            )}
           >
             {busy ? (
               <>
@@ -1370,17 +1393,34 @@ function UploadDialog({
                 <div className="text-sm font-medium text-foreground">
                   上传中 {progress?.done}/{progress?.total}…
                 </div>
+                <div className="mt-1 text-xs">上传完成前请勿关闭</div>
+              </>
+            ) : staged.length > 0 ? (
+              <>
+                <FileUp className="mb-3 size-10 text-primary" />
+                <div className="text-sm font-medium text-foreground">
+                  已选 {staged.length} 个文件
+                  {isFolderUpload && `（文件夹「${rootFolderName}」，将保留目录结构）`}
+                </div>
+                <div className="mt-1 text-xs">点这里可重新选择</div>
               </>
             ) : (
               <>
                 <FileUp className="mb-3 size-10 text-blue-400" />
                 <div className="text-sm font-medium text-foreground">点击选择文件（可多选）</div>
-                <div className="mt-1 text-xs">
-                  视频 / 音频 / 图片 / PSD 等源文件 · 也可整个文件夹上传
-                </div>
+                <div className="mt-1 text-xs">视频 / 音频 / 图片 / PSD 等源文件</div>
               </>
             )}
           </button>
+          {!busy && (
+            <button
+              type="button"
+              onClick={() => dirRef.current?.click()}
+              className="flex items-center gap-1.5 text-[13px] text-primary hover:underline"
+            >
+              <FolderUp className="size-4" /> 或上传整个文件夹（保留目录结构）
+            </button>
+          )}
           {error && (
             <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {error}
@@ -1418,20 +1458,11 @@ function UploadDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            关闭
+            取消
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => dirRef.current?.click()}
-            disabled={busy}
-            className="gap-1.5"
-          >
-            <FolderUp className="size-4" />
-            上传文件夹
-          </Button>
-          <Button onClick={() => fileRef.current?.click()} disabled={busy} className="gap-1.5">
+          <Button onClick={startUpload} disabled={busy || staged.length === 0} className="gap-1.5">
             <Upload className="size-4" />
-            选择文件
+            开始上传{staged.length > 0 ? `（${staged.length}）` : ""}
           </Button>
         </DialogFooter>
       </DialogContent>
