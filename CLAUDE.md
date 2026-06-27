@@ -89,6 +89,20 @@ pnpm worker                          # 另开终端，钉钉同步等定时任�
 应急后门密码在 `.env.local` 的 `EMERGENCY_LOGIN_PASSWORD`。
 当前 admin 用户：张锦（钉钉登录）、emergency-admin（应急后门）。
 
+## NAS 连接 / 部署（线上跑在绿联 NAS）
+
+线上 = 公司内网绿联 NAS，所有容器（qjhy-web/worker/postgres、miracle-pro-cs、录制器等）都在上面。
+
+- **IP**：`172.16.39.61`（公司内网，外网不可达）
+- **SSH 用户**：`15679982012`（NAS 账号是手机号）
+- **SSH key**：`~/.ssh/id_rsa_nas`（本机已配免密）
+- **工作目录**：`/volume1/docker/qjhy/`（compose 用 `image: qjhy-{web,worker}:latest`，非 build）
+- **连一条**：`ssh -i ~/.ssh/id_rsa_nas 15679982012@172.16.39.61`
+- **连生产库**：`ssh ... 'docker exec -i qjhy-postgres psql -U qjhy -d qjhy'`（库内端口 5432 不对外，只能从 NAS 内 `docker exec` 进）
+- **老中台 PRO3**：容器 `miracle-pro-cs`，目录 `/volume1/docker/miracle-pro-cs/`，SQLite 在 `server/database.sqlite`
+
+> 完整部署一条龙（build amd64 → save → scp -O → load → recreate）、8 个踩坑、反向 dump：见 memory `qjhy-pro-nas-deployment.md`。Mac(ARM64)→NAS(amd64) build **必须** `--platform linux/amd64`。
+
 ## 已知小尾巴（Phase 2 时一起修）
 
 - **sync job unionid 兜底**：`/topapi/user/listsimple` 不返回 unionid，sync job 用 userid 兜底，导致钉钉 OAuth 拿到的 user.id ≠ dingtalk_user.unionid。需改用 `/v2/user/get` 接口拉真实 unionid。
