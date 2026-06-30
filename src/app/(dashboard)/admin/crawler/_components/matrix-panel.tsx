@@ -35,7 +35,7 @@ interface MatrixData {
 }
 
 // ---- 行配置 ----
-type BackfillJob = "daily" | "profile" | "portrait" | "minigame";
+type BackfillJob = "daily" | "profile" | "portrait" | "minigame" | "game";
 interface DatedRow {
   job: string; // pgboss job name
   label: string;
@@ -526,6 +526,7 @@ function BackfillForm({ onDone }: { onDone: () => Promise<void> }): React.JSX.El
         <option value="profile">主播档案</option>
         <option value="portrait">主播肖像</option>
         <option value="minigame">小游戏</option>
+        <option value="game">推广游戏</option>
         <option value="ks_history">快手·历史直播</option>
         <option value="ks_gift">快手·补礼物数据（流水分时）</option>
       </select>

@@ -34,7 +34,7 @@ export async function rerunCrawl(input: unknown): Promise<{ ok: true }> {
 }
 
 const BackfillRangeInput = z.object({
-  job: z.enum(["minigame", "daily", "portrait", "profile"]),
+  job: z.enum(["minigame", "daily", "portrait", "profile", "game"]),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   basecamp: z.enum(["cs", "nc1", "nc2"]),
@@ -45,6 +45,9 @@ const JOB_MAP = {
   daily: JOB_NAMES.FETCH_DAILY,
   portrait: JOB_NAMES.FETCH_PORTRAIT,
   profile: JOB_NAMES.FETCH_PROFILE,
+  // 推广游戏：与 minigame 同为 fetch-daily 下游 {date,basecamp} 自包含 job，
+  // 矩阵内不支持单 cell 重跑，但「补更早范围」可按日期补（如补 7 天前的 6-16）
+  game: JOB_NAMES.FETCH_GAME,
 };
 
 /** 手动触发快手同步（成员 / 历史直播 / 今日实时 / 历史流水分时回补=补礼物） */
