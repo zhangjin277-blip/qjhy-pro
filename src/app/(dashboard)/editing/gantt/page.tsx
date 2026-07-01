@@ -27,21 +27,32 @@ function getWeekRange(weekOffset: number): { start: string; end: string; label: 
   return { start: fmt(monday), end: fmt(sunday), label: `${short(monday)} - ${short(sunday)}` };
 }
 
-function getMonthRange(): { start: string; end: string } {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+/** month 参数为 "YYYY-MM"（缺省=当前月，上海时区）。可查历史月份占比。 */
+function getMonthRange(monthStr?: string): { start: string; end: string; value: string } {
+  let y: number;
+  let m0: number; // 0-based month
+  if (monthStr && /^\d{4}-\d{2}$/.test(monthStr)) {
+    const [ys, ms] = monthStr.split("-");
+    y = Number(ys);
+    m0 = Number(ms) - 1;
+  } else {
+    const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+    y = now.getFullYear();
+    m0 = now.getMonth();
+  }
+  const m = String(m0 + 1).padStart(2, "0");
+  const lastDay = new Date(y, m0 + 1, 0).getDate();
   return {
     start: `${y}-${m}-01`,
     end: `${y}-${m}-${String(lastDay).padStart(2, "0")}`,
+    value: `${y}-${m}`,
   };
 }
 
 export default async function GanttPage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string }>;
+  searchParams: Promise<{ week?: string; month?: string }>;
 }) {
   const sp = await searchParams;
   const weekOffset = Number(sp.week ?? "0");
@@ -50,7 +61,7 @@ export default async function GanttPage({
   const where = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   const week = getWeekRange(weekOffset);
-  const month = getMonthRange();
+  const month = getMonthRange(sp.month);
 
   const [rows, share] = await Promise.all([
     queryWeeklyGantt({ weekStart: week.start, weekEnd: week.end, whereClause: where }),
@@ -63,6 +74,7 @@ export default async function GanttPage({
       weekEnd={week.end}
       weekLabel={week.label}
       weekOffset={weekOffset}
+      monthValue={month.value}
       rows={rows}
       monthlyShare={share}
     />

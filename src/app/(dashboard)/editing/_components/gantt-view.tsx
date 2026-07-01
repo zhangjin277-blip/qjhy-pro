@@ -9,11 +9,21 @@ interface Props {
   weekEnd: string;
   weekLabel: string;
   weekOffset: number;
+  monthValue: string; // "YYYY-MM"，产品占比所属月份
   rows: GanttRow[];
   monthlyShare: MonthlyProductShare[];
 }
 
 const DAY_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+
+/** YYYY-MM 加减月份 */
+function shiftMonth(ym: string, delta: number): string {
+  const parts = ym.split("-");
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
 
 function enumDates(start: string, end: string): string[] {
   const result: string[] = [];
@@ -31,12 +41,20 @@ export function GanttView({
   weekEnd,
   weekLabel,
   weekOffset,
+  monthValue,
   rows,
   monthlyShare,
 }: Props) {
   const router = useRouter();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const dates = enumDates(weekStart, weekEnd);
+
+  // 周/月导航互相保留参数
+  function go(nextWeek: number, nextMonth: string): void {
+    router.push(`?week=${nextWeek}&month=${nextMonth}`);
+  }
+  const [my, mm] = monthValue.split("-");
+  const monthLabel = `${my}年${Number(mm)}月`;
 
   function toggle(userId: string) {
     setExpanded((s) => {
@@ -54,7 +72,7 @@ export function GanttView({
         <ViewTabs active="gantt" />
         <div className="flex items-center gap-3 text-sm">
           <button
-            onClick={() => router.push(`?week=${weekOffset - 1}`)}
+            onClick={() => go(weekOffset - 1, monthValue)}
             className="rounded p-1 hover:bg-slate-100"
             aria-label="上一周"
           >
@@ -62,7 +80,7 @@ export function GanttView({
           </button>
           <span className="font-medium">{weekLabel}</span>
           <button
-            onClick={() => router.push(`?week=${weekOffset + 1}`)}
+            onClick={() => go(weekOffset + 1, monthValue)}
             className="rounded p-1 hover:bg-slate-100"
             aria-label="下一周"
           >
@@ -180,15 +198,34 @@ export function GanttView({
         </table>
       </div>
 
-      {/* 月度产品占比 */}
+      {/* 月度产品占比（可切月份查历史） */}
       <div className="mt-8">
-        <h2 className="mb-3 text-base font-semibold">本月产品占比</h2>
+        <div className="mb-3 flex items-center gap-3">
+          <h2 className="text-base font-semibold">产品占比</h2>
+          <div className="flex items-center gap-2 text-sm">
+            <button
+              onClick={() => go(weekOffset, shiftMonth(monthValue, -1))}
+              className="rounded p-1 hover:bg-slate-100"
+              aria-label="上个月"
+            >
+              ‹
+            </button>
+            <span className="font-medium tabular-nums">{monthLabel}</span>
+            <button
+              onClick={() => go(weekOffset, shiftMonth(monthValue, 1))}
+              className="rounded p-1 hover:bg-slate-100"
+              aria-label="下个月"
+            >
+              ›
+            </button>
+          </div>
+        </div>
         <div className="overflow-hidden rounded-xl border border-border bg-white">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold text-slate-500">剪辑师</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-500">本月总数</th>
+                <th className="px-4 py-3 text-right font-semibold text-slate-500">当月总数</th>
                 <th className="px-4 py-3 text-left font-semibold text-slate-500">产品分布</th>
               </tr>
             </thead>
@@ -196,7 +233,7 @@ export function GanttView({
               {monthlyShare.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="py-8 text-center text-slate-400">
-                    本月暂无数据
+                    该月暂无数据
                   </td>
                 </tr>
               ) : (
