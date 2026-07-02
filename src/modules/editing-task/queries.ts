@@ -6,6 +6,7 @@ import {
   live_account,
   dingtalk_user,
   product_config,
+  entity_alias,
 } from "@/db/schema";
 import type {
   BoardCard,
@@ -475,18 +476,34 @@ export async function queryMonthlyProductShare(args: {
     ),
   ];
 
+  // 账号运营(agent)所在部门别名 → 线上/线下：斗地主按此拆分（口径同首页看板）
+  const agentUser = alias(dingtalk_user, "agent_user");
   const rows = await db
     .select({
       editor_user_id: editing_task.editor_user_id,
       editor_name: dingtalk_user.name,
       product: live_account.product,
+      agent_alias: entity_alias.alias,
       count: sql<number>`count(*)::int`,
     })
     .from(editing_task)
     .leftJoin(live_account, eq(live_account.id, editing_task.live_account_id))
     .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, editing_task.editor_user_id))
+    .leftJoin(agentUser, eq(agentUser.user_id, live_account.agent_dingtalk_user_id))
+    .leftJoin(
+      entity_alias,
+      and(
+        eq(entity_alias.entity_type, "dept"),
+        eq(entity_alias.entity_id, sql`${agentUser.dept_ids}->>0`),
+      ),
+    )
     .where(and(...(filters.filter(Boolean) as SQL[])))
-    .groupBy(editing_task.editor_user_id, dingtalk_user.name, live_account.product);
+    .groupBy(
+      editing_task.editor_user_id,
+      dingtalk_user.name,
+      live_account.product,
+      entity_alias.alias,
+    );
 
   // 按 editor 聚合
   const editorMap = new Map<
@@ -501,7 +518,13 @@ export async function queryMonthlyProductShare(args: {
   for (const r of rows) {
     if (!r.editor_user_id) continue;
     const uid = r.editor_user_id;
-    const product = r.product ?? "未分类";
+    const rawProduct = r.product ?? "未分类";
+    // 斗地主按账号运营(agent)所在组拆线上/线下；其余产品不拆
+    const product = rawProduct.includes("斗地主")
+      ? `${
+          r.agent_alias === "线上运营" ? "线上" : r.agent_alias === "线下运营" ? "线下" : "其他"
+        }·${rawProduct}`
+      : rawProduct;
     if (!editorMap.has(uid)) {
       editorMap.set(uid, {
         editorUserId: uid,
