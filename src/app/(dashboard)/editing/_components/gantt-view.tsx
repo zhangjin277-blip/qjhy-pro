@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { GanttRow, MonthlyProductShare } from "@/modules/editing-task";
+import { enumDates } from "../_lib/enum-dates";
 import { ViewTabs } from "./view-tabs";
 
 interface Props {
@@ -23,17 +24,6 @@ function shiftMonth(ym: string, delta: number): string {
   const m = Number(parts[1]);
   const d = new Date(y, m - 1 + delta, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function enumDates(start: string, end: string): string[] {
-  const result: string[] = [];
-  const d = new Date(start + "T00:00:00");
-  const e = new Date(end + "T00:00:00");
-  while (d <= e) {
-    result.push(d.toISOString().slice(0, 10));
-    d.setDate(d.getDate() + 1);
-  }
-  return result;
 }
 
 export function GanttView({
