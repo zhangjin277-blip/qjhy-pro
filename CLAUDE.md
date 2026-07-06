@@ -108,6 +108,21 @@ pnpm worker                          # 另开终端，钉钉同步等定时任�
 - **sync job unionid 兜底**：`/topapi/user/listsimple` 不返回 unionid，sync job 用 userid 兜底，导致钉钉 OAuth 拿到的 user.id ≠ dingtalk_user.unionid。需改用 `/v2/user/get` 接口拉真实 unionid。
 - **张锦 admin override 是手动 SQL 加的**，每天 02:00 sync 会被覆盖（unionid 变回 userid 后查不到）。临时方案：每次同步后重新 seed；根因解决在上一条。
 
+## 板块级文档（子目录 CLAUDE.md，读该目录文件时自动加载）
+
+改某板块前先读它的 CLAUDE.md——里面是**代码看不出来的口径和坑**：
+
+| 板块 | 文档 | 核心内容 |
+|---|---|---|
+| 爬虫 | `src/modules/crawler/CLAUDE.md` | job 架构 / cookie 续期 / 补数入口 / barrel 陷阱 |
+| 剪辑工作流 | `src/modules/editing-task/CLAUDE.md` | 状态机 / **anchor_id 存钉钉ID 的坑** / 交片口径 / 命名规则 / 流式上传 |
+| 开播打卡 | `src/modules/checkin/CLAUDE.md` | **礼物列算法**(trend MAX-MIN) / 投放分摊 / admin 操作 |
+| 业务看板 | `src/modules/dashboard/CLAUDE.md` | **线上/线下分组链**(broker→部门别名) / 各指标 SQL 口径 |
+| 主播明细 | `src/modules/anchors/CLAUDE.md` | 双平台配置化表格 / 经纪人筛选 / id 空间的坑 |
+| 投放 | `src/modules/placement/CLAUDE.md` | **ingestRows 必须配归因** / placement_label 绑定 |
+
+> 新板块做完（或踩了新坑）就补/更新对应 CLAUDE.md，别让知识只留在会话里。
+
 ## 模块清单（19 个 module / `src/modules/*`）
 
 ```
