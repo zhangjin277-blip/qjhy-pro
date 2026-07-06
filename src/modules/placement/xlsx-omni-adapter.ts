@@ -55,7 +55,9 @@ export function isOmniFormat(buffer: Buffer | ArrayBuffer): boolean {
  *   14:01 → hour=13（min<19，归 14-1=13，继续覆盖；表示 13 点这小时完整 1h 结束的累计）
  *   14:21 → hour=14（新一行）
  *
- * 边界：HH=0 且 min<19 → hour=0 不减（避免跨日 hour=-1）。
+ * 边界：HH=0 且 min<19 → 回滚到前一天 hour=23（"昨天 23 点收尾累计"）。
+ * 若不回滚，凌晨推送带来的"全天累计"会被误存为新一天 hour=0，
+ * computeIncrements 里 date 内首行不做差分 → 新一天 hour=0 增量 = 昨天全天。
  */
 function parsePushTime(text: string): { date: string; hour: number } | null {
   const m = text.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})/);
@@ -63,11 +65,17 @@ function parsePushTime(text: string): { date: string; hour: number } | null {
   const [, y, mo, d, h, mm] = m;
   const pushedH = Math.min(23, Math.max(0, Number(h)));
   const pushedM = Number(mm);
-  const hour = pushedM < 19 ? (pushedH === 0 ? 0 : pushedH - 1) : pushedH;
-  return {
-    date: `${y}-${mo}-${d}`,
-    hour,
-  };
+  if (pushedH === 0 && pushedM < 19) {
+    // 跨日回滚：date -= 1, hour = 23
+    const prev = new Date(`${y}-${mo}-${d}T00:00:00Z`);
+    prev.setUTCDate(prev.getUTCDate() - 1);
+    const py = prev.getUTCFullYear();
+    const pmo = String(prev.getUTCMonth() + 1).padStart(2, "0");
+    const pd = String(prev.getUTCDate()).padStart(2, "0");
+    return { date: `${py}-${pmo}-${pd}`, hour: 23 };
+  }
+  const hour = pushedM < 19 ? pushedH - 1 : pushedH;
+  return { date: `${y}-${mo}-${d}`, hour };
 }
 
 function toNumber(v: unknown): number {

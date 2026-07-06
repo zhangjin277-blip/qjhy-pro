@@ -26,6 +26,15 @@ registerJob({
   task: crawlOrchestrator,
 });
 
+// Phase 2: 抖音爬虫 18:00 补一次
+// 有时上午 10:00 抖音后台数据还没刷新出来，下午补跑一次拉最新版本。
+// 下游 fetch job 全部 UPSERT 幂等，重复跑无副作用，仅覆盖更新字段。
+registerJob({
+  name: "crawl-orchestrator-evening",
+  schedule: "0 18 * * *",
+  task: crawlOrchestrator,
+});
+
 // Phase 2.2: 归因兜底（每天 04:00 扫 dirty 行）
 registerJob({
   name: "attribution-sweep",
