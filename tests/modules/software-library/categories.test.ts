@@ -2,7 +2,11 @@ import { describe, it, expect, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { software_category, software_item } from "@/db/schema/software";
-import { categoryHasActiveItems, categoryNameTaken } from "@/modules/software-library/server";
+import {
+  categoryHasActiveItems,
+  categoryNameTaken,
+  listCategories,
+} from "@/modules/software-library/server";
 
 const createdCatIds: number[] = [];
 const createdItemIds: number[] = [];
@@ -68,5 +72,33 @@ describe("分类删除保护 categoryHasActiveItems", () => {
       .set({ deleted_at: new Date() })
       .where(eq(software_item.id, item.id));
     expect(await categoryHasActiveItems(id)).toBe(false);
+  });
+});
+
+describe("listCategories 计数", () => {
+  it("itemCount 只数未删软件", async () => {
+    const id = await makeCategory(`vitest-计数-${Date.now()}`);
+    const mk = async (deleted: boolean) => {
+      const [item] = await db
+        .insert(software_item)
+        .values({
+          category_id: id,
+          name: "t",
+          nas_path: `软件库/test/vitest-${Date.now()}-${Math.random()}`,
+          file_name: "t.exe",
+          file_hash: `vitest-${Date.now()}-${Math.random()}`,
+          file_size: 1,
+          ...(deleted ? { deleted_at: new Date() } : {}),
+        })
+        .returning({ id: software_item.id });
+      if (!item) throw new Error("插入软件失败");
+      createdItemIds.push(item.id);
+    };
+    await mk(false);
+    await mk(true);
+
+    const cats = await listCategories();
+    const cat = cats.find((c) => c.id === id);
+    expect(cat?.itemCount).toBe(1);
   });
 });

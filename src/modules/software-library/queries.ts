@@ -62,7 +62,7 @@ export async function listItems(input: ListItemsInput): Promise<SoftwareListResu
     .leftJoin(software_category, eq(software_category.id, software_item.category_id))
     .leftJoin(dingtalk_user, eq(dingtalk_user.user_id, software_item.uploaded_by_user_id))
     .where(where)
-    .orderBy(desc(software_item.created_at))
+    .orderBy(desc(software_item.created_at), desc(software_item.id))
     .limit(input.pageSize)
     .offset((input.page - 1) * input.pageSize);
 

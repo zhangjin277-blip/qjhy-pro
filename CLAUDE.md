@@ -45,7 +45,7 @@ Next.js 16.2.4 + TypeScript strict + PostgreSQL 16 + Drizzle ORM + better-auth 1
 - token/userinfo 用自定义交换逻辑：`userAccessToken` 走 JSON body，`contact/users/me` 走 `x-acs-dingtalk-access-token`。
 - 钉钉机器人 webhook 关键词："报错"
 
-## 数据库当前状态（45 张 public 表）
+## 数据库当前状态（47 张 public 表）
 
 ```
 Phase 1 钉钉/权限：
@@ -71,6 +71,9 @@ Phase 2.4 配置 / 别名：
 
 Phase 3.0 剪辑工作流（剪辑师 + 任务 + 事件）：
   editing_task / editing_task_event
+
+软件库：
+  software_category / software_item
 
 打卡 / 直播日志：
   live_session_log
@@ -120,10 +123,11 @@ pnpm worker                          # 另开终端，钉钉同步等定时任�
 | 业务看板 | `src/modules/dashboard/CLAUDE.md` | **线上/线下分组链**(broker→部门别名) / 各指标 SQL 口径 |
 | 主播明细 | `src/modules/anchors/CLAUDE.md` | 双平台配置化表格 / 经纪人筛选 / id 空间的坑 |
 | 投放 | `src/modules/placement/CLAUDE.md` | **ingestRows 必须配归因** / placement_label 绑定 |
+| 软件库 | `src/modules/software-library/CLAUDE.md` | 权限口径 / 分类硬删+FK 兜底 / 已知限制 / migration 手动应用 |
 
 > 新板块做完（或踩了新坑）就补/更新对应 CLAUDE.md，别让知识只留在会话里。
 
-## 模块清单（19 个 module / `src/modules/*`）
+## 模块清单（20 个 module / `src/modules/*`）
 
 ```
 基础 / 权限：permissions / brokers / aliases / column-presets / invite-codes
@@ -132,6 +136,7 @@ pnpm worker                          # 另开终端，钉钉同步等定时任�
 爬虫：crawler
 配置：product-config
 剪辑工作流：editing-task / editing-editor / editing-storage
+软件库：software-library
 ```
 
 每个 module 必须双入口（`index.ts` 客户端可用 / `server.ts` server-only）。eslint zone 同步注册。
