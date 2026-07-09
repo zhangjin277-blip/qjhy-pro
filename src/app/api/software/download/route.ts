@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   }
 
   const id = Number(req.nextUrl.searchParams.get("id"));
-  if (!id || !Number.isFinite(id)) return new NextResponse("Bad Request", { status: 400 });
+  if (!Number.isSafeInteger(id) || id <= 0) return new NextResponse("Bad Request", { status: 400 });
 
   const item = await getItemFile(id);
   if (!item) return new NextResponse("Not Found", { status: 404 });
@@ -33,7 +33,9 @@ export async function GET(req: NextRequest) {
     return new NextResponse("文件不存在", { status: 404 });
   }
 
-  const disposition = `attachment; filename="${encodeURIComponent(item.fileName)}"`;
+  // RFC 6266：filename* 让非 Chromium 浏览器正确还原中文文件名（否则存成 %E5%89%.. 字面串）
+  const enc = encodeURIComponent(item.fileName);
+  const disposition = `attachment; filename="${enc}"; filename*=UTF-8''${enc}`;
 
   // Range 请求（浏览器断点续传）不重复计数
   const rangeHeader = req.headers.get("range");
