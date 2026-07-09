@@ -2460,4 +2460,12 @@ git commit -m "docs(claude): 软件库板块入册（software_category/software_
 
 ## 部署提醒（不在本 plan 内自动执行）
 
-NAS 部署时无需新增配置：`EDITING_NAS_PATH=/mnt/qjhy-edit` 已挂载，migration 随 `pnpm db:migrate` 一起跑。走 memory `qjhy-pro-nas-deployment.md` 的 build → save → scp → load → recreate 流程即可。
+NAS 部署时无需新增配置：`EDITING_NAS_PATH=/mnt/qjhy-edit` 已挂载（web/worker 都有）。
+**migration 必须手动 psql 应用**（本项目 `pnpm db:migrate` 不可用，journal 脱节，见 Task 1 执行记录）：
+
+```bash
+ssh -i ~/.ssh/id_rsa_nas 15679982012@172.16.39.61 'docker exec -i qjhy-postgres psql -U qjhy -d qjhy' < src/db/migrations/0054_software_library.sql
+ssh -i ~/.ssh/id_rsa_nas 15679982012@172.16.39.61 'docker exec -i qjhy-postgres psql -U qjhy -d qjhy' < src/db/migrations/0055_software_library_permission_seed.sql
+```
+
+然后走 memory `qjhy-pro-nas-deployment.md` 的 build（--platform linux/amd64）→ save → scp → load → recreate 流程重建 qjhy-web 镜像。
