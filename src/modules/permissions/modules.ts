@@ -15,6 +15,7 @@ export const MODULE_KEYS = [
   "live_room",
   "placement",
   "editing_workflow",
+  "software_library",
 ] as const;
 
 export type ModuleKey = (typeof MODULE_KEYS)[number];
@@ -29,6 +30,7 @@ export const MODULE_LABEL: Record<ModuleKey, string> = {
   live_room: "直播间",
   placement: "投放数据",
   editing_workflow: "剪辑工作流",
+  software_library: "软件库",
 };
 
 export const MODULE_DESC: Record<ModuleKey, string> = {
@@ -41,6 +43,7 @@ export const MODULE_DESC: Record<ModuleKey, string> = {
   live_room: "线下物理直播间管理",
   placement: "投放消耗 / 激活 / 主播归因看板",
   editing_workflow: "剪辑任务全链路看板 / 派单 / 审核 / 发布",
+  software_library: "工作软件上传下载 / 分类管理",
 };
 
 export function isModuleKey(value: string): value is ModuleKey {

@@ -84,5 +84,15 @@ export const ROLE_DEFAULTS_SEED: (Permission & {
   MODULE_KEYS.map((module) => ({
     ...row,
     module,
+    // 软件库：全员可见可下载（scope=all）；上传/管理仅总监/老板（与 0055 种子一致）。
+    // 必须显式覆盖全部权限字段——运营岗位 base 是 can_edit=true，沿用 base 会错误获得上传权。
+    ...(module === "software_library"
+      ? {
+          scope: "all" as const,
+          can_edit: row.position === "总监" || row.position === "老板",
+          can_export: false,
+          can_admin: row.position === "总监" || row.position === "老板",
+        }
+      : {}),
   })),
 );

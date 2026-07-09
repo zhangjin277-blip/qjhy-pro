@@ -888,5 +888,7 @@ function moduleEmoji(m: ModuleKey): string {
       return "💸";
     case "editing_workflow":
       return "✂️";
+    case "software_library":
+      return "🧰";
   }
 }
