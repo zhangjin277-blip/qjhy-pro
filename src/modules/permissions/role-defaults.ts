@@ -92,6 +92,7 @@ export const ROLE_DEFAULTS_SEED: (Permission & {
           can_edit: row.position === "总监" || row.position === "老板",
           can_export: false,
           can_admin: row.position === "总监" || row.position === "老板",
+          description: "软件库：全员可下载，管理员可上传",
         }
       : {}),
   })),

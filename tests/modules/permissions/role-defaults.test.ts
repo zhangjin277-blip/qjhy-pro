@@ -16,4 +16,17 @@ describe("ROLE_DEFAULTS_SEED software_library 特例", () => {
     const editors = rows.filter((r) => r.can_edit).map((r) => r.position);
     expect(editors.sort()).toEqual(["总监", "老板"].sort());
   });
+
+  it("全员 can_export=false", () => {
+    expect(rows.every((r) => !r.can_export)).toBe(true);
+  });
+
+  it("仅总监/老板默认 can_admin", () => {
+    expect(
+      rows
+        .filter((r) => r.can_admin)
+        .map((r) => r.position)
+        .sort(),
+    ).toEqual(["总监", "老板"].sort());
+  });
 });
