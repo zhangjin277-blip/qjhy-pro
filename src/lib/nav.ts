@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  HardDriveDownload,
   Home,
   MonitorPlay,
   Scissors,
@@ -109,6 +110,14 @@ export const NAV: NavItem[] = [
         module: "editing_workflow",
       },
     ],
+  },
+  {
+    key: "software",
+    label: "软件库",
+    icon: HardDriveDownload,
+    single: true,
+    href: "/software",
+    module: "software_library",
   },
   {
     key: "ops",
