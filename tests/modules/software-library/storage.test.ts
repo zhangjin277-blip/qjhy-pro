@@ -6,10 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { software_item } from "@/db/schema/software";
 import { dingtalk_user } from "@/db/schema/dingtalk";
-import {
-  buildSoftwarePath,
-  ingestSoftware /*, listItems */,
-} from "@/modules/software-library/server"; // Task 4 完成后恢复
+import { buildSoftwarePath, ingestSoftware, listItems } from "@/modules/software-library/server";
 import { removeFile } from "@/modules/editing-storage/server";
 
 const NAS = process.env.EDITING_NAS_PATH ?? "./tmp/editing-nas";
@@ -95,8 +92,8 @@ describe("ingestSoftware 入库/去重/软删", () => {
     const st = await stat(join(NAS, row.nas_path));
     expect(st.size).toBe(bytes);
 
-    // const list = await listItems({ page: 1, pageSize: 100 }); // Task 4 完成后恢复
-    // expect(list.items.some((i) => i.id === r.itemId)).toBe(true); // Task 4 完成后恢复
+    const list = await listItems({ page: 1, pageSize: 100 });
+    expect(list.items.some((i) => i.id === r.itemId)).toBe(true);
   });
 
   it("自定义名为空时回退文件名", async () => {
@@ -184,7 +181,7 @@ describe("ingestSoftware 入库/去重/软删", () => {
       .set({ deleted_at: sql`now()` })
       .where(eq(software_item.id, r.itemId));
 
-    // const list = await listItems({ page: 1, pageSize: 100 }); // Task 4 完成后恢复
-    // expect(list.items.some((i) => i.id === r.itemId)).toBe(false); // Task 4 完成后恢复
+    const list = await listItems({ page: 1, pageSize: 100 });
+    expect(list.items.some((i) => i.id === r.itemId)).toBe(false);
   });
 });

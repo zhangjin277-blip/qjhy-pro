@@ -6,3 +6,10 @@ export {
   type IngestSoftwareResult,
 } from "./storage";
 export { requireSoftwareViewer, requireSoftwareWriter } from "./authz";
+export {
+  listCategories,
+  listItems,
+  getItemFile,
+  categoryNameTaken,
+  categoryHasActiveItems,
+} from "./queries";
