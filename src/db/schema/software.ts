@@ -22,7 +22,9 @@ export const software_item = pgTable(
   "software_item",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    category_id: bigint("category_id", { mode: "number" }).references(() => software_category.id), // NULL = 未分类
+    category_id: bigint("category_id", { mode: "number" }).references(() => software_category.id, {
+      onDelete: "set null",
+    }), // NULL = 未分类；分类被硬删时残留引用（含软删条目）自动落回未分类
     name: text("name").notNull(), // 自定义软件名，默认取文件名，可改
     version: text("version"), // 版本号，选填
     note: text("note"), // 一句话说明，选填

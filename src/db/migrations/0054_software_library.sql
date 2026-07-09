@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS "software_category" (
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "software_item" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"category_id" bigint REFERENCES "public"."software_category"("id"),
+	"category_id" bigint REFERENCES "public"."software_category"("id") ON DELETE SET NULL,
 	"name" text NOT NULL,
 	"version" text,
 	"note" text,
