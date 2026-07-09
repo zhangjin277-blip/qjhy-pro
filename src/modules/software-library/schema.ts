@@ -35,3 +35,10 @@ export const ListItemsInput = z.object({
   pageSize: z.number().int().min(1).max(200).default(100),
 });
 export type ListItemsInput = z.infer<typeof ListItemsInput>;
+
+/** 上传接口的 multipart 文本字段（上限与 UpdateItemInput 一致）。 */
+export const UploadFieldsInput = z.object({
+  name: z.string().trim().max(120),
+  version: z.string().trim().max(60),
+  note: z.string().trim().max(300),
+});

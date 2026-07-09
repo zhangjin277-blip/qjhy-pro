@@ -7,6 +7,7 @@ export {
   UpdateItemInput,
   DeleteItemInput,
   ListItemsInput,
+  UploadFieldsInput,
 } from "./schema";
 
 export { createCategory } from "./actions/create-category";
