@@ -21,4 +21,5 @@ export * from "./material";
 export * from "./permissions";
 export * from "./placements";
 export * from "./schedule-override";
+export * from "./software";
 export * from "./user-preset";
