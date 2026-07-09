@@ -1205,6 +1205,23 @@ git commit -m "feat(software-library): queries + 分类/条目 actions + 双入�
 **Files:**
 - Create: `src/app/api/software/upload/route.ts`
 - Create: `src/app/api/software/download/route.ts`
+- Modify: `src/modules/software-library/schema.ts`（加 UploadFieldsInput）
+- Modify: `src/modules/software-library/index.ts`（导出 UploadFieldsInput）
+
+- [ ] **Step 0: 上传字段 Zod 校验（Task 3 质量审查要求）**
+
+`src/modules/software-library/schema.ts` 追加（上限与 UpdateItemInput 一致，防止 multipart 原始字段无限长入库）：
+
+```ts
+/** 上传接口的 multipart 文本字段（上限与 UpdateItemInput 一致）。 */
+export const UploadFieldsInput = z.object({
+  name: z.string().trim().max(120),
+  version: z.string().trim().max(60),
+  note: z.string().trim().max(300),
+});
+```
+
+`src/modules/software-library/index.ts` 的 schema 导出列表加 `UploadFieldsInput`。
 
 - [ ] **Step 1: 上传 route**
 
@@ -1214,6 +1231,7 @@ git commit -m "feat(software-library): queries + 分类/条目 actions + 双入�
 import { NextRequest, NextResponse } from "next/server";
 import { parseUploadToTemp, removeTemp } from "@/modules/editing-storage/server";
 import { ingestSoftware, requireSoftwareWriter } from "@/modules/software-library/server";
+import { UploadFieldsInput } from "@/modules/software-library";
 import { isAppError } from "@/lib/errors";
 
 export const runtime = "nodejs";
@@ -1245,6 +1263,18 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const fields = UploadFieldsInput.safeParse({
+      name: parsed.fields.name ?? "",
+      version: parsed.fields.version ?? "",
+      note: parsed.fields.note ?? "",
+    });
+    if (!fields.success) {
+      await removeTemp(NAS, parsed.tmpRelPath).catch(() => undefined);
+      return NextResponse.json(
+        { ok: false, error: "字段超长（名称≤120 / 版本≤60 / 说明≤300）" },
+        { status: 400 },
+      );
+    }
     const catRaw = parsed.fields.categoryId;
     const categoryId = catRaw && catRaw !== "" ? Number(catRaw) : null;
     const result = await ingestSoftware(NAS, {
@@ -1253,9 +1283,9 @@ export async function POST(req: NextRequest) {
       bytes: parsed.bytes,
       tmpRelPath: parsed.tmpRelPath,
       categoryId: categoryId && Number.isFinite(categoryId) ? categoryId : null,
-      name: parsed.fields.name ?? null,
-      version: parsed.fields.version ?? null,
-      note: parsed.fields.note ?? null,
+      name: fields.data.name || null,
+      version: fields.data.version || null,
+      note: fields.data.note || null,
       uploadedByUserId: userId,
     });
     return NextResponse.json(result);
@@ -2319,6 +2349,50 @@ git commit -m "feat(software-library): /software 页面 + 顶层导航（分类�
 
 **Files:**
 - Modify: `CLAUDE.md`（表清单 + 模块清单）
+- Modify: `src/modules/software-library/queries.ts`（分页排序决胜键）
+- Modify: `tests/modules/software-library/categories.test.ts`（补 listCategories 测试）
+
+- [ ] **Step 0: Task 4 质量审查的两个 carry-forward**
+
+1. `queries.ts` 的 listItems 排序加决胜键，避免同秒批量插入时跨页顺序不稳定：
+
+```ts
+    .orderBy(desc(software_item.created_at), desc(software_item.id))
+```
+
+2. `tests/modules/software-library/categories.test.ts` 补 listCategories 计数断言（软删不计入）：
+
+```ts
+describe("listCategories 计数", () => {
+  it("itemCount 只数未删软件", async () => {
+    const id = await makeCategory(`vitest-计数-${Date.now()}`);
+    const mk = async (deleted: boolean) => {
+      const [item] = await db
+        .insert(software_item)
+        .values({
+          category_id: id,
+          name: "t",
+          nas_path: `软件库/test/vitest-${Date.now()}-${Math.random()}`,
+          file_name: "t.exe",
+          file_hash: `vitest-${Date.now()}-${Math.random()}`,
+          file_size: 1,
+          ...(deleted ? { deleted_at: new Date() } : {}),
+        })
+        .returning({ id: software_item.id });
+      if (!item) throw new Error("插入软件失败");
+      createdItemIds.push(item.id);
+    };
+    await mk(false);
+    await mk(true);
+
+    const cats = await listCategories();
+    const cat = cats.find((c) => c.id === id);
+    expect(cat?.itemCount).toBe(1);
+  });
+});
+```
+
+（`listCategories` 需加入该测试文件顶部的 import。）
 
 - [ ] **Step 1: 全量验证**
 
