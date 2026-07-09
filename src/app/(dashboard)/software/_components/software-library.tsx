@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils/cn";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -86,10 +86,19 @@ export function SoftwareLibrary({ initialCategories, initialItems, initialTotal,
   const [isPending, startTransition] = useTransition();
 
   // server component 重新渲染（revalidatePath 后）同步 props
+  const activeCatRef = useRef(activeCat);
+  activeCatRef.current = activeCat;
+  const keywordRef = useRef(keyword);
+  keywordRef.current = keyword;
+
   useEffect(() => setCategories(initialCategories), [initialCategories]);
   useEffect(() => {
-    setItems(initialItems);
-    setTotal(initialTotal);
+    // revalidatePath/router.refresh 的 RSC payload 是无筛选全量；
+    // 筛选状态下接受它会覆盖 reload() 的筛选结果，故仅无筛选时同步
+    if (activeCatRef.current === "all" && !keywordRef.current.trim()) {
+      setItems(initialItems);
+      setTotal(initialTotal);
+    }
   }, [initialItems, initialTotal]);
 
   const reload = useCallback(
@@ -114,6 +123,12 @@ export function SoftwareLibrary({ initialCategories, initialItems, initialTotal,
 
   // 搜索防抖
   const kwTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (kwTimer.current) clearTimeout(kwTimer.current);
+    },
+    [],
+  );
   function onKeywordChange(v: string) {
     setKeyword(v);
     if (kwTimer.current) clearTimeout(kwTimer.current);
@@ -121,6 +136,7 @@ export function SoftwareLibrary({ initialCategories, initialItems, initialTotal,
   }
 
   function switchCategory(cat: CategoryFilter) {
+    if (kwTimer.current) clearTimeout(kwTimer.current);
     setActiveCat(cat);
     reload(cat, keyword);
   }
@@ -145,6 +161,7 @@ export function SoftwareLibrary({ initialCategories, initialItems, initialTotal,
     try {
       await renameCategory({ id: renameCat.id, name });
       toast.success("分类已重命名");
+      reload(activeCat, keyword);
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "重命名失败");
@@ -156,7 +173,7 @@ export function SoftwareLibrary({ initialCategories, initialItems, initialTotal,
     try {
       await deleteCategory({ id: deleteCat.id });
       toast.success("分类已删除");
-      if (activeCat === deleteCat.id) setActiveCat("all");
+      if (activeCat === deleteCat.id) switchCategory("all");
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "删除失败");
@@ -289,10 +306,12 @@ export function SoftwareLibrary({ initialCategories, initialItems, initialTotal,
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <a href={`/api/software/download?id=${it.id}`} download>
-                        <Button variant="ghost" size="sm" className="h-7 px-2">
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
+                      <a
+                        href={`/api/software/download?id=${it.id}`}
+                        download
+                        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-7 px-2")}
+                      >
+                        <Download className="h-3.5 w-3.5" />
                       </a>
                       {canEdit && (
                         <>
@@ -320,6 +339,11 @@ export function SoftwareLibrary({ initialCategories, initialItems, initialTotal,
               ))}
             </TableBody>
           </Table>
+          {total > items.length && (
+            <p className="text-muted-foreground border-t px-4 py-2 text-[11px]">
+              仅显示前 {items.length} 条，可用搜索或分类缩小范围
+            </p>
+          )}
         </div>
       </main>
 
@@ -413,34 +437,34 @@ function CategoryRow({
 
   return (
     <div ref={ref} className="group relative">
-      <button
-        type="button"
-        onClick={onClick}
+      <div
         className={cn(
-          "flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-[13px] transition-colors",
+          "flex w-full items-center gap-1.5 rounded pr-1 text-[13px] transition-colors",
           active
             ? "bg-primary/10 text-primary font-medium"
             : "text-foreground/80 hover:bg-[var(--hover-bg)]",
         )}
       >
-        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <button
+          type="button"
+          onClick={onClick}
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-2 text-left"
+        >
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+        </button>
         {count != null && <span className="text-muted-foreground text-[11px]">{count}</span>}
         {(onRename || onDelete) && (
-          <span
-            role="button"
-            tabIndex={-1}
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenuOpen(!menuOpen);
-            }}
+          <button
+            type="button"
+            onClick={() => setMenuOpen(!menuOpen)}
             className="hover:bg-muted hidden rounded p-0.5 group-hover:block"
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
-          </span>
+          </button>
         )}
-      </button>
+      </div>
       {menuOpen && (
-        <div className="border-border absolute top-full right-0 z-20 mt-0.5 w-[100px] rounded-lg border bg-white p-1 shadow-lg">
+        <div className="border-border bg-card absolute top-full right-0 z-20 mt-0.5 w-[100px] rounded-lg border p-1 shadow-lg">
           {onRename && (
             <button
               type="button"
@@ -524,7 +548,9 @@ function UploadDialog({
           error?: string;
         };
         if (xhr.status === 200 && res.ok) {
-          toast.success(res.deduped ? "该文件已存在，直接复用" : "上传成功");
+          toast.success(
+            res.deduped ? "该文件已存在，直接复用已有条目（本次填写的信息未生效）" : "上传成功",
+          );
           onUploaded();
         } else {
           toast.error(res.error ?? `上传失败（${xhr.status}）`);
