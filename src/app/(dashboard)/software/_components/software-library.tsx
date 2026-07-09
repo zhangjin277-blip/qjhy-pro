@@ -4,11 +4,11 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Download,
-  FolderPlus,
   HardDriveDownload,
   Loader2,
   MoreHorizontal,
   Pencil,
+  Plus,
   Search,
   Trash2,
   Upload,
@@ -35,14 +35,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   createCategory,
   deleteCategory,
@@ -74,6 +66,28 @@ function formatDate(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
     d.getDate(),
   ).padStart(2, "0")}`;
+}
+
+/** 首字渐变头像：按软件名哈希取固定渐变色，取首个字符（含中文/emoji 代理对安全）。 */
+const AVATAR_GRADIENTS = [
+  "from-sky-400 to-blue-600",
+  "from-violet-400 to-purple-600",
+  "from-emerald-400 to-teal-600",
+  "from-amber-400 to-orange-500",
+  "from-rose-400 to-pink-600",
+  "from-cyan-400 to-sky-600",
+  "from-indigo-400 to-violet-600",
+  "from-lime-400 to-green-600",
+] as const;
+
+function avatarGradient(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_GRADIENTS[h % AVATAR_GRADIENTS.length] ?? "from-sky-400 to-blue-600";
+}
+
+function avatarChar(name: string): string {
+  return [...name.trim()][0]?.toUpperCase() ?? "?";
 }
 
 export function SoftwareLibrary({ initialCategories, initialItems, initialTotal, canEdit }: Props) {
@@ -198,23 +212,44 @@ export function SoftwareLibrary({ initialCategories, initialItems, initialTotal,
   }
 
   return (
-    <div className="flex gap-4 p-4">
-      {/* 左侧分类栏 */}
-      <aside className="w-[180px] shrink-0">
-        <div className="bg-card rounded-xl border p-2">
-          <CategoryRow
+    <div className="p-4">
+      <div className="bg-card rounded-xl border">
+        {/* 标题 + 搜索 + 上传 */}
+        <div className="flex items-center gap-3 border-b px-4 py-3">
+          <HardDriveDownload className="text-primary h-4.5 w-4.5" />
+          <h1 className="text-[15px] font-semibold">软件库</h1>
+          <span className="text-muted-foreground text-xs">{total} 个软件</span>
+          <div className="relative ml-auto w-56">
+            <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
+            <Input
+              value={keyword}
+              onChange={(e) => onKeywordChange(e.target.value)}
+              placeholder="搜索软件名/文件名"
+              className="h-8 pl-8 text-[13px]"
+            />
+          </div>
+          {canEdit && (
+            <Button size="sm" onClick={() => setUploadOpen(true)}>
+              <Upload className="mr-1 h-3.5 w-3.5" />
+              上传软件
+            </Button>
+          )}
+        </div>
+
+        {/* 顶部分类 chips */}
+        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5">
+          <CategoryChip
             label="全部"
             active={activeCat === "all"}
             onClick={() => switchCategory("all")}
           />
-          <CategoryRow
+          <CategoryChip
             label="未分类"
             active={activeCat === "none"}
             onClick={() => switchCategory("none")}
           />
-          <div className="my-1.5 border-t" />
           {categories.map((c) => (
-            <CategoryRow
+            <CategoryChip
               key={c.id}
               label={c.name}
               count={c.itemCount}
@@ -228,124 +263,43 @@ export function SoftwareLibrary({ initialCategories, initialItems, initialTotal,
             <button
               type="button"
               onClick={() => setCreateCatOpen(true)}
-              className="text-muted-foreground hover:text-primary mt-1 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-[12px]"
+              className="text-muted-foreground hover:border-primary/40 hover:text-primary flex items-center gap-1 rounded-full border border-dashed px-3 py-1 text-[12px] transition-colors"
             >
-              <FolderPlus className="h-3.5 w-3.5" />
+              <Plus className="h-3 w-3" />
               新建分类
             </button>
           )}
         </div>
-      </aside>
 
-      {/* 右侧列表 */}
-      <main className="min-w-0 flex-1">
-        <div className="bg-card rounded-xl border">
-          <div className="flex items-center gap-3 border-b px-4 py-3">
-            <HardDriveDownload className="text-primary h-4.5 w-4.5" />
-            <h1 className="text-[15px] font-semibold">软件库</h1>
-            <span className="text-muted-foreground text-xs">{total} 个软件</span>
-            <div className="relative ml-auto w-56">
-              <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
-              <Input
-                value={keyword}
-                onChange={(e) => onKeywordChange(e.target.value)}
-                placeholder="搜索软件名/文件名"
-                className="h-8 pl-8 text-[13px]"
-              />
-            </div>
-            {canEdit && (
-              <Button size="sm" onClick={() => setUploadOpen(true)}>
-                <Upload className="mr-1 h-3.5 w-3.5" />
-                上传软件
-              </Button>
-            )}
+        {/* 卡片网格 */}
+        {items.length === 0 ? (
+          <div className="text-muted-foreground flex h-48 items-center justify-center text-sm">
+            {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : "暂无软件"}
           </div>
-
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>名称</TableHead>
-                <TableHead>分类</TableHead>
-                <TableHead>版本</TableHead>
-                <TableHead>说明</TableHead>
-                <TableHead>大小</TableHead>
-                <TableHead>上传人</TableHead>
-                <TableHead>上传时间</TableHead>
-                <TableHead className="text-right">下载次数</TableHead>
-                <TableHead className="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground h-32 text-center">
-                    {isPending ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : "暂无软件"}
-                  </TableCell>
-                </TableRow>
-              )}
-              {items.map((it) => (
-                <TableRow key={it.id}>
-                  <TableCell className="max-w-[220px]">
-                    <div className="truncate font-medium">{it.name}</div>
-                    <div className="text-muted-foreground truncate text-[11px]">{it.fileName}</div>
-                  </TableCell>
-                  <TableCell className="text-[12px]">{it.categoryName ?? "未分类"}</TableCell>
-                  <TableCell className="text-[12px]">{it.version ?? "-"}</TableCell>
-                  <TableCell className="text-muted-foreground max-w-[200px] truncate text-[12px]">
-                    {it.note ?? "-"}
-                  </TableCell>
-                  <TableCell className="text-[12px] tabular-nums">
-                    {formatSize(it.fileSize)}
-                  </TableCell>
-                  <TableCell className="text-[12px]">{it.uploadedByName ?? "-"}</TableCell>
-                  <TableCell className="text-[12px] tabular-nums">
-                    {formatDate(it.uploadedAt)}
-                  </TableCell>
-                  <TableCell className="text-right text-[12px] tabular-nums">
-                    {it.downloadCount}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <a
-                        href={`/api/software/download?id=${it.id}`}
-                        download
-                        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-7 px-2")}
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </a>
-                      {canEdit && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2"
-                            onClick={() => setEditItem(it)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive h-7 px-2"
-                            onClick={() => setDeleteTarget(it)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {total > items.length && (
-            <p className="text-muted-foreground border-t px-4 py-2 text-[11px]">
-              仅显示前 {items.length} 条，可用搜索或分类缩小范围
-            </p>
-          )}
-        </div>
-      </main>
+        ) : (
+          <div
+            className={cn(
+              "grid grid-cols-2 gap-4 p-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6",
+              isPending && "opacity-60",
+            )}
+          >
+            {items.map((it) => (
+              <SoftwareCard
+                key={it.id}
+                item={it}
+                canEdit={canEdit}
+                onEdit={() => setEditItem(it)}
+                onDelete={() => setDeleteTarget(it)}
+              />
+            ))}
+          </div>
+        )}
+        {total > items.length && (
+          <p className="text-muted-foreground border-t px-4 py-2 text-[11px]">
+            仅显示前 {items.length} 条，可用搜索或分类缩小范围
+          </p>
+        )}
+      </div>
 
       {/* 弹窗集合 */}
       <PromptDialog
@@ -408,7 +362,7 @@ export function SoftwareLibrary({ initialCategories, initialItems, initialTotal,
   );
 }
 
-function CategoryRow({
+function CategoryChip({
   label,
   count,
   active,
@@ -425,6 +379,7 @@ function CategoryRow({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const hasMenu = Boolean(onRename || onDelete);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -436,35 +391,47 @@ function CategoryRow({
   }, [menuOpen]);
 
   return (
-    <div ref={ref} className="group relative">
+    <div ref={ref} className="relative">
       <div
         className={cn(
-          "flex w-full items-center gap-1.5 rounded pr-1 text-[13px] transition-colors",
+          "flex items-center rounded-full border text-[12px] transition-colors",
           active
-            ? "bg-primary/10 text-primary font-medium"
-            : "text-foreground/80 hover:bg-[var(--hover-bg)]",
+            ? "border-primary bg-primary text-primary-foreground"
+            : "text-foreground/80 hover:border-primary/40 hover:text-primary bg-card",
         )}
       >
         <button
           type="button"
           onClick={onClick}
-          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-2 text-left"
+          className={cn("flex items-center gap-1.5 py-1 pl-3", hasMenu ? "pr-1.5" : "pr-3")}
         >
-          <span className="min-w-0 flex-1 truncate">{label}</span>
+          <span className="max-w-[120px] truncate">{label}</span>
+          {count != null && (
+            <span
+              className={cn(
+                "rounded-full px-1.5 text-[10px] tabular-nums",
+                active ? "bg-white/25" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {count}
+            </span>
+          )}
         </button>
-        {count != null && <span className="text-muted-foreground text-[11px]">{count}</span>}
-        {(onRename || onDelete) && (
+        {hasMenu && (
           <button
             type="button"
             onClick={() => setMenuOpen(!menuOpen)}
-            className="hover:bg-muted hidden rounded p-0.5 group-hover:block"
+            className={cn(
+              "mr-1.5 rounded-full p-0.5",
+              active ? "hover:bg-white/25" : "hover:bg-muted text-muted-foreground",
+            )}
           >
-            <MoreHorizontal className="h-3.5 w-3.5" />
+            <MoreHorizontal className="h-3 w-3" />
           </button>
         )}
       </div>
       {menuOpen && (
-        <div className="border-border bg-card absolute top-full right-0 z-20 mt-0.5 w-[100px] rounded-lg border p-1 shadow-lg">
+        <div className="border-border bg-card absolute top-full left-0 z-20 mt-1 w-[100px] rounded-lg border p-1 shadow-lg">
           {onRename && (
             <button
               type="button"
@@ -491,6 +458,93 @@ function CategoryRow({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SoftwareCard({
+  item,
+  canEdit,
+  onEdit,
+  onDelete,
+}: {
+  item: SoftwareListItem;
+  canEdit: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="group border-border/70 bg-card relative flex flex-col rounded-xl border p-3.5 transition-shadow hover:shadow-md">
+      {canEdit && (
+        <div className="absolute top-2 right-2 z-10 hidden gap-0.5 group-hover:flex">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="text-muted-foreground hover:text-primary bg-card hover:bg-muted rounded-md border p-1 shadow-sm"
+            aria-label="编辑"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="text-muted-foreground hover:text-destructive bg-card hover:bg-muted rounded-md border p-1 shadow-sm"
+            aria-label="删除"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+
+      {/* 首字渐变图标 */}
+      <div className="flex justify-center py-4">
+        <div
+          className={cn(
+            "flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br text-2xl font-semibold text-white shadow-sm",
+            avatarGradient(item.name),
+          )}
+        >
+          {avatarChar(item.name)}
+        </div>
+      </div>
+
+      {/* 分类 · 版本 */}
+      <div className="flex items-center gap-1.5 text-[11px]">
+        <span className="bg-primary h-1.5 w-1.5 shrink-0 rounded-full" />
+        <span className="text-primary truncate">{item.categoryName ?? "未分类"}</span>
+        {item.version && <span className="text-muted-foreground shrink-0">· {item.version}</span>}
+      </div>
+
+      {/* 名称 */}
+      <div className="mt-1 line-clamp-2 text-[13px] leading-snug font-semibold" title={item.name}>
+        {item.name}
+      </div>
+
+      {/* 说明（空则回退原始文件名） */}
+      <p className="text-muted-foreground mt-1 mb-2 line-clamp-2 min-h-[32px] text-[12px] leading-4">
+        {item.note ?? item.fileName}
+      </p>
+
+      {/* 底部：大小/下载数 + 下载按钮 */}
+      <div className="mt-auto flex items-center justify-between border-t pt-2">
+        <span
+          className="text-muted-foreground text-[11px] tabular-nums"
+          title={`${item.uploadedByName ?? "-"} 上传于 ${formatDate(item.uploadedAt)} · ${item.fileName}`}
+        >
+          {formatSize(item.fileSize)} · {item.downloadCount} 次下载
+        </span>
+        <a
+          href={`/api/software/download?id=${item.id}`}
+          download
+          className={cn(
+            buttonVariants({ variant: "default", size: "sm" }),
+            "h-6.5 rounded-full px-2.5 text-[11px]",
+          )}
+        >
+          <Download className="mr-0.5 h-3 w-3" />
+          下载
+        </a>
+      </div>
     </div>
   );
 }
