@@ -19,6 +19,8 @@
 
 ### Task 1: DB schema + migration + 权限种子
 
+> **实际执行记录（2026-07-09）**：本项目 drizzle journal 与真实 migration 长期脱节（0010+ 全部手写 SQL + psql 应用，journal 只记到 0017），`pnpm db:generate` 会产出混入无关表的脏 diff、`pnpm db:migrate` 不可用。故 Step 3-5 实际改为：手写 0054/0055 SQL（IF NOT EXISTS 可重跑）+ `docker exec -i qjhy-postgres psql -U qjhy -d qjhy < 文件` 直接应用。部署到 NAS 时同样需要手动 psql 应用这两个文件。
+
 **Files:**
 - Create: `src/db/schema/software.ts`
 - Modify: `src/db/schema/index.ts`（加一行 export）
@@ -64,7 +66,8 @@ export const software_item = pgTable(
     id: bigserial("id", { mode: "number" }).primaryKey(),
     category_id: bigint("category_id", { mode: "number" }).references(
       () => software_category.id,
-    ), // NULL = 未分类
+      { onDelete: "set null" },
+    ), // NULL = 未分类；分类被硬删时残留引用（含软删条目）自动落回未分类
     name: text("name").notNull(), // 自定义软件名，默认取文件名，可改
     version: text("version"), // 版本号，选填
     note: text("note"), // 一句话说明，选填
@@ -219,8 +222,16 @@ export const ROLE_DEFAULTS_SEED: (Permission & {
   MODULE_KEYS.map((module) => ({
     ...row,
     module,
-    // 软件库：全员可见可下载（scope=all），can_edit/can_admin 沿用岗位 base（仅总监/老板 true）
-    ...(module === "software_library" ? { scope: "all" as const } : {}),
+    // 软件库：全员可见可下载（scope=all）；上传/管理仅总监/老板（与 0055 种子一致）。
+    // 必须显式覆盖全部权限字段——运营岗位 base 是 can_edit=true，沿用 base 会错误获得上传权。
+    ...(module === "software_library"
+      ? {
+          scope: "all" as const,
+          can_edit: row.position === "总监" || row.position === "老板",
+          can_export: false,
+          can_admin: row.position === "总监" || row.position === "老板",
+        }
+      : {}),
   })),
 );
 ```
