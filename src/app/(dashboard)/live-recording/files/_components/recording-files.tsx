@@ -35,9 +35,17 @@ function mediaUrl(streamer: string, file: string, download = false): string {
  * .ts 无内置时长/索引 → 传 filesize + seekType:"range" 让 mpegts.js 用 HTTP Range
  * 估算时长并按字节位置跳转(进度条可显示可拖动;定位为码率估算,非精确)。
  */
+const PLAYBACK_RATES = [0.5, 1, 1.5, 2, 3];
+
 function TsPreview({ src, size }: { src: string; size: number }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [rate, setRate] = useState(1);
+
+  function changeRate(r: number) {
+    setRate(r);
+    if (videoRef.current) videoRef.current.playbackRate = r;
+  }
 
   useEffect(() => {
     let destroyed = false;
@@ -78,8 +86,32 @@ function TsPreview({ src, size }: { src: string; size: number }) {
     return <div className="p-6 text-center text-sm text-muted-foreground">{err}</div>;
   }
   return (
-    <div className="space-y-2">
-      <video ref={videoRef} controls className="max-h-[70vh] w-full rounded-md bg-black" />
+    <div className="space-y-2.5">
+      <video
+        ref={videoRef}
+        controls
+        onLoadedMetadata={() => {
+          if (videoRef.current) videoRef.current.playbackRate = rate;
+        }}
+        className="max-h-[70vh] w-full rounded-md bg-black"
+      />
+      <div className="flex items-center justify-center gap-1.5">
+        <span className="mr-1 text-xs text-slate-400">倍速</span>
+        {PLAYBACK_RATES.map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => changeRate(r)}
+            className={`rounded-md px-2 py-1 text-xs font-medium tabular-nums transition-colors ${
+              rate === r
+                ? "bg-primary text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            {r}×
+          </button>
+        ))}
+      </div>
       <p className="text-center text-xs text-slate-400">
         录像为直播流格式,进度条可拖动但定位为估算、可能有偏差;精确回看请下载后本地播放。
       </p>
