@@ -1,4 +1,5 @@
 export type {
+  ActionResult,
   AnchorFolder,
   BuiltinTask,
   RecorderConfig,

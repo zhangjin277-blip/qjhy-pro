@@ -43,3 +43,10 @@ export interface RecordingFile {
   /** mtime 距今 < 2 分钟,视为正在写入 */
   recording: boolean;
 }
+
+/**
+ * 写 action 的判别式返回值。生产 Server Action 里 throw 的 Error 会被 Next
+ * 脱敏成通用 digest,UI 拿不到具体原因;改走返回值绕过脱敏,业务错误一律
+ * `{ ok: false, error }` 而非向上抛出。
+ */
+export type ActionResult = { ok: true } | { ok: false; error: string };
