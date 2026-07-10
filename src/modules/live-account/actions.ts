@@ -5,6 +5,7 @@ import {
   daily_schedule_day,
   daily_schedule_segment,
   dingtalk_user,
+  editing_task,
   live_account,
   live_session_log,
   placement_cumulative_raw,
@@ -177,11 +178,12 @@ export async function deleteAccount(input: unknown): Promise<DeleteAccountResult
   }
 
   // force=true 或无 placement：清所有 FK 关联表再删 account
-  // FK 引用清单（pg_constraint 查得）：
+  // FK 引用清单（pg_constraint 查得，新增 FK 表时必须同步补这里）：
   //   placement_row / placement_cumulative_raw（投放）
   //   schedule_override / daily_schedule_segment / daily_schedule_day（排班）
   //   account_anchor_default（主播绑定）
   //   live_session_log（开播记录）
+  //   editing_task（剪辑任务；editing_task_event 有 onDelete cascade 自动带走）
   await db.delete(placement_row).where(eq(placement_row.live_account_id, id));
   await db.delete(placement_cumulative_raw).where(eq(placement_cumulative_raw.live_account_id, id));
   await db.delete(schedule_override).where(eq(schedule_override.account_id, id));
@@ -189,6 +191,7 @@ export async function deleteAccount(input: unknown): Promise<DeleteAccountResult
   await db.delete(daily_schedule_day).where(eq(daily_schedule_day.account_id, id));
   await db.delete(account_anchor_default).where(eq(account_anchor_default.account_id, id));
   await db.delete(live_session_log).where(eq(live_session_log.live_account_id, id));
+  await db.delete(editing_task).where(eq(editing_task.live_account_id, id));
   await db.delete(live_account).where(eq(live_account.id, id));
 
   await writeAuditLog({
