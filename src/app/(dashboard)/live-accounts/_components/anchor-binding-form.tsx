@@ -112,7 +112,7 @@ export function AnchorBindingForm({ accountId, bindings, anchors }: AnchorBindin
 
     updateDraft(idx, { saving: true, error: null });
     try {
-      await upsertBinding({
+      const r = await upsertBinding({
         id: d.id,
         account_id: accountId,
         dingtalk_user_id: d.dingtalk_user_id,
@@ -120,6 +120,10 @@ export function AnchorBindingForm({ accountId, bindings, anchors }: AnchorBindin
         rest_days: d.rest_days,
         remark: d.remark || null,
       });
+      if (!r.ok) {
+        updateDraft(idx, { saving: false, error: r.error });
+        return;
+      }
       updateDraft(idx, { saving: false });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "保存失败";
@@ -134,7 +138,11 @@ export function AnchorBindingForm({ accountId, bindings, anchors }: AnchorBindin
     }
     startDeleteTransition(async () => {
       try {
-        await deleteBinding({ id: bindingId });
+        const r = await deleteBinding({ id: bindingId });
+        if (!r.ok) {
+          setGlobalError(r.error);
+          return;
+        }
         removeDraft(idx);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "删除失败";

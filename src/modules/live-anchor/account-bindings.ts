@@ -69,9 +69,27 @@ export async function listBindings(input: unknown) {
   return rows;
 }
 
-export async function upsertBinding(input: unknown) {
-  const data = UpsertBindingInput.parse(input);
-  const { userId } = await requireBindingEdit();
+/**
+ * 业务错误用 `return { ok: false, error }` 而非 throw —
+ * Next.js production 会把 server-side throw 包装成 generic "Server Components
+ * render" 错误并吞掉具体 message，导致前端无法显示业务原因。
+ */
+export type BindingResult =
+  | { ok: true; binding: typeof account_anchor_default.$inferSelect | undefined }
+  | { ok: false; error: string };
+
+export async function upsertBinding(input: unknown): Promise<BindingResult> {
+  const parsed = UpsertBindingInput.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: `参数校验失败：${parsed.error.issues[0]?.message ?? "未知"}` };
+  }
+  const data = parsed.data;
+  let userId: string;
+  try {
+    ({ userId } = await requireBindingEdit());
+  } catch (e) {
+    return { ok: false, error: e instanceof AppError ? e.message : "无排班编辑权限" };
+  }
 
   const id = data.id ?? crypto.randomUUID();
   const isUpdate = Boolean(data.id);
@@ -80,7 +98,7 @@ export async function upsertBinding(input: unknown) {
     ? await db.select().from(account_anchor_default).where(eq(account_anchor_default.id, id))
     : [null];
   if (isUpdate && !beforeRow) {
-    throw new AppError("BINDING_NOT_FOUND", "排班绑定不存在", 404);
+    return { ok: false, error: "排班绑定不存在" };
   }
 
   const values = {
@@ -96,14 +114,19 @@ export async function upsertBinding(input: unknown) {
   };
 
   let result;
-  if (isUpdate) {
-    [result] = await db
-      .update(account_anchor_default)
-      .set(values)
-      .where(eq(account_anchor_default.id, id))
-      .returning();
-  } else {
-    [result] = await db.insert(account_anchor_default).values(values).returning();
+  try {
+    if (isUpdate) {
+      [result] = await db
+        .update(account_anchor_default)
+        .set(values)
+        .where(eq(account_anchor_default.id, id))
+        .returning();
+    } else {
+      [result] = await db.insert(account_anchor_default).values(values).returning();
+    }
+  } catch (e) {
+    console.error("[upsertBinding] db error:", e);
+    return { ok: false, error: `保存失败：${e instanceof Error ? e.message : "数据库错误"}` };
   }
 
   await writeAuditLog({
@@ -133,18 +156,27 @@ export async function upsertBinding(input: unknown) {
   }
   await remarkAttributionForWindows(windows);
 
-  return result;
+  return { ok: true, binding: result };
 }
 
-export async function deleteBinding(input: unknown) {
-  const { id } = DeleteBindingInput.parse(input);
-  const { userId } = await requireBindingEdit();
+export type DeleteBindingResult = { ok: true } | { ok: false; error: string };
+
+export async function deleteBinding(input: unknown): Promise<DeleteBindingResult> {
+  const parsed = DeleteBindingInput.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "参数校验失败" };
+  const { id } = parsed.data;
+  let userId: string;
+  try {
+    ({ userId } = await requireBindingEdit());
+  } catch (e) {
+    return { ok: false, error: e instanceof AppError ? e.message : "无排班编辑权限" };
+  }
 
   const [before] = await db
     .select()
     .from(account_anchor_default)
     .where(eq(account_anchor_default.id, id));
-  if (!before) throw new AppError("BINDING_NOT_FOUND", "排班绑定不存在", 404);
+  if (!before) return { ok: false, error: "排班绑定不存在" };
 
   await db.delete(account_anchor_default).where(eq(account_anchor_default.id, id));
 
