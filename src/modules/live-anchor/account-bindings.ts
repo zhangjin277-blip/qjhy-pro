@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/db/client";
-import { account_anchor_default, live_account, dingtalk_user } from "@/db/schema";
+import { account_anchor_default, live_account, live_anchor, dingtalk_user } from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { resolvePermission } from "@/modules/permissions/server";
@@ -99,6 +99,35 @@ export async function upsertBinding(input: unknown): Promise<BindingResult> {
     : [null];
   if (isUpdate && !beforeRow) {
     return { ok: false, error: "排班绑定不存在" };
+  }
+
+  // account_anchor_default.dingtalk_user_id FK → live_anchor（不是 dingtalk_user）。
+  // 下拉允许选「钉钉主播部门里还没建档的人」，所以这里自动补建主播档案：
+  // business_line 用该账号的 product，employment_type 默认「正式」，后续可在主播管理改。
+  const [anchorProfile] = await db
+    .select({ dingtalk_user_id: live_anchor.dingtalk_user_id })
+    .from(live_anchor)
+    .where(eq(live_anchor.dingtalk_user_id, data.dingtalk_user_id));
+  if (!anchorProfile) {
+    const [account] = await db
+      .select({ product: live_account.product })
+      .from(live_account)
+      .where(eq(live_account.id, data.account_id));
+    if (!account) return { ok: false, error: "直播账号不存在" };
+    try {
+      await db.insert(live_anchor).values({
+        dingtalk_user_id: data.dingtalk_user_id,
+        business_line: account.product,
+        employment_type: "正式",
+        work_status: "active",
+      });
+    } catch (e) {
+      console.error("[upsertBinding] auto-create live_anchor failed:", e);
+      return {
+        ok: false,
+        error: `该主播还没有档案且自动建档失败：${e instanceof Error ? e.message : "未知错误"}`,
+      };
+    }
   }
 
   const values = {
