@@ -30,8 +30,12 @@ function mediaUrl(streamer: string, file: string, download = false): string {
   return `/api/live-recording/media?${q.toString()}`;
 }
 
-/** mpegts.js 播放器:动态 import(浏览器专用),挂载时创建、卸载时销毁 */
-function TsPreview({ src }: { src: string }) {
+/**
+ * mpegts.js 播放器:动态 import(浏览器专用),挂载时创建、卸载时销毁。
+ * .ts 无内置时长/索引 → 传 filesize + seekType:"range" 让 mpegts.js 用 HTTP Range
+ * 估算时长并按字节位置跳转(进度条可显示可拖动;定位为码率估算,非精确)。
+ */
+function TsPreview({ src, size }: { src: string; size: number }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -49,7 +53,10 @@ function TsPreview({ src }: { src: string }) {
           setErr("当前浏览器不支持在线预览,请下载后本地播放");
           return;
         }
-        const p = mpegts.createPlayer({ type: "mpegts", url: src, isLive: false });
+        const p = mpegts.createPlayer(
+          { type: "mpegts", url: src, isLive: false, filesize: size },
+          { lazyLoad: true, seekType: "range", enableStashBuffer: false },
+        );
         p.attachMediaElement(video);
         p.load();
         player = p;
@@ -65,12 +72,19 @@ function TsPreview({ src }: { src: string }) {
         /* ignore */
       }
     };
-  }, [src]);
+  }, [src, size]);
 
   if (err) {
     return <div className="p-6 text-center text-sm text-muted-foreground">{err}</div>;
   }
-  return <video ref={videoRef} controls className="max-h-[70vh] w-full rounded-md bg-black" />;
+  return (
+    <div className="space-y-2">
+      <video ref={videoRef} controls className="max-h-[70vh] w-full rounded-md bg-black" />
+      <p className="text-center text-xs text-slate-400">
+        录像为直播流格式,进度条可拖动但定位为估算、可能有偏差;精确回看请下载后本地播放。
+      </p>
+    </div>
+  );
 }
 
 export function RecordingFiles({
@@ -229,7 +243,9 @@ export function RecordingFiles({
           <DialogHeader>
             <DialogTitle className="truncate font-mono text-sm">{previewFile?.name}</DialogTitle>
           </DialogHeader>
-          {previewFile && selected && <TsPreview src={mediaUrl(selected, previewFile.name)} />}
+          {previewFile && selected && (
+            <TsPreview src={mediaUrl(selected, previewFile.name)} size={previewFile.size} />
+          )}
         </DialogContent>
       </Dialog>
 
