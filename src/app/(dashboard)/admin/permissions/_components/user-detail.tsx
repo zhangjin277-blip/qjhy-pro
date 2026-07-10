@@ -890,5 +890,7 @@ function moduleEmoji(m: ModuleKey): string {
       return "✂️";
     case "software_library":
       return "🧰";
+    case "recording":
+      return "🎥";
   }
 }

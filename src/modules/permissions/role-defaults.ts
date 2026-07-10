@@ -95,5 +95,16 @@ export const ROLE_DEFAULTS_SEED: (Permission & {
           description: "软件库：全员可下载，管理员可上传",
         }
       : {}),
+    // 直播录制：全员可见可下载（scope=all）；任务增删/暂停、删录像仅总监/老板（与 0056 种子一致）。
+    // 同软件库：必须显式覆盖全部权限字段，防运营岗 base can_edit=true 泄漏管理权。
+    ...(module === "recording"
+      ? {
+          scope: "all" as const,
+          can_edit: row.position === "总监" || row.position === "老板",
+          can_export: false,
+          can_admin: row.position === "总监" || row.position === "老板",
+          description: "直播录制：全员可看可下载，管理员可控制/删文件",
+        }
+      : {}),
   })),
 );
