@@ -8,6 +8,7 @@ import {
   Shield,
   UserCircle2,
   Users,
+  Video,
   type LucideIcon,
 } from "lucide-react";
 import type { ModuleKey } from "@/modules/permissions";
@@ -118,6 +119,14 @@ export const NAV: NavItem[] = [
     single: true,
     href: "/software",
     module: "software_library",
+  },
+  {
+    key: "live-recording",
+    label: "直播录制",
+    icon: Video,
+    single: true,
+    href: "/live-recording",
+    // 不填 module → 任何登录用户始终可见(不分权限)
   },
   {
     key: "ops",
