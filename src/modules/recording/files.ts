@@ -117,5 +117,7 @@ export async function deleteRecordingFile(
   if (Date.now() - st.mtimeMs < RECORDING_GRACE_MS) {
     throw new Error("文件 2 分钟内仍在写入(疑似录制中),禁止删除");
   }
-  await fs.unlink(fullPath);
+  await fs.unlink(fullPath).catch((e) => {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e; // 幂等:stat 与 unlink 之间被引擎轮转掉
+  });
 }

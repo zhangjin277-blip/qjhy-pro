@@ -89,3 +89,10 @@ describe("deleteRecordingFile", () => {
     await expect(deleteRecordingFile("主播A", "cover.png", new Set())).rejects.toThrow();
   });
 });
+
+describe("RECORDINGS_DIR 未配置", () => {
+  it("抛错", async () => {
+    delete process.env.RECORDINGS_DIR;
+    await expect(listAnchorFolders()).rejects.toThrow(/未配置/);
+  });
+});
