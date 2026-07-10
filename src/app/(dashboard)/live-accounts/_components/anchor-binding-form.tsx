@@ -51,6 +51,89 @@ function toSlotDrafts(timeSlots: [string, string][]): SlotDraft[] {
 const inputCls =
   "rounded border border-slate-200 bg-white px-2 py-1.5 text-[13px] text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100";
 
+/** 可搜索主播下拉：输入拼音/汉字过滤 */
+function AnchorCombobox({
+  anchors,
+  value,
+  onChange,
+}: {
+  anchors: AnchorLite[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selected = anchors.find((a) => a.dingtalk_user_id === value);
+  const filtered = query.trim()
+    ? anchors.filter((a) => a.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : anchors;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className={`${inputCls} flex w-full items-center justify-between text-left`}
+        onClick={() => {
+          setOpen((o) => !o);
+          setQuery("");
+        }}
+      >
+        <span className={selected ? "" : "text-slate-400"}>
+          {selected ? selected.name : "— 选择主播 —"}
+        </span>
+        <span className="text-[10px] text-slate-400">▾</span>
+      </button>
+      {open && (
+        <>
+          {/* 点击外部关闭 */}
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+            <div className="border-b border-slate-100 p-2">
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="搜索姓名..."
+                className={`${inputCls} w-full`}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setOpen(false);
+                  if (e.key === "Enter" && filtered.length === 1 && filtered[0]) {
+                    onChange(filtered[0].dingtalk_user_id);
+                    setOpen(false);
+                  }
+                }}
+              />
+            </div>
+            <div className="max-h-[240px] overflow-y-auto py-1">
+              {filtered.length === 0 ? (
+                <div className="px-3 py-2 text-[12px] text-slate-400">无匹配</div>
+              ) : (
+                filtered.map((a) => (
+                  <button
+                    key={a.dingtalk_user_id}
+                    type="button"
+                    onClick={() => {
+                      onChange(a.dingtalk_user_id);
+                      setOpen(false);
+                    }}
+                    className={`block w-full px-3 py-1.5 text-left text-[13px] hover:bg-blue-50 ${
+                      a.dingtalk_user_id === value
+                        ? "bg-blue-50 font-medium text-blue-700"
+                        : "text-slate-700"
+                    }`}
+                  >
+                    {a.name}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function AnchorBindingForm({ accountId, bindings, anchors }: AnchorBindingFormProps) {
   const [drafts, setDrafts] = useState<BindingDraft[]>(
     bindings.map((b) => ({
@@ -187,18 +270,11 @@ export function AnchorBindingForm({ accountId, bindings, anchors }: AnchorBindin
             <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-slate-500">
               主播（钉钉用户）
             </label>
-            <select
-              className={`${inputCls} w-full`}
+            <AnchorCombobox
+              anchors={anchors}
               value={draft.dingtalk_user_id}
-              onChange={(e) => updateDraft(idx, { dingtalk_user_id: e.target.value })}
-            >
-              <option value="">— 选择主播 —</option>
-              {anchors.map((a) => (
-                <option key={a.dingtalk_user_id} value={a.dingtalk_user_id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => updateDraft(idx, { dingtalk_user_id: id })}
+            />
           </div>
 
           {/* Time slots */}
