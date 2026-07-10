@@ -21,6 +21,22 @@ export default tseslint.config(
       },
     },
   },
+  {
+    // scripts/ 下的 .mjs 是独立运行的 Node 脚本(非 Next.js 应用代码),需要 Node/Web 全局
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      sourceType: "module",
+      globals: {
+        process: "readonly",
+        Buffer: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+        WebSocket: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+      },
+    },
+  },
   js.configs.recommended,
   ...tseslint.configs.strict,
   ...tseslint.configs.stylistic,
