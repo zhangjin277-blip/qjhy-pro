@@ -172,22 +172,22 @@ export function RecordingList({
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow className="border-slate-100 hover:bg-transparent">
-              <TableHead className="h-11 pl-5 text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[36%] pl-5 text-xs font-medium text-slate-400">
                 主播及画面
               </TableHead>
-              <TableHead className="h-11 w-28 text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[13%] text-xs font-medium text-slate-400">
                 直播链接
               </TableHead>
-              <TableHead className="h-11 w-64 text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[27%] text-xs font-medium text-slate-400">
                 录制状态
               </TableHead>
-              <TableHead className="h-11 w-24 text-center text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[11%] text-center text-xs font-medium text-slate-400">
                 监听状态
               </TableHead>
-              <TableHead className="h-11 w-28 pr-5 text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[13%] pr-5 text-xs font-medium text-slate-400">
                 操作
               </TableHead>
             </TableRow>
@@ -198,7 +198,7 @@ export function RecordingList({
                 key={s.index}
                 className="border-slate-100 transition-colors hover:bg-slate-50/70"
               >
-                <TableCell className="py-3 pl-5">
+                <TableCell className="py-3.5 pl-5">
                   <div className="flex items-center gap-3.5">
                     <CoverThumb s={s} />
                     <div className="min-w-0">
@@ -206,13 +206,30 @@ export function RecordingList({
                         <span className="truncate text-[15px] font-semibold text-slate-800">
                           {s.name || s.roomId}
                         </span>
-                        <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
+                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-px text-[10px] font-medium tracking-wide text-slate-500">
                           {s.platformName}
                         </span>
                       </div>
-                      <div className="mt-0.5 truncate text-xs text-slate-400 tabular-nums">
-                        {s.fileCount} 个录像 · {formatSize(s.totalSize)}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          s.name &&
+                          router.push(`/live-recording/files?s=${encodeURIComponent(s.name)}`)
+                        }
+                        disabled={!s.name}
+                        className="group mt-1 flex items-center gap-1 text-xs text-slate-400 tabular-nums transition-colors hover:text-primary disabled:pointer-events-none"
+                      >
+                        <svg
+                          viewBox="0 0 16 16"
+                          className="size-3.5 shrink-0 text-slate-300 transition-colors group-hover:text-primary"
+                          fill="currentColor"
+                        >
+                          <path d="M1.75 3A1.75 1.75 0 0 0 0 4.75v6.5C0 12.216.784 13 1.75 13h12.5A1.75 1.75 0 0 0 16 11.25V5.75A1.75 1.75 0 0 0 14.25 4H8.061l-1.5-1.5A1.75 1.75 0 0 0 5.32 2H1.75A1.75 1.75 0 0 0 0 3.75V3Z" />
+                        </svg>
+                        <span className="group-hover:underline">
+                          {s.fileCount} 个录像 · {formatSize(s.totalSize)}
+                        </span>
+                      </button>
                     </div>
                   </div>
                 </TableCell>
@@ -228,10 +245,13 @@ export function RecordingList({
                 </TableCell>
                 <TableCell>
                   {s.recording ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 py-1 pl-2 pr-2.5 text-xs font-medium text-emerald-700">
-                      <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+                    <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 py-1 pl-2 pr-3 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/15">
+                      <span className="relative flex size-1.5">
+                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+                      </span>
                       正在录制
-                      <span className="font-normal text-emerald-600/80 tabular-nums">
+                      <span className="font-normal text-emerald-600/70 tabular-nums">
                         {formatDuration(s.durationSec)} · {formatSize(s.currentSize)}
                       </span>
                     </span>
