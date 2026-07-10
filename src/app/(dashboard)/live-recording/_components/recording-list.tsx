@@ -42,7 +42,7 @@ function formatDuration(sec: number): string {
   return h > 0 ? `${pad(h)}小时${pad(m)}分${pad(s)}秒` : `${pad(m)}分${pad(s)}秒`;
 }
 
-/** 封面缩略图:有则显图,加载失败/无封面显占位 */
+/** 封面缩略图(16:9):有则显图,加载失败/无封面显占位 */
 function CoverThumb({ s }: { s: StreamerView }) {
   const [failed, setFailed] = useState(false);
   const showImg = s.hasCover && s.platform && s.roomId && !failed;
@@ -52,19 +52,20 @@ function CoverThumb({ s }: { s: StreamerView }) {
       <img
         src={`/api/live-recording/cover?platform=${encodeURIComponent(s.platform)}&room=${encodeURIComponent(s.roomId)}`}
         alt=""
-        className="h-12 w-20 shrink-0 rounded-md bg-muted object-cover"
+        className="h-[52px] w-[92px] shrink-0 rounded-lg object-cover ring-1 ring-slate-900/5"
         onError={() => setFailed(true)}
       />
     );
   }
   return (
-    <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] text-muted-foreground">
+    <div className="flex h-[52px] w-[92px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-slate-50 text-[11px] text-slate-400 ring-1 ring-slate-900/5">
+      <span className="text-base leading-none opacity-40">▷</span>
       {s.hasCover ? "无画面" : "封面失效"}
     </div>
   );
 }
 
-/** 监听开关(蓝=监听中,灰=已暂停) */
+/** 监听开关(主蓝=监听中,灰=已暂停) */
 function MonitorSwitch({
   on,
   disabled,
@@ -81,13 +82,13 @@ function MonitorSwitch({
       aria-checked={on}
       disabled={disabled}
       onClick={onToggle}
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-        on ? "bg-blue-500" : "bg-muted-foreground/30"
+      className={`relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full transition-colors duration-200 disabled:opacity-40 ${
+        on ? "bg-primary" : "bg-slate-200"
       }`}
     >
       <span
-        className={`inline-block size-4 rounded-full bg-white shadow transition-transform ${
-          on ? "translate-x-4" : "translate-x-0.5"
+        className={`inline-block size-[18px] rounded-full bg-white shadow-sm ring-1 ring-slate-900/5 transition-transform duration-200 ${
+          on ? "translate-x-[20px]" : "translate-x-0.5"
         }`}
       />
     </button>
@@ -140,11 +141,24 @@ export function RecordingList({
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <span>总计 {streamers.length}</span>
-          <span className="text-emerald-600">监控中 {monitoringCount}</span>
-          <span className="text-red-600">录制中 {recordingCount}</span>
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight text-slate-800">录制名单</h1>
+          <div className="mt-1.5 flex items-center gap-4 text-[13px] text-slate-500">
+            <span>
+              总计 <b className="font-semibold text-slate-700 tabular-nums">{streamers.length}</b>
+            </span>
+            <span className="text-slate-300">·</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-emerald-500" />
+              监控中{" "}
+              <b className="font-semibold text-emerald-600 tabular-nums">{monitoringCount}</b>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-red-500" />
+              录制中 <b className="font-semibold text-red-500 tabular-nums">{recordingCount}</b>
+            </span>
+          </div>
         </div>
         <Button
           onClick={() => {
@@ -153,35 +167,50 @@ export function RecordingList({
             setAddOpen(true);
           }}
         >
-          添加主播
+          + 添加主播
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="pl-4">主播及画面</TableHead>
-              <TableHead className="w-28">直播链接</TableHead>
-              <TableHead className="w-64">录制状态</TableHead>
-              <TableHead className="w-24 text-center">监听状态</TableHead>
-              <TableHead className="w-32">操作</TableHead>
+            <TableRow className="border-slate-100 hover:bg-transparent">
+              <TableHead className="h-11 pl-5 text-xs font-medium text-slate-400">
+                主播及画面
+              </TableHead>
+              <TableHead className="h-11 w-28 text-xs font-medium text-slate-400">
+                直播链接
+              </TableHead>
+              <TableHead className="h-11 w-64 text-xs font-medium text-slate-400">
+                录制状态
+              </TableHead>
+              <TableHead className="h-11 w-24 text-center text-xs font-medium text-slate-400">
+                监听状态
+              </TableHead>
+              <TableHead className="h-11 w-28 pr-5 text-xs font-medium text-slate-400">
+                操作
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {streamers.map((s) => (
-              <TableRow key={s.index}>
-                <TableCell className="pl-4">
-                  <div className="flex items-center gap-3">
+              <TableRow
+                key={s.index}
+                className="border-slate-100 transition-colors hover:bg-slate-50/70"
+              >
+                <TableCell className="py-3 pl-5">
+                  <div className="flex items-center gap-3.5">
                     <CoverThumb s={s} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="truncate font-medium">{s.name || s.roomId}</span>
-                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                        <span className="truncate text-[15px] font-semibold text-slate-800">
+                          {s.name || s.roomId}
+                        </span>
+                        <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
                           {s.platformName}
                         </span>
                       </div>
-                      <div className="truncate text-xs text-muted-foreground">
+                      <div className="mt-0.5 truncate text-xs text-slate-400 tabular-nums">
                         {s.fileCount} 个录像 · {formatSize(s.totalSize)}
                       </div>
                     </div>
@@ -192,23 +221,23 @@ export function RecordingList({
                     href={s.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-sm text-blue-600 hover:underline"
+                    className="text-[13px] font-medium text-primary hover:underline"
                   >
-                    前往房间
+                    前往房间 ↗
                   </a>
                 </TableCell>
                 <TableCell>
                   {s.recording ? (
-                    <span className="inline-flex items-center gap-1.5 text-sm text-emerald-600">
-                      <span className="size-2 animate-pulse rounded-full bg-emerald-500" />
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 py-1 pl-2 pr-2.5 text-xs font-medium text-emerald-700">
+                      <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
                       正在录制
-                      <span className="text-xs text-muted-foreground">
-                        ({formatDuration(s.durationSec)} | {formatSize(s.currentSize)})
+                      <span className="font-normal text-emerald-600/80 tabular-nums">
+                        {formatDuration(s.durationSec)} · {formatSize(s.currentSize)}
                       </span>
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <span className="size-2 rounded-full bg-muted-foreground/40" />
+                    <span className="inline-flex items-center gap-1.5 text-[13px] text-slate-400">
+                      <span className="size-1.5 rounded-full bg-slate-300" />
                       {s.paused ? "已暂停" : "未在录制"}
                     </span>
                   )}
@@ -220,11 +249,12 @@ export function RecordingList({
                     onToggle={() => run(() => setPausedAction(s.index, !s.paused))}
                   />
                 </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
+                <TableCell className="pr-5">
+                  <div className="flex gap-0.5">
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="text-slate-500 hover:text-slate-800"
                       disabled={pending}
                       onClick={() => {
                         setRenameValue(s.name);
@@ -236,6 +266,7 @@ export function RecordingList({
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="text-slate-500 hover:bg-red-50 hover:text-red-600"
                       disabled={pending}
                       onClick={() => setDeleteTarget(s)}
                     >
