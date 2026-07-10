@@ -93,7 +93,8 @@ export async function getRecorderSnapshot(): Promise<RecorderSnapshot> {
         cache = snap;
         return snap;
       })
-      .catch(() => {
+      .catch((e: unknown) => {
+        console.warn("[recording] 快照获取失败,降级返回最后快照:", e);
         const stale: RecorderSnapshot = {
           online: false,
           tasks: cache?.tasks ?? [],
