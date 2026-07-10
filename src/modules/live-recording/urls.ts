@@ -49,6 +49,45 @@ export function listStreamers(content: string): StreamerEntry[] {
   return parseUrlsFile(content).filter((e) => e.recognized);
 }
 
+/**
+ * 从 url 推断平台与房间号(用于匹配封面 `{平台}_{房间号}.jpg` 与显示平台标签)。
+ * 平台名与 go-recorder 一致:Douyin / Kuaishou / Soop。
+ */
+export function parsePlatformRoom(url: string): { platform: string; roomId: string } {
+  const u = url.toLowerCase();
+  let platform = "";
+  if (u.includes("douyin.com")) platform = "Douyin";
+  else if (u.includes("kuaishou") || u.includes("chenzhongtech")) platform = "Kuaishou";
+  else if (u.includes("sooplive") || u.includes("afreeca")) platform = "Soop";
+  const nums = url.match(/\d+/g);
+  const roomId = nums && nums.length > 0 ? (nums[nums.length - 1] ?? "") : "";
+  return { platform, roomId };
+}
+
+/** 平台中文名 */
+export function platformLabel(platform: string): string {
+  if (platform === "Douyin") return "抖音";
+  if (platform === "Kuaishou") return "快手";
+  if (platform === "Soop") return "Soop";
+  return "其他";
+}
+
+/** 从录像文件名解析开播时间(`<名>_YYYY-MM-DD_HH-MM-SS[_NNN].ts`),失败返回 null(毫秒时间戳) */
+export function parseStartTimeMs(filename: string): number | null {
+  const m = /_(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})/.exec(filename);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  const t = new Date(
+    Number(y),
+    Number(mo) - 1,
+    Number(d),
+    Number(h),
+    Number(mi),
+    Number(s),
+  ).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
 function buildLine(paused: boolean, url: string, name: string): string {
   const core = name ? `${url},主播:${name}` : url;
   return paused ? `#${core}` : core;

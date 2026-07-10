@@ -124,9 +124,11 @@ export const NAV: NavItem[] = [
     key: "live-recording",
     label: "直播录制",
     icon: Video,
-    single: true,
-    href: "/live-recording",
-    // 不填 module → 任何登录用户始终可见(不分权限)
+    children: [
+      // 子项不填 module → 任何登录用户始终可见(不分权限)
+      { key: "lr-list", label: "录制名单", href: "/live-recording" },
+      { key: "lr-files", label: "录像文件", href: "/live-recording/files" },
+    ],
   },
   {
     key: "ops",

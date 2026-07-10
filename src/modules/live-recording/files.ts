@@ -23,6 +23,10 @@ export interface StreamerFolder {
   totalSize: number;
   latestMtimeMs: number;
   recording: boolean;
+  /** 最新一个 .ts 文件名(正在录制时即当前场次文件),用于算时长;无则 "" */
+  latestFileName: string;
+  /** 最新一个 .ts 文件大小 */
+  latestFileSize: number;
 }
 
 export interface RecordingFile {
@@ -70,6 +74,8 @@ export async function listStreamerFolders(): Promise<StreamerFolder[]> {
     let fileCount = 0;
     let totalSize = 0;
     let latestMtimeMs = 0;
+    let latestFileName = "";
+    let latestFileSize = 0;
     const files = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
     for (const f of files) {
       if (!f.isFile() || !f.name.endsWith(".ts")) continue;
@@ -77,7 +83,11 @@ export async function listStreamerFolders(): Promise<StreamerFolder[]> {
       if (!st) continue;
       fileCount += 1;
       totalSize += st.size;
-      if (st.mtimeMs > latestMtimeMs) latestMtimeMs = st.mtimeMs;
+      if (st.mtimeMs > latestMtimeMs) {
+        latestMtimeMs = st.mtimeMs;
+        latestFileName = f.name;
+        latestFileSize = st.size;
+      }
     }
     out.push({
       name: d.name,
@@ -85,6 +95,8 @@ export async function listStreamerFolders(): Promise<StreamerFolder[]> {
       totalSize,
       latestMtimeMs,
       recording: latestMtimeMs > 0 && now - latestMtimeMs < RECORDING_WINDOW_MS,
+      latestFileName,
+      latestFileSize,
     });
   }
   return out.sort((a, b) => b.totalSize - a.totalSize);
@@ -166,11 +178,37 @@ export async function readUrlsFile(): Promise<string> {
 }
 
 /**
- * 原子写名单文件(临时文件 + rename),尽量减小与 go-recorder 写回的竞态窗口。
+ * 就地覆写名单文件。
+ * 注意:builtin_urls.txt 通常以「单文件 bind mount」挂进容器,rename 到挂载点会 EBUSY,
+ * 所以不能用 tmp+rename 的原子写法,只能就地覆写(go-recorder 本身也是就地读写此文件)。
+ * 小文本单次 writeFile,与 go-recorder 3 秒热重载的竞态窗口极小,可接受。
  */
 export async function writeUrlsFile(content: string): Promise<void> {
-  const target = urlsFilePath();
-  const tmp = `${target}.qjhy-tmp-${process.pid}`;
-  await fs.writeFile(tmp, content, "utf8");
-  await fs.rename(tmp, target);
+  await fs.writeFile(urlsFilePath(), content, "utf8");
+}
+
+/**
+ * 封面图:go-recorder 存在 COVERS_DIR 下,命名 `{平台}_{房间号}.jpg`。
+ * 校验平台(白名单)与房间号(纯数字)防穿越;不存在则抛错(路由回 404 → 前端显占位)。
+ */
+export async function statCover(
+  platform: string,
+  roomId: string,
+): Promise<{ fullPath: string; size: number }> {
+  const dir = process.env.COVERS_DIR;
+  if (!dir) throw new Error("COVERS_DIR 未配置");
+  if (!["Douyin", "Kuaishou", "Soop"].includes(platform)) throw new Error("非法平台");
+  if (!/^\d+$/.test(roomId)) throw new Error("非法房间号");
+  const fullPath = path.join(dir, `${platform}_${roomId}.jpg`);
+  const st = await fs.stat(fullPath);
+  if (!st.isFile()) throw new Error("不是文件");
+  return { fullPath, size: st.size };
+}
+
+/** 该主播是否有封面文件(名单页决定显缩略图还是占位) */
+export async function hasCover(platform: string, roomId: string): Promise<boolean> {
+  return statCover(platform, roomId).then(
+    () => true,
+    () => false,
+  );
 }

@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   addStreamer,
   listStreamers,
+  parsePlatformRoom,
+  parseStartTimeMs,
   parseUrlsFile,
+  platformLabel,
   removeAt,
   renameAt,
   setPausedAt,
@@ -43,6 +46,55 @@ describe("listStreamers", () => {
   it("空行不计入,已识别条目全部返回", () => {
     const withBlank = SAMPLE + "\n\n";
     expect(listStreamers(withBlank)).toHaveLength(4);
+  });
+});
+
+describe("parsePlatformRoom", () => {
+  it("抖音各种链接取平台+房间号", () => {
+    expect(parsePlatformRoom("https://live.douyin.com/90910615050")).toEqual({
+      platform: "Douyin",
+      roomId: "90910615050",
+    });
+    expect(parsePlatformRoom("https://www.douyin.com/root/live/134085333433")).toEqual({
+      platform: "Douyin",
+      roomId: "134085333433",
+    });
+  });
+  it("快手链接", () => {
+    expect(parsePlatformRoom("https://live.kuaishou.com/u/xxx/3xabc123?room=456").platform).toBe(
+      "Kuaishou",
+    );
+  });
+  it("纯房间号:无平台,房间号为自身", () => {
+    expect(parsePlatformRoom("3129518236")).toEqual({ platform: "", roomId: "3129518236" });
+  });
+  it("非直播间 union 行:无房间号", () => {
+    expect(
+      parsePlatformRoom("https://union.bytedance.com/open/portal/live_flow/followRoomDetail")
+        .roomId,
+    ).toBe("");
+  });
+});
+
+describe("platformLabel", () => {
+  it("中文名映射", () => {
+    expect(platformLabel("Douyin")).toBe("抖音");
+    expect(platformLabel("Kuaishou")).toBe("快手");
+    expect(platformLabel("")).toBe("其他");
+  });
+});
+
+describe("parseStartTimeMs", () => {
+  it("从文件名解析开播时间", () => {
+    const ms = parseStartTimeMs("原始传奇_2026-07-10_02-38-07.ts");
+    expect(ms).not.toBeNull();
+    expect(new Date(ms ?? 0).getHours()).toBe(2);
+  });
+  it("分段文件名也能解析", () => {
+    expect(parseStartTimeMs("豆掌柜_2026-03-22_20-15-42_001.ts")).not.toBeNull();
+  });
+  it("无时间戳返回 null", () => {
+    expect(parseStartTimeMs("random.ts")).toBeNull();
   });
 });
 

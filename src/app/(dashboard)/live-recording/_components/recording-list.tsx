@@ -18,12 +18,80 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 function formatSize(n: number): string {
   if (n >= 1024 ** 4) return `${(n / 1024 ** 4).toFixed(2)} TB`;
-  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(2)} GB`;
   if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(0)} MB`;
   return `${(n / 1024).toFixed(0)} KB`;
+}
+
+function formatDuration(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${pad(h)}小时${pad(m)}分${pad(s)}秒` : `${pad(m)}分${pad(s)}秒`;
+}
+
+/** 封面缩略图:有则显图,加载失败/无封面显占位 */
+function CoverThumb({ s }: { s: StreamerView }) {
+  const [failed, setFailed] = useState(false);
+  const showImg = s.hasCover && s.platform && s.roomId && !failed;
+  if (showImg) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- 录制器动态封面,尺寸不定
+      <img
+        src={`/api/live-recording/cover?platform=${encodeURIComponent(s.platform)}&room=${encodeURIComponent(s.roomId)}`}
+        alt=""
+        className="h-12 w-20 shrink-0 rounded-md bg-muted object-cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] text-muted-foreground">
+      {s.hasCover ? "无画面" : "封面失效"}
+    </div>
+  );
+}
+
+/** 监听开关(蓝=监听中,灰=已暂停) */
+function MonitorSwitch({
+  on,
+  disabled,
+  onToggle,
+}: {
+  on: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={onToggle}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+        on ? "bg-blue-500" : "bg-muted-foreground/30"
+      }`}
+    >
+      <span
+        className={`inline-block size-4 rounded-full bg-white shadow transition-transform ${
+          on ? "translate-x-4" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
 }
 
 export function RecordingList({
@@ -37,15 +105,15 @@ export function RecordingList({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // 添加对话框
   const [addOpen, setAddOpen] = useState(false);
   const [addUrl, setAddUrl] = useState("");
   const [addName, setAddName] = useState("");
-  // 改名对话框
   const [renameTarget, setRenameTarget] = useState<StreamerView | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  // 删除确认
   const [deleteTarget, setDeleteTarget] = useState<StreamerView | null>(null);
+
+  const recordingCount = streamers.filter((s) => s.recording).length;
+  const monitoringCount = streamers.filter((s) => !s.paused && !s.recording).length;
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, after?: () => void) =>
     startTransition(async () => {
@@ -73,81 +141,119 @@ export function RecordingList({
       )}
 
       <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">共 {streamers.length} 个录制主播</div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push("/live-recording/files")}>
-            录像文件
-          </Button>
-          <Button
-            onClick={() => {
-              setAddUrl("");
-              setAddName("");
-              setAddOpen(true);
-            }}
-          >
-            添加主播
-          </Button>
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <span>总计 {streamers.length}</span>
+          <span className="text-emerald-600">监控中 {monitoringCount}</span>
+          <span className="text-red-600">录制中 {recordingCount}</span>
         </div>
+        <Button
+          onClick={() => {
+            setAddUrl("");
+            setAddName("");
+            setAddOpen(true);
+          }}
+        >
+          添加主播
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {streamers.map((s) => (
-          <div key={s.index} className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate font-medium">{s.name || s.url}</div>
-                <div className="truncate text-xs text-muted-foreground">{s.url}</div>
-              </div>
-              {s.recording ? (
-                <span className="inline-flex shrink-0 items-center gap-1 text-xs text-red-600">
-                  <span className="size-2 animate-pulse rounded-full bg-red-500" />
-                  录制中
-                </span>
-              ) : s.paused ? (
-                <span className="shrink-0 text-xs text-muted-foreground">已暂停</span>
-              ) : (
-                <span className="shrink-0 text-xs text-muted-foreground">监控中</span>
-              )}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {s.fileCount} 个录像 · {formatSize(s.totalSize)}
-            </div>
-            <div className="flex flex-wrap gap-2 border-t pt-3">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pending}
-                onClick={() => run(() => setPausedAction(s.index, !s.paused))}
-              >
-                {s.paused ? "恢复" : "暂停"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pending}
-                onClick={() => {
-                  setRenameValue(s.name);
-                  setRenameTarget(s);
-                }}
-              >
-                改名
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pending}
-                onClick={() => setDeleteTarget(s)}
-              >
-                删除
-              </Button>
-            </div>
-          </div>
-        ))}
-        {streamers.length === 0 && !loadError && (
-          <div className="col-span-full rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-            暂无录制主播,点「添加主播」加入名单
-          </div>
-        )}
+      <div className="overflow-hidden rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-4">主播及画面</TableHead>
+              <TableHead className="w-28">直播链接</TableHead>
+              <TableHead className="w-64">录制状态</TableHead>
+              <TableHead className="w-24 text-center">监听状态</TableHead>
+              <TableHead className="w-32">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {streamers.map((s) => (
+              <TableRow key={s.index}>
+                <TableCell className="pl-4">
+                  <div className="flex items-center gap-3">
+                    <CoverThumb s={s} />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">{s.name || s.roomId}</span>
+                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                          {s.platformName}
+                        </span>
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {s.fileCount} 个录像 · {formatSize(s.totalSize)}
+                      </div>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    前往房间
+                  </a>
+                </TableCell>
+                <TableCell>
+                  {s.recording ? (
+                    <span className="inline-flex items-center gap-1.5 text-sm text-emerald-600">
+                      <span className="size-2 animate-pulse rounded-full bg-emerald-500" />
+                      正在录制
+                      <span className="text-xs text-muted-foreground">
+                        ({formatDuration(s.durationSec)} | {formatSize(s.currentSize)})
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <span className="size-2 rounded-full bg-muted-foreground/40" />
+                      {s.paused ? "已暂停" : "未在录制"}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  <MonitorSwitch
+                    on={!s.paused}
+                    disabled={pending}
+                    onToggle={() => run(() => setPausedAction(s.index, !s.paused))}
+                  />
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() => {
+                        setRenameValue(s.name);
+                        setRenameTarget(s);
+                      }}
+                    >
+                      改名
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() => setDeleteTarget(s)}
+                    >
+                      删除
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {streamers.length === 0 && !loadError && (
+              <TableRow>
+                <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                  暂无录制主播,点右上角「添加主播」加入名单
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       {/* 添加主播 */}
@@ -160,7 +266,7 @@ export function RecordingList({
             <Input
               value={addUrl}
               onChange={(e) => setAddUrl(e.target.value)}
-              placeholder="粘贴直播间链接(如 https://live.douyin.com/xxxx)"
+              placeholder="粘贴抖音或快手直播间链接"
             />
             <Input
               value={addName}
@@ -216,7 +322,7 @@ export function RecordingList({
       {/* 删除确认 */}
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={`从名单删除「${deleteTarget?.name || deleteTarget?.url || ""}」?`}
+        title={`从名单删除「${deleteTarget?.name || deleteTarget?.roomId || ""}」?`}
         description="仅从录制名单移除,已录制的视频文件不受影响。"
         variant="danger"
         onOpenChange={(o) => !o && setDeleteTarget(null)}
