@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
   if (resolved.origin !== new URL(base).origin) {
     return new NextResponse("Bad Request", { status: 400 });
   }
+  if (resolved.pathname.includes("%")) return new NextResponse("Bad Request", { status: 400 });
   if (!ALLOWED_PREFIXES.some((p) => resolved.pathname.startsWith(p))) {
     return new NextResponse("Bad Request", { status: 400 });
   }
