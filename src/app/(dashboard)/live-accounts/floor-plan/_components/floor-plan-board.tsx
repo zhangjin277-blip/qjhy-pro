@@ -20,6 +20,7 @@ export interface SectionVM {
   key: string;
   title?: string;
   columns: number;
+  rowHeightPx?: number;
   cells: CellVM[];
 }
 
@@ -57,7 +58,7 @@ function ProductTags({ products }: { products: string[] }) {
       {shown.map((p) => (
         <span
           key={p}
-          className={`rounded-full px-2 py-px text-[11px] font-medium ${TAG_STYLES[p] ?? "bg-slate-100 text-slate-500"}`}
+          className={`whitespace-nowrap rounded-full px-1.5 py-px text-[11px] font-medium ${TAG_STYLES[p] ?? "bg-slate-100 text-slate-500"}`}
         >
           {p}
         </span>
@@ -95,7 +96,7 @@ function RoomCell({ roomNo, view }: { roomNo: string; view: RoomCellView }) {
           {first.anchorName}
           {more > 0 && ` +${more}`}
         </span>
-        <span className="text-[11px] font-medium tabular-nums text-[#2B5CFF]">
+        <span className="whitespace-nowrap text-[11px] font-medium tabular-nums text-[#2B5CFF]">
           {first.startAtLabel} 开播
         </span>
       </div>
@@ -195,7 +196,7 @@ export function FloorPlanBoard({ sections, stats, unmapped, generatedAtHHmm }: P
                 className="grid gap-1.5"
                 style={{
                   gridTemplateColumns: `repeat(${sec.columns}, minmax(0, 1fr))`,
-                  gridAutoRows: "minmax(92px, auto)",
+                  gridAutoRows: `minmax(${sec.rowHeightPx ?? 92}px, auto)`,
                 }}
               >
                 {sec.cells.map((cell, i) => (

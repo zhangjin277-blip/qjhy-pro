@@ -84,6 +84,7 @@ export default async function FloorPlanPage() {
     key: sec.key,
     title: sec.title,
     columns: sec.columns,
+    rowHeightPx: sec.rowHeightPx,
     cells: sec.cells.map((cell) => {
       if (cell.kind === "zone") return cell;
       const key = normalizeRoomNo(cell.roomNo) as string;
