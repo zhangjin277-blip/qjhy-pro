@@ -11,7 +11,10 @@ cron(worker/index.ts) → `enqueue` → pg-boss(`pgboss.job` 表) → handler(wo
 
 ## 抖音 vs 快手两套体系
 
-- **抖音**（basecamp cs/nc1/nc2）：puppeteer 打开百应后台注入 cookie，7 个 adapter（见 memory qjhy-pro-crawler-architecture）。链：check_data_ready → fetch_daily → 下游(portrait/game/minigame)
+- **抖音**（basecamp cs/nc1/nc2）：puppeteer 打开百应后台注入 cookie，8 个 adapter（见 memory qjhy-pro-crawler-architecture）。链：check_data_ready → fetch_daily → 下游(portrait/game/minigame)
+  - **douyin-live-rooms（5min）**：公会后台工作台「正在直播」`/ark/api/broker/follow/get_room_by_label`
+    → `douyin_live_room`（room_id 主键 upsert，create_time=实际开播时间，owner.user_id_str=live_account.platform_uid）。
+    平面图抖音在播+迟到判定靠它；行保留=抖音场次沉淀。cookie basecamp=cs
 - **快手**（basecamp kuaishou）：机构后台 jigou.kuaishou.com + 666.kuaishou.com。members(02:30) / history_live(11:00, 拉 D-2~D-1) / today_live / live_snapshot(5min, 在播分时)
 
 ## Cookie
