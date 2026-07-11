@@ -33,6 +33,8 @@ export type FloorCell = FloorCellRoom | FloorCellZone;
 export interface FloorSection {
   key: string;
   title?: string; // 分区标题（如 'C 区'）；不填不显示
+  /** 分区主题色键（A/B/C），决定色带底色和房号角标颜色 */
+  zone?: "A" | "B" | "C";
   columns: number;
   /** 每格行高 px（默认 92）。C 区房间实际更小（12㎡ vs A 区 21㎡），用更矮的行体现比例 */
   rowHeightPx?: number;
@@ -66,6 +68,7 @@ export const FLOOR_SECTIONS: FloorSection[] = [
     // D2 面积以 CAD 为准（78㎡，老系统截图误标 160）。
     key: "c",
     title: "C 区",
+    zone: "C",
     columns: 24,
     rowHeightPx: 76,
     cells: [
@@ -103,8 +106,11 @@ export const FLOOR_SECTIONS: FloorSection[] = [
     ],
   },
   {
-    key: "ab",
-    title: "A · B 区",
+    // A/B 拆成两个色带分区（2026-07-11 用户反馈：区域区分不明显）。
+    // 大直播间 D1 实际横跨 A/B 两排，拆分后放在 A 区带内（h2），示意为主。
+    key: "a",
+    title: "A 区",
+    zone: "A",
     columns: 44,
     cells: [
       // ── Row 1：A 区首排（宽格）──
@@ -118,7 +124,7 @@ export const FLOOR_SECTIONS: FloorSection[] = [
       room("A区-08", 23, 1),
       room("A区-09", 26, 1),
       zone("拍摄房", 29, 1, 12, 1, "60㎡"),
-      zone("大直播间1", 41, 1, 4, 4, "D1 · 160㎡"),
+      zone("大直播间1", 41, 1, 4, 2, "D1 · 160㎡"),
       // ── Row 2：A 区次排（窄格）──
       zone("机房", 1, 2, 4, 1, "16㎡"),
       room("A区-10", 5, 2, 2),
@@ -138,35 +144,49 @@ export const FLOOR_SECTIONS: FloorSection[] = [
       zone("茶水间", 34, 2, 3),
       room("A区-26", 37, 2, 2),
       room("A区-27", 39, 2, 2),
-      // ── Row 3：B 区首排 ──
-      zone("IT仓库", 1, 3, 4, 1, "9㎡"),
-      room("B区-01", 5, 3),
-      room("B区-02", 8, 3),
-      room("B区-03", 11, 3),
-      room("B区-05", 14, 3),
-      zone("休闲区", 17, 3, 2, 1, "19㎡"),
-      room("B区-06", 19, 3),
-      room("B区-07", 22, 3),
-      room("B区-08", 25, 3),
-      room("B区-09", 28, 3),
-      room("B区-10", 31, 3),
-      room("B区-11", 34, 3),
-      // ── Row 4：B 区次排 ──
-      room("B区-12", 1, 4, 6),
-      zone("复盘室4", 7, 4, 2, 1, "6㎡"),
-      zone("复盘室5", 9, 4, 2, 1, "6㎡"),
-      room("B区-13", 11, 4),
-      room("B区-15", 14, 4),
-      zone("休息区", 17, 4, 2),
-      room("B区-16", 19, 4),
-      room("B区-17", 22, 4),
-      room("B区-19", 25, 4),
-      room("B区-20", 28, 4),
-      room("B区-21", 31, 4),
-      room("B区-22", 34, 4),
+    ],
+  },
+  {
+    key: "b",
+    title: "B 区",
+    zone: "B",
+    columns: 44,
+    cells: [
+      // ── Row 1：B 区首排 ──
+      zone("IT仓库", 1, 1, 4, 1, "9㎡"),
+      room("B区-01", 5, 1),
+      room("B区-02", 8, 1),
+      room("B区-03", 11, 1),
+      room("B区-05", 14, 1),
+      zone("休闲区", 17, 1, 2, 1, "19㎡"),
+      room("B区-06", 19, 1),
+      room("B区-07", 22, 1),
+      room("B区-08", 25, 1),
+      room("B区-09", 28, 1),
+      room("B区-10", 31, 1),
+      room("B区-11", 34, 1),
+      // ── Row 2：B 区次排 ──
+      room("B区-12", 1, 2, 6),
+      zone("复盘室4", 7, 2, 2, 1, "6㎡"),
+      zone("复盘室5", 9, 2, 2, 1, "6㎡"),
+      room("B区-13", 11, 2),
+      room("B区-15", 14, 2),
+      zone("休息区", 17, 2, 2),
+      room("B区-16", 19, 2),
+      room("B区-17", 22, 2),
+      room("B区-19", 25, 2),
+      room("B区-20", 28, 2),
+      room("B区-21", 31, 2),
+      room("B区-22", 34, 2),
     ],
   },
 ];
+
+/** 房号 → 角标数字（'A区-01' → '01'，'B区-12' → '12'）；取不出数字就原样显示 */
+export function roomCornerNo(roomNo: string): string {
+  const num = roomNo.match(/(\d+)\s*$/)?.[1];
+  return num ? num.padStart(2, "0") : roomNo;
+}
 
 /**
  * 房号归一化：'A1' / 'A01' / 'A区-01' / 'a区-1' / 'B17' → 'A-01' / 'B-17'。

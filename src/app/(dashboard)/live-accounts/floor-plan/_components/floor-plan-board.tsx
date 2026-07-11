@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { roomCornerNo } from "@/modules/live-room";
 import type { FloorCellZone, RoomCellView } from "@/modules/live-room";
 
 export type CellVM =
@@ -19,10 +20,23 @@ export type CellVM =
 export interface SectionVM {
   key: string;
   title?: string;
+  zone?: "A" | "B" | "C";
   columns: number;
   rowHeightPx?: number;
   cells: CellVM[];
 }
+
+/** 分区主题：色带底色 / 区名 chip / 房号角标色。底色极浅保证白卡和在播蓝卡都能跳出来 */
+const ZONE_THEME: Record<string, { band: string; chip: string; badge: string }> = {
+  A: { band: "bg-[#F3F6FC]", chip: "bg-[#EBF1FF] text-[#2B5CFF]", badge: "text-[#2B5CFF]" },
+  B: { band: "bg-[#F0F9F8]", chip: "bg-[#E6F8FA] text-[#0E9CA8]", badge: "text-[#0E9CA8]" },
+  C: { band: "bg-[#F6F4FB]", chip: "bg-[#F1EEFF] text-[#7B61FF]", badge: "text-[#7B61FF]" },
+};
+const DEFAULT_THEME = {
+  band: "bg-slate-50",
+  chip: "bg-slate-100 text-slate-600",
+  badge: "text-slate-500",
+};
 
 interface Props {
   sections: SectionVM[];
@@ -78,21 +92,36 @@ function LiveDot() {
   );
 }
 
-function RoomCell({ roomNo, view }: { roomNo: string; view: RoomCellView }) {
+function RoomCell({
+  roomNo,
+  view,
+  badgeClass,
+}: {
+  roomNo: string;
+  view: RoomCellView;
+  badgeClass: string;
+}) {
   const base =
     "relative flex h-full min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-center";
+  // 房号退到左上角标，中间空间留给产品/主播/时间；完整房号挂 title 悬停可见
+  const corner = (cls: string) => (
+    <span className={`absolute left-1.5 top-1 text-[10px] font-semibold tabular-nums ${cls}`}>
+      {roomCornerNo(roomNo)}
+    </span>
+  );
 
   const first = view.checkins[0];
   if (view.state === "living_checkin" && first) {
     const more = view.checkins.length - 1;
     return (
       <div
+        title={roomNo}
         className={`${base} border-[1.5px] border-[#2B5CFF] bg-[#EBF1FF] shadow-[0_2px_4px_rgba(43,92,255,0.08)]`}
       >
+        {corner(badgeClass)}
         <LiveDot />
-        <span className="text-[13px] font-semibold text-slate-800">{roomNo}</span>
         <ProductTags products={view.products} />
-        <span className="max-w-full truncate text-[11px] text-slate-600">
+        <span className="max-w-full truncate text-[12px] font-medium text-slate-700">
           {first.anchorName}
           {more > 0 && ` +${more}`}
         </span>
@@ -105,9 +134,9 @@ function RoomCell({ roomNo, view }: { roomNo: string; view: RoomCellView }) {
 
   if (view.state === "living_crawler") {
     return (
-      <div className={`${base} border-[1.5px] border-[#85ADFF] bg-white`}>
+      <div title={roomNo} className={`${base} border-[1.5px] border-[#85ADFF] bg-white`}>
+        {corner(badgeClass)}
         <LiveDot />
-        <span className="text-[13px] font-semibold text-slate-800">{roomNo}</span>
         <ProductTags products={view.products} />
         <span className="text-[10px] text-slate-400">在播 · 未打卡</span>
       </div>
@@ -116,8 +145,8 @@ function RoomCell({ roomNo, view }: { roomNo: string; view: RoomCellView }) {
 
   if (view.state === "rest") {
     return (
-      <div className={`${base} border border-dashed border-[#FF7D00] bg-[#FFF7E8]`}>
-        <span className="text-[13px] font-semibold text-slate-800">{roomNo}</span>
+      <div title={roomNo} className={`${base} border border-dashed border-[#FF7D00] bg-[#FFF7E8]`}>
+        {corner("text-[#FF7D00]")}
         <ProductTags products={view.products} />
         <span className="text-[11px] text-[#FF7D00]">今日休</span>
       </div>
@@ -126,8 +155,8 @@ function RoomCell({ roomNo, view }: { roomNo: string; view: RoomCellView }) {
 
   if (view.state === "idle") {
     return (
-      <div className={`${base} border border-slate-200 bg-white`}>
-        <span className="text-[13px] font-semibold text-slate-800">{roomNo}</span>
+      <div title={roomNo} className={`${base} border border-slate-200 bg-white`}>
+        {corner(badgeClass)}
         <ProductTags products={view.products} />
         {view.scheduled && (
           <>
@@ -149,15 +178,15 @@ function RoomCell({ roomNo, view }: { roomNo: string; view: RoomCellView }) {
 
   // vacant
   return (
-    <div className={`${base} border border-slate-200 bg-white`}>
-      <span className="text-[13px] font-medium text-slate-400">{roomNo}</span>
+    <div title={roomNo} className={`${base} border border-slate-200 bg-white`}>
+      {corner("text-slate-300")}
     </div>
   );
 }
 
 function ZoneCell({ label, sub }: { label: string; sub?: string }) {
   return (
-    <div className="flex h-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-slate-200 bg-[#F7F8FA] px-1 text-center">
+    <div className="flex h-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-slate-200 bg-white/45 px-1 text-center">
       <span className="text-xs text-slate-400">{label}</span>
       {sub && <span className="text-[10px] text-slate-300">{sub}</span>}
     </div>
@@ -197,40 +226,44 @@ export function FloorPlanBoard({ sections, stats, unmapped, generatedAtHHmm }: P
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-4">
-        <div className="min-w-[1280px] space-y-5">
-          {sections.map((sec) => (
-            <div key={sec.key}>
-              {sec.title && (
-                <div className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-slate-700">
-                  <span className="h-3.5 w-[3px] rounded-full bg-[#2B5CFF]" />
-                  {sec.title}
-                </div>
-              )}
-              <div
-                className="grid gap-1.5"
-                style={{
-                  gridTemplateColumns: `repeat(${sec.columns}, minmax(0, 1fr))`,
-                  gridAutoRows: `minmax(${sec.rowHeightPx ?? 92}px, auto)`,
-                }}
-              >
-                {sec.cells.map((cell, i) => (
-                  <div
-                    key={cell.kind === "room" ? cell.roomNo : `${cell.label}-${i}`}
-                    style={{
-                      gridColumn: `${cell.col} / span ${cell.w}`,
-                      gridRow: `${cell.row} / span ${cell.h}`,
-                    }}
+        <div className="min-w-[1280px] space-y-4">
+          {sections.map((sec) => {
+            const theme = (sec.zone && ZONE_THEME[sec.zone]) || DEFAULT_THEME;
+            return (
+              <div key={sec.key} className={`rounded-xl p-2.5 ${theme.band}`}>
+                {sec.title && (
+                  <span
+                    className={`mb-2 inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${theme.chip}`}
                   >
-                    {cell.kind === "room" ? (
-                      <RoomCell roomNo={cell.roomNo} view={cell.view} />
-                    ) : (
-                      <ZoneCell label={cell.label} sub={cell.sub} />
-                    )}
-                  </div>
-                ))}
+                    {sec.title}
+                  </span>
+                )}
+                <div
+                  className="grid gap-1.5"
+                  style={{
+                    gridTemplateColumns: `repeat(${sec.columns}, minmax(0, 1fr))`,
+                    gridAutoRows: `minmax(${sec.rowHeightPx ?? 92}px, auto)`,
+                  }}
+                >
+                  {sec.cells.map((cell, i) => (
+                    <div
+                      key={cell.kind === "room" ? cell.roomNo : `${cell.label}-${i}`}
+                      style={{
+                        gridColumn: `${cell.col} / span ${cell.w}`,
+                        gridRow: `${cell.row} / span ${cell.h}`,
+                      }}
+                    >
+                      {cell.kind === "room" ? (
+                        <RoomCell roomNo={cell.roomNo} view={cell.view} badgeClass={theme.badge} />
+                      ) : (
+                        <ZoneCell label={cell.label} sub={cell.sub} />
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-slate-100 pt-3 text-xs text-slate-500">
             <span className="flex items-center gap-1.5">

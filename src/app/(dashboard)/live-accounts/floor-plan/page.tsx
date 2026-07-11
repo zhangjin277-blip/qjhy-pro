@@ -131,6 +131,7 @@ export default async function FloorPlanPage() {
   const sections: SectionVM[] = FLOOR_SECTIONS.map((sec) => ({
     key: sec.key,
     title: sec.title,
+    zone: sec.zone,
     columns: sec.columns,
     rowHeightPx: sec.rowHeightPx,
     cells: sec.cells.map((cell) => {

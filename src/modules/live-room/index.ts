@@ -5,6 +5,7 @@ export {
   productShortName,
   deriveRoomView,
   slotCoversTime,
+  roomCornerNo,
 } from "./floorplan";
 export type {
   FloorCell,
