@@ -206,14 +206,43 @@ export type RoomState =
   | "idle" // 有账号但无在播信号
   | "vacant"; // 没有账号绑定该房间
 
+/**
+ * 时段是否覆盖某时刻（'HH:mm'）。start <= t < end；end <= start 视为跨天班
+ * （如 22:00-02:00 覆盖 23:30 和 01:00）。
+ */
+export function slotCoversTime(slot: [string, string], hhmm: string): boolean {
+  const [start, end] = slot;
+  if (end <= start) return hhmm >= start || hhmm < end;
+  return hhmm >= start && hhmm < end;
+}
+
+/** 某账号一位主播的今日有效排班（已合并 daily/override/default、已剔除今天休的主播） */
+export interface ScheduleEntry {
+  anchorName: string;
+  slots: [string, string][];
+}
+
 export interface RoomAccountInput {
   product: string;
   /** in_progress 打卡（同账号至多一条，DB 唯一索引保证）。startAtLabel：今天 'HH:mm'，跨天 'MM-DD HH:mm' */
   checkin: { anchorName: string; startAtLabel: string } | null;
   /** platform_account_id 在 trend 最近 15 分钟有快照 */
   trendActive: boolean;
-  /** 今天生效的默认排班绑定的 rest_days（ISO weekday 1-7） */
+  /**
+   * 今天生效的默认排班绑定的 rest_days（ISO weekday 1-7）。
+   * ⚠️ 只对抖音账号填（快手排班变动大不可信，2026-07-11 用户定）——快手房间不判「今日休」。
+   */
   bindingRestDays: number[][];
+  /** 今日有效排班。⚠️ 同上只对抖音账号填；快手房卡只认打卡不显示排班 */
+  schedule: ScheduleEntry[];
+}
+
+/** 空闲卡上显示的排班：当班（current=true）优先，否则今天内下一班 */
+export interface ScheduledView {
+  anchorName: string;
+  start: string;
+  end: string;
+  current: boolean;
 }
 
 export interface RoomCellView {
@@ -222,25 +251,40 @@ export interface RoomCellView {
   products: string[];
   /** living_checkin 时按开播时间升序的打卡列表 */
   checkins: { anchorName: string; startAtLabel: string }[];
+  /** idle 态的排班提示（仅抖音账号有排班数据） */
+  scheduled: ScheduledView | null;
+}
+
+function pickScheduled(entries: ScheduleEntry[], nowHHmm: string): ScheduledView | null {
+  const flat = entries.flatMap((e) =>
+    e.slots.map((slot) => ({ anchorName: e.anchorName, start: slot[0], end: slot[1] })),
+  );
+  const current = flat.find((s) => slotCoversTime([s.start, s.end], nowHHmm));
+  if (current) return { ...current, current: true };
+  const upcoming = flat
+    .filter((s) => s.start > nowHHmm)
+    .sort((a, b) => a.start.localeCompare(b.start))[0];
+  return upcoming ? { ...upcoming, current: false } : null;
 }
 
 export function deriveRoomView(
   accounts: RoomAccountInput[],
   todayIsoWeekday: number,
+  nowHHmm: string,
 ): RoomCellView {
   const products = [...new Set(accounts.map((a) => productShortName(a.product)))];
 
-  if (accounts.length === 0) return { state: "vacant", products, checkins: [] };
+  if (accounts.length === 0) return { state: "vacant", products, checkins: [], scheduled: null };
 
   const checkins = accounts
     .flatMap((a) => (a.checkin ? [a.checkin] : []))
     .sort((a, b) => a.startAtLabel.localeCompare(b.startAtLabel));
-  if (checkins.length > 0) return { state: "living_checkin", products, checkins };
+  if (checkins.length > 0) return { state: "living_checkin", products, checkins, scheduled: null };
 
   if (accounts.some((a) => a.trendActive))
-    return { state: "living_crawler", products, checkins: [] };
+    return { state: "living_crawler", products, checkins: [], scheduled: null };
 
-  // 今日休：每个账号都有绑定，且所有绑定的 rest_days 都含今天
+  // 今日休：每个账号都有绑定，且所有绑定的 rest_days 都含今天（快手账号 bindingRestDays 恒空 → 不触发）
   const allRestDays = accounts.flatMap((a) => a.bindingRestDays);
   const everyAccountBound = accounts.every((a) => a.bindingRestDays.length > 0);
   if (
@@ -248,8 +292,16 @@ export function deriveRoomView(
     allRestDays.length > 0 &&
     allRestDays.every((days) => days.includes(todayIsoWeekday))
   ) {
-    return { state: "rest", products, checkins: [] };
+    return { state: "rest", products, checkins: [], scheduled: null };
   }
 
-  return { state: "idle", products, checkins: [] };
+  return {
+    state: "idle",
+    products,
+    checkins: [],
+    scheduled: pickScheduled(
+      accounts.flatMap((a) => a.schedule),
+      nowHHmm,
+    ),
+  };
 }

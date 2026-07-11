@@ -129,6 +129,20 @@ function RoomCell({ roomNo, view }: { roomNo: string; view: RoomCellView }) {
       <div className={`${base} border border-slate-200 bg-white`}>
         <span className="text-[13px] font-semibold text-slate-800">{roomNo}</span>
         <ProductTags products={view.products} />
+        {view.scheduled && (
+          <>
+            <span className="max-w-full truncate text-[11px] text-slate-600">
+              {view.scheduled.anchorName}
+            </span>
+            <span
+              className={`whitespace-nowrap text-[11px] tabular-nums ${
+                view.scheduled.current ? "font-medium text-[#2B5CFF]" : "text-slate-400"
+              }`}
+            >
+              {view.scheduled.start}–{view.scheduled.end}
+            </span>
+          </>
+        )}
       </div>
     );
   }

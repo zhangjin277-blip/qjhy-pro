@@ -4,6 +4,7 @@ import {
   deriveRoomView,
   normalizeRoomNo,
   productShortName,
+  slotCoversTime,
   type RoomAccountInput,
 } from "@/modules/live-room/floorplan";
 
@@ -105,17 +106,34 @@ describe("productShortName", () => {
   });
 });
 
+describe("slotCoversTime", () => {
+  it("普通时段：start <= t < end", () => {
+    expect(slotCoversTime(["11:00", "14:00"], "11:00")).toBe(true);
+    expect(slotCoversTime(["11:00", "14:00"], "13:59")).toBe(true);
+    expect(slotCoversTime(["11:00", "14:00"], "14:00")).toBe(false);
+    expect(slotCoversTime(["11:00", "14:00"], "10:59")).toBe(false);
+  });
+
+  it("跨天时段（end <= start）", () => {
+    expect(slotCoversTime(["22:00", "02:00"], "23:30")).toBe(true);
+    expect(slotCoversTime(["22:00", "02:00"], "01:00")).toBe(true);
+    expect(slotCoversTime(["22:00", "02:00"], "12:00")).toBe(false);
+  });
+});
+
 describe("deriveRoomView", () => {
+  const NOW = "12:00";
   const acc = (over: Partial<RoomAccountInput> = {}): RoomAccountInput => ({
     product: "捕鱼大作战",
     checkin: null,
     trendActive: false,
     bindingRestDays: [],
+    schedule: [],
     ...over,
   });
 
   it("无账号 → vacant", () => {
-    expect(deriveRoomView([], 1).state).toBe("vacant");
+    expect(deriveRoomView([], 1, NOW).state).toBe("vacant");
   });
 
   it("有打卡 → living_checkin，优先于爬虫/休", () => {
@@ -128,6 +146,7 @@ describe("deriveRoomView", () => {
         }),
       ],
       1,
+      NOW,
     );
     expect(view.state).toBe("living_checkin");
     expect(view.checkins[0]?.anchorName).toBe("陈晓晓");
@@ -140,31 +159,100 @@ describe("deriveRoomView", () => {
         acc({ checkin: { anchorName: "甲", startAtLabel: "09:00" } }),
       ],
       1,
+      NOW,
     );
     expect(view.checkins.map((c) => c.anchorName)).toEqual(["甲", "乙"]);
   });
 
   it("仅 trend 活跃 → living_crawler", () => {
-    expect(deriveRoomView([acc({ trendActive: true })], 1).state).toBe("living_crawler");
+    expect(deriveRoomView([acc({ trendActive: true })], 1, NOW).state).toBe("living_crawler");
   });
 
   it("所有绑定今天都休 → rest", () => {
-    const view = deriveRoomView([acc({ bindingRestDays: [[1, 3]] })], 3);
+    const view = deriveRoomView([acc({ bindingRestDays: [[1, 3]] })], 3, NOW);
     expect(view.state).toBe("rest");
   });
 
   it("有一个绑定今天不休 → idle", () => {
-    const view = deriveRoomView([acc({ bindingRestDays: [[3], [1]] })], 3);
+    const view = deriveRoomView([acc({ bindingRestDays: [[3], [1]] })], 3, NOW);
     expect(view.state).toBe("idle");
   });
 
-  it("某账号完全没绑定 → 不判休，idle", () => {
-    const view = deriveRoomView([acc({ bindingRestDays: [[3]] }), acc()], 3);
+  it("某账号完全没绑定 → 不判休，idle（快手账号 restDays 恒空）", () => {
+    const view = deriveRoomView([acc({ bindingRestDays: [[3]] }), acc()], 3, NOW);
     expect(view.state).toBe("idle");
   });
 
   it("产品短名去重", () => {
-    const view = deriveRoomView([acc(), acc(), acc({ product: "途游斗地主" })], 1);
+    const view = deriveRoomView([acc(), acc(), acc({ product: "途游斗地主" })], 1, NOW);
     expect(view.products).toEqual(["大作战", "斗地主"]);
+  });
+
+  it("idle + 当班时段 → scheduled.current=true", () => {
+    const view = deriveRoomView(
+      [
+        acc({
+          schedule: [
+            {
+              anchorName: "林诗源",
+              slots: [
+                ["11:00", "14:00"],
+                ["16:00", "19:00"],
+              ],
+            },
+          ],
+        }),
+      ],
+      1,
+      "12:30",
+    );
+    expect(view.state).toBe("idle");
+    expect(view.scheduled).toEqual({
+      anchorName: "林诗源",
+      start: "11:00",
+      end: "14:00",
+      current: true,
+    });
+  });
+
+  it("idle + 无当班 → 显示今天下一班（最早的）", () => {
+    const view = deriveRoomView(
+      [
+        acc({ schedule: [{ anchorName: "乙", slots: [["18:00", "21:00"]] }] }),
+        acc({ schedule: [{ anchorName: "甲", slots: [["16:00", "19:00"]] }] }),
+      ],
+      1,
+      "15:00",
+    );
+    expect(view.scheduled).toEqual({
+      anchorName: "甲",
+      start: "16:00",
+      end: "19:00",
+      current: false,
+    });
+  });
+
+  it("idle + 今天班次已全部结束 → scheduled=null", () => {
+    const view = deriveRoomView(
+      [acc({ schedule: [{ anchorName: "甲", slots: [["09:00", "12:00"]] }] })],
+      1,
+      "22:00",
+    );
+    expect(view.scheduled).toBeNull();
+  });
+
+  it("在播/休/空房不带 scheduled", () => {
+    const schedule = [{ anchorName: "甲", slots: [["11:00", "14:00"]] as [string, string][] }];
+    expect(
+      deriveRoomView(
+        [acc({ schedule, checkin: { anchorName: "甲", startAtLabel: "11:00" } })],
+        1,
+        "12:00",
+      ).scheduled,
+    ).toBeNull();
+    expect(
+      deriveRoomView([acc({ schedule, bindingRestDays: [[1]] })], 1, "12:00").scheduled,
+    ).toBeNull();
+    expect(deriveRoomView([], 1, "12:00").scheduled).toBeNull();
   });
 });
