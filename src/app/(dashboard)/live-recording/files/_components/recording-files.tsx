@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   deleteFileAction,
+  deleteFilesAction,
   type RecordingFile,
   type StreamerFolder,
 } from "@/modules/live-recording";
@@ -140,6 +141,45 @@ export function RecordingFiles({
   const [error, setError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RecordingFile | null>(null);
   const [previewFile, setPreviewFile] = useState<RecordingFile | null>(null);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [batchConfirm, setBatchConfirm] = useState(false);
+
+  // 切换主播时清空选择
+  useEffect(() => {
+    setChecked(new Set());
+  }, [selected]);
+
+  const selectable = files.filter((f) => !f.recording); // 录制中的不可选/不可删
+  const allSelected = selectable.length > 0 && selectable.every((f) => checked.has(f.name));
+  const toggleOne = (name: string) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  const toggleAll = () =>
+    setChecked(allSelected ? new Set() : new Set(selectable.map((f) => f.name)));
+
+  function runBatchDelete() {
+    if (!selected || checked.size === 0) return;
+    startTransition(async () => {
+      setError(null);
+      const res = await deleteFilesAction(selected, [...checked]);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      if (res.failed.length > 0) {
+        setError(
+          `已删除 ${res.deleted} 个,${res.failed.length} 个失败:${res.failed[0]?.error ?? ""}`,
+        );
+      }
+      setChecked(new Set());
+      setBatchConfirm(false);
+      router.refresh();
+    });
+  }
 
   if (rootError) {
     return (
@@ -194,13 +234,41 @@ export function RecordingFiles({
             {error}
           </div>
         )}
+        {checked.size > 0 && (
+          <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
+            <span className="text-sm text-slate-600">
+              已选 <b className="text-primary tabular-nums">{checked.size}</b> 个文件
+            </span>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setChecked(new Set())}>
+                取消
+              </Button>
+              <Button
+                size="sm"
+                className="bg-red-600 hover:bg-red-700"
+                disabled={pending}
+                onClick={() => setBatchConfirm(true)}
+              >
+                批量删除
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <Table>
             <TableHeader>
               <TableRow className="border-slate-100 hover:bg-transparent">
-                <TableHead className="h-11 pl-5 text-xs font-medium text-slate-400">
-                  文件名
+                <TableHead className="h-11 w-10 pl-5">
+                  <input
+                    type="checkbox"
+                    aria-label="全选"
+                    checked={allSelected}
+                    disabled={selectable.length === 0}
+                    onChange={toggleAll}
+                    className="size-4 cursor-pointer accent-[#1677ff] align-middle"
+                  />
                 </TableHead>
+                <TableHead className="h-11 text-xs font-medium text-slate-400">文件名</TableHead>
                 <TableHead className="h-11 w-28 text-xs font-medium text-slate-400">大小</TableHead>
                 <TableHead className="h-11 w-44 text-xs font-medium text-slate-400">
                   修改时间
@@ -214,9 +282,20 @@ export function RecordingFiles({
               {files.map((f) => (
                 <TableRow
                   key={f.name}
-                  className="border-slate-100 transition-colors hover:bg-slate-50/70"
+                  data-selected={checked.has(f.name) ? "" : undefined}
+                  className="border-slate-100 transition-colors hover:bg-slate-50/70 data-[selected]:bg-primary/5"
                 >
-                  <TableCell className="max-w-0 truncate py-3 pl-5">
+                  <TableCell className="w-10 pl-5">
+                    <input
+                      type="checkbox"
+                      aria-label={`选择 ${f.name}`}
+                      checked={checked.has(f.name)}
+                      disabled={f.recording}
+                      onChange={() => toggleOne(f.name)}
+                      className="size-4 cursor-pointer accent-[#1677ff] align-middle disabled:cursor-not-allowed disabled:opacity-40"
+                    />
+                  </TableCell>
+                  <TableCell className="max-w-0 truncate py-3">
                     <span className="font-mono text-[13px] text-slate-700">{f.name}</span>
                     {f.recording && (
                       <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">
@@ -264,7 +343,7 @@ export function RecordingFiles({
               ))}
               {files.length === 0 && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={4} className="py-16 text-center text-sm text-slate-400">
+                  <TableCell colSpan={5} className="py-16 text-center text-sm text-slate-400">
                     该主播暂无录像文件
                   </TableCell>
                 </TableRow>
@@ -310,6 +389,16 @@ export function RecordingFiles({
             router.refresh();
           });
         }}
+      />
+
+      {/* 批量删除确认 */}
+      <ConfirmDialog
+        open={batchConfirm}
+        title={`删除选中的 ${checked.size} 个录像文件?`}
+        description="选中文件将被物理删除,不可恢复。"
+        variant="danger"
+        onOpenChange={(o) => !o && setBatchConfirm(false)}
+        onConfirm={runBatchDelete}
       />
     </div>
   );

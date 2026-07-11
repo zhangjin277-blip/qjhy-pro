@@ -7,5 +7,7 @@ export {
   removeStreamerAction,
   renameStreamerAction,
   deleteFileAction,
+  deleteFilesAction,
   type ActionResult,
+  type BatchDeleteResult,
 } from "./actions";

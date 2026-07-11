@@ -60,3 +60,31 @@ export async function deleteFileAction(streamer: string, file: string): Promise<
     await deleteRecording(streamer, file);
   });
 }
+
+export type BatchDeleteResult =
+  | { ok: true; deleted: number; failed: { file: string; error: string }[] }
+  | { ok: false; error: string };
+
+/** 批量物理删除录像文件;逐个删,汇总成功数与失败项(单个失败不影响其他)。 */
+export async function deleteFilesAction(
+  streamer: string,
+  files: string[],
+): Promise<BatchDeleteResult> {
+  try {
+    await requireUser();
+    let deleted = 0;
+    const failed: { file: string; error: string }[] = [];
+    for (const f of files) {
+      try {
+        await deleteRecording(streamer, f);
+        deleted += 1;
+      } catch (e) {
+        failed.push({ file: f, error: e instanceof Error ? e.message : "删除失败" });
+      }
+    }
+    revalidatePath("/live-recording/files");
+    return { ok: true, deleted, failed };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "操作失败" };
+  }
+}
