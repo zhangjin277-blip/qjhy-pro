@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { roomCornerNo } from "@/modules/live-room";
-import type { RoomCellView, SectionVM } from "@/modules/live-room";
+import type { CellVM, RoomCellView, SectionVM } from "@/modules/live-room";
+import type { AccountWithRelations } from "@/modules/live-account";
+import { AccountEditDrawer } from "../../_components/account-edit-drawer";
+import type { AccountEditDrawerData } from "../../_lib/edit-drawer-data";
 import { RoomDetailDrawer, type SelectedRoom } from "./room-detail-drawer";
 
 /** 分区主题：色带底色 / 区名 chip / 房号角标色。底色极浅保证白卡和在播蓝卡都能跳出来 */
@@ -31,6 +34,8 @@ interface Props {
   generatedAtHHmm: string;
   /** 电视大屏模式：无抽屉交互、隐藏未上图条、整体放大 */
   tv?: boolean;
+  /** 账号编辑抽屉支撑数据（tv 模式不传）。accounts 已按用户 scope 过滤 */
+  editData?: AccountEditDrawerData;
 }
 
 /** 产品短名 → tag 配色（老系统 tag 心智，饱和度收敛到 token 体系） */
@@ -203,14 +208,42 @@ function LegendChip({ className }: { className: string }) {
   return <span className={`inline-block size-3.5 rounded ${className}`} />;
 }
 
-export function FloorPlanBoard({ sections, stats, unmapped, generatedAtHHmm, tv }: Props) {
+export function FloorPlanBoard({
+  sections,
+  stats,
+  unmapped,
+  generatedAtHHmm,
+  tv,
+  editData,
+}: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<SelectedRoom | null>(null);
+  const [editingAccount, setEditingAccount] = useState<AccountWithRelations | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => router.refresh(), REFRESH_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [router]);
+
+  const accountById = useMemo(
+    () => new Map((editData?.accounts ?? []).map((a) => [a.id, a])),
+    [editData],
+  );
+
+  function openAccountEditor(accountId: string): boolean {
+    const acc = accountById.get(accountId);
+    if (!acc) return false; // scope 外账号不可编辑，回落只读抽屉
+    setSelected(null);
+    setEditingAccount(acc);
+    return true;
+  }
+
+  function onRoomClick(cell: Extract<CellVM, { kind: "room" }>) {
+    // 单账号且可编辑 → 直接打开账号编辑抽屉；多账号/空房/无权限 → 房间抽屉（可再点账号进编辑）
+    const first = cell.detail[0];
+    if (cell.detail.length === 1 && first && openAccountEditor(first.accountId)) return;
+    setSelected({ roomNo: cell.roomNo, view: cell.view, detail: cell.detail });
+  }
 
   const living = stats.livingCheckin + stats.livingCrawler;
 
@@ -269,15 +302,7 @@ export function FloorPlanBoard({ sections, stats, unmapped, generatedAtHHmm, tv 
                         gridRow: `${cell.row} / span ${cell.h}`,
                       }}
                       {...(cell.kind === "room" && !tv
-                        ? {
-                            onClick: () =>
-                              setSelected({
-                                roomNo: cell.roomNo,
-                                view: cell.view,
-                                detail: cell.detail,
-                              }),
-                            className: "cursor-pointer",
-                          }
+                        ? { onClick: () => onRoomClick(cell), className: "cursor-pointer" }
                         : {})}
                     >
                       {cell.kind === "room" ? (
@@ -327,7 +352,31 @@ export function FloorPlanBoard({ sections, stats, unmapped, generatedAtHHmm, tv 
         </div>
       )}
 
-      {!tv && <RoomDetailDrawer selected={selected} onClose={() => setSelected(null)} />}
+      {!tv && (
+        <RoomDetailDrawer
+          selected={selected}
+          onClose={() => setSelected(null)}
+          onSelectAccount={editData ? openAccountEditor : undefined}
+        />
+      )}
+      {!tv && editData && (
+        <AccountEditDrawer
+          open={editingAccount !== null}
+          onOpenChange={(o) => {
+            if (!o) {
+              setEditingAccount(null);
+              router.refresh();
+            }
+          }}
+          account={editingAccount}
+          rooms={editData.rooms}
+          dingtalkUsers={editData.dingtalkUsers}
+          anchors={editData.anchors}
+          bindingsByAccount={editData.bindingsByAccount}
+          overridesByAccount={editData.overridesByAccount}
+          placementLabelOptions={editData.placementLabelOptions}
+        />
+      )}
     </div>
   );
 }

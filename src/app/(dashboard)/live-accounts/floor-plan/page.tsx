@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { getFloorPlanData } from "@/modules/live-room/server";
 import { buildFloorPlanView } from "@/modules/live-room";
+import { getAccountEditDrawerData } from "../_lib/edit-drawer-data";
 import { FloorPlanBoard } from "./_components/floor-plan-board";
 
 export default async function FloorPlanPage() {
@@ -15,7 +16,10 @@ export default async function FloorPlanPage() {
     );
   }
 
-  const data = await getFloorPlanData(ctx.dingtalkUserId, ctx.isEmergency);
+  const [data, editData] = await Promise.all([
+    getFloorPlanData(ctx.dingtalkUserId, ctx.isEmergency),
+    getAccountEditDrawerData(ctx.dingtalkUserId, ctx.isEmergency),
+  ]);
   if (!data) {
     return <div className="p-6 text-sm text-slate-500">没有直播账号板块的查看权限。</div>;
   }
@@ -28,6 +32,7 @@ export default async function FloorPlanPage() {
       stats={view.stats}
       unmapped={view.unmapped}
       generatedAtHHmm={view.generatedAtHHmm}
+      editData={editData}
     />
   );
 }

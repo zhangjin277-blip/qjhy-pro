@@ -26,9 +26,12 @@ const PLATFORM_CLS: Record<string, string> = {
 export function RoomDetailDrawer({
   selected,
   onClose,
+  onSelectAccount,
 }: {
   selected: SelectedRoom | null;
   onClose: () => void;
+  /** 点账号卡打开编辑抽屉；返回 false 表示无编辑权限（保持只读） */
+  onSelectAccount?: (accountId: string) => boolean;
 }) {
   const state = selected ? STATE_LABEL[selected.view.state] : null;
   return (
@@ -53,7 +56,16 @@ export function RoomDetailDrawer({
                 </div>
               )}
               {selected.detail.map((acc) => (
-                <div key={acc.accountName} className="rounded-lg border border-slate-200 p-3">
+                <div
+                  key={acc.accountId}
+                  {...(onSelectAccount
+                    ? {
+                        onClick: () => onSelectAccount(acc.accountId),
+                        className:
+                          "cursor-pointer rounded-lg border border-slate-200 p-3 transition-colors hover:border-[#2B5CFF]",
+                      }
+                    : { className: "rounded-lg border border-slate-200 p-3" })}
+                >
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-[13px] font-medium text-slate-800">
                       {acc.accountName}
@@ -66,6 +78,9 @@ export function RoomDetailDrawer({
                     <span className="rounded-full bg-slate-100 px-1.5 py-px text-[10px] text-slate-500">
                       {productShortName(acc.product)}
                     </span>
+                    {onSelectAccount && (
+                      <span className="ml-auto text-[11px] text-slate-400">编辑 ›</span>
+                    )}
                   </div>
 
                   {acc.checkin && (

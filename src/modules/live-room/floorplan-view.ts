@@ -44,6 +44,7 @@ function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
 
 /** 抽屉里展示的账号明细 */
 export interface RoomAccountDetail {
+  accountId: string;
   accountName: string;
   platform: string;
   product: string;
@@ -219,6 +220,7 @@ export function buildFloorPlanView(data: FloorPlanRawData, now = new Date()): Fl
         const schedule = isDouyin ? effectiveSchedule(acc.id) : [];
 
         detail.push({
+          accountId: acc.id,
           accountName: acc.account_name,
           platform: acc.platform,
           product: acc.product,
