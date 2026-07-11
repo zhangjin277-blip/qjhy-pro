@@ -16,12 +16,17 @@ import { resolvePermission } from "@/modules/permissions/server";
 
 /**
  * live_room 是物理直播间（B17/A20 等公共资源），没有用户/部门关联字段，
- * 行级过滤无意义。改为 module 级 gate：scope=none 返回空，其他全量返回。
+ * 行级过滤无意义。module 级 gate：live_room 或 live_account 任一 scope
+ * 非 none 即可见 —— 运营通常只有 live_account 权限，但编辑账号要绑房间号，
+ * 直播间号本身是公共字典数据，不该被 live_room 页面权限卡住。
  */
 export async function listRooms(userId?: string, emergencyMode = false) {
   if (!emergencyMode && userId) {
-    const perm = await resolvePermission(userId, "live_room");
-    if (perm.scope === "none") return [];
+    const [roomPerm, accountPerm] = await Promise.all([
+      resolvePermission(userId, "live_room"),
+      resolvePermission(userId, "live_account"),
+    ]);
+    if (roomPerm.scope === "none" && accountPerm.scope === "none") return [];
   }
   return db.select().from(live_room).orderBy(live_room.room_no);
 }
