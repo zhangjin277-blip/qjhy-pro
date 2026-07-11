@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { roomCornerNo } from "@/modules/live-room";
+import { createRoom, roomCornerNo } from "@/modules/live-room";
 import type { CellVM, RoomCellView, SectionVM } from "@/modules/live-room";
 import type { AccountWithRelations } from "@/modules/live-account";
 import { AccountEditDrawer } from "../../_components/account-edit-drawer";
@@ -218,7 +218,11 @@ export function FloorPlanBoard({
 }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<SelectedRoom | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AccountWithRelations | null>(null);
+  const [presetRoomId, setPresetRoomId] = useState<string | undefined>(undefined);
+  /** 空房绑定时现建的 live_room 行（编辑抽屉的直播间下拉需要能选中它） */
+  const [extraRooms, setExtraRooms] = useState<{ id: string; room_no: string }[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => router.refresh(), REFRESH_INTERVAL_MS);
@@ -229,20 +233,59 @@ export function FloorPlanBoard({
     () => new Map((editData?.accounts ?? []).map((a) => [a.id, a])),
     [editData],
   );
+  /** 未绑房间的账号（空房绑定候选，已按用户 scope 过滤） */
+  const unboundAccounts = useMemo(
+    () => (editData?.accounts ?? []).filter((a) => !a.room_id),
+    [editData],
+  );
 
-  function openAccountEditor(accountId: string): boolean {
+  function openAccountEditor(accountId: string, roomId?: string): boolean {
     const acc = accountById.get(accountId);
     if (!acc) return false; // scope 外账号不可编辑，回落只读抽屉
     setSelected(null);
+    setPresetRoomId(roomId);
     setEditingAccount(acc);
+    setEditorOpen(true);
     return true;
   }
 
+  /** 房间字典里还没这个房号时先建一行（权限同账号编辑），返回 room_id */
+  async function resolveRoomId(room: SelectedRoom): Promise<string | null> {
+    if (room.roomId) return room.roomId;
+    try {
+      const created = (await createRoom({ room_no: room.roomNo })) as { id: string };
+      setExtraRooms((prev) => [...prev, { id: created.id, room_no: room.roomNo }]);
+      return created.id;
+    } catch {
+      return null;
+    }
+  }
+
+  async function bindAccountToRoom(accountId: string, room: SelectedRoom): Promise<boolean> {
+    const roomId = await resolveRoomId(room);
+    if (!roomId) return false;
+    return openAccountEditor(accountId, roomId);
+  }
+
+  async function createAccountInRoom(room: SelectedRoom): Promise<void> {
+    const roomId = await resolveRoomId(room);
+    if (!roomId) return;
+    setSelected(null);
+    setPresetRoomId(roomId);
+    setEditingAccount(null); // null = 新建模式
+    setEditorOpen(true);
+  }
+
   function onRoomClick(cell: Extract<CellVM, { kind: "room" }>) {
-    // 单账号且可编辑 → 直接打开账号编辑抽屉；多账号/空房/无权限 → 房间抽屉（可再点账号进编辑）
+    // 单账号且可编辑 → 直接打开账号编辑抽屉；多账号/空房/无权限 → 房间抽屉（可再点账号进编辑/绑定）
     const first = cell.detail[0];
     if (cell.detail.length === 1 && first && openAccountEditor(first.accountId)) return;
-    setSelected({ roomNo: cell.roomNo, view: cell.view, detail: cell.detail });
+    setSelected({
+      roomNo: cell.roomNo,
+      roomId: cell.roomId,
+      view: cell.view,
+      detail: cell.detail,
+    });
   }
 
   const living = stats.livingCheckin + stats.livingCrawler;
@@ -356,25 +399,31 @@ export function FloorPlanBoard({
         <RoomDetailDrawer
           selected={selected}
           onClose={() => setSelected(null)}
-          onSelectAccount={editData ? openAccountEditor : undefined}
+          onSelectAccount={editData ? (id) => openAccountEditor(id) : undefined}
+          unboundAccounts={editData ? unboundAccounts : undefined}
+          onBindAccount={editData ? bindAccountToRoom : undefined}
+          onCreateAccount={editData ? createAccountInRoom : undefined}
         />
       )}
       {!tv && editData && (
         <AccountEditDrawer
-          open={editingAccount !== null}
+          open={editorOpen}
           onOpenChange={(o) => {
             if (!o) {
+              setEditorOpen(false);
               setEditingAccount(null);
+              setPresetRoomId(undefined);
               router.refresh();
             }
           }}
           account={editingAccount}
-          rooms={editData.rooms}
+          rooms={[...editData.rooms, ...extraRooms]}
           dingtalkUsers={editData.dingtalkUsers}
           anchors={editData.anchors}
           bindingsByAccount={editData.bindingsByAccount}
           overridesByAccount={editData.overridesByAccount}
           placementLabelOptions={editData.placementLabelOptions}
+          presetRoomId={presetRoomId}
         />
       )}
     </div>

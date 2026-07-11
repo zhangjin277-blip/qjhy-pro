@@ -293,6 +293,8 @@ interface AccountEditDrawerProps {
   overridesByAccount: Record<string, OverrideRowView[]>;
   /** 已有 placement_label 列表（去重，从所有 live_account 收集），供下拉选 */
   placementLabelOptions: string[];
+  /** 直播间预选（平面图空房「绑定/新建」入口用）：账号本身没绑房时预填该房间 */
+  presetRoomId?: string;
 }
 
 type TabKey = "basic" | "bindings";
@@ -325,6 +327,7 @@ export function AccountEditDrawer({
   bindingsByAccount,
   overridesByAccount,
   placementLabelOptions,
+  presetRoomId,
 }: AccountEditDrawerProps) {
   const isEdit = account !== null;
   const [tab, setTab] = useState<TabKey>("basic");
@@ -366,7 +369,7 @@ export function AccountEditDrawer({
       setPhone(account.phone ?? "");
       setPhoneIndex(account.phone_index ?? "");
       setPhoneRealName(account.phone_real_name ?? "");
-      setRoomId(account.room_id ?? "");
+      setRoomId(account.room_id ?? presetRoomId ?? "");
       setGameAccount1(account.game_account_1 ?? "");
       setGameAccount2(account.game_account_2 ?? "");
       setGameAccount3(account.game_account_3 ?? "");
@@ -384,7 +387,7 @@ export function AccountEditDrawer({
       setPhone("");
       setPhoneIndex("");
       setPhoneRealName("");
-      setRoomId("");
+      setRoomId(presetRoomId ?? "");
       setGameAccount1("");
       setGameAccount2("");
       setGameAccount3("");
@@ -395,7 +398,7 @@ export function AccountEditDrawer({
     setTab("basic");
     setScheduleSubTab("default");
     setError(null);
-  }, [open, account, defaultProduct]);
+  }, [open, account, defaultProduct, presetRoomId]);
 
   // Auto-update platform when product changes
   const handleProductChange = (p: string) => {

@@ -67,6 +67,8 @@ export type CellVM =
       h: number;
       view: RoomCellView;
       detail: RoomAccountDetail[];
+      /** live_room 表主键；配置里有格子但字典还没这条房号时为 null（绑定时需先建房） */
+      roomId: string | null;
     };
 
 export interface SectionVM {
@@ -240,7 +242,12 @@ export function buildFloorPlanView(data: FloorPlanRawData, now = new Date()): Fl
           schedule: schedule.filter((s) => !s.restToday),
         };
       });
-      return { ...cell, view: deriveRoomView(inputs, todayIsoWeekday, nowHHmm), detail };
+      return {
+        ...cell,
+        view: deriveRoomView(inputs, todayIsoWeekday, nowHHmm),
+        detail,
+        roomId: roomIds[0] ?? null,
+      };
     }),
   }));
 
