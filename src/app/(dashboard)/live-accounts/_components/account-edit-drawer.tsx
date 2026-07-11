@@ -476,7 +476,10 @@ export function AccountEditDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[560px] !max-w-[90vw] gap-0 p-0 sm:max-w-none">
+      <SheetContent
+        side="right"
+        className="min-w-[560px] gap-0 p-0 data-[side=right]:w-1/2 data-[side=right]:sm:max-w-none"
+      >
         <SheetTitle className="sr-only">
           {isEdit ? `编辑账号 · ${account?.account_name}` : "新增账号"}
         </SheetTitle>
