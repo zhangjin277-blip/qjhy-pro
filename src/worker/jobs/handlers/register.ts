@@ -12,6 +12,7 @@ import { syncKuaishouTodayLiveSessionsHandler } from "./sync-kuaishou-today-live
 import { syncKuaishouLiveSnapshotHandler } from "./sync-kuaishou-live-snapshot";
 import { backfillKuaishouTrendHandler } from "./backfill-kuaishou-trend";
 import { fetchVideoHandler } from "./fetch-video";
+import { syncDouyinLiveRoomsHandler } from "./sync-douyin-live-rooms";
 import type PgBoss from "pg-boss";
 
 // batchSize=1: one job at a time, avoids rate-limit / Cookie contention.
@@ -107,5 +108,10 @@ export async function registerCrawlerHandlers(): Promise<void> {
     );
   });
   await boss.work(JOB_NAMES.FETCH_VIDEO, { batchSize: 1 }, runFirst(fetchVideoHandler));
-  console.log("[crawler] all 12 handlers registered");
+  await boss.work(JOB_NAMES.SYNC_DOUYIN_LIVE_ROOMS, { batchSize: 1 }, async (jobs) => {
+    const job = jobs.at(0);
+    if (job === undefined) return undefined;
+    return await wrap(() => syncDouyinLiveRoomsHandler());
+  });
+  console.log("[crawler] all 13 handlers registered");
 }

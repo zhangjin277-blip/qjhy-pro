@@ -82,6 +82,16 @@ registerJob({
   },
 });
 
+// 抖音公会「正在直播」快照（union get_room_by_label）→ douyin_live_room。
+// 平面图抖音在播 + 实际开播时间（迟到判定）依赖这条链。singletonKey 防重叠。
+registerJob({
+  name: "sync-douyin-live-rooms",
+  schedule: "*/5 * * * *",
+  task: async () => {
+    await enqueue(JOB_NAMES.SYNC_DOUYIN_LIVE_ROOMS, {}, { singletonKey: "dy-live-rooms-sync" });
+  },
+});
+
 // 抖音视频快照（每天 12:00）：仅"线下运营"组带的主播，近 30 天滑动窗口
 registerJob({
   name: "fetch-video",

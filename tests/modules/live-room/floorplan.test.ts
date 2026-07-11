@@ -123,10 +123,12 @@ describe("slotCoversTime", () => {
 
 describe("deriveRoomView", () => {
   const NOW = "12:00";
+  /** 快手 trend 式爬虫信号：只亮灯，无开播时间 */
+  const KS_LIVE = { startAtLabel: null, startHHmm: null, startedToday: false };
   const acc = (over: Partial<RoomAccountInput> = {}): RoomAccountInput => ({
     product: "捕鱼大作战",
     checkin: null,
-    trendActive: false,
+    crawlerLive: null,
     bindingRestDays: [],
     schedule: [],
     ...over,
@@ -141,7 +143,7 @@ describe("deriveRoomView", () => {
       [
         acc({
           checkin: { anchorName: "陈晓晓", startAtLabel: "09:00" },
-          trendActive: true,
+          crawlerLive: KS_LIVE,
           bindingRestDays: [[1]],
         }),
       ],
@@ -164,8 +166,78 @@ describe("deriveRoomView", () => {
     expect(view.checkins.map((c) => c.anchorName)).toEqual(["甲", "乙"]);
   });
 
-  it("仅 trend 活跃 → living_crawler", () => {
-    expect(deriveRoomView([acc({ trendActive: true })], 1, NOW).state).toBe("living_crawler");
+  it("仅爬虫信号（快手无时间）→ living_crawler，crawler.startAtLabel=null", () => {
+    const view = deriveRoomView([acc({ crawlerLive: KS_LIVE })], 1, NOW);
+    expect(view.state).toBe("living_crawler");
+    expect(view.crawler).toEqual({
+      startAtLabel: null,
+      scheduledAnchorName: null,
+      lateMinutes: null,
+    });
+  });
+
+  it("抖音爬虫在播 + 当班排班 → 迟到分钟 + 当班主播名", () => {
+    const view = deriveRoomView(
+      [
+        acc({
+          crawlerLive: { startAtLabel: "11:07", startHHmm: "11:07", startedToday: true },
+          schedule: [{ anchorName: "林诗源", slots: [["11:00", "14:00"]] }],
+        }),
+      ],
+      1,
+      "12:00",
+    );
+    expect(view.state).toBe("living_crawler");
+    expect(view.crawler).toEqual({
+      startAtLabel: "11:07",
+      scheduledAnchorName: "林诗源",
+      lateMinutes: 7,
+    });
+  });
+
+  it("提前开播 → 准时（lateMinutes=0）", () => {
+    const view = deriveRoomView(
+      [
+        acc({
+          crawlerLive: { startAtLabel: "10:55", startHHmm: "10:55", startedToday: true },
+          schedule: [{ anchorName: "甲", slots: [["11:00", "14:00"]] }],
+        }),
+      ],
+      1,
+      "12:00",
+    );
+    expect(view.crawler?.lateMinutes).toBe(0);
+  });
+
+  it("无当班排班 → lateMinutes=null 且不显示排班主播", () => {
+    const view = deriveRoomView(
+      [
+        acc({
+          crawlerLive: { startAtLabel: "11:07", startHHmm: "11:07", startedToday: true },
+          schedule: [{ anchorName: "甲", slots: [["16:00", "19:00"]] }],
+        }),
+      ],
+      1,
+      "12:00",
+    );
+    expect(view.crawler?.lateMinutes).toBeNull();
+    expect(view.crawler?.scheduledAnchorName).toBeNull();
+    expect(view.crawler?.startAtLabel).toBe("11:07");
+  });
+
+  it("跨天开播（非今天）→ 不判迟到", () => {
+    const view = deriveRoomView(
+      [
+        acc({
+          crawlerLive: { startAtLabel: "07-10 22:30", startHHmm: "22:30", startedToday: false },
+          schedule: [{ anchorName: "甲", slots: [["11:00", "14:00"]] }],
+        }),
+      ],
+      1,
+      "12:00",
+    );
+    expect(view.crawler?.lateMinutes).toBeNull();
+    expect(view.crawler?.startAtLabel).toBe("07-10 22:30");
   });
 
   it("所有绑定今天都休 → rest", () => {

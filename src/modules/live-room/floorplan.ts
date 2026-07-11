@@ -246,8 +246,16 @@ export interface RoomAccountInput {
   product: string;
   /** in_progress 打卡（同账号至多一条，DB 唯一索引保证）。startAtLabel：今天 'HH:mm'，跨天 'MM-DD HH:mm' */
   checkin: { anchorName: string; startAtLabel: string } | null;
-  /** platform_account_id 在 trend 最近 15 分钟有快照 */
-  trendActive: boolean;
+  /**
+   * 爬虫在播信号：
+   * - 快手（trend 15min 有快照）：无开播时间 → 三个字段全 null/false
+   * - 抖音（douyin_live_room 15min 内见过）：有实际开播时间
+   */
+  crawlerLive: {
+    startAtLabel: string | null; // 展示用：'12:01' 或跨天 '07-10 22:30'
+    startHHmm: string | null; // 迟到计算用（仅今天开播才有意义）
+    startedToday: boolean;
+  } | null;
   /**
    * 今天生效的默认排班绑定的 rest_days（ISO weekday 1-7）。
    * ⚠️ 只对抖音账号填（快手排班变动大不可信，2026-07-11 用户定）——快手房间不判「今日休」。
@@ -273,6 +281,24 @@ export interface RoomCellView {
   checkins: { anchorName: string; startAtLabel: string }[];
   /** idle 态的排班提示（仅抖音账号有排班数据） */
   scheduled: ScheduledView | null;
+  /**
+   * living_crawler 态的详情：
+   * - startAtLabel：实际开播时间（抖音有；快手 trend 无 → null，只亮灯）
+   * - scheduledAnchorName：当班排班主播（抖音有排班时）
+   * - lateMinutes：null=无当班排班/跨天开播判不了；0=准时（含提前）；>0=迟到分钟
+   */
+  crawler: {
+    startAtLabel: string | null;
+    scheduledAnchorName: string | null;
+    lateMinutes: number | null;
+  } | null;
+}
+
+/** 'HH:mm' 差值（分钟），b - a */
+function minutesBetween(a: string, b: string): number {
+  const [ah = 0, am = 0] = a.split(":").map(Number);
+  const [bh = 0, bm = 0] = b.split(":").map(Number);
+  return bh * 60 + bm - (ah * 60 + am);
 }
 
 function pickScheduled(entries: ScheduleEntry[], nowHHmm: string): ScheduledView | null {
@@ -294,15 +320,43 @@ export function deriveRoomView(
 ): RoomCellView {
   const products = [...new Set(accounts.map((a) => productShortName(a.product)))];
 
-  if (accounts.length === 0) return { state: "vacant", products, checkins: [], scheduled: null };
+  if (accounts.length === 0)
+    return { state: "vacant", products, checkins: [], scheduled: null, crawler: null };
 
   const checkins = accounts
     .flatMap((a) => (a.checkin ? [a.checkin] : []))
     .sort((a, b) => a.startAtLabel.localeCompare(b.startAtLabel));
-  if (checkins.length > 0) return { state: "living_checkin", products, checkins, scheduled: null };
+  if (checkins.length > 0)
+    return { state: "living_checkin", products, checkins, scheduled: null, crawler: null };
 
-  if (accounts.some((a) => a.trendActive))
-    return { state: "living_crawler", products, checkins: [], scheduled: null };
+  const crawlerLives = accounts.flatMap((a) => (a.crawlerLive ? [a.crawlerLive] : []));
+  if (crawlerLives.length > 0) {
+    // 多账号同房都在播时取最早开播的那个展示
+    const withTime = crawlerLives
+      .filter((c) => c.startAtLabel !== null)
+      .sort((a, b) => (a.startAtLabel as string).localeCompare(b.startAtLabel as string));
+    const first = withTime[0] ?? crawlerLives[0];
+    // 迟到判定：当班排班时段开始 vs 实际开播（仅今天开播的能比；提前开播算准时=0）
+    const sched = pickScheduled(
+      accounts.flatMap((a) => a.schedule),
+      nowHHmm,
+    );
+    let lateMinutes: number | null = null;
+    if (first?.startHHmm && first.startedToday && sched?.current) {
+      lateMinutes = Math.max(0, minutesBetween(sched.start, first.startHHmm));
+    }
+    return {
+      state: "living_crawler",
+      products,
+      checkins: [],
+      scheduled: null,
+      crawler: {
+        startAtLabel: first?.startAtLabel ?? null,
+        scheduledAnchorName: sched?.current ? sched.anchorName : null,
+        lateMinutes,
+      },
+    };
+  }
 
   // 今日休：每个账号都有绑定，且所有绑定的 rest_days 都含今天（快手账号 bindingRestDays 恒空 → 不触发）
   const allRestDays = accounts.flatMap((a) => a.bindingRestDays);
@@ -312,7 +366,7 @@ export function deriveRoomView(
     allRestDays.length > 0 &&
     allRestDays.every((days) => days.includes(todayIsoWeekday))
   ) {
-    return { state: "rest", products, checkins: [], scheduled: null };
+    return { state: "rest", products, checkins: [], scheduled: null, crawler: null };
   }
 
   return {
@@ -323,5 +377,6 @@ export function deriveRoomView(
       accounts.flatMap((a) => a.schedule),
       nowHHmm,
     ),
+    crawler: null,
   };
 }

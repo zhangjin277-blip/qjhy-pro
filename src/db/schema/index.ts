@@ -8,6 +8,7 @@ export * from "./brokers";
 export * from "./crawler";
 export * from "./dingtalk";
 export * from "./daily-schedule";
+export * from "./douyin-live-room";
 export * from "./editing";
 export * from "./invite-codes";
 export * from "./kuaishou-live-session";

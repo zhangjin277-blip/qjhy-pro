@@ -84,6 +84,7 @@ export default async function FloorPlanPage() {
   }
   const checkinByAccountId = new Map(data.checkins.map((c) => [c.live_account_id, c]));
   const trendActive = new Set(data.trendActiveMemberIds);
+  const douyinLivingByUid = new Map(data.douyinLiving.map((d) => [d.platform_uid, d.start_at]));
 
   const bindingsByAccountId = groupBy(data.bindings, (b) => b.account_id);
   const overridesByAccountId = groupBy(data.overrides, (o) => o.account_id);
@@ -143,6 +144,27 @@ export default async function FloorPlanPage() {
         const checkin = checkinByAccountId.get(acc.id);
         // 快手排班变动大不可信（2026-07-11 用户定）：排班显示与「今日休」只看抖音账号
         const isDouyin = acc.platform === "抖音";
+
+        // 爬虫在播：快手 = trend 有快照（只亮灯）；抖音 = douyin_live_room（带实际开播时间）
+        let crawlerLive: RoomAccountInput["crawlerLive"] = null;
+        const ksActive =
+          !isDouyin && acc.platform_account_id !== null && trendActive.has(acc.platform_account_id);
+        if (ksActive) {
+          crawlerLive = { startAtLabel: null, startHHmm: null, startedToday: false };
+        }
+        const dyStart =
+          isDouyin && acc.platform_uid !== null
+            ? douyinLivingByUid.get(acc.platform_uid)
+            : undefined;
+        if (dyStart) {
+          const now = new Date();
+          crawlerLive = {
+            startAtLabel: startAtLabel(dyStart, now),
+            startHHmm: HHMM.format(dyStart),
+            startedToday: MMDD.format(dyStart) === MMDD.format(now),
+          };
+        }
+
         return {
           product: acc.product,
           checkin: checkin
@@ -151,7 +173,7 @@ export default async function FloorPlanPage() {
                 startAtLabel: startAtLabel(checkin.start_at, new Date()),
               }
             : null,
-          trendActive: acc.platform_account_id !== null && trendActive.has(acc.platform_account_id),
+          crawlerLive,
           bindingRestDays: isDouyin
             ? (bindingsByAccountId.get(acc.id) ?? []).map((b) => b.rest_days)
             : [],

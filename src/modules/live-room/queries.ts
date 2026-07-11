@@ -4,6 +4,7 @@ import {
   account_anchor_default,
   daily_schedule_segment,
   dingtalk_user,
+  douyin_live_room,
   kuaishou_live_trend,
   live_account,
   live_room,
@@ -36,11 +37,14 @@ export interface FloorPlanRawData {
     product: string;
     platform: string;
     platform_account_id: string | null;
+    platform_uid: string | null;
   }[];
   /** in_progress 打卡（每账号至多一条） */
   checkins: { live_account_id: string; anchor_name: string; start_at: Date }[];
   /** 最近 15 分钟有 trend 快照的 member_id（= 快手爬虫「当前在播」） */
   trendActiveMemberIds: string[];
+  /** 抖音当前在播（douyin_live_room 15min 内见过），platform_uid → 实际开播时间 */
+  douyinLiving: { platform_uid: string; start_at: Date }[];
   /** 今天生效的默认排班绑定（抖音房卡排班显示 + 休判定） */
   bindings: {
     account_id: string;
@@ -83,7 +87,7 @@ export async function getFloorPlanData(
   // 「今天」按 Asia/Shanghai（服务器 TZ 可能是 UTC）
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
 
-  const [rooms, accounts, checkins, trendRows, bindings, overrides, dailySegments] =
+  const [rooms, accounts, checkins, trendRows, douyinLiving, bindings, overrides, dailySegments] =
     await Promise.all([
       db.select({ id: live_room.id, room_no: live_room.room_no }).from(live_room),
       db
@@ -93,6 +97,7 @@ export async function getFloorPlanData(
           product: live_account.product,
           platform: live_account.platform,
           platform_account_id: live_account.platform_account_id,
+          platform_uid: live_account.platform_uid,
         })
         .from(live_account)
         .where(isNotNull(live_account.room_id)),
@@ -117,6 +122,22 @@ export async function getFloorPlanData(
             sql`now() - make_interval(mins => ${TREND_ACTIVE_WINDOW_MINUTES})`,
           ),
         ),
+      // 抖音在播：同 uid 多场取最新开播的一场
+      db
+        .select({
+          platform_uid: douyin_live_room.platform_uid,
+          start_at: sql<Date>`MAX(${douyin_live_room.start_at})`.mapWith(
+            (v: string | Date) => new Date(v),
+          ),
+        })
+        .from(douyin_live_room)
+        .where(
+          gt(
+            douyin_live_room.last_seen_at,
+            sql`now() - make_interval(mins => ${TREND_ACTIVE_WINDOW_MINUTES})`,
+          ),
+        )
+        .groupBy(douyin_live_room.platform_uid),
       db
         .select({
           account_id: account_anchor_default.account_id,
@@ -171,6 +192,7 @@ export async function getFloorPlanData(
     accounts,
     checkins,
     trendActiveMemberIds: trendRows.map((r) => r.member_id),
+    douyinLiving,
     bindings: bindings.map((b) => ({
       ...b,
       time_slots: (b.time_slots ?? []) as [string, string][],

@@ -133,12 +133,36 @@ function RoomCell({
   }
 
   if (view.state === "living_crawler") {
+    const c = view.crawler;
     return (
       <div title={roomNo} className={`${base} border-[1.5px] border-[#85ADFF] bg-white`}>
         {corner(badgeClass)}
         <LiveDot />
         <ProductTags products={view.products} />
-        <span className="text-[10px] text-slate-400">在播 · 未打卡</span>
+        {c?.scheduledAnchorName && (
+          <span className="max-w-full truncate text-[12px] font-medium text-slate-700">
+            {c.scheduledAnchorName}
+          </span>
+        )}
+        {c?.startAtLabel ? (
+          <span className="flex max-w-full flex-wrap items-center justify-center gap-x-1 gap-y-0.5">
+            <span className="whitespace-nowrap text-[10px] font-medium tabular-nums text-[#2B5CFF]">
+              {c.startAtLabel} 开播
+            </span>
+            {c.lateMinutes !== null &&
+              (c.lateMinutes > 0 ? (
+                <span className="whitespace-nowrap rounded-full bg-[#FFECE8] px-1.5 text-[10px] font-medium text-[#F53F3F]">
+                  迟到{c.lateMinutes}分
+                </span>
+              ) : (
+                <span className="whitespace-nowrap rounded-full bg-[#E8FFEA] px-1.5 text-[10px] font-medium text-[#00B42A]">
+                  准时
+                </span>
+              ))}
+          </span>
+        ) : (
+          <span className="text-[10px] text-slate-400">在播 · 未打卡</span>
+        )}
       </div>
     );
   }
@@ -164,7 +188,7 @@ function RoomCell({
               {view.scheduled.anchorName}
             </span>
             <span
-              className={`whitespace-nowrap text-[11px] tabular-nums ${
+              className={`whitespace-nowrap text-[10px] tabular-nums ${
                 view.scheduled.current ? "font-medium text-[#2B5CFF]" : "text-slate-400"
               }`}
             >

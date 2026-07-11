@@ -80,4 +80,5 @@ export {
   type KuaishouHistoryTrendPoint,
 } from "./adapters/kuaishou-live-baseinfo";
 export { fetchVideoListForAnchor, type VideoSnapshotRow } from "./adapters/video-list";
+export { fetchDouyinLiveRooms, type DouyinLiveRoomRow } from "./adapters/douyin-live-rooms";
 export { resolveOfflineOpAnchors, type OfflineOpAnchor } from "./offline-op-anchors";
