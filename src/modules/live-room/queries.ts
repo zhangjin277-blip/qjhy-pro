@@ -34,6 +34,7 @@ export interface FloorPlanRawData {
   accounts: {
     id: string;
     room_id: string;
+    account_name: string;
     product: string;
     platform: string;
     platform_account_id: string | null;
@@ -94,6 +95,7 @@ export async function getFloorPlanData(
         .select({
           id: live_account.id,
           room_id: sql<string>`${live_account.room_id}`,
+          account_name: live_account.account_name,
           product: live_account.product,
           platform: live_account.platform,
           platform_account_id: live_account.platform_account_id,

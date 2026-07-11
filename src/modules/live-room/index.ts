@@ -7,6 +7,14 @@ export {
   slotCoversTime,
   roomCornerNo,
 } from "./floorplan";
+export { buildFloorPlanView } from "./floorplan-view";
+export type {
+  CellVM,
+  FloorPlanStats,
+  FloorPlanViewModel,
+  RoomAccountDetail,
+  SectionVM,
+} from "./floorplan-view";
 export type {
   FloorCell,
   FloorCellRoom,

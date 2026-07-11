@@ -1,30 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { roomCornerNo } from "@/modules/live-room";
-import type { FloorCellZone, RoomCellView } from "@/modules/live-room";
-
-export type CellVM =
-  | FloorCellZone
-  | {
-      kind: "room";
-      roomNo: string;
-      col: number;
-      row: number;
-      w: number;
-      h: number;
-      view: RoomCellView;
-    };
-
-export interface SectionVM {
-  key: string;
-  title?: string;
-  zone?: "A" | "B" | "C";
-  columns: number;
-  rowHeightPx?: number;
-  cells: CellVM[];
-}
+import type { RoomCellView, SectionVM } from "@/modules/live-room";
+import { RoomDetailDrawer, type SelectedRoom } from "./room-detail-drawer";
 
 /** 分区主题：色带底色 / 区名 chip / 房号角标色。底色极浅保证白卡和在播蓝卡都能跳出来 */
 const ZONE_THEME: Record<string, { band: string; chip: string; badge: string }> = {
@@ -49,6 +29,8 @@ interface Props {
   };
   unmapped: string[];
   generatedAtHHmm: string;
+  /** 电视大屏模式：无抽屉交互、隐藏未上图条、整体放大 */
+  tv?: boolean;
 }
 
 /** 产品短名 → tag 配色（老系统 tag 心智，饱和度收敛到 token 体系） */
@@ -221,8 +203,9 @@ function LegendChip({ className }: { className: string }) {
   return <span className={`inline-block size-3.5 rounded ${className}`} />;
 }
 
-export function FloorPlanBoard({ sections, stats, unmapped, generatedAtHHmm }: Props) {
+export function FloorPlanBoard({ sections, stats, unmapped, generatedAtHHmm, tv }: Props) {
   const router = useRouter();
+  const [selected, setSelected] = useState<SelectedRoom | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => router.refresh(), REFRESH_INTERVAL_MS);
@@ -244,8 +227,17 @@ export function FloorPlanBoard({ sections, stats, unmapped, generatedAtHHmm }: P
           <span className="mx-1.5 text-slate-300">·</span>今日休 {stats.rest}
           <span className="mx-1.5 text-slate-300">·</span>空房 {stats.vacant}
         </span>
-        <span className="ml-auto px-3 text-xs text-slate-400">
+        <span className="ml-auto flex items-center gap-3 px-3 text-xs text-slate-400">
           更新于 {generatedAtHHmm} · 每分钟自动刷新
+          {!tv && (
+            <a
+              href="/floor-plan-tv"
+              target="_blank"
+              className="rounded-md border border-slate-200 px-2 py-0.5 text-slate-500 hover:border-[#2B5CFF] hover:text-[#2B5CFF]"
+            >
+              大屏模式
+            </a>
+          )}
         </span>
       </div>
 
@@ -276,6 +268,17 @@ export function FloorPlanBoard({ sections, stats, unmapped, generatedAtHHmm }: P
                         gridColumn: `${cell.col} / span ${cell.w}`,
                         gridRow: `${cell.row} / span ${cell.h}`,
                       }}
+                      {...(cell.kind === "room" && !tv
+                        ? {
+                            onClick: () =>
+                              setSelected({
+                                roomNo: cell.roomNo,
+                                view: cell.view,
+                                detail: cell.detail,
+                              }),
+                            className: "cursor-pointer",
+                          }
+                        : {})}
                     >
                       {cell.kind === "room" ? (
                         <RoomCell roomNo={cell.roomNo} view={cell.view} badgeClass={theme.badge} />
@@ -314,7 +317,7 @@ export function FloorPlanBoard({ sections, stats, unmapped, generatedAtHHmm }: P
         </div>
       </div>
 
-      {unmapped.length > 0 && (
+      {!tv && unmapped.length > 0 && (
         <div className="rounded-lg border border-[#FF7D00]/30 bg-[#FFF7E8] px-4 py-2 text-xs text-slate-600">
           <b className="text-[#FF7D00]">未上图房间（{unmapped.length}）：</b>
           {unmapped.join("、")}
@@ -323,6 +326,8 @@ export function FloorPlanBoard({ sections, stats, unmapped, generatedAtHHmm }: P
           </span>
         </div>
       )}
+
+      {!tv && <RoomDetailDrawer selected={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
