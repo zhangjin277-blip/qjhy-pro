@@ -70,6 +70,15 @@ describe("listFiles", () => {
     expect(files[1]?.recording).toBe(false);
   });
 
+  it("同时识别 .mp4(录完转封装)与 .ts,排除非视频文件", async () => {
+    await mkFile("主播A/finished.mp4", 100, OLD);
+    await mkFile("主播A/recording.ts", 100, OLD);
+    await mkFile("主播A/cover.png", 10, OLD);
+    await mkFile("主播A/log.txt", 10, OLD);
+    const files = await listFiles("主播A");
+    expect(files.map((f) => f.name).sort()).toEqual(["finished.mp4", "recording.ts"]);
+  });
+
   it("路径穿越被拒", async () => {
     await expect(listFiles("../etc")).rejects.toThrow();
     await expect(listFiles("a/b")).rejects.toThrow();

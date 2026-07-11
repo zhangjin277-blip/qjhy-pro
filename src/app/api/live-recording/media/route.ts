@@ -37,6 +37,17 @@ export async function GET(req: NextRequest) {
     ? `attachment; filename="${enc}"; filename*=UTF-8''${enc}`
     : `inline; filename="${enc}"; filename*=UTF-8''${enc}`;
 
+  const lower = file.toLowerCase();
+  const contentType = lower.endsWith(".mp4")
+    ? "video/mp4"
+    : lower.endsWith(".flv")
+      ? "video/x-flv"
+      : lower.endsWith(".mkv")
+        ? "video/x-matroska"
+        : lower.endsWith(".mov")
+          ? "video/quicktime"
+          : "video/mp2t";
+
   const rangeHeader = req.headers.get("range");
   const rangeMatch = rangeHeader ? /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim()) : null;
   if (rangeMatch) {
@@ -67,7 +78,7 @@ export async function GET(req: NextRequest) {
       status: 206,
       headers: {
         "Content-Disposition": disposition,
-        "Content-Type": "video/mp2t",
+        "Content-Type": contentType,
         "Accept-Ranges": "bytes",
         "Content-Range": `bytes ${start}-${end}/${size}`,
         "Content-Length": String(end - start + 1),
@@ -79,7 +90,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse(webStream, {
     headers: {
       "Content-Disposition": disposition,
-      "Content-Type": "video/mp2t",
+      "Content-Type": contentType,
       "Accept-Ranges": "bytes",
       "Content-Length": String(size),
     },

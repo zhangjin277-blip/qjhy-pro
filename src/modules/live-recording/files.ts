@@ -14,8 +14,18 @@ import path from "node:path";
  * 只认 .ts 文件,忽略子目录和其他文件。
  */
 
-/** 最新 .ts 文件修改时间在此窗口内 → 视为“正在录制” / 禁止删除 */
+/** 最新录像文件修改时间在此窗口内 → 视为“正在录制” / 禁止删除 */
 const RECORDING_WINDOW_MS = 2 * 60 * 1000;
+
+/**
+ * 录像文件扩展名白名单。go-recorder 录制中为 .ts,录完转封装为 .mp4;
+ * 兼容其他常见容器。判断/列表/下载/删除都以此为准。
+ */
+const VIDEO_EXTS = [".ts", ".mp4", ".flv", ".mkv", ".mov"];
+function isVideoFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  return VIDEO_EXTS.some((e) => lower.endsWith(e));
+}
 
 export interface StreamerFolder {
   name: string;
@@ -78,7 +88,7 @@ export async function listStreamerFolders(): Promise<StreamerFolder[]> {
     let latestFileSize = 0;
     const files = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
     for (const f of files) {
-      if (!f.isFile() || !f.name.endsWith(".ts")) continue;
+      if (!f.isFile() || !isVideoFile(f.name)) continue;
       const st = await fs.stat(path.join(dir, f.name)).catch(() => null);
       if (!st) continue;
       fileCount += 1;
@@ -110,7 +120,7 @@ export async function listFiles(streamer: string): Promise<RecordingFile[]> {
   const now = Date.now();
   const out: RecordingFile[] = [];
   for (const f of dirents) {
-    if (!f.isFile() || !f.name.endsWith(".ts")) continue;
+    if (!f.isFile() || !isVideoFile(f.name)) continue;
     const st = await fs.stat(path.join(dir, f.name)).catch(() => null);
     if (!st) continue;
     out.push({
@@ -130,7 +140,7 @@ export async function statRecording(
 ): Promise<{ size: number; fullPath: string }> {
   assertSafeName(streamer);
   assertSafeName(file);
-  if (!file.endsWith(".ts")) throw new Error("只允许 .ts 文件");
+  if (!isVideoFile(file)) throw new Error("不支持的文件类型");
   const fullPath = path.join(recordingsRoot(), streamer, file);
   const st = await fs.stat(fullPath);
   if (!st.isFile()) throw new Error("不是文件");
@@ -152,7 +162,7 @@ export function getReadStream(
 export async function deleteRecording(streamer: string, file: string): Promise<void> {
   assertSafeName(streamer);
   assertSafeName(file);
-  if (!file.endsWith(".ts")) throw new Error("只允许删除 .ts 录像文件");
+  if (!isVideoFile(file)) throw new Error("只允许删除录像文件");
   const fullPath = path.join(recordingsRoot(), streamer, file);
   let st;
   try {

@@ -30,17 +30,18 @@ function mediaUrl(streamer: string, file: string, download = false): string {
   return `/api/live-recording/media?${q.toString()}`;
 }
 
-/**
- * mpegts.js 播放器:动态 import(浏览器专用),挂载时创建、卸载时销毁。
- * .ts 无内置时长/索引 → 传 filesize + seekType:"range" 让 mpegts.js 用 HTTP Range
- * 估算时长并按字节位置跳转(进度条可显示可拖动;定位为码率估算,非精确)。
- */
 const PLAYBACK_RATES = [0.5, 1, 1.5, 2, 3];
 
-function TsPreview({ src, size }: { src: string; size: number }) {
+/**
+ * 录像预览。
+ * - .mp4(录完转封装,有完整索引)→ 原生 <video src>,进度条/拖动/倍速全原生精确。
+ * - .ts(录制中的直播流,无索引)→ mpegts.js + filesize + range,进度条可拖但定位为估算。
+ */
+function Preview({ src, size, file }: { src: string; size: number; file: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [err, setErr] = useState<string | null>(null);
   const [rate, setRate] = useState(1);
+  const isTs = file.toLowerCase().endsWith(".ts");
 
   function changeRate(r: number) {
     setRate(r);
@@ -48,6 +49,7 @@ function TsPreview({ src, size }: { src: string; size: number }) {
   }
 
   useEffect(() => {
+    if (!isTs) return; // 非 .ts 走原生 <video src>,无需 mpegts.js
     let destroyed = false;
     let player: { destroy: () => void } | null = null;
     const video = videoRef.current;
@@ -80,7 +82,7 @@ function TsPreview({ src, size }: { src: string; size: number }) {
         /* ignore */
       }
     };
-  }, [src, size]);
+  }, [src, size, isTs]);
 
   if (err) {
     return <div className="p-6 text-center text-sm text-muted-foreground">{err}</div>;
@@ -90,6 +92,7 @@ function TsPreview({ src, size }: { src: string; size: number }) {
       <video
         ref={videoRef}
         controls
+        src={isTs ? undefined : src}
         onLoadedMetadata={() => {
           if (videoRef.current) videoRef.current.playbackRate = rate;
         }}
@@ -112,9 +115,11 @@ function TsPreview({ src, size }: { src: string; size: number }) {
           </button>
         ))}
       </div>
-      <p className="text-center text-xs text-slate-400">
-        录像为直播流格式,进度条可拖动但定位为估算、可能有偏差;精确回看请下载后本地播放。
-      </p>
+      {isTs && (
+        <p className="text-center text-xs text-slate-400">
+          此为录制中的直播流(.ts),进度条可拖动但定位为估算;录完转为 mp4 后即可精确拖动。
+        </p>
+      )}
     </div>
   );
 }
@@ -276,7 +281,11 @@ export function RecordingFiles({
             <DialogTitle className="truncate font-mono text-sm">{previewFile?.name}</DialogTitle>
           </DialogHeader>
           {previewFile && selected && (
-            <TsPreview src={mediaUrl(selected, previewFile.name)} size={previewFile.size} />
+            <Preview
+              src={mediaUrl(selected, previewFile.name)}
+              size={previewFile.size}
+              file={previewFile.name}
+            />
           )}
         </DialogContent>
       </Dialog>
