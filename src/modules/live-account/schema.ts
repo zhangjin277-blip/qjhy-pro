@@ -10,6 +10,8 @@ export const Product = z.enum([
   "富豪麻将",
   "途游休闲捕鱼",
   "电玩捕鱼",
+  "试播",
+  "招募",
 ]);
 export type Product = z.infer<typeof Product>;
 
@@ -24,6 +26,9 @@ const PRODUCT_PLATFORMS: Record<z.infer<typeof Product>, z.infer<typeof Platform
   捕鱼大作战: ["快手"],
   途游休闲捕鱼: ["快手"],
   电玩捕鱼: ["快手"],
+  // 试播/招募是过程性分类（还没定产品），不限平台
+  试播: ["抖音", "快手", "B站", "视频号"],
+  招募: ["抖音", "快手", "B站", "视频号"],
 };
 
 export const UpsertAccountInput = z

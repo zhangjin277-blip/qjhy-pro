@@ -20,6 +20,8 @@ const ALL_PRODUCTS = [
   "富豪麻将",
   "途游休闲捕鱼",
   "电玩捕鱼",
+  "试播",
+  "招募",
 ];
 
 interface BindingLite {

@@ -231,6 +231,8 @@ const PRODUCT_PLATFORMS: Record<string, string[]> = {
   捕鱼大作战: ["快手"],
   途游休闲捕鱼: ["快手"],
   电玩捕鱼: ["快手"],
+  试播: ["抖音", "快手", "B站", "视频号"],
+  招募: ["抖音", "快手", "B站", "视频号"],
 };
 
 const ALL_PRODUCTS = [
@@ -240,6 +242,8 @@ const ALL_PRODUCTS = [
   "富豪麻将",
   "途游休闲捕鱼",
   "电玩捕鱼",
+  "试播",
+  "招募",
 ];
 
 const ALL_PLATFORMS = ["抖音", "快手", "B站", "视频号"];
