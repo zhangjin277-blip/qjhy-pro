@@ -93,7 +93,6 @@ export const FLOOR_SECTIONS: FloorSection[] = [
       room("C区-12", 5, 4, 2),
       room("C区-15", 8, 4, 2),
       room("C区-17", 11, 4, 2),
-      zone("PY", 13, 4, 1),
       zone("仓库", 14, 4, 4, 2),
       zone("主播休息交流区", 18, 4, 4, 2, "69㎡"),
       zone("大直播间2", 22, 4, 3, 2, "D2 · 78㎡"),
