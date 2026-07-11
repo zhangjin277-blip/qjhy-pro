@@ -91,6 +91,12 @@ export const NAV: NavItem[] = [
         href: "/live-accounts/checkin-history",
         module: "live_account",
       },
+      {
+        key: "live-floorplan",
+        label: "直播间平面图",
+        href: "/live-accounts/floor-plan",
+        module: "live_account",
+      },
     ],
   },
   {
