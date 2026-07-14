@@ -172,11 +172,12 @@ describe("deriveRoomView", () => {
     expect(view.crawler).toEqual({
       startAtLabel: null,
       scheduledAnchorName: null,
+      scheduledAnchorRest: false,
       lateMinutes: null,
     });
   });
 
-  it("抖音爬虫在播 + 当班排班 → 迟到分钟 + 当班主播名", () => {
+  it("抖音爬虫在播 + 开播落在班内 → 迟到分钟 + 当班主播名", () => {
     const view = deriveRoomView(
       [
         acc({
@@ -191,11 +192,27 @@ describe("deriveRoomView", () => {
     expect(view.crawler).toEqual({
       startAtLabel: "11:07",
       scheduledAnchorName: "林诗源",
+      scheduledAnchorRest: false,
       lateMinutes: 7,
     });
   });
 
-  it("提前开播 → 准时（lateMinutes=0）", () => {
+  it("班结束了人还在播（拖堂）→ 名字和迟到保留（按开播时间对班，不看现在）", () => {
+    const view = deriveRoomView(
+      [
+        acc({
+          crawlerLive: { startAtLabel: "14:00", startHHmm: "14:00", startedToday: true },
+          schedule: [{ anchorName: "李夏", slots: [["13:30", "16:00"]] }],
+        }),
+      ],
+      1,
+      "18:30", // 班已结束 2.5 小时
+    );
+    expect(view.crawler?.scheduledAnchorName).toBe("李夏");
+    expect(view.crawler?.lateMinutes).toBe(30);
+  });
+
+  it("提前 ≤60min 开播 → 算下一班的人，准时（lateMinutes=0）", () => {
     const view = deriveRoomView(
       [
         acc({
@@ -206,10 +223,11 @@ describe("deriveRoomView", () => {
       1,
       "12:00",
     );
+    expect(view.crawler?.scheduledAnchorName).toBe("甲");
     expect(view.crawler?.lateMinutes).toBe(0);
   });
 
-  it("无当班排班 → lateMinutes=null 且不显示排班主播", () => {
+  it("提前太多对不上班 + 全房只绑一位 → 兜底显名，不判迟到", () => {
     const view = deriveRoomView(
       [
         acc({
@@ -221,11 +239,44 @@ describe("deriveRoomView", () => {
       "12:00",
     );
     expect(view.crawler?.lateMinutes).toBeNull();
-    expect(view.crawler?.scheduledAnchorName).toBeNull();
-    expect(view.crawler?.startAtLabel).toBe("11:07");
+    expect(view.crawler?.scheduledAnchorName).toBe("甲");
+    expect(view.crawler?.scheduledAnchorRest).toBe(false);
   });
 
-  it("跨天开播（非今天）→ 不判迟到", () => {
+  it("排休硬来播 + 全房只绑一位 → 显名并标休", () => {
+    const view = deriveRoomView(
+      [
+        acc({
+          crawlerLive: { startAtLabel: "14:32", startHHmm: "14:32", startedToday: true },
+          schedule: [{ anchorName: "文姬", slots: [["13:30", "16:00"]], restToday: true }],
+        }),
+      ],
+      1,
+      "18:30",
+    );
+    expect(view.crawler?.scheduledAnchorName).toBe("文姬");
+    expect(view.crawler?.scheduledAnchorRest).toBe(true);
+    expect(view.crawler?.lateMinutes).toBeNull();
+  });
+
+  it("多位主播都对不上班 → 不猜名字", () => {
+    const view = deriveRoomView(
+      [
+        acc({
+          crawlerLive: { startAtLabel: "09:00", startHHmm: "09:00", startedToday: true },
+          schedule: [
+            { anchorName: "甲", slots: [["16:00", "19:00"]] },
+            { anchorName: "乙", slots: [["19:00", "22:00"]] },
+          ],
+        }),
+      ],
+      1,
+      "12:00",
+    );
+    expect(view.crawler?.scheduledAnchorName).toBeNull();
+  });
+
+  it("跨天开播（非今天）→ 不判迟到，单主播兜底显名", () => {
     const view = deriveRoomView(
       [
         acc({
@@ -237,7 +288,30 @@ describe("deriveRoomView", () => {
       "12:00",
     );
     expect(view.crawler?.lateMinutes).toBeNull();
+    expect(view.crawler?.scheduledAnchorName).toBe("甲");
     expect(view.crawler?.startAtLabel).toBe("07-10 22:30");
+  });
+
+  it("排休的主播不进 idle 排班显示", () => {
+    const view = deriveRoomView(
+      [
+        acc({
+          schedule: [
+            { anchorName: "甲", slots: [["11:00", "14:00"]], restToday: true },
+            { anchorName: "乙", slots: [["16:00", "19:00"]] },
+          ],
+        }),
+      ],
+      1,
+      "12:00",
+    );
+    expect(view.state).toBe("idle");
+    expect(view.scheduled).toEqual({
+      anchorName: "乙",
+      start: "16:00",
+      end: "19:00",
+      current: false,
+    });
   });
 
   it("所有绑定今天都休 → rest", () => {

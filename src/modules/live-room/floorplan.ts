@@ -238,10 +238,12 @@ export function slotCoversTime(slot: [string, string], hhmm: string): boolean {
   return hhmm >= start && hhmm < end;
 }
 
-/** 某账号一位主播的今日有效排班（已合并 daily/override/default、已剔除今天休的主播） */
+/** 某账号一位主播的今日有效排班（已合并 daily/override/default） */
 export interface ScheduleEntry {
   anchorName: string;
   slots: [string, string][];
+  /** 该主播今天排休（排班显示/当班判定跳过；在播兜底显名时标「休」） */
+  restToday?: boolean;
 }
 
 export interface RoomAccountInput {
@@ -286,12 +288,15 @@ export interface RoomCellView {
   /**
    * living_crawler 态的详情：
    * - startAtLabel：实际开播时间（抖音有；快手 trend 无 → null，只亮灯）
-   * - scheduledAnchorName：当班排班主播（抖音有排班时）
-   * - lateMinutes：null=无当班排班/跨天开播判不了；0=准时（含提前）；>0=迟到分钟
+   * - scheduledAnchorName：这场直播的当班主播——按「开播时间」落在谁的班里判
+   *  （班结束了人还在播也保留名字）；找不到班但全房只绑一位主播时兜底显示 TA
+   * - scheduledAnchorRest：兜底显示的主播今天排休（排休硬来播 → UI 标「休」）
+   * - lateMinutes：null=对不上任何班/跨天开播判不了；0=准时（含提前 ≤60min 到岗）；>0=迟到分钟
    */
   crawler: {
     startAtLabel: string | null;
     scheduledAnchorName: string | null;
+    scheduledAnchorRest: boolean;
     lateMinutes: number | null;
   } | null;
 }
@@ -303,16 +308,42 @@ function minutesBetween(a: string, b: string): number {
   return bh * 60 + bm - (ah * 60 + am);
 }
 
+function flatSlots(entries: ScheduleEntry[]): { anchorName: string; start: string; end: string }[] {
+  return entries
+    .filter((e) => !e.restToday)
+    .flatMap((e) =>
+      e.slots.map((slot) => ({ anchorName: e.anchorName, start: slot[0], end: slot[1] })),
+    );
+}
+
 function pickScheduled(entries: ScheduleEntry[], nowHHmm: string): ScheduledView | null {
-  const flat = entries.flatMap((e) =>
-    e.slots.map((slot) => ({ anchorName: e.anchorName, start: slot[0], end: slot[1] })),
-  );
+  const flat = flatSlots(entries);
   const current = flat.find((s) => slotCoversTime([s.start, s.end], nowHHmm));
   if (current) return { ...current, current: true };
   const upcoming = flat
     .filter((s) => s.start > nowHHmm)
     .sort((a, b) => a.start.localeCompare(b.start))[0];
   return upcoming ? { ...upcoming, current: false } : null;
+}
+
+/** 允许提前到岗的分钟数：开播时间在某班开始前 60min 内也算这一班的 */
+const EARLY_START_TOLERANCE_MINUTES = 60;
+
+/** 这场直播算谁的班：开播时刻落在班内，否则最近一个 60min 内即将开始的班 */
+function pickDutySlot(
+  entries: ScheduleEntry[],
+  startHHmm: string,
+): { anchorName: string; start: string; end: string } | null {
+  const flat = flatSlots(entries);
+  const containing = flat.find((s) => slotCoversTime([s.start, s.end], startHHmm));
+  if (containing) return containing;
+  const upcoming = flat
+    .filter(
+      (s) =>
+        s.start >= startHHmm && minutesBetween(startHHmm, s.start) <= EARLY_START_TOLERANCE_MINUTES,
+    )
+    .sort((a, b) => a.start.localeCompare(b.start))[0];
+  return upcoming ?? null;
 }
 
 export function deriveRoomView(
@@ -338,15 +369,31 @@ export function deriveRoomView(
       .filter((c) => c.startAtLabel !== null)
       .sort((a, b) => (a.startAtLabel as string).localeCompare(b.startAtLabel as string));
     const first = withTime[0] ?? crawlerLives[0];
-    // 迟到判定：当班排班时段开始 vs 实际开播（仅今天开播的能比；提前开播算准时=0）
-    const sched = pickScheduled(
-      accounts.flatMap((a) => a.schedule),
-      nowHHmm,
-    );
+
+    const entries = accounts.flatMap((a) => a.schedule);
+    let scheduledAnchorName: string | null = null;
+    let scheduledAnchorRest = false;
     let lateMinutes: number | null = null;
-    if (first?.startHHmm && first.startedToday && sched?.current) {
-      lateMinutes = Math.max(0, minutesBetween(sched.start, first.startHHmm));
+
+    // 这场直播的当班人：按开播时间对班（班结束了人还在播也保留名字），
+    // 迟到 = 实际开播 - 该班开始（提前 ≤60min 到岗算准时）
+    if (first?.startHHmm && first.startedToday) {
+      const duty = pickDutySlot(entries, first.startHHmm);
+      if (duty) {
+        scheduledAnchorName = duty.anchorName;
+        lateMinutes = Math.max(0, minutesBetween(duty.start, first.startHHmm));
+      }
     }
+    // 对不上任何班（提前太多/排休硬来播/跨天）：全房只绑一位主播时兜底显示 TA
+    if (!scheduledAnchorName) {
+      const names = [...new Set(entries.map((e) => e.anchorName))];
+      const only = names.length === 1 ? names[0] : undefined;
+      if (only) {
+        scheduledAnchorName = only;
+        scheduledAnchorRest = entries.some((e) => e.anchorName === only && e.restToday);
+      }
+    }
+
     return {
       state: "living_crawler",
       products,
@@ -354,7 +401,8 @@ export function deriveRoomView(
       scheduled: null,
       crawler: {
         startAtLabel: first?.startAtLabel ?? null,
-        scheduledAnchorName: sched?.current ? sched.anchorName : null,
+        scheduledAnchorName,
+        scheduledAnchorRest,
         lateMinutes,
       },
     };

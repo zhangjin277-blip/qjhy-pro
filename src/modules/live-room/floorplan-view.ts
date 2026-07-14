@@ -239,7 +239,9 @@ export function buildFloorPlanView(data: FloorPlanRawData, now = new Date()): Fl
           bindingRestDays: isDouyin
             ? (bindingsByAccountId.get(acc.id) ?? []).map((b) => b.rest_days)
             : [],
-          schedule: schedule.filter((s) => !s.restToday),
+          // 含 restToday 标记的完整排班：排班显示/当班判定在纯函数内自行过滤，
+          // 排休硬来播的兜底显名需要看到休的主播
+          schedule,
         };
       });
       return {

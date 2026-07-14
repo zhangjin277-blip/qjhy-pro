@@ -127,8 +127,15 @@ function RoomCell({
         <LiveDot />
         <ProductTags products={view.products} />
         {c?.scheduledAnchorName && (
-          <span className="max-w-full truncate text-[12px] font-medium text-slate-700">
-            {c.scheduledAnchorName}
+          <span className="flex max-w-full items-center gap-1">
+            <span className="min-w-0 truncate text-[12px] font-medium text-slate-700">
+              {c.scheduledAnchorName}
+            </span>
+            {c.scheduledAnchorRest && (
+              <span className="shrink-0 rounded-full bg-[#FFF7E8] px-1.5 text-[10px] font-medium text-[#FF7D00]">
+                休
+              </span>
+            )}
           </span>
         )}
         {c?.startAtLabel ? (
