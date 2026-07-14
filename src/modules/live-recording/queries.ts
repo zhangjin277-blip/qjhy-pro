@@ -1,5 +1,11 @@
 import "server-only";
-import { hasCover, listStreamerFolders, readCategories, readUrlsFile } from "./files";
+import {
+  hasCover,
+  listStreamerFolders,
+  readCategories,
+  readRetention,
+  readUrlsFile,
+} from "./files";
 import {
   listStreamers,
   parsePlatformRoom,
@@ -25,6 +31,8 @@ export interface StreamerView extends StreamerEntry {
   totalSize: number;
   /** 自定义分类名;未分类为 "" */
   category: string;
+  /** 录像保存天数;0 = 永久(不自动删除) */
+  retentionDays: number;
 }
 
 /** 已定义的分类名列表(供筛选与下拉) */
@@ -38,10 +46,11 @@ export async function getCategories(): Promise<string[]> {
  * 录像目录读不到时 degrade 为“只显示名单、录制状态未知”。
  */
 export async function getStreamerList(): Promise<StreamerView[]> {
-  const [content, folders, cat] = await Promise.all([
+  const [content, folders, cat, ret] = await Promise.all([
     readUrlsFile(),
     listStreamerFolders().catch(() => []),
     readCategories(),
+    readRetention(),
   ]);
   const byName = new Map(folders.map((f) => [f.name, f]));
   const now = Date.now();
@@ -76,6 +85,7 @@ export async function getStreamerList(): Promise<StreamerView[]> {
       fileCount: folder?.fileCount ?? 0,
       totalSize: folder?.totalSize ?? 0,
       category: cat.byUrl[e.url] ?? "",
+      retentionDays: ret.byUrl[e.url] ?? 0,
     });
   }
   return views;

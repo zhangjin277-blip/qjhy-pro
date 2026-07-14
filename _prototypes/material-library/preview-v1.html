@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>素材库 · 原型 v1 · QJHY-Pro</title>
+<style>
+/* ============================================================
+   设计 token —— 直接取自 QJHY-Pro globals.css（保持一页无缝）
+   ============================================================ */
+:root{
+  --blue-50:#e8f4ff; --blue-100:#d1e9ff; --blue-200:#a3d3ff; --blue-400:#4096ff;
+  --blue-500:#1677ff; --blue-600:#0958d9; --blue-700:#0046b3;
+  --slate-50:#f8fafc; --slate-100:#f1f5f9; --slate-200:#e2e8f0; --slate-300:#cbd5e1;
+  --slate-400:#94a3b8; --slate-500:#64748b; --slate-600:#475569; --slate-700:#334155; --slate-800:#1e293b;
+  --green-500:#10b981; --amber-500:#f59e0b; --red-500:#ef4444; --purple-500:#a855f7; --cyan-500:#06b6d4;
+  --text-primary:var(--slate-800); --text-secondary:var(--slate-500); --text-muted:var(--slate-400);
+  --border-subtle:rgba(226,232,240,.6); --border-default:var(--slate-200);
+  --primary:var(--blue-500);
+  --bg-page-start:#eaf0ff; --bg-page-mid:#f1f2ff; --bg-page-end:#eef1ff;
+  --radius-sm:6px; --radius-md:8px; --radius-lg:12px; --radius-xl:16px;
+  --shadow-card:0 1px 3px rgba(0,0,0,.04),0 1px 2px rgba(0,0,0,.02);
+  --shadow-card-hover:0 8px 24px rgba(0,0,0,.1);
+  --shadow-lg:0 8px 24px rgba(0,0,0,.08);
+  --shadow-modal:0 16px 40px rgba(0,0,0,.1);
+  --font-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{font-family:var(--font-sans);}
+body{
+  min-height:100vh;font-size:14px;color:var(--text-primary);
+  background:linear-gradient(135deg,var(--bg-page-start),var(--bg-page-mid) 50%,var(--bg-page-end));
+  -webkit-font-smoothing:antialiased;padding:28px;
+}
+
+/* ====== workspace 外壳（毛玻璃，取自 .workspace-shell）====== */
+.shell{
+  max-width:1440px;margin:0 auto;border-radius:var(--radius-xl);overflow:hidden;
+  background:rgba(246,247,255,.88);
+  border:2px solid rgba(255,255,255,.98);
+  box-shadow:0 0 0 1px rgba(210,220,245,.42),inset 0 1px 0 rgba(255,255,255,1),0 24px 68px -40px rgba(40,55,120,.42);
+  backdrop-filter:blur(18px);
+  display:flex;min-height:calc(100vh - 56px);
+}
+
+/* ============================================================
+   左栏 —— 快捷入口 + 文件夹树（参考图2的结构）
+   ============================================================ */
+.sidebar{
+  width:248px;flex-shrink:0;padding:20px 14px;
+  background:rgba(255,255,255,.5);border-right:1px solid var(--border-subtle);
+  display:flex;flex-direction:column;gap:4px;overflow-y:auto;
+}
+.side-title{font-size:16px;font-weight:700;color:var(--text-primary);padding:4px 8px 12px;display:flex;align-items:center;gap:8px;}
+.side-title svg{color:var(--primary);}
+
+.nav-item{
+  display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);
+  color:var(--text-secondary);cursor:pointer;font-size:13.5px;transition:all .15s;user-select:none;
+}
+.nav-item:hover{background:var(--blue-50);color:var(--primary);}
+.nav-item.active{background:var(--blue-50);color:var(--primary);font-weight:600;position:relative;}
+.nav-item.active::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:3px;background:var(--primary);}
+.nav-item svg{flex-shrink:0;}
+.nav-item .count{margin-left:auto;font-size:11.5px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
+.nav-item.active .count{color:var(--blue-400);}
+
+.side-divider{height:1px;background:var(--border-subtle);margin:12px 8px;}
+.side-group-label{font-size:11.5px;font-weight:600;color:var(--text-muted);padding:4px 10px;display:flex;align-items:center;justify-content:space-between;letter-spacing:.04em;}
+.side-group-label .add{cursor:pointer;color:var(--text-muted);width:18px;height:18px;display:grid;place-items:center;border-radius:4px;}
+.side-group-label .add:hover{background:var(--blue-50);color:var(--primary);}
+
+/* 文件夹树 */
+.tree-node{display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:13.5px;transition:all .15s;user-select:none;}
+.tree-node:hover{background:var(--blue-50);color:var(--primary);}
+.tree-node.active{background:var(--blue-50);color:var(--primary);font-weight:600;}
+.tree-node .caret{width:14px;height:14px;flex-shrink:0;display:grid;place-items:center;transition:transform .15s;color:var(--text-muted);}
+.tree-node.open .caret{transform:rotate(90deg);}
+.tree-node .folder-ico{color:var(--amber-500);flex-shrink:0;}
+.tree-node .count{margin-left:auto;font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
+.tree-children{margin-left:16px;border-left:1px dashed var(--border-default);padding-left:4px;display:none;}
+.tree-children.show{display:block;}
+.tree-leaf{display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:13px;transition:all .15s;user-select:none;}
+.tree-leaf:hover{background:var(--blue-50);color:var(--primary);}
+.tree-leaf.active{background:var(--blue-50);color:var(--primary);font-weight:600;}
+.tree-leaf .count{margin-left:auto;font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
+
+/* ============================================================
+   主区
+   ============================================================ */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.topbar{
+  padding:18px 24px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+}
+.crumb{font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.crumb b{color:var(--text-primary);font-weight:600;font-size:20px;}
+.crumb .sep{color:var(--slate-300);}
+.crumb .desc{font-size:12.5px;color:var(--text-muted);margin-top:2px;}
+
+.btn{
+  display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:var(--radius-sm);
+  font-size:13.5px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all .15s;white-space:nowrap;
+}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:0 1px 2px rgba(22,119,255,.25);}
+.btn-primary:hover{background:var(--blue-600);}
+.btn-ghost{background:#fff;color:var(--text-secondary);border-color:var(--border-default);}
+.btn-ghost:hover{border-color:var(--blue-200);color:var(--primary);background:var(--blue-50);}
+
+/* 工具条 */
+.toolbar{padding:16px 24px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.type-tabs{display:inline-flex;background:var(--slate-100);padding:3px;border-radius:var(--radius-sm);gap:2px;}
+.type-tab{padding:6px 14px;border-radius:5px;font-size:13px;color:var(--text-secondary);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;user-select:none;}
+.type-tab:hover{color:var(--primary);}
+.type-tab.active{background:#fff;color:var(--primary);font-weight:600;box-shadow:var(--shadow-card);}
+.type-tab .dot{width:6px;height:6px;border-radius:50%;}
+
+.search{position:relative;flex:1;min-width:200px;max-width:340px;}
+.search input{
+  width:100%;height:34px;padding:0 12px 0 34px;border:1px solid var(--border-default);border-radius:var(--radius-sm);
+  font-size:13.5px;color:var(--text-primary);background:#fff;font-family:inherit;
+}
+.search input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(22,119,255,.15);}
+.search svg{position:absolute;left:11px;top:9px;color:var(--text-muted);}
+
+.tagfilter{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.chip{padding:4px 11px;border-radius:99px;font-size:12px;border:1px solid var(--border-default);color:var(--text-secondary);cursor:pointer;background:#fff;transition:all .15s;user-select:none;}
+.chip:hover{border-color:var(--blue-200);color:var(--primary);}
+.chip.on{background:var(--blue-50);border-color:var(--blue-200);color:var(--primary);font-weight:500;}
+
+.spacer{flex:1;}
+.sortsel{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);cursor:pointer;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid transparent;}
+.sortsel:hover{background:var(--slate-100);}
+
+/* 内容滚动区 */
+.content{flex:1;overflow-y:auto;padding:4px 24px 28px;}
+
+/* 子文件夹卡片行 */
+.folder-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-bottom:22px;}
+.folder-card{
+  display:flex;align-items:center;gap:12px;padding:12px;border-radius:var(--radius-lg);
+  background:rgba(255,255,255,.92);border:1px solid var(--border-subtle);box-shadow:var(--shadow-card);cursor:pointer;transition:all .18s;
+}
+.folder-card:hover{box-shadow:var(--shadow-card-hover);transform:translateY(-1px);}
+.folder-thumb{width:54px;height:54px;border-radius:var(--radius-md);flex-shrink:0;display:grid;place-items:center;color:#fff;}
+.folder-meta .fname{font-size:14px;font-weight:600;color:var(--text-primary);}
+.folder-meta .fcount{font-size:12px;color:var(--text-muted);margin-top:3px;}
+
+.section-label{font-size:13px;font-weight:600;color:var(--text-secondary);margin:0 0 14px;display:flex;align-items:center;gap:8px;}
+.section-label .n{color:var(--text-muted);font-weight:400;}
+
+/* 素材网格 */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
+.card{
+  background:rgba(255,255,255,.94);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);
+  overflow:hidden;cursor:pointer;transition:all .18s;box-shadow:var(--shadow-card);position:relative;
+}
+.card:hover{box-shadow:var(--shadow-card-hover);transform:translateY(-2px);}
+.thumb{position:relative;aspect-ratio:16/10;display:grid;place-items:center;overflow:hidden;}
+.thumb .ico{color:rgba(255,255,255,.92);filter:drop-shadow(0 2px 6px rgba(0,0,0,.25));}
+.type-badge{position:absolute;left:8px;top:8px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;color:#fff;backdrop-filter:blur(4px);background:rgba(15,23,42,.42);display:flex;align-items:center;gap:4px;}
+.dur-badge{position:absolute;right:8px;bottom:8px;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600;color:#fff;background:rgba(15,23,42,.6);font-variant-numeric:tabular-nums;}
+.fav{position:absolute;right:8px;top:8px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(15,23,42,.32);backdrop-filter:blur(4px);color:#fff;opacity:0;transition:all .15s;}
+.card:hover .fav{opacity:1;}
+.fav.on{opacity:1;color:var(--amber-500);background:rgba(255,255,255,.9);}
+.hover-actions{position:absolute;inset:0;background:linear-gradient(to top,rgba(15,23,42,.55),transparent 55%);opacity:0;transition:opacity .18s;display:flex;align-items:flex-end;justify-content:center;gap:8px;padding-bottom:12px;}
+.card:hover .hover-actions{opacity:1;}
+.mini-btn{padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600;background:rgba(255,255,255,.95);color:var(--text-primary);display:flex;align-items:center;gap:5px;}
+.mini-btn.primary{background:var(--primary);color:#fff;}
+
+/* 波形（音频卡）*/
+.wave{display:flex;align-items:center;gap:2px;height:46px;padding:0 14px;}
+.wave span{flex:1;background:rgba(255,255,255,.85);border-radius:2px;}
+
+.card-body{padding:11px 12px 12px;}
+.card-name{font-size:13.5px;font-weight:600;color:var(--text-primary);line-height:1.35;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;}
+.card-tags{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;}
+.tag{padding:1px 7px;border-radius:4px;font-size:11px;background:var(--slate-100);color:var(--text-secondary);}
+.tag.blue{background:var(--blue-50);color:var(--primary);}
+.card-foot{display:flex;align-items:center;gap:7px;margin-top:10px;font-size:11.5px;color:var(--text-muted);}
+.avatar{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:9px;color:#fff;font-weight:600;flex-shrink:0;}
+.card-foot .use{margin-left:auto;display:flex;align-items:center;gap:3px;}
+
+/* ============================================================
+   详情抽屉
+   ============================================================ */
+.drawer-mask{position:fixed;inset:0;background:rgba(15,20,25,.42);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40;}
+.drawer-mask.show{opacity:1;pointer-events:auto;}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:420px;background:#fff;z-index:50;
+  box-shadow:var(--shadow-modal);transform:translateX(100%);transition:transform .26s cubic-bezier(0,0,.2,1);
+  display:flex;flex-direction:column;
+}
+.drawer.show{transform:translateX(0);}
+.drawer-head{padding:18px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-subtle);}
+.drawer-head h3{font-size:15px;font-weight:600;}
+.drawer-close{width:30px;height:30px;border-radius:var(--radius-sm);display:grid;place-items:center;cursor:pointer;color:var(--text-muted);}
+.drawer-close:hover{background:var(--slate-100);color:var(--text-primary);}
+.drawer-body{flex:1;overflow-y:auto;padding:20px;}
+.preview-box{aspect-ratio:16/10;border-radius:var(--radius-lg);display:grid;place-items:center;margin-bottom:18px;position:relative;overflow:hidden;}
+.preview-box .ico{color:rgba(255,255,255,.92);}
+.preview-box .dur-badge{font-size:12px;}
+.d-name{font-size:16px;font-weight:600;margin-bottom:14px;}
+.meta-grid{display:grid;grid-template-columns:auto 1fr;gap:10px 18px;font-size:13px;margin-bottom:18px;}
+.meta-grid dt{color:var(--text-muted);}
+.meta-grid dd{color:var(--text-primary);text-align:right;font-variant-numeric:tabular-nums;}
+.d-section{font-size:12px;font-weight:600;color:var(--text-muted);margin:18px 0 10px;letter-spacing:.04em;}
+.d-tags{display:flex;gap:6px;flex-wrap:wrap;}
+.usage{display:flex;flex-direction:column;gap:8px;}
+.usage-row{display:flex;align-items:center;gap:9px;padding:9px 11px;background:var(--slate-50);border-radius:var(--radius-sm);font-size:12.5px;}
+.usage-row .uname{color:var(--text-primary);font-weight:500;}
+.usage-row .utask{color:var(--text-muted);margin-left:auto;}
+.drawer-foot{padding:14px 20px;border-top:1px solid var(--border-subtle);display:flex;gap:10px;}
+.drawer-foot .btn{flex:1;justify-content:center;}
+.btn-danger{background:#fff;color:var(--red-500);border-color:var(--border-default);flex:0 0 auto !important;}
+.btn-danger:hover{background:var(--red-500);color:#fff;border-color:var(--red-500);}
+
+/* ============================================================
+   上传弹窗
+   ============================================================ */
+.modal-mask{position:fixed;inset:0;background:rgba(15,20,25,.42);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;display:grid;place-items:center;}
+.modal-mask.show{opacity:1;pointer-events:auto;}
+.modal{width:520px;max-width:92vw;background:#fff;border-radius:var(--radius-xl);box-shadow:var(--shadow-modal);transform:scale(.96);transition:transform .2s;overflow:hidden;}
+.modal-mask.show .modal{transform:scale(1);}
+.modal-head{padding:18px 22px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between;}
+.modal-head h3{font-size:16px;font-weight:600;}
+.modal-body{padding:22px;}
+.dropzone{border:2px dashed var(--border-default);border-radius:var(--radius-lg);padding:34px 20px;text-align:center;color:var(--text-muted);transition:all .15s;cursor:pointer;}
+.dropzone:hover{border-color:var(--primary);background:var(--blue-50);color:var(--primary);}
+.dropzone .up-ico{margin:0 auto 12px;color:var(--blue-400);}
+.dropzone .up-main{font-size:14px;color:var(--text-primary);font-weight:500;margin-bottom:5px;}
+.dropzone .up-sub{font-size:12px;}
+.field{margin-top:18px;}
+.field label{display:block;font-size:13px;color:var(--text-secondary);margin-bottom:7px;font-weight:500;}
+.field .ipt{width:100%;height:34px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-sm);font-size:13.5px;font-family:inherit;}
+.field .ipt:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(22,119,255,.15);}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--border-subtle);display:flex;justify-content:flex-end;gap:10px;}
+
+/* 假设标注 */
+.note{max-width:1440px;margin:0 auto 16px;padding:12px 18px;background:rgba(255,247,232,.85);border:1px solid #ffe2b8;border-radius:var(--radius-md);font-size:12.5px;color:#92600a;line-height:1.6;}
+.note b{color:#7a4f00;}
+</style>
+</head>
+<body>
+
+<div class="note">
+  <b>原型说明（v1）</b>　这是「素材库」方案 B 的高保真原型，视觉沿用 QJHY-Pro 现有 token。结构借鉴你给的 jingyou 素材库（文件夹树 + 封面卡 + 数量），但把"投放数据"改成对剪辑有用的"使用次数 / 上传人 / 被哪些任务用过"。
+  缩略图为<b>诚实占位</b>（渐变块＋类型图标），真实素材接入后替换。可点：左侧分类、顶部类型切换、卡片打开详情、右上「上传素材」。
+</div>
+
+<div class="shell">
+  <!-- ============ 左栏 ============ -->
+  <aside class="sidebar">
+    <div class="side-title">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l2-3h12l2 3"/><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 12l3 2 3-2"/></svg>
+      素材库
+    </div>
+
+    <div class="nav-item active" data-nav="all"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>全部素材<span class="count">5,930</span></div>
+    <div class="nav-item" data-nav="fav"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.9 6.3 6.9.7-5.1 4.7 1.4 6.8L12 17.8 5.9 20.5l1.4-6.8L2.2 9l6.9-.7z"/></svg>我的收藏<span class="count">38</span></div>
+    <div class="nav-item" data-nav="mine"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>我的上传<span class="count">212</span></div>
+    <div class="nav-item" data-nav="recent"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>最近使用<span class="count">60</span></div>
+
+    <div class="side-divider"></div>
+    <div class="side-group-label">分类目录<span class="add" title="新建文件夹"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span></div>
+
+    <div id="tree"></div>
+
+    <div class="side-divider"></div>
+    <div class="nav-item" data-nav="tags"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 13.4L13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2A2 2 0 0 1 2.8 12V4a2 2 0 0 1 2-2h8a2 2 0 0 1 1.4.6l6.4 6.4a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.4"/></svg>标签管理</div>
+  </aside>
+
+  <!-- ============ 主区 ============ -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="crumb"><span>素材库</span><span class="sep">/</span><span>捕鱼大作战</span><span class="sep">/</span><b>高光时刻</b></div>
+        <div class="desc" id="crumbDesc">爆奖、连杀、逆袭翻盘等可直接复用的高光片段</div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h7"/></svg>批量操作</button>
+        <button class="btn btn-primary" id="uploadBtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>上传素材</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="type-tabs">
+        <div class="type-tab active" data-type="all">全部</div>
+        <div class="type-tab" data-type="video"><span class="dot" style="background:var(--blue-500)"></span>视频</div>
+        <div class="type-tab" data-type="audio"><span class="dot" style="background:var(--purple-500)"></span>音频</div>
+        <div class="type-tab" data-type="image"><span class="dot" style="background:var(--green-500)"></span>图片</div>
+      </div>
+      <div class="search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input placeholder="搜索素材名称 / 标签…" />
+      </div>
+      <div class="tagfilter">
+        <span class="chip on">全部标签</span>
+        <span class="chip">爆奖</span>
+        <span class="chip">开场</span>
+        <span class="chip">转场</span>
+        <span class="chip">BGM</span>
+      </div>
+      <div class="spacer"></div>
+      <div class="sortsel">最新上传 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+    </div>
+
+    <div class="content">
+      <!-- 子文件夹卡片行 -->
+      <div class="folder-strip" id="folderStrip"></div>
+
+      <div class="section-label">当前目录素材 <span class="n" id="gridCount">· 共 0 个</span></div>
+      <div class="grid" id="grid"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ 详情抽屉 ============ -->
+<div class="drawer-mask" id="drawerMask"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h3>素材详情</h3>
+    <div class="drawer-close" id="drawerClose"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer-foot">
+    <button class="btn btn-primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>下载</button>
+    <button class="btn btn-ghost"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2v6h6"/><path d="M4 13V4a2 2 0 0 1 2-2h8l6 6v11a2 2 0 0 1-2 2H6"/><path d="M9 18l3-3 3 3"/></svg>引用到任务</button>
+    <button class="btn btn-danger" title="删除"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+  </div>
+</aside>
+
+<!-- ============ 上传弹窗 ============ -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <div class="modal-head"><h3>上传素材</h3><div class="drawer-close" id="modalClose"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></div></div>
+    <div class="modal-body">
+      <div class="dropzone">
+        <svg class="up-ico" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 9l5-5 5 5"/><path d="M12 4v12"/></svg>
+        <div class="up-main">拖拽文件到此，或点击选择</div>
+        <div class="up-sub">支持 视频 mp4/mov · 音频 mp3/wav · 图片 jpg/png · 单文件最大 2GB</div>
+      </div>
+      <div class="field">
+        <label>归属目录</label>
+        <input class="ipt" value="捕鱼大作战 / 高光时刻" />
+      </div>
+      <div class="field">
+        <label>标签（回车分隔，便于检索）</label>
+        <input class="ipt" placeholder="如：爆奖、竖屏、无字幕…" />
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="modalCancel">取消</button>
+      <button class="btn btn-primary">开始上传</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   假数据 —— 游戏直播剪辑语境（中文）
+   ============================================================ */
+const TREE = [
+  {name:"捕鱼大作战", count:1840, color:"#06b6d4", open:true, children:[
+    {name:"高光时刻", count:412, active:true},
+    {name:"爆奖瞬间", count:286},
+    {name:"开场片头", count:74},
+    {name:"空镜/过场", count:158},
+  ]},
+  {name:"途游斗地主", count:1267, color:"#ef4444", children:[
+    {name:"逆风翻盘", count:203},
+    {name:"炸弹连击", count:141},
+    {name:"主播表情包", count:96},
+  ]},
+  {name:"三国逆袭", count:2167, color:"#b88b3a", children:[
+    {name:"武将出场", count:312},
+    {name:"攻城名场面", count:188},
+  ]},
+  {name:"通用素材", count:656, color:"#64748b", open:true, children:[
+    {name:"转场特效", count:124},
+    {name:"BGM / 音效", count:208},
+    {name:"贴纸 / 字幕条", count:176},
+    {name:"关注引导", count:148},
+  ]},
+];
+
+const SUBFOLDERS = [
+  {name:"高光时刻", count:412, color:"#06b6d4", icon:"video"},
+  {name:"爆奖瞬间", count:286, color:"#0ea5e9", icon:"video"},
+  {name:"开场片头", count:74, color:"#3b82f6", icon:"video"},
+  {name:"空镜/过场", count:158, color:"#0891b2", icon:"image"},
+];
+
+const GRAD = {
+  video:["#1677ff","#0958d9"], video2:["#06b6d4","#0e7490"], video3:["#3b82f6","#1d4ed8"],
+  audio:["#a855f7","#7e22ce"], audio2:["#8b5cf6","#6d28d9"],
+  image:["#10b981","#047857"], image2:["#0d9488","#115e59"], image3:["#f59e0b","#b45309"],
+};
+function gico(t){
+  if(t==="video") return '<svg class="ico" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M10 8l6 4-6 4z" fill="currentColor"/></svg>';
+  if(t==="audio") return '<svg class="ico" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+  return '<svg class="ico" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
+}
+const AVCOLOR=["#1677ff","#a855f7","#10b981","#f59e0b","#ef4444","#06b6d4"];
+
+const ITEMS = [
+  {n:"金鲨爆奖·满屏金币连锁", t:"video", g:"video2", dur:"0:18", tags:["爆奖","竖屏"], by:"陈晓", use:42, fav:true},
+  {n:"逆袭翻盘·最后一炮绝杀", t:"video", g:"video", dur:"0:24", tags:["高光"], by:"李蕾", use:31},
+  {n:"开场霓虹片头·捕鱼通用", t:"video", g:"video3", dur:"0:06", tags:["开场","片头"], by:"王浩", use:67, fav:true},
+  {n:"爆奖欢呼·人声 + 金币音效", t:"audio", g:"audio", dur:"0:04", tags:["音效","爆奖"], by:"赵敏", use:88},
+  {n:"紧张追击 BGM·循环段", t:"audio", g:"audio2", dur:"1:12", tags:["BGM","循环"], by:"赵敏", use:54},
+  {n:"竖版关注引导贴·箭头动效", t:"image", g:"image", dur:null, tags:["引导","贴纸"], by:"孙琪", use:120, fav:true},
+  {n:"深海空镜·缓慢横移", t:"video", g:"video2", dur:"0:15", tags:["空镜","过场"], by:"陈晓", use:23},
+  {n:"中奖弹窗字幕条·红金", t:"image", g:"image3", dur:null, tags:["字幕条"], by:"孙琪", use:76},
+  {n:"连杀计数音效·叠加版", t:"audio", g:"audio", dur:"0:03", tags:["音效","连杀"], by:"周杰", use:45},
+  {n:"水花转场·左右擦除", t:"video", g:"video3", dur:"0:02", tags:["转场"], by:"王浩", use:93},
+  {n:"主播惊讶表情包·循环", t:"image", g:"image2", dur:null, tags:["表情","贴纸"], by:"李蕾", use:38},
+  {n:"逆风翻盘高潮·慢动作", t:"video", g:"video", dur:"0:21", tags:["高光","慢动作"], by:"周杰", use:29},
+];
+
+const TYPE_LABEL={video:"视频",audio:"音频",image:"图片"};
+const TYPE_COLOR={video:"var(--blue-500)",audio:"var(--purple-500)",image:"var(--green-500)"};
+
+/* ============ 渲染左树 ============ */
+function renderTree(){
+  const el=document.getElementById("tree");
+  el.innerHTML=TREE.map((f,i)=>{
+    const kids=f.children.map(c=>`<div class="tree-leaf ${c.active?'active':''}">${dotSvg(f.color)}<span>${c.name}</span><span class="count">${c.count}</span></div>`).join("");
+    return `<div class="tree-node ${f.open?'open':''}" data-tree="${i}">
+        <span class="caret"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6"/></svg></span>
+        <svg class="folder-ico" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>${f.name}</span><span class="count">${f.count}</span>
+      </div>
+      <div class="tree-children ${f.open?'show':''}">${kids}</div>`;
+  }).join("");
+  el.querySelectorAll(".tree-node").forEach(n=>n.addEventListener("click",()=>{
+    n.classList.toggle("open");n.nextElementSibling.classList.toggle("show");
+  }));
+}
+function dotSvg(c){return `<span style="width:6px;height:6px;border-radius:50%;background:${c};flex-shrink:0;"></span>`;}
+
+/* ============ 渲染子文件夹卡片 ============ */
+function renderFolders(){
+  document.getElementById("folderStrip").innerHTML=SUBFOLDERS.map(f=>`
+    <div class="folder-card">
+      <div class="folder-thumb" style="background:linear-gradient(135deg,${f.color},${shade(f.color)})">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      </div>
+      <div class="folder-meta"><div class="fname">${f.name}</div><div class="fcount">素材 ${f.count}</div></div>
+    </div>`).join("");
+}
+function shade(hex){
+  const c=hex.replace("#","");const n=parseInt(c,16);
+  let r=(n>>16)-30,g=((n>>8)&255)-30,b=(n&255)-30;
+  r=Math.max(0,r);g=Math.max(0,g);b=Math.max(0,b);
+  return "#"+((r<<16)|(g<<8)|b).toString(16).padStart(6,"0");
+}
+
+/* ============ 渲染网格 ============ */
+let curType="all";
+function renderGrid(){
+  const list=ITEMS.filter(it=>curType==="all"||it.t===curType);
+  document.getElementById("gridCount").textContent="· 共 "+list.length+" 个";
+  document.getElementById("grid").innerHTML=list.map((it,idx)=>{
+    const [c1,c2]=GRAD[it.g];
+    let thumbInner;
+    if(it.t==="audio"){
+      let bars="";for(let i=0;i<28;i++){const h=20+Math.abs(Math.sin(i*1.3+idx))*60;bars+=`<span style="height:${h}%"></span>`;}
+      thumbInner=`<div class="wave">${bars}</div>`;
+    } else { thumbInner=gico(it.t); }
+    return `<div class="card" data-idx="${ITEMS.indexOf(it)}">
+      <div class="thumb" style="background:linear-gradient(135deg,${c1},${c2})">
+        ${thumbInner}
+        <span class="type-badge"><span class="dot" style="width:6px;height:6px;border-radius:50%;background:#fff;display:inline-block"></span>${TYPE_LABEL[it.t]}</span>
+        ${it.dur?`<span class="dur-badge">${it.dur}</span>`:""}
+        <div class="fav ${it.fav?'on':''}"><svg width="14" height="14" viewBox="0 0 24 24" fill="${it.fav?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M12 2l2.9 6.3 6.9.7-5.1 4.7 1.4 6.8L12 17.8 5.9 20.5l1.4-6.8L2.2 9l6.9-.7z"/></svg></div>
+        <div class="hover-actions">
+          <span class="mini-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>预览</span>
+          <span class="mini-btn primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>下载</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-name">${it.n}</div>
+        <div class="card-tags">${it.tags.map((t,i)=>`<span class="tag ${i===0?'blue':''}">${t}</span>`).join("")}</div>
+        <div class="card-foot">
+          <span class="avatar" style="background:${AVCOLOR[it.by.length%6]}">${it.by[0]}</span>
+          <span>${it.by}</span>
+          <span class="use"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2v6h6"/><path d="M4 13V4a2 2 0 0 1 2-2h8l6 6v11a2 2 0 0 1-2 2H6"/></svg>用过 ${it.use} 次</span>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+  document.querySelectorAll(".card").forEach(c=>c.addEventListener("click",e=>{
+    if(e.target.closest(".fav")){e.stopPropagation();return;}
+    openDrawer(parseInt(c.dataset.idx));
+  }));
+}
+
+/* ============ 详情抽屉 ============ */
+function openDrawer(idx){
+  const it=ITEMS[idx];const [c1,c2]=GRAD[it.g];
+  let preview;
+  if(it.t==="audio"){let bars="";for(let i=0;i<48;i++){const h=15+Math.abs(Math.sin(i*0.9+idx))*70;bars+=`<span style="height:${h}%"></span>`;}preview=`<div class="wave" style="height:100%;width:100%;padding:0 22px">${bars}</div>`;}
+  else preview=gico(it.t).replace('width="38" height="38"','width="56" height="56"');
+  const meta = it.t==="audio"
+    ? {格式:"WAV · 48kHz",时长:it.dur,大小:"3.4 MB",采样:"立体声"}
+    : it.t==="image"
+    ? {格式:"PNG · 透明底",尺寸:"1080 × 1920",大小:"820 KB",色彩:"sRGB"}
+    : {格式:"MP4 · H.264",尺寸:"1080 × 1920",时长:it.dur,大小:"24.6 MB"};
+  document.getElementById("drawerBody").innerHTML=`
+    <div class="preview-box" style="background:linear-gradient(135deg,${c1},${c2})">${preview}${it.dur&&it.t!=='audio'?`<span class="dur-badge" style="position:absolute;right:10px;bottom:10px">${it.dur}</span>`:""}</div>
+    <div class="d-name">${it.n}</div>
+    <dl class="meta-grid">
+      <dt>类型</dt><dd>${TYPE_LABEL[it.t]}</dd>
+      <dt>归属目录</dt><dd>捕鱼大作战 / 高光时刻</dd>
+      ${Object.entries(meta).map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}
+      <dt>上传人</dt><dd>${it.by}（剪辑）</dd>
+      <dt>上传时间</dt><dd>2026-06-18 14:32</dd>
+      <dt>累计使用</dt><dd>${it.use} 次</dd>
+    </dl>
+    <div class="d-section">标签</div>
+    <div class="d-tags">${it.tags.map(t=>`<span class="tag blue">${t}</span>`).join("")}<span class="tag" style="cursor:pointer">+ 添加</span></div>
+    <div class="d-section">使用记录</div>
+    <div class="usage">
+      <div class="usage-row"><span class="avatar" style="background:#1677ff">王</span><span class="uname">王浩</span><span class="utask">捕鱼大作战 · 0618 剪辑任务</span></div>
+      <div class="usage-row"><span class="avatar" style="background:#10b981">李</span><span class="uname">李蕾</span><span class="utask">捕鱼大作战 · 0615 剪辑任务</span></div>
+      <div class="usage-row"><span class="avatar" style="background:#f59e0b">陈</span><span class="uname">陈晓</span><span class="utask">捕鱼大作战 · 0611 剪辑任务</span></div>
+    </div>`;
+  document.getElementById("drawer").classList.add("show");
+  document.getElementById("drawerMask").classList.add("show");
+}
+function closeDrawer(){document.getElementById("drawer").classList.remove("show");document.getElementById("drawerMask").classList.remove("show");}
+
+/* ============ 事件 ============ */
+document.querySelectorAll(".type-tab").forEach(t=>t.addEventListener("click",()=>{
+  document.querySelectorAll(".type-tab").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active");curType=t.dataset.type;renderGrid();
+}));
+document.querySelectorAll(".chip").forEach(c=>c.addEventListener("click",()=>{
+  document.querySelectorAll(".chip").forEach(x=>x.classList.remove("on"));c.classList.add("on");
+}));
+document.querySelectorAll(".nav-item").forEach(n=>n.addEventListener("click",()=>{
+  document.querySelectorAll(".nav-item").forEach(x=>x.classList.remove("active"));n.classList.add("active");
+}));
+document.getElementById("drawerClose").addEventListener("click",closeDrawer);
+document.getElementById("drawerMask").addEventListener("click",closeDrawer);
+document.getElementById("uploadBtn").addEventListener("click",()=>document.getElementById("modalMask").classList.add("show"));
+document.getElementById("modalClose").addEventListener("click",()=>document.getElementById("modalMask").classList.remove("show"));
+document.getElementById("modalCancel").addEventListener("click",()=>document.getElementById("modalMask").classList.remove("show"));
+document.getElementById("modalMask").addEventListener("click",e=>{if(e.target.id==="modalMask")document.getElementById("modalMask").classList.remove("show");});
+
+renderTree();renderFolders();renderGrid();
+</script>
+</body>
+</html>

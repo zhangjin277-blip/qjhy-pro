@@ -4,8 +4,10 @@ import { requireUser } from "@/lib/auth/page-auth";
 import {
   deleteRecording,
   readCategories,
+  readRetention,
   readUrlsFile,
   writeCategories,
+  writeRetention,
   writeUrlsFile,
 } from "./files";
 import { addStreamer as addStreamerLine, removeAt, renameAt, setPausedAt } from "./urls";
@@ -28,11 +30,36 @@ async function ok(fn: () => Promise<void>): Promise<ActionResult> {
   }
 }
 
-/** 加录制主播(url 原样写入,go-recorder 自己解析平台)。读-改-写降低竞态。 */
-export async function addStreamerAction(url: string, name: string): Promise<ActionResult> {
+/**
+ * 加录制主播(url 原样写入,go-recorder 自己解析平台)。读-改-写降低竞态。
+ * retentionDays > 0 时同时写保存时长(0 = 永久,不写)。
+ */
+export async function addStreamerAction(
+  url: string,
+  name: string,
+  retentionDays = 0,
+): Promise<ActionResult> {
   return ok(async () => {
     const content = await readUrlsFile();
     await writeUrlsFile(addStreamerLine(content, url, name));
+    if (retentionDays > 0) {
+      const ret = await readRetention();
+      ret.byUrl[url.trim()] = Math.floor(retentionDays);
+      await writeRetention(ret);
+    }
+  });
+}
+
+/** 设置某主播录像保存天数(days <= 0 = 永久,即删除该主播的保存设置) */
+export async function setRetentionAction(url: string, days: number): Promise<ActionResult> {
+  return ok(async () => {
+    const ret = await readRetention();
+    if (days > 0) {
+      ret.byUrl[url] = Math.floor(days);
+    } else {
+      ret.byUrl = Object.fromEntries(Object.entries(ret.byUrl).filter(([k]) => k !== url));
+    }
+    await writeRetention(ret);
   });
 }
 

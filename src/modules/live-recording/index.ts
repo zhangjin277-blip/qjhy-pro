@@ -11,6 +11,7 @@ export {
   addCategoryAction,
   deleteCategoryAction,
   assignCategoryAction,
+  setRetentionAction,
   type ActionResult,
   type BatchDeleteResult,
 } from "./actions";

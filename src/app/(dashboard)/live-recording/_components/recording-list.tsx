@@ -9,6 +9,7 @@ import {
   removeStreamerAction,
   renameStreamerAction,
   setPausedAction,
+  setRetentionAction,
   type StreamerView,
 } from "@/modules/live-recording";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,19 @@ import {
 const NO_CATEGORY = "__none__";
 const FILTER_ALL = "__all__";
 const FILTER_NONE = "__uncategorized__";
+
+/** 保存时长预设(天;0 = 永久) */
+const RETENTION_OPTIONS = [
+  { days: 0, label: "永久" },
+  { days: 3, label: "3 天" },
+  { days: 7, label: "7 天" },
+  { days: 15, label: "15 天" },
+  { days: 30, label: "30 天" },
+];
+
+function retentionLabel(days: number): string {
+  return RETENTION_OPTIONS.find((o) => o.days === days)?.label ?? `${days} 天`;
+}
 
 function formatSize(n: number): string {
   if (n >= 1024 ** 4) return `${(n / 1024 ** 4).toFixed(2)} TB`;
@@ -125,6 +139,7 @@ export function RecordingList({
   const [addOpen, setAddOpen] = useState(false);
   const [addUrl, setAddUrl] = useState("");
   const [addName, setAddName] = useState("");
+  const [addRetention, setAddRetention] = useState(0);
   const [renameTarget, setRenameTarget] = useState<StreamerView | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<StreamerView | null>(null);
@@ -190,6 +205,7 @@ export function RecordingList({
           onClick={() => {
             setAddUrl("");
             setAddName("");
+            setAddRetention(0);
             setAddOpen(true);
           }}
         >
@@ -230,22 +246,25 @@ export function RecordingList({
         <Table className="table-fixed">
           <TableHeader>
             <TableRow className="border-slate-100 hover:bg-transparent">
-              <TableHead className="h-11 w-[30%] pl-5 text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[28%] pl-5 text-xs font-medium text-slate-400">
                 主播及画面
               </TableHead>
-              <TableHead className="h-11 w-[10%] text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[9%] text-xs font-medium text-slate-400">
                 直播链接
               </TableHead>
-              <TableHead className="h-11 w-[24%] text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[21%] text-xs font-medium text-slate-400">
                 录制状态
               </TableHead>
-              <TableHead className="h-11 w-[13%] text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[12%] text-xs font-medium text-slate-400">
                 分类
               </TableHead>
-              <TableHead className="h-11 w-[10%] text-center text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[12%] text-xs font-medium text-slate-400">
+                保存时长
+              </TableHead>
+              <TableHead className="h-11 w-[8%] text-center text-xs font-medium text-slate-400">
                 监听状态
               </TableHead>
-              <TableHead className="h-11 w-[13%] pr-5 text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[10%] pr-5 text-xs font-medium text-slate-400">
                 操作
               </TableHead>
             </TableRow>
@@ -341,6 +360,31 @@ export function RecordingList({
                     </SelectContent>
                   </Select>
                 </TableCell>
+                <TableCell>
+                  <Select
+                    value={String(s.retentionDays)}
+                    onValueChange={(v) =>
+                      run(() => setRetentionAction(s.url, Number(v ?? "0") || 0))
+                    }
+                    disabled={pending}
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      className={`h-7 w-full text-xs ${
+                        s.retentionDays > 0 ? "text-amber-700" : ""
+                      }`}
+                    >
+                      <SelectValue placeholder="永久" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RETENTION_OPTIONS.map((o) => (
+                        <SelectItem key={o.days} value={String(o.days)}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
                 <TableCell className="text-center">
                   <MonitorSwitch
                     on={!s.paused}
@@ -377,7 +421,7 @@ export function RecordingList({
             ))}
             {streamers.length === 0 && !loadError && (
               <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                   暂无录制主播,点右上角「添加主播」加入名单
                 </TableCell>
               </TableRow>
@@ -403,13 +447,38 @@ export function RecordingList({
               onChange={(e) => setAddName(e.target.value)}
               placeholder="主播名(可选,留空则由录制器识别)"
             />
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-medium text-slate-600">录像保存时长</span>
+                <Select
+                  value={String(addRetention)}
+                  onValueChange={(v) => setAddRetention(Number(v ?? "0") || 0)}
+                >
+                  <SelectTrigger size="sm" className="h-8 w-28 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RETENTION_OPTIONS.map((o) => (
+                      <SelectItem key={o.days} value={String(o.days)}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs text-slate-400">
+                {addRetention > 0
+                  ? `录像超过 ${retentionLabel(addRetention)}会被自动删除,释放硬盘空间`
+                  : "永久保存,不会自动删除(可随时在名单里改)"}
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button
               disabled={pending || !addUrl.trim()}
               onClick={() =>
                 run(
-                  () => addStreamerAction(addUrl.trim(), addName.trim()),
+                  () => addStreamerAction(addUrl.trim(), addName.trim(), addRetention),
                   () => setAddOpen(false),
                 )
               }

@@ -7,11 +7,16 @@ import {
   listFiles,
   listStreamerFolders,
   readCategories,
+  readRetention,
   readUrlsFile,
   statRecording,
+  sweepRetention,
   writeCategories,
+  writeRetention,
   writeUrlsFile,
 } from "@/modules/live-recording/files";
+
+const DAY = 24 * 60 * 60 * 1000;
 
 let root: string;
 let urls: string;
@@ -139,5 +144,54 @@ describe("readCategories / writeCategories", () => {
   it("坏 JSON 返回空结构不崩", async () => {
     await fs.writeFile(path.join(root, ".qjhy-categories.json"), "{ bad json", "utf8");
     expect(await readCategories()).toEqual({ categories: [], byUrl: {} });
+  });
+});
+
+describe("readRetention / writeRetention", () => {
+  it("不存在返回空", async () => {
+    expect(await readRetention()).toEqual({ byUrl: {} });
+  });
+  it("写后可读回,过滤掉 0/负/非法值", async () => {
+    await writeRetention({ byUrl: { "https://x/1": 3, "https://x/2": 0, "https://x/3": -5 } });
+    expect(await readRetention()).toEqual({ byUrl: { "https://x/1": 3 } });
+  });
+  it("坏 JSON 不崩", async () => {
+    await fs.writeFile(path.join(root, ".qjhy-retention.json"), "{ nope", "utf8");
+    expect(await readRetention()).toEqual({ byUrl: {} });
+  });
+});
+
+describe("sweepRetention", () => {
+  it("删除超期录像,保留未到期与永久主播", async () => {
+    await writeUrlsFile(
+      "https://live.douyin.com/111,主播:甲\nhttps://live.douyin.com/222,主播:乙\n",
+    );
+    await writeRetention({ byUrl: { "https://live.douyin.com/111": 3 } });
+    await mkFile("甲/old.mp4", 100, new Date(Date.now() - 5 * DAY)); // 超期→删
+    await mkFile("甲/recent.mp4", 100, new Date(Date.now() - 1 * DAY)); // 未到期→留
+    await mkFile("乙/ancient.mp4", 100, new Date(Date.now() - 90 * DAY)); // 永久→留
+
+    const r = await sweepRetention();
+    expect(r.deleted).toBe(1);
+    expect(r.freedBytes).toBe(100);
+    expect(r.items[0]).toMatchObject({ streamer: "甲", file: "old.mp4" });
+    expect((await listFiles("甲")).map((f) => f.name)).toEqual(["recent.mp4"]);
+    expect((await listFiles("乙")).map((f) => f.name)).toEqual(["ancient.mp4"]);
+  });
+
+  it("2 分钟内在写的文件不删", async () => {
+    await writeUrlsFile("https://live.douyin.com/111,主播:甲\n");
+    await writeRetention({ byUrl: { "https://live.douyin.com/111": 3 } });
+    await mkFile("甲/fresh.mp4", 100); // mtime≈now
+    const r = await sweepRetention();
+    expect(r.deleted).toBe(0);
+  });
+
+  it("无主播名(无法定位文件夹)跳过", async () => {
+    await writeUrlsFile("https://live.douyin.com/111\n"); // 无 ,主播: 后缀
+    await writeRetention({ byUrl: { "https://live.douyin.com/111": 1 } });
+    await mkFile("111/old.mp4", 100, new Date(Date.now() - 5 * DAY));
+    const r = await sweepRetention();
+    expect(r.deleted).toBe(0);
   });
 });

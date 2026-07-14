@@ -14,3 +14,10 @@ export {
 } from "./files";
 export { getStreamerList, getCategories, type StreamerView } from "./queries";
 export { readCategories, writeCategories, type CategoryData } from "./files";
+export {
+  readRetention,
+  writeRetention,
+  sweepRetention,
+  type RetentionData,
+  type SweepResult,
+} from "./files";

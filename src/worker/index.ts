@@ -9,6 +9,7 @@ import { closeBrowser } from "@/lib/puppeteer";
 import { runCronAttributionSweep } from "@/modules/placement-attribution/server";
 import { runEditingCleanup } from "./jobs/editing-cleanup";
 import { runAnchorPenaltyJob } from "./jobs/anchor-penalty";
+import { sweepRetention } from "@/modules/live-recording/server";
 
 // Phase 1: 钉钉同步
 // ⚠️ 必须错开整点（02:00:00）：钉钉 /topapi/v2/department/listsub 在整点被全网应用挤爆
@@ -116,6 +117,21 @@ registerJob({
   name: "anchor-penalty",
   schedule: "0 2 * * *",
   task: runAnchorPenaltyJob,
+});
+
+// 直播录像保存时长自动清理（每小时 15 分，删除超过各主播保存天数的录像；永久=跳过）
+// 依赖 worker 容器挂载 RECORDINGS_DIR + URLS_FILE(见 docker-compose worker.volumes)
+registerJob({
+  name: "live-recording-retention",
+  schedule: "15 * * * *",
+  task: async () => {
+    if (!process.env.RECORDINGS_DIR || !process.env.URLS_FILE) return; // 未挂载则不跑
+    const r = await sweepRetention();
+    if (r.deleted > 0) {
+      const mb = (r.freedBytes / 1024 ** 2).toFixed(0);
+      console.log(`[live-recording-retention] 删除 ${r.deleted} 个录像,释放 ${mb} MB`);
+    }
+  },
 });
 
 registerJob({

@@ -2,6 +2,7 @@ import "server-only";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { listStreamers } from "./urls";
 
 /**
  * 录像目录(downloads)与名单文件(builtin_urls.txt)的文件系统读写。
@@ -256,4 +257,91 @@ export async function readCategories(): Promise<CategoryData> {
 /** 写分类(就地覆写,普通文件无 bind mount 竞态)。 */
 export async function writeCategories(data: CategoryData): Promise<void> {
   await fs.writeFile(categoriesFilePath(), JSON.stringify(data, null, 2), "utf8");
+}
+
+// ---------------- 保存时长 / 自动清理(存 JSON 边车文件)----------------
+
+/** 保存时长数据:主播 url → 保存天数。0 或缺失 = 永久(不自动删除)。 */
+export interface RetentionData {
+  byUrl: Record<string, number>;
+}
+
+/** 保存时长文件路径:同分类,放录像根目录下的隐藏文件。 */
+function retentionFilePath(): string {
+  return process.env.RETENTION_FILE ?? path.join(recordingsRoot(), ".qjhy-retention.json");
+}
+
+/** 读保存时长(不存在/损坏都返回空,不崩)。 */
+export async function readRetention(): Promise<RetentionData> {
+  try {
+    const raw = await fs.readFile(retentionFilePath(), "utf8");
+    const data = JSON.parse(raw) as Partial<RetentionData>;
+    const byUrl: Record<string, number> = {};
+    if (data.byUrl && typeof data.byUrl === "object") {
+      for (const [k, v] of Object.entries(data.byUrl)) {
+        if (typeof v === "number" && Number.isFinite(v) && v > 0) byUrl[k] = Math.floor(v);
+      }
+    }
+    return { byUrl };
+  } catch {
+    return { byUrl: {} };
+  }
+}
+
+/** 写保存时长(就地覆写)。 */
+export async function writeRetention(data: RetentionData): Promise<void> {
+  await fs.writeFile(retentionFilePath(), JSON.stringify(data, null, 2), "utf8");
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface SweepResult {
+  deleted: number;
+  freedBytes: number;
+  items: { streamer: string; file: string; ageDays: number }[];
+}
+
+/**
+ * 保存时长自动清理:遍历名单,对设置了有限保存天数的主播,删除其文件夹里
+ * mtime 超过保存天数的录像。定位链与名单页一致(url → 主播名 → 文件夹);
+ * 无主播名(文件夹无法定位)或永久(天数 <=0)跳过;2 分钟内在写的文件复用录制保护跳过。
+ * 幂等、只读磁盘再删,单文件失败不影响其他;由 worker 每小时 cron 调用。
+ */
+export async function sweepRetention(): Promise<SweepResult> {
+  const root = recordingsRoot();
+  const [content, ret] = await Promise.all([readUrlsFile(), readRetention()]);
+  const now = Date.now();
+  const result: SweepResult = { deleted: 0, freedBytes: 0, items: [] };
+
+  for (const e of listStreamers(content)) {
+    const days = ret.byUrl[e.url] ?? 0;
+    if (days <= 0) continue; // 永久
+    if (!e.name) continue; // 无主播名无法定位文件夹
+    // 主播名必须是单层安全目录(防穿越,和 assertSafeName 同口径)
+    if (e.name.includes("/") || e.name.includes("\\") || e.name.includes("..")) continue;
+    const dir = path.join(root, e.name);
+    const dirents = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+    const cutoff = days * DAY_MS;
+    for (const f of dirents) {
+      if (!f.isFile() || !isVideoFile(f.name)) continue;
+      const full = path.join(dir, f.name);
+      const st = await fs.stat(full).catch(() => null);
+      if (!st) continue;
+      const age = now - st.mtimeMs;
+      if (age < RECORDING_WINDOW_MS) continue; // 疑似正在写
+      if (age <= cutoff) continue; // 未到期
+      const size = st.size;
+      try {
+        await fs.unlink(full);
+        result.deleted += 1;
+        result.freedBytes += size;
+        result.items.push({ streamer: e.name, file: f.name, ageDays: Math.floor(age / DAY_MS) });
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+          console.error(`[retention] 删除失败 ${full}:`, err);
+        }
+      }
+    }
+  }
+  return result;
 }
