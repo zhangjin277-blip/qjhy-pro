@@ -39,20 +39,17 @@ export async function listAccounts(
       conditions.push(eq(live_account.agent_dingtalk_user_id, userId));
     } else if (perm.scope === "team") {
       const deptIds = await getManagedDeptIds(userId);
-      if (deptIds.length === 0) return [];
-      const teamUsers = await db
-        .select({ user_id: dingtalk_user.user_id })
-        .from(dingtalk_user)
-        .where(
-          sql`${dingtalk_user.dept_ids} ?| ${sql.raw(`ARRAY[${deptIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")}]::text[]`)}`,
-        );
-      if (teamUsers.length === 0) return [];
-      conditions.push(
-        inArray(
-          live_account.agent_dingtalk_user_id,
-          teamUsers.map((u) => u.user_id),
-        ),
-      );
+      const teamUserIds = new Set<string>([userId]); // team 恒含本人：负责人可能管别的组、自己不在被管部门里
+      if (deptIds.length > 0) {
+        const teamUsers = await db
+          .select({ user_id: dingtalk_user.user_id })
+          .from(dingtalk_user)
+          .where(
+            sql`${dingtalk_user.dept_ids} ?| ${sql.raw(`ARRAY[${deptIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")}]::text[]`)}`,
+          );
+        for (const u of teamUsers) teamUserIds.add(u.user_id);
+      }
+      conditions.push(inArray(live_account.agent_dingtalk_user_id, [...teamUserIds]));
     }
     // perm.scope === "all" → 不加过滤
   }

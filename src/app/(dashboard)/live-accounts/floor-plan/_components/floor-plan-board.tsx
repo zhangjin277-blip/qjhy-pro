@@ -407,6 +407,7 @@ export function FloorPlanBoard({
           selected={selected}
           onClose={() => setSelected(null)}
           onSelectAccount={editData ? (id) => openAccountEditor(id) : undefined}
+          editableIds={editData ? new Set(accountById.keys()) : undefined}
           unboundAccounts={editData ? unboundAccounts : undefined}
           onBindAccount={editData ? bindAccountToRoom : undefined}
           onCreateAccount={editData ? createAccountInRoom : undefined}

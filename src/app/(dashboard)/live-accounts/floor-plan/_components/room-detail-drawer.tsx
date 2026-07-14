@@ -37,6 +37,7 @@ export function RoomDetailDrawer({
   selected,
   onClose,
   onSelectAccount,
+  editableIds,
   unboundAccounts,
   onBindAccount,
   onCreateAccount,
@@ -45,6 +46,8 @@ export function RoomDetailDrawer({
   onClose: () => void;
   /** 点账号卡打开编辑抽屉；返回 false 表示无编辑权限（保持只读） */
   onSelectAccount?: (accountId: string) => boolean;
+  /** 当前用户 scope 内可编辑的账号 id；不在集合里的账号卡不显示「编辑 ›」 */
+  editableIds?: Set<string>;
   /** 未绑房间的账号（空房绑定候选）；不传 = 无编辑权限 */
   unboundAccounts?: UnboundAccountLite[];
   onBindAccount?: (accountId: string, room: SelectedRoom) => Promise<boolean>;
@@ -129,80 +132,87 @@ export function RoomDetailDrawer({
                     该房间还没有绑定直播账号，去「直播账号」页编辑绑定。
                   </div>
                 ))}
-              {selected.detail.map((acc) => (
-                <div
-                  key={acc.accountId}
-                  {...(onSelectAccount
-                    ? {
-                        onClick: () => onSelectAccount(acc.accountId),
-                        className:
-                          "cursor-pointer rounded-lg border border-slate-200 p-3 transition-colors hover:border-[#2B5CFF]",
-                      }
-                    : { className: "rounded-lg border border-slate-200 p-3" })}
-                >
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[13px] font-medium text-slate-800">
-                      {acc.accountName}
-                    </span>
-                    <span
-                      className={`rounded-full px-1.5 py-px text-[10px] font-medium ${PLATFORM_CLS[acc.platform] ?? "bg-slate-100 text-slate-500"}`}
-                    >
-                      {acc.platform}
-                    </span>
-                    <span className="rounded-full bg-slate-100 px-1.5 py-px text-[10px] text-slate-500">
-                      {productShortName(acc.product)}
-                    </span>
-                    {onSelectAccount && (
-                      <span className="ml-auto text-[11px] text-slate-400">编辑 ›</span>
-                    )}
-                  </div>
-
-                  {acc.checkin && (
-                    <div className="mt-2 text-xs text-slate-600">
-                      <span className="text-slate-400">打卡在播：</span>
-                      {acc.checkin.anchorName}
-                      <span className="ml-1.5 tabular-nums text-[#2B5CFF]">
-                        {acc.checkin.startAtLabel} 开播
+              {selected.detail.map((acc) => {
+                const editable = !!onSelectAccount && (editableIds?.has(acc.accountId) ?? false);
+                return (
+                  <div
+                    key={acc.accountId}
+                    {...(editable
+                      ? {
+                          onClick: () => onSelectAccount(acc.accountId),
+                          className:
+                            "cursor-pointer rounded-lg border border-slate-200 p-3 transition-colors hover:border-[#2B5CFF]",
+                        }
+                      : { className: "rounded-lg border border-slate-200 p-3" })}
+                  >
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[13px] font-medium text-slate-800">
+                        {acc.accountName}
                       </span>
-                    </div>
-                  )}
-                  {!acc.checkin && acc.crawlerLiving && (
-                    <div className="mt-2 text-xs text-slate-600">
-                      <span className="text-slate-400">平台在播：</span>
-                      {acc.crawlerStartLabel ? (
-                        <span className="tabular-nums text-[#2B5CFF]">
-                          {acc.crawlerStartLabel} 开播
-                        </span>
+                      <span
+                        className={`rounded-full px-1.5 py-px text-[10px] font-medium ${PLATFORM_CLS[acc.platform] ?? "bg-slate-100 text-slate-500"}`}
+                      >
+                        {acc.platform}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-1.5 py-px text-[10px] text-slate-500">
+                        {productShortName(acc.product)}
+                      </span>
+                      {editable ? (
+                        <span className="ml-auto text-[11px] text-slate-400">编辑 ›</span>
                       ) : (
-                        "在播中（未打卡）"
+                        onSelectAccount && (
+                          <span className="ml-auto text-[10px] text-slate-300">无编辑权限</span>
+                        )
                       )}
                     </div>
-                  )}
 
-                  {acc.schedule.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      <div className="text-[11px] text-slate-400">今日排班</div>
-                      {acc.schedule.map((s) => (
-                        <div
-                          key={s.anchorName}
-                          className="flex items-center gap-2 text-xs text-slate-600"
-                        >
-                          <span className="min-w-0 truncate">{s.anchorName}</span>
-                          {s.restToday ? (
-                            <span className="rounded-full bg-[#FFF7E8] px-1.5 text-[10px] text-[#FF7D00]">
-                              休
-                            </span>
-                          ) : (
-                            <span className="tabular-nums text-slate-400">
-                              {s.slots.map((slot) => `${slot[0]}–${slot[1]}`).join(" / ")}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+                    {acc.checkin && (
+                      <div className="mt-2 text-xs text-slate-600">
+                        <span className="text-slate-400">打卡在播：</span>
+                        {acc.checkin.anchorName}
+                        <span className="ml-1.5 tabular-nums text-[#2B5CFF]">
+                          {acc.checkin.startAtLabel} 开播
+                        </span>
+                      </div>
+                    )}
+                    {!acc.checkin && acc.crawlerLiving && (
+                      <div className="mt-2 text-xs text-slate-600">
+                        <span className="text-slate-400">平台在播：</span>
+                        {acc.crawlerStartLabel ? (
+                          <span className="tabular-nums text-[#2B5CFF]">
+                            {acc.crawlerStartLabel} 开播
+                          </span>
+                        ) : (
+                          "在播中（未打卡）"
+                        )}
+                      </div>
+                    )}
+
+                    {acc.schedule.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <div className="text-[11px] text-slate-400">今日排班</div>
+                        {acc.schedule.map((s) => (
+                          <div
+                            key={s.anchorName}
+                            className="flex items-center gap-2 text-xs text-slate-600"
+                          >
+                            <span className="min-w-0 truncate">{s.anchorName}</span>
+                            {s.restToday ? (
+                              <span className="rounded-full bg-[#FFF7E8] px-1.5 text-[10px] text-[#FF7D00]">
+                                休
+                              </span>
+                            ) : (
+                              <span className="tabular-nums text-slate-400">
+                                {s.slots.map((slot) => `${slot[0]}–${slot[1]}`).join(" / ")}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
