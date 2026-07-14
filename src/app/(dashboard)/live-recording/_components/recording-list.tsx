@@ -2,7 +2,10 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
+  addCategoryAction,
   addStreamerAction,
+  assignCategoryAction,
+  deleteCategoryAction,
   removeStreamerAction,
   renameStreamerAction,
   setPausedAction,
@@ -19,6 +22,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -26,6 +36,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+const NO_CATEGORY = "__none__";
+const FILTER_ALL = "__all__";
+const FILTER_NONE = "__uncategorized__";
 
 function formatSize(n: number): string {
   if (n >= 1024 ** 4) return `${(n / 1024 ** 4).toFixed(2)} TB`;
@@ -97,9 +111,11 @@ function MonitorSwitch({
 
 export function RecordingList({
   streamers,
+  categories,
   loadError,
 }: {
   streamers: StreamerView[];
+  categories: string[];
   loadError: string | null;
 }) {
   const router = useRouter();
@@ -113,8 +129,18 @@ export function RecordingList({
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<StreamerView | null>(null);
 
+  const [filter, setFilter] = useState<string>(FILTER_ALL);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
+
   const recordingCount = streamers.filter((s) => s.recording).length;
   const monitoringCount = streamers.filter((s) => !s.paused && !s.recording).length;
+
+  const shown = streamers.filter((s) => {
+    if (filter === FILTER_ALL) return true;
+    if (filter === FILTER_NONE) return !s.category;
+    return s.category === filter;
+  });
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, after?: () => void) =>
     startTransition(async () => {
@@ -171,20 +197,52 @@ export function RecordingList({
         </Button>
       </div>
 
+      {/* 分类筛选 */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {[
+          { key: FILTER_ALL, label: "全部" },
+          ...categories.map((c) => ({ key: c, label: c })),
+          { key: FILTER_NONE, label: "未分类" },
+        ].map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => setFilter(c.key)}
+            className={`rounded-full px-3 py-1 text-[13px] font-medium transition-colors ${
+              filter === c.key
+                ? "bg-primary text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setManageOpen(true)}
+          className="rounded-full border border-dashed border-slate-300 px-3 py-1 text-[13px] text-slate-400 transition-colors hover:border-primary hover:text-primary"
+        >
+          管理分类
+        </button>
+      </div>
+
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <Table className="table-fixed">
           <TableHeader>
             <TableRow className="border-slate-100 hover:bg-transparent">
-              <TableHead className="h-11 w-[36%] pl-5 text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[30%] pl-5 text-xs font-medium text-slate-400">
                 主播及画面
               </TableHead>
-              <TableHead className="h-11 w-[13%] text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[10%] text-xs font-medium text-slate-400">
                 直播链接
               </TableHead>
-              <TableHead className="h-11 w-[27%] text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[24%] text-xs font-medium text-slate-400">
                 录制状态
               </TableHead>
-              <TableHead className="h-11 w-[11%] text-center text-xs font-medium text-slate-400">
+              <TableHead className="h-11 w-[13%] text-xs font-medium text-slate-400">
+                分类
+              </TableHead>
+              <TableHead className="h-11 w-[10%] text-center text-xs font-medium text-slate-400">
                 监听状态
               </TableHead>
               <TableHead className="h-11 w-[13%] pr-5 text-xs font-medium text-slate-400">
@@ -193,7 +251,7 @@ export function RecordingList({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {streamers.map((s) => (
+            {shown.map((s) => (
               <TableRow
                 key={s.index}
                 className="border-slate-100 transition-colors hover:bg-slate-50/70"
@@ -262,6 +320,27 @@ export function RecordingList({
                     </span>
                   )}
                 </TableCell>
+                <TableCell>
+                  <Select
+                    value={s.category || NO_CATEGORY}
+                    onValueChange={(v) =>
+                      run(() => assignCategoryAction(s.url, v && v !== NO_CATEGORY ? v : ""))
+                    }
+                    disabled={pending}
+                  >
+                    <SelectTrigger size="sm" className="h-7 w-full text-xs">
+                      <SelectValue placeholder="未分类" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_CATEGORY}>未分类</SelectItem>
+                      {categories.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
                 <TableCell className="text-center">
                   <MonitorSwitch
                     on={!s.paused}
@@ -298,7 +377,7 @@ export function RecordingList({
             ))}
             {streamers.length === 0 && !loadError && (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
                   暂无录制主播,点右上角「添加主播」加入名单
                 </TableCell>
               </TableRow>
@@ -383,6 +462,69 @@ export function RecordingList({
           run(() => removeStreamerAction(t.index));
         }}
       />
+
+      {/* 管理分类 */}
+      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>管理分类</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Input
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                placeholder="新分类名(如 官号直播、棋牌)"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newCategory.trim()) {
+                    run(
+                      () => addCategoryAction(newCategory.trim()),
+                      () => setNewCategory(""),
+                    );
+                  }
+                }}
+              />
+              <Button
+                disabled={pending || !newCategory.trim()}
+                onClick={() =>
+                  run(
+                    () => addCategoryAction(newCategory.trim()),
+                    () => setNewCategory(""),
+                  )
+                }
+              >
+                新建
+              </Button>
+            </div>
+            <div className="space-y-1">
+              {categories.length === 0 && (
+                <div className="py-6 text-center text-sm text-slate-400">
+                  还没有分类,在上面新建一个
+                </div>
+              )}
+              {categories.map((c) => (
+                <div
+                  key={c}
+                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm"
+                >
+                  <span className="text-slate-700">{c}</span>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => run(() => deleteCategoryAction(c))}
+                    className="text-xs text-slate-400 transition-colors hover:text-red-600 disabled:opacity-40"
+                  >
+                    删除
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-slate-400">
+              删除分类会把归属该分类的主播恢复为「未分类」,不影响录制与录像。
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

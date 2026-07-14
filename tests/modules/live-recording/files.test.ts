@@ -6,8 +6,10 @@ import {
   deleteRecording,
   listFiles,
   listStreamerFolders,
+  readCategories,
   readUrlsFile,
   statRecording,
+  writeCategories,
   writeUrlsFile,
 } from "@/modules/live-recording/files";
 
@@ -120,5 +122,22 @@ describe("readUrlsFile / writeUrlsFile", () => {
   it("原子写后可读回", async () => {
     await writeUrlsFile("https://live.douyin.com/1,主播:甲\n");
     expect(await readUrlsFile()).toBe("https://live.douyin.com/1,主播:甲\n");
+  });
+});
+
+describe("readCategories / writeCategories", () => {
+  it("不存在返回空结构", async () => {
+    expect(await readCategories()).toEqual({ categories: [], byUrl: {} });
+  });
+  it("写后可读回", async () => {
+    await writeCategories({ categories: ["棋牌", "官号"], byUrl: { "https://x/1": "棋牌" } });
+    expect(await readCategories()).toEqual({
+      categories: ["棋牌", "官号"],
+      byUrl: { "https://x/1": "棋牌" },
+    });
+  });
+  it("坏 JSON 返回空结构不崩", async () => {
+    await fs.writeFile(path.join(root, ".qjhy-categories.json"), "{ bad json", "utf8");
+    expect(await readCategories()).toEqual({ categories: [], byUrl: {} });
   });
 });

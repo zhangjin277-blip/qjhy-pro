@@ -222,3 +222,38 @@ export async function hasCover(platform: string, roomId: string): Promise<boolea
     () => false,
   );
 }
+
+// ---------------- 分类(自定义,存 JSON 边车文件)----------------
+
+/** 分类数据:自定义分类名列表 + 主播url→分类名 的归属。 */
+export interface CategoryData {
+  categories: string[];
+  byUrl: Record<string, string>;
+}
+
+/** 分类文件路径:默认放在录像根目录下的隐藏文件(不影响 go-recorder,dir 扫描会跳过非目录)。 */
+function categoriesFilePath(): string {
+  return process.env.CATEGORIES_FILE ?? path.join(recordingsRoot(), ".qjhy-categories.json");
+}
+
+/** 读分类(文件不存在/损坏都返回空,不崩)。 */
+export async function readCategories(): Promise<CategoryData> {
+  try {
+    const raw = await fs.readFile(categoriesFilePath(), "utf8");
+    const data = JSON.parse(raw) as Partial<CategoryData>;
+    return {
+      categories: Array.isArray(data.categories)
+        ? data.categories.filter((c) => typeof c === "string")
+        : [],
+      byUrl:
+        data.byUrl && typeof data.byUrl === "object" ? (data.byUrl as Record<string, string>) : {},
+    };
+  } catch {
+    return { categories: [], byUrl: {} };
+  }
+}
+
+/** 写分类(就地覆写,普通文件无 bind mount 竞态)。 */
+export async function writeCategories(data: CategoryData): Promise<void> {
+  await fs.writeFile(categoriesFilePath(), JSON.stringify(data, null, 2), "utf8");
+}

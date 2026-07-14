@@ -8,6 +8,9 @@ export {
   renameStreamerAction,
   deleteFileAction,
   deleteFilesAction,
+  addCategoryAction,
+  deleteCategoryAction,
+  assignCategoryAction,
   type ActionResult,
   type BatchDeleteResult,
 } from "./actions";

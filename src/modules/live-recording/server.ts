@@ -12,4 +12,5 @@ export {
   type StreamerFolder,
   type RecordingFile,
 } from "./files";
-export { getStreamerList, type StreamerView } from "./queries";
+export { getStreamerList, getCategories, type StreamerView } from "./queries";
+export { readCategories, writeCategories, type CategoryData } from "./files";
