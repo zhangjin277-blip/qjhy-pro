@@ -67,3 +67,20 @@ export const ListAccountsInput = z.object({
   platform: Platform.optional(),
   product: Product.optional(),
 });
+
+// ─── 删除审核流 ──────────────────────────────────────────────────────────────
+
+export const DeleteContextInput = z.object({ id: z.string().min(1) });
+
+export const DeleteRequestCreateInput = z.object({
+  id: z.string().min(1), // account id
+  reason: z.string().max(500).optional().nullable(),
+});
+
+export const DeleteRequestReviewInput = z.object({
+  requestId: z.string().min(1),
+  approve: z.boolean(),
+  note: z.string().max(500).optional().nullable(),
+});
+
+export const DeleteRequestCancelInput = z.object({ requestId: z.string().min(1) });

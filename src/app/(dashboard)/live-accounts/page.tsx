@@ -3,13 +3,15 @@ import { db } from "@/db/client";
 import { dingtalk_user, anchor_profile, live_account } from "@/db/schema";
 import { schedule_override } from "@/db/schema/schedule-override";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { listAccounts } from "@/modules/live-account/server";
+import { listAccounts, listPendingDeleteRequests } from "@/modules/live-account/server";
 import { listAnchors } from "@/modules/live-anchor/server";
 import { listBindings } from "@/modules/live-anchor";
 import { listRooms } from "@/modules/live-room/server";
 import { Product } from "@/modules/live-account";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
+import { resolvePermission } from "@/modules/permissions/server";
 import { AccountListClient } from "./_components/account-list-client";
+import { DeleteRequestBanner, type DeleteRequestItem } from "./_components/delete-request-banner";
 import type { OverrideRowView } from "./_components/schedule-override-tab";
 
 const PRODUCTS = Product.options;
@@ -33,6 +35,22 @@ export default async function LiveAccountsPage({
     );
   }
   const { dingtalkUserId, isEmergency } = ctx;
+
+  // 删除审核：live_account 管理员可见待审申请横幅
+  const canAdmin = isEmergency
+    ? true
+    : (await resolvePermission(dingtalkUserId, "live_account")).can_admin;
+  const pendingDeleteRequests: DeleteRequestItem[] = canAdmin
+    ? (await listPendingDeleteRequests()).map((r) => ({
+        id: r.id,
+        account_name: r.account_name,
+        product: r.product,
+        reason: r.reason,
+        impact: r.impact,
+        requested_by_name: r.requested_by_name ?? "(未知)",
+        requested_at: r.requested_at.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }),
+      }))
+    : [];
 
   const sp = await searchParams;
   const selectedProduct = PRODUCTS.includes(sp.product as (typeof PRODUCTS)[number])
@@ -191,6 +209,7 @@ export default async function LiveAccountsPage({
           共 {productCounts[selectedProduct] ?? 0} 个账号 · {selectedProduct}
         </div>
       </div>
+      {pendingDeleteRequests.length > 0 && <DeleteRequestBanner requests={pendingDeleteRequests} />}
       <AccountListClient
         initialAccounts={accounts}
         bindingsByAccount={bindingsByAccount}

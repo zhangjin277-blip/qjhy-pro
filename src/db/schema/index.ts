@@ -15,6 +15,7 @@ export * from "./kuaishou-live-session";
 export * from "./kuaishou-live-trend";
 export * from "./kuaishou-member";
 export * from "./live-account";
+export * from "./live-account-delete-request";
 export * from "./live-anchor";
 export * from "./live-room";
 export * from "./live-session-log";

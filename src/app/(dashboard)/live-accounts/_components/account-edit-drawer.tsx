@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useTransition, useRef } from "react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { upsertAccount, deleteAccount } from "@/modules/live-account";
+import {
+  upsertAccount,
+  deleteAccount,
+  getAccountDeleteContext,
+  requestAccountDeletion,
+  cancelAccountDeleteRequest,
+} from "@/modules/live-account";
 import type { AccountWithRelations } from "@/modules/live-account";
 import { AnchorBindingForm } from "./anchor-binding-form";
 import { ScheduleOverrideTab } from "./schedule-override-tab";
@@ -409,32 +415,65 @@ export function AccountEditDrawer({
     }
   };
 
-  const handleDelete = (force = false) => {
+  const handleDelete = () => {
     if (!account) return;
-    const confirmMsg = force
-      ? `⚠️ 强制删除「${account.account_name}」？\n会一并删除所有关联的投放数据，不可恢复。`
-      : `确认删除账号「${account.account_name}」？\n该操作不可撤销，关联的排班/绑定也会一并清理。`;
-    if (!confirm(confirmMsg)) return;
     setError(null);
     startTransition(async () => {
       try {
-        const r = await deleteAccount({ id: account.id, force });
-        if (!r.ok) {
-          // 有 placement 数据但允许强制：弹二次确认让 admin 决定
-          if (r.canForce && !force) {
-            if (
-              confirm(
-                `${r.error}\n\n确认要连同 ${r.placementCount} 条投放数据一起删除吗？此操作不可恢复。`,
-              )
-            ) {
-              handleDelete(true);
-              return;
-            }
-          }
-          setError(r.error);
+        const ctx = await getAccountDeleteContext({ id: account.id });
+        if (!ctx.ok) {
+          setError(ctx.error);
           return;
         }
-        onOpenChange(false);
+        const impactStr =
+          `剪辑任务 ${ctx.impact.editing_tasks} 条 · 开播记录 ${ctx.impact.live_sessions} 条 · ` +
+          `投放 ${ctx.impact.placement_rows} 条 · 排班 ${ctx.impact.schedule_items} 条 · ` +
+          `主播绑定 ${ctx.impact.anchor_bindings} 条`;
+
+        // 已有待审申请：本人/管理员可撤销，其他人只读提示
+        if (ctx.pending) {
+          if (
+            ctx.pending.canCancel &&
+            confirm(
+              `该账号已有待审核的删除申请\n（${ctx.pending.requestedByName} · ${ctx.pending.requestedAt}）\n\n要撤销这条申请吗？`,
+            )
+          ) {
+            const r = await cancelAccountDeleteRequest({ requestId: ctx.pending.id });
+            if (!r.ok) setError(r.error);
+            return;
+          }
+          setError(`已有待审核的删除申请（${ctx.pending.requestedByName}），请等待管理员审核`);
+          return;
+        }
+
+        if (ctx.mode === "direct") {
+          // 管理员直删：一次确认，明示连带数据
+          if (
+            !confirm(
+              `确认删除账号「${account.account_name}」？\n\n将连带删除：${impactStr}\n\n此操作不可恢复。`,
+            )
+          )
+            return;
+          const r = await deleteAccount({ id: account.id, force: true });
+          if (!r.ok) {
+            setError(r.error);
+            return;
+          }
+          onOpenChange(false);
+        } else {
+          // 编辑权限：提交删除申请，管理员审核后才执行
+          const reason = prompt(
+            `删除账号需管理员审核。\n\n「${account.account_name}」将连带删除：\n${impactStr}\n\n申请理由（选填）：`,
+          );
+          if (reason === null) return; // 用户取消
+          const r = await requestAccountDeletion({ id: account.id, reason: reason || null });
+          if (!r.ok) {
+            setError(r.error);
+            return;
+          }
+          alert("删除申请已提交，管理员审核通过后账号才会删除。");
+          onOpenChange(false);
+        }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "删除失败，请重试";
         setError(msg);
