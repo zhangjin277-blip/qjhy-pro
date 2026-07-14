@@ -138,8 +138,8 @@ export function RecordingList({
 
   const [addOpen, setAddOpen] = useState(false);
   const [addUrl, setAddUrl] = useState("");
-  const [addName, setAddName] = useState("");
   const [addRetention, setAddRetention] = useState(0);
+  const [addCategory, setAddCategory] = useState("");
   const [renameTarget, setRenameTarget] = useState<StreamerView | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<StreamerView | null>(null);
@@ -204,8 +204,8 @@ export function RecordingList({
         <Button
           onClick={() => {
             setAddUrl("");
-            setAddName("");
             setAddRetention(0);
+            setAddCategory("");
             setAddOpen(true);
           }}
         >
@@ -348,7 +348,9 @@ export function RecordingList({
                     disabled={pending}
                   >
                     <SelectTrigger size="sm" className="h-7 w-full text-xs">
-                      <SelectValue placeholder="未分类" />
+                      <SelectValue>
+                        {(v: string | null) => (v && v !== NO_CATEGORY ? v : "未分类")}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={NO_CATEGORY}>未分类</SelectItem>
@@ -374,7 +376,9 @@ export function RecordingList({
                         s.retentionDays > 0 ? "text-amber-700" : ""
                       }`}
                     >
-                      <SelectValue placeholder="永久" />
+                      <SelectValue>
+                        {(v: string | null) => retentionLabel(Number(v ?? 0) || 0)}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {RETENTION_OPTIONS.map((o) => (
@@ -442,20 +446,38 @@ export function RecordingList({
               onChange={(e) => setAddUrl(e.target.value)}
               placeholder="粘贴抖音或快手直播间链接"
             />
-            <Input
-              value={addName}
-              onChange={(e) => setAddName(e.target.value)}
-              placeholder="主播名(可选,留空则由录制器识别)"
-            />
-            <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-[13px] font-medium text-slate-600">录像保存时长</span>
+                <span className="text-[13px] font-medium text-slate-600">分类</span>
+                <Select
+                  value={addCategory || NO_CATEGORY}
+                  onValueChange={(v) => setAddCategory(v && v !== NO_CATEGORY ? v : "")}
+                >
+                  <SelectTrigger size="sm" className="h-8 w-32 text-sm">
+                    <SelectValue>
+                      {(v: string | null) => (v && v !== NO_CATEGORY ? v : "未分类")}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_CATEGORY}>未分类</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-medium text-slate-600">保存时长</span>
                 <Select
                   value={String(addRetention)}
                   onValueChange={(v) => setAddRetention(Number(v ?? "0") || 0)}
                 >
                   <SelectTrigger size="sm" className="h-8 w-28 text-sm">
-                    <SelectValue />
+                    <SelectValue>
+                      {(v: string | null) => retentionLabel(Number(v ?? 0) || 0)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {RETENTION_OPTIONS.map((o) => (
@@ -466,19 +488,19 @@ export function RecordingList({
                   </SelectContent>
                 </Select>
               </div>
-              <p className="text-xs text-slate-400">
-                {addRetention > 0
-                  ? `录像超过 ${retentionLabel(addRetention)}会被自动删除,释放硬盘空间`
-                  : "永久保存,不会自动删除(可随时在名单里改)"}
-              </p>
             </div>
+            <p className="text-xs text-slate-400">
+              {addRetention > 0
+                ? `录像超过 ${retentionLabel(addRetention)}会被自动删除,释放硬盘空间;主播名留空,由录制器自动识别`
+                : "主播名由录制器自动识别;保存时长「永久」= 不自动删除(可随时在名单里改)"}
+            </p>
           </div>
           <DialogFooter>
             <Button
               disabled={pending || !addUrl.trim()}
               onClick={() =>
                 run(
-                  () => addStreamerAction(addUrl.trim(), addName.trim(), addRetention),
+                  () => addStreamerAction(addUrl.trim(), "", addRetention, addCategory),
                   () => setAddOpen(false),
                 )
               }

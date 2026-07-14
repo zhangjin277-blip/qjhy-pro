@@ -31,21 +31,28 @@ async function ok(fn: () => Promise<void>): Promise<ActionResult> {
 }
 
 /**
- * 加录制主播(url 原样写入,go-recorder 自己解析平台)。读-改-写降低竞态。
- * retentionDays > 0 时同时写保存时长(0 = 永久,不写)。
+ * 加录制主播(url 原样写入;主播名一般留空,由 go-recorder 拉取昵称写回)。读-改-写降低竞态。
+ * retentionDays > 0 时同时写保存时长(0 = 永久,不写);category 非空时同时写分类。
  */
 export async function addStreamerAction(
   url: string,
   name: string,
   retentionDays = 0,
+  category = "",
 ): Promise<ActionResult> {
   return ok(async () => {
     const content = await readUrlsFile();
     await writeUrlsFile(addStreamerLine(content, url, name));
+    const u = url.trim();
     if (retentionDays > 0) {
       const ret = await readRetention();
-      ret.byUrl[url.trim()] = Math.floor(retentionDays);
+      ret.byUrl[u] = Math.floor(retentionDays);
       await writeRetention(ret);
+    }
+    if (category) {
+      const cat = await readCategories();
+      cat.byUrl[u] = category;
+      await writeCategories(cat);
     }
   });
 }
