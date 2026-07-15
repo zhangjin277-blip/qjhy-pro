@@ -3,13 +3,13 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { material_folder, material_asset } from "@/db/schema/material";
-import { requireMaterialWriter } from "../authz";
+import { requireMaterialPoint } from "../authz";
 import { DeleteFolderInput } from "../schema";
 
 /** 删除目录：仅允许删空目录（无子目录、无素材），避免级联误删。 */
 export async function deleteFolder(input: unknown): Promise<{ ok: true }> {
   const data = DeleteFolderInput.parse(input);
-  await requireMaterialWriter();
+  await requireMaterialPoint("material_delete");
 
   const [child] = await db
     .select({ id: material_folder.id })

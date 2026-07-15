@@ -4,9 +4,7 @@ import { ModuleKeySchema, ScopeSchema } from "@/modules/permissions";
 export const InviteCodePermSpecSchema = z.object({
   module: ModuleKeySchema,
   scope: ScopeSchema,
-  can_edit: z.boolean().default(false),
-  can_export: z.boolean().default(false),
-  can_admin: z.boolean().default(false),
+  points: z.array(z.string().min(1)).max(64).default([]),
 });
 
 export const GenerateInviteCodeInput = z.object({

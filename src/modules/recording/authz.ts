@@ -20,12 +20,12 @@ export async function requireRecordingViewer(): Promise<{
   return { userId, perm };
 }
 
-export async function requireRecordingWriter(): Promise<{
+export async function requireRecordingPoint(point: string): Promise<{
   userId: string;
   perm: ResolvedPermission;
 }> {
   const { userId } = await requireUser();
   const perm = await resolvePermission(userId, MODULE);
-  if (!perm.can_edit) throw new Error("无直播录制管理权限");
+  if (!perm.points.has(point)) throw new Error("无直播录制管理权限");
   return { userId, perm };
 }

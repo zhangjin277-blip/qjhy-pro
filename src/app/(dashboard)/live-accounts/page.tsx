@@ -39,7 +39,7 @@ export default async function LiveAccountsPage({
   // 删除审核：live_account 管理员可见待审申请横幅
   const canAdmin = isEmergency
     ? true
-    : (await resolvePermission(dingtalkUserId, "live_account")).can_admin;
+    : (await resolvePermission(dingtalkUserId, "live_account")).points.has("delete_review");
   const pendingDeleteRequests: DeleteRequestItem[] = canAdmin
     ? (await listPendingDeleteRequests()).map((r) => ({
         id: r.id,

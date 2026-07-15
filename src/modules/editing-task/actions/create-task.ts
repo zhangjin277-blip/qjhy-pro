@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/db/client";
 import { editing_task } from "@/db/schema";
-import { requireUser } from "@/lib/auth/page-auth";
+import { requireEditingPoint } from "../authz";
 import { writeEvent } from "../event-writer";
 import { CreateTaskInput } from "../schema";
 import { notifyUrgentTaskCreated } from "../notify";
@@ -14,7 +14,7 @@ export interface CreateTaskResult {
 // 真正的去重靠上传源文件时的 MD5 文件内容判重（upload-source.ts）。
 export async function createTask(input: unknown): Promise<CreateTaskResult> {
   const data = CreateTaskInput.parse(input);
-  const { userId } = await requireUser();
+  const { userId } = await requireEditingPoint("task_create");
 
   const rows = await db
     .insert(editing_task)

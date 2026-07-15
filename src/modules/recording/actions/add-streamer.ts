@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { requireRecordingWriter } from "../authz";
+import { requireRecordingPoint } from "../authz";
 import { recorderRequest } from "../client";
 import { AddStreamerInput } from "../schema";
 import type { ActionResult } from "../types";
@@ -12,7 +12,7 @@ import type { ActionResult } from "../types";
 export async function addStreamer(input: unknown): Promise<ActionResult> {
   try {
     const data = AddStreamerInput.parse(input);
-    await requireRecordingWriter();
+    await requireRecordingPoint("task_manage");
     await recorderRequest("/api/v1/builtin_recorder/add", { platform: "Douyin", url: data.url });
     revalidatePath("/recording");
     return { ok: true };

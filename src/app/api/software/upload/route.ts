@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseUploadToTemp, removeTemp } from "@/modules/editing-storage/server";
-import { ingestSoftware, requireSoftwareWriter } from "@/modules/software-library/server";
+import { ingestSoftware, requireSoftwarePoint } from "@/modules/software-library/server";
 import { UploadFieldsInput } from "@/modules/software-library";
 import { isAppError } from "@/lib/errors";
 
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   // 先鉴权再落盘：未授权请求不允许往 NAS 写临时文件
   let userId: string;
   try {
-    ({ userId } = await requireSoftwareWriter());
+    ({ userId } = await requireSoftwarePoint("item_edit"));
   } catch (e) {
     const status = isAppError(e) ? e.httpStatus : 403;
     const msg = e instanceof Error ? e.message : String(e);

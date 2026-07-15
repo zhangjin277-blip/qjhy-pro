@@ -4,7 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { material_folder } from "@/db/schema/material";
-import { requireMaterialWriter } from "../authz";
+import { requireMaterialPoint } from "../authz";
 
 const Input = z.object({
   parentId: z.number().int().positive().nullable(),
@@ -19,7 +19,7 @@ export async function ensureFolderPath(
   input: unknown,
 ): Promise<{ ok: true; folderId: number | null }> {
   const { parentId, segments } = Input.parse(input);
-  const { userId } = await requireMaterialWriter();
+  const { userId } = await requireMaterialPoint("material_organize");
 
   let parent: number | null = parentId;
   for (const name of segments) {

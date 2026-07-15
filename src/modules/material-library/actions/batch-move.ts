@@ -3,13 +3,13 @@ import { revalidatePath } from "next/cache";
 import { and, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { material_asset } from "@/db/schema/material";
-import { requireMaterialWriter } from "../authz";
+import { requireMaterialPoint } from "../authz";
 import { BatchMoveInput } from "../schema";
 
 /** 批量移动素材到指定目录（folderId=null → 未分类）。 */
 export async function batchMoveAssets(input: unknown): Promise<{ ok: true; moved: number }> {
   const data = BatchMoveInput.parse(input);
-  await requireMaterialWriter();
+  await requireMaterialPoint("material_organize");
   const res = await db
     .update(material_asset)
     .set({ folder_id: data.folderId, updated_at: new Date() })

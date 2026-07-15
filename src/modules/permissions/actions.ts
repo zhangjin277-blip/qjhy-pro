@@ -76,25 +76,21 @@ export async function upsertOverride(input: unknown): Promise<{ ok: true }> {
       user_id: data.user_id,
       module: data.module,
       scope: data.scope ?? null,
-      can_edit: data.can_edit ?? null,
-      can_export: data.can_export ?? null,
-      can_admin: data.can_admin ?? null,
+      points: data.points ?? null,
       reason: data.reason,
       expires_at: data.expires_at ? new Date(data.expires_at) : null,
       created_by: opUser,
     })
     .onConflictDoUpdate({
       target: [auth_permission_override.user_id, auth_permission_override.module],
-      // 仅 update 调用方实际传了的字段——未传的 can_* / scope 保留旧值，
-      // 避免"只想改 scope"的请求把 can_admin 等清空。
+      // 仅 update 调用方实际传了的字段——未传的 points/scope 保留旧值，
+      // 避免"只想改 scope"的请求把点集清空。
       set: {
         reason: data.reason,
         expires_at: data.expires_at ? new Date(data.expires_at) : null,
         created_by: opUser,
         ...(data.scope !== undefined && { scope: data.scope }),
-        ...(data.can_edit !== undefined && { can_edit: data.can_edit }),
-        ...(data.can_export !== undefined && { can_export: data.can_export }),
-        ...(data.can_admin !== undefined && { can_admin: data.can_admin }),
+        ...(data.points !== undefined && { points: data.points }),
       },
     });
 
@@ -133,14 +129,13 @@ export async function upsertOverrideBatch(input: unknown): Promise<{ ok: true; c
 
   let count = 0;
   for (const entry of data.entries) {
-    // scope=null（数据范围用默认）且三个开关也全是 null（用默认）且无委托 → 该 module
+    // scope=null（数据范围用默认）且点集也是 null（用默认）且无委托 → 该 module
     // 无任何覆盖内容，删除 override 行。
-    // 注意不能只看 scope：scope 用默认但单独设了编辑/导出/管理开关是合法配置
-    // （schema scope 列可空，resolve 对 null scope 不抬范围、null flag 回落岗位默认）。
-    const hasFlagOverride =
-      entry.can_edit !== null || entry.can_export !== null || entry.can_admin !== null;
+    // 注意不能只看 scope：scope 用默认但单独覆盖了点集是合法配置
+    // （schema scope 列可空，resolve 对 null scope 不抬范围、null points 回落岗位默认）。
+    const hasPointsOverride = entry.points !== null && entry.points !== undefined;
     const hasDelegated = delegatedExplicit && delegatedValue !== null;
-    if (entry.scope === null && !hasFlagOverride && !hasDelegated) {
+    if (entry.scope === null && !hasPointsOverride && !hasDelegated) {
       await db
         .delete(auth_permission_override)
         .where(
@@ -158,9 +153,7 @@ export async function upsertOverrideBatch(input: unknown): Promise<{ ok: true; c
         user_id: data.user_id,
         module: entry.module,
         scope: entry.scope,
-        can_edit: entry.can_edit ?? null,
-        can_export: entry.can_export ?? null,
-        can_admin: entry.can_admin ?? null,
+        points: entry.points ?? null,
         reason: data.reason,
         expires_at: null,
         delegated_user_ids: delegatedExplicit ? delegatedValue : null,
@@ -168,14 +161,12 @@ export async function upsertOverrideBatch(input: unknown): Promise<{ ok: true; c
       })
       .onConflictDoUpdate({
         target: [auth_permission_override.user_id, auth_permission_override.module],
-        // 仅 update 调用方实际传了的 can_* 字段（undefined = 不动）。
+        // points undefined = 不动；null = 显式恢复岗位默认；数组 = 整体替换。
         set: {
           scope: entry.scope,
           reason: data.reason,
           created_by: opUser,
-          ...(entry.can_edit !== undefined && { can_edit: entry.can_edit }),
-          ...(entry.can_export !== undefined && { can_export: entry.can_export }),
-          ...(entry.can_admin !== undefined && { can_admin: entry.can_admin }),
+          ...(entry.points !== undefined && { points: entry.points }),
           ...(delegatedExplicit && { delegated_user_ids: delegatedValue }),
         },
       });
@@ -260,18 +251,14 @@ export async function upsertRoleDefault(input: unknown): Promise<{ ok: true }> {
       position: data.position,
       module: data.module,
       scope: data.scope,
-      can_edit: data.can_edit,
-      can_export: data.can_export,
-      can_admin: data.can_admin,
+      points: data.points,
       description: data.description ?? null,
     })
     .onConflictDoUpdate({
       target: [role_default_permission.position, role_default_permission.module],
       set: {
         scope: data.scope,
-        can_edit: data.can_edit,
-        can_export: data.can_export,
-        can_admin: data.can_admin,
+        points: data.points,
         description: data.description ?? null,
         updated_at: new Date(),
       },

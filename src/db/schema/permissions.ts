@@ -1,5 +1,4 @@
 import {
-  boolean,
   index,
   jsonb,
   pgTable,
@@ -43,9 +42,8 @@ export const role_default_permission = pgTable(
     position: text("position").notNull(),
     module: text("module").notNull(),
     scope: text("scope", { enum: ["none", "self", "team", "all"] }).notNull(),
-    can_edit: boolean("can_edit").notNull().default(false),
-    can_export: boolean("can_export").notNull().default(false),
-    can_admin: boolean("can_admin").notNull().default(false),
+    /** 该板块已开通的权限点（板块内短 key 数组，注册表见 modules.ts MODULE_POINTS） */
+    points: jsonb("points").$type<string[]>().notNull().default([]),
     description: text("description"),
     updated_at: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -84,9 +82,8 @@ export const auth_permission_override = pgTable(
       .references(() => dingtalk_user.user_id, { onDelete: "cascade" }),
     module: text("module").notNull(),
     scope: text("scope", { enum: ["none", "self", "team", "all"] }),
-    can_edit: boolean("can_edit"),
-    can_export: boolean("can_export"),
-    can_admin: boolean("can_admin"),
+    /** null = 不覆盖（用岗位默认）；非 null = 整体替换该板块权限点集合 */
+    points: jsonb("points").$type<string[] | null>(),
     reason: text("reason").notNull(),
     expires_at: timestamp("expires_at"),
     /**

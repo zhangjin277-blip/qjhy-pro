@@ -31,7 +31,7 @@ export default async function PermissionsAdminPage() {
   }
 
   const perm = await resolvePermission(currentUser.dingtalkUserId, "permissions");
-  if (!perm.can_admin) {
+  if (perm.points.size === 0) {
     return (
       <div className="max-w-2xl p-8">
         <h2 className="text-xl font-semibold">权限不足</h2>

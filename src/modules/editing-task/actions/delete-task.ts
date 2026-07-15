@@ -12,7 +12,7 @@ export async function deleteTask(input: unknown): Promise<{ deleted: number; ski
   const data = DeleteTaskInput.parse(input);
   const { userId } = await requireUser();
   const perm = await resolvePermission(userId, "editing_workflow");
-  const isAdmin = perm.can_admin;
+  const isAdmin = perm.points.has("task_delete");
 
   const candidates = await db
     .select({

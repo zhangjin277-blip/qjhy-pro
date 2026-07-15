@@ -23,7 +23,7 @@ interface Props {
   taskId: number;
   onClose: () => void;
   editors: EditorOption[];
-  permissions: { canEdit: boolean; isAdmin: boolean };
+  permissions: { canAssign: boolean };
 }
 
 export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
@@ -258,7 +258,7 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
         </main>
 
         <footer className="flex flex-wrap gap-2 border-t border-border bg-white px-6 py-3">
-          {task.status === "uploaded" && permissions.canEdit && (
+          {task.status === "uploaded" && permissions.canAssign && (
             <AssignPopover editors={editors} taskIds={[task.id]} onDone={onClose} />
           )}
           {task.status === "editing" && (
@@ -303,9 +303,7 @@ export function TaskDrawer({ taskId, onClose, editors, permissions }: Props) {
               <ReviewRejectDialog taskId={task.id} onBeforeReject={flushWatch} onDone={onClose} />
             </>
           )}
-          {task.status === "ready" && (
-            <MarkPublishedDialog taskId={task.id} isAdmin={permissions.isAdmin} onDone={onClose} />
-          )}
+          {task.status === "ready" && <MarkPublishedDialog taskId={task.id} onDone={onClose} />}
           {task.isDisqualified ? (
             <button
               onClick={async () => {

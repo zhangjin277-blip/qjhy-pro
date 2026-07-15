@@ -1,5 +1,5 @@
 import "server-only";
-export { requireRecordingViewer, requireRecordingWriter } from "./authz";
+export { requireRecordingViewer, requireRecordingPoint } from "./authz";
 export { getRecorderSnapshot, recordingAnchorNames } from "./snapshot";
 export { recorderRequest, RecorderOfflineError } from "./client";
 export {

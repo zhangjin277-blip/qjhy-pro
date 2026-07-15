@@ -3,13 +3,13 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { software_category } from "@/db/schema/software";
-import { requireSoftwareWriter } from "../authz";
+import { requireSoftwarePoint } from "../authz";
 import { categoryNameTaken } from "../queries";
 import { RenameCategoryInput } from "../schema";
 
 export async function renameCategory(input: unknown): Promise<{ ok: true }> {
   const data = RenameCategoryInput.parse(input);
-  await requireSoftwareWriter();
+  await requireSoftwarePoint("item_edit");
   if (await categoryNameTaken(data.name, data.id)) throw new Error("同名分类已存在");
   const res = await db
     .update(software_category)

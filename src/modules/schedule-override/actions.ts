@@ -12,8 +12,8 @@ import { overrideInputSchema } from "./schema";
 import { revalidatePath } from "next/cache";
 
 /**
- * 校验当前用户具备 live_account 模块写权限（跟 schedule-today 同口径）。
- * emergency 后门直接通过；否则要求 resolvePermission(uid, "live_account").can_edit。
+ * 校验当前用户具备排班编辑权限点（live_account.schedule_edit）。
+ * emergency 后门直接通过。
  */
 async function requireScheduleWrite(): Promise<{
   authUserId: string;
@@ -25,7 +25,7 @@ async function requireScheduleWrite(): Promise<{
   if (currentUser.kind !== "ok") throw new Error("AUTH_USER_NOT_SYNCED");
   if (!currentUser.isEmergency) {
     const perm = await resolvePermission(currentUser.dingtalkUserId, "live_account");
-    if (!perm.can_edit) throw new Error("FORBIDDEN");
+    if (!perm.points.has("schedule_edit")) throw new Error("FORBIDDEN");
   }
   return { authUserId: session.user.id, dingtalkUserId: currentUser.dingtalkUserId };
 }

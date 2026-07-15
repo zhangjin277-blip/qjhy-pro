@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { editing_task, live_account } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { writeEvent } from "../event-writer";
-import { requireEditingWriter } from "../authz";
+import { requireEditingPoint } from "../authz";
 import { buildEditingScopeWhere } from "../scope";
 import { assertTransition } from "../state-machine";
 import { MarkPublishedInput } from "../schema";
@@ -19,7 +19,7 @@ type MarkResult =
 
 export async function markPublished(input: unknown): Promise<MarkResult> {
   const data = MarkPublishedInput.parse(input);
-  const { userId, perm } = await requireEditingWriter();
+  const { userId, perm } = await requireEditingPoint("publish");
   const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   const [t] = await db

@@ -2,13 +2,13 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { software_category } from "@/db/schema/software";
-import { requireSoftwareWriter } from "../authz";
+import { requireSoftwarePoint } from "../authz";
 import { categoryNameTaken } from "../queries";
 import { CreateCategoryInput } from "../schema";
 
 export async function createCategory(input: unknown): Promise<{ ok: true; id: number }> {
   const data = CreateCategoryInput.parse(input);
-  await requireSoftwareWriter();
+  await requireSoftwarePoint("item_edit");
   if (await categoryNameTaken(data.name)) throw new Error("同名分类已存在");
   const [row] = await db
     .insert(software_category)

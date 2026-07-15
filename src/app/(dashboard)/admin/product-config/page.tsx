@@ -9,10 +9,10 @@ export default async function ProductConfigPage() {
   if (currentUser.kind === "unauth") redirect("/login");
   if (currentUser.kind === "user_not_synced") redirect("/");
 
-  // 应急用户直接放行；钉钉用户需 permissions.can_admin
+  // 应急用户直接放行；钉钉用户需 permissions 板块任意管理点
   if (!currentUser.isEmergency) {
     const perm = await resolvePermission(currentUser.dingtalkUserId, "permissions");
-    if (!perm.can_admin) redirect("/");
+    if (perm.points.size === 0) redirect("/");
   }
 
   const products = await listProducts();

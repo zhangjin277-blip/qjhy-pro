@@ -4,7 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { material_asset } from "@/db/schema/material";
 import { removeFile } from "@/modules/editing-storage/server";
-import { requireMaterialWriter } from "../authz";
+import { requireMaterialPoint } from "../authz";
 import { DeleteAssetInput } from "../schema";
 
 /**
@@ -13,7 +13,7 @@ import { DeleteAssetInput } from "../schema";
  */
 export async function deleteAsset(input: unknown): Promise<{ ok: true }> {
   const data = DeleteAssetInput.parse(input);
-  await requireMaterialWriter();
+  await requireMaterialPoint("material_delete");
 
   const [row] = await db
     .select({ id: material_asset.id, nasPath: material_asset.nas_path })

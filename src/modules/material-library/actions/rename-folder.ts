@@ -3,12 +3,12 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { material_folder } from "@/db/schema/material";
-import { requireMaterialWriter } from "../authz";
+import { requireMaterialPoint } from "../authz";
 import { RenameFolderInput } from "../schema";
 
 export async function renameFolder(input: unknown): Promise<{ ok: true }> {
   const data = RenameFolderInput.parse(input);
-  await requireMaterialWriter();
+  await requireMaterialPoint("material_organize");
   const res = await db
     .update(material_folder)
     .set({ name: data.name, updated_at: new Date() })

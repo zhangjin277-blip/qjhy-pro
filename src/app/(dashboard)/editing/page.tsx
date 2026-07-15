@@ -105,7 +105,7 @@ export default async function EditingBoardPage({
       products={products}
       anchors={anchors}
       accounts={accounts}
-      permissions={{ canEdit: perm.can_edit, isAdmin: perm.can_admin }}
+      permissions={{ canAssign: perm.points.has("task_assign") }}
       fishCoverage={fishCoverage}
       todaySummary={summary}
       editorLoad={editorLoad}

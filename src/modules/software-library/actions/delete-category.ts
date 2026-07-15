@@ -3,14 +3,14 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { software_category } from "@/db/schema/software";
-import { requireSoftwareWriter } from "../authz";
+import { requireSoftwarePoint } from "../authz";
 import { categoryHasActiveItems } from "../queries";
 import { DeleteCategoryInput } from "../schema";
 
 /** 删除分类：分类下还有未删软件则拒绝，避免悬空引用。 */
 export async function deleteCategory(input: unknown): Promise<{ ok: true }> {
   const data = DeleteCategoryInput.parse(input);
-  await requireSoftwareWriter();
+  await requireSoftwarePoint("item_delete");
 
   if (await categoryHasActiveItems(data.id)) throw new Error("该分类下还有软件，请先移走或删除");
 

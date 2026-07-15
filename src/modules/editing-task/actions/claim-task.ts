@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { editing_task, dingtalk_user } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { writeEvent } from "../event-writer";
-import { requireEditingWriter } from "../authz";
+import { requireEditingPoint } from "../authz";
 import { buildEditingScopeWhere } from "../scope";
 import { assertTransition } from "../state-machine";
 import { z } from "zod";
@@ -12,7 +12,7 @@ const Input = z.object({ taskId: z.number().int().positive() });
 
 export async function claimTask(input: unknown): Promise<{ ok: true }> {
   const { taskId } = Input.parse(input);
-  const { userId, perm } = await requireEditingWriter();
+  const { userId, perm } = await requireEditingPoint("task_claim");
   const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   const [t] = await db

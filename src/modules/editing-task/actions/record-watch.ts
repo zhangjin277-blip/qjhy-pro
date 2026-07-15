@@ -2,7 +2,7 @@
 import { db } from "@/db/client";
 import { editing_task } from "@/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { requireEditingWriter } from "../authz";
+import { requireEditingPoint } from "../authz";
 import { buildEditingScopeWhere } from "../scope";
 import { z } from "zod";
 
@@ -17,7 +17,7 @@ const Input = z.object({
  */
 export async function recordReviewWatch(input: unknown): Promise<{ ok: true; total: number }> {
   const { taskId, seconds } = Input.parse(input);
-  const { userId, perm } = await requireEditingWriter();
+  const { userId, perm } = await requireEditingPoint("task_claim");
   const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   // scope 条件直接进 UPDATE WHERE：scope 外 / 已软删 0 行 → 按不存在处理

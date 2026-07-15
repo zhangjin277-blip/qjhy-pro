@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseUploadToTemp, removeTemp } from "@/modules/editing-storage/server";
-import { ingestMaterial, requireMaterialWriter } from "@/modules/material-library/server";
+import { ingestMaterial, requireMaterialPoint } from "@/modules/material-library/server";
 import { isAppError } from "@/lib/errors";
 
 export const runtime = "nodejs";
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   // 先鉴权再落盘：未授权请求不允许往 NAS 写临时文件
   let userId: string;
   try {
-    ({ userId } = await requireMaterialWriter());
+    ({ userId } = await requireMaterialPoint("material_upload"));
   } catch (e) {
     const status = isAppError(e) ? e.httpStatus : 403;
     const msg = e instanceof Error ? e.message : String(e);

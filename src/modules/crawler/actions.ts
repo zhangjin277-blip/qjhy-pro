@@ -2,7 +2,7 @@
 
 import { db } from "@/db/client";
 import { field_alias } from "@/db/schema";
-import { requireModuleEdit } from "@/lib/admin-guard";
+import { requirePoint } from "@/lib/admin-guard";
 import { writeAuditLog } from "@/lib/audit";
 import { z } from "zod";
 // 直接从子模块导入，避免走 ./server barrel —— barrel 会 re-export 所有 adapter，
@@ -17,7 +17,7 @@ const RerunInput = z.object({
 });
 export async function rerunCrawl(input: unknown): Promise<{ ok: true }> {
   const data = RerunInput.parse(input);
-  const { userId } = await requireModuleEdit("crawler");
+  const { userId } = await requirePoint("crawler", "run_jobs");
   await enqueue(JOB_NAMES.CHECK_DATA_READY, {
     date: data.date,
     basecamp: data.basecamp,
@@ -64,7 +64,7 @@ const TriggerKuaishouSyncInput = z.object({
 });
 export async function triggerKuaishouSync(input: unknown): Promise<{ ok: true }> {
   const data = TriggerKuaishouSyncInput.parse(input);
-  const { userId } = await requireModuleEdit("crawler");
+  const { userId } = await requirePoint("crawler", "run_jobs");
   const jobName =
     data.type === "members"
       ? JOB_NAMES.SYNC_KUAISHOU_MEMBERS
@@ -92,7 +92,7 @@ export async function triggerKuaishouSync(input: unknown): Promise<{ ok: true }>
 /** 按类型 × 日期范围批量入队（每天一个 job）。用于补漏数据，不触发其它采集任务。*/
 export async function backfillRange(input: unknown): Promise<{ ok: true; days: number }> {
   const data = BackfillRangeInput.parse(input);
-  const { userId } = await requireModuleEdit("crawler");
+  const { userId } = await requirePoint("crawler", "run_jobs");
   const start = new Date(data.from + "T00:00:00");
   const end = new Date(data.to + "T00:00:00");
   if (start > end) throw new Error("from > to");
@@ -120,7 +120,7 @@ const SaveCookieInput = z.object({
 });
 export async function saveCookieAction(input: unknown): Promise<{ ok: true }> {
   const data = SaveCookieInput.parse(input);
-  const { userId } = await requireModuleEdit("crawler");
+  const { userId } = await requirePoint("crawler", "cookie_update");
   await saveCookies(data.basecamp as Basecamp, data.cookies);
   await writeAuditLog({
     user_id: userId,
@@ -142,7 +142,7 @@ const FieldAliasInput = z.object({
 });
 export async function upsertFieldAlias(input: unknown): Promise<{ ok: true }> {
   const data = FieldAliasInput.parse(input);
-  const { userId } = await requireModuleEdit("crawler");
+  const { userId } = await requirePoint("crawler", "field_alias");
   await db
     .insert(field_alias)
     .values({

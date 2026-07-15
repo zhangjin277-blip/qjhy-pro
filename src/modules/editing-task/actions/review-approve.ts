@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { editing_task } from "@/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { writeEvent } from "../event-writer";
-import { requireEditingWriter } from "../authz";
+import { requireEditingPoint } from "../authz";
 import { buildEditingScopeWhere } from "../scope";
 import { assertTransition } from "../state-machine";
 import { z } from "zod";
@@ -15,7 +15,7 @@ const Input = z.object({
 
 export async function reviewApprove(input: unknown): Promise<{ ok: true }> {
   const { taskId, watchSeconds } = Input.parse(input);
-  const { userId, perm } = await requireEditingWriter();
+  const { userId, perm } = await requireEditingPoint("review");
   const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   const [t] = await db

@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   try {
     const { userId } = await requireUser();
     const perm = await resolvePermission(userId, "editing_workflow");
-    if (!perm.can_edit) {
+    if (!perm.points.has("edited_upload")) {
       return NextResponse.json({ ok: false, error: "无剪辑工作流编辑权限" }, { status: 403 });
     }
   } catch (e) {

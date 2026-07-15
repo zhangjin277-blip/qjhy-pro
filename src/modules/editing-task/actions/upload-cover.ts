@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { editing_task, live_account } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { writeEvent } from "../event-writer";
-import { requireEditingWriter } from "../authz";
+import { requireEditingPoint } from "../authz";
 import { buildEditingScopeWhere } from "../scope";
 import {
   buildCoverPath,
@@ -25,7 +25,7 @@ export async function uploadCover(formData: FormData): Promise<{ ok: true }> {
   if (!file.type.startsWith("image/")) throw new Error("仅支持图片");
 
   const data = Input.parse({ taskId, fileName: file.name });
-  const { userId, perm } = await requireEditingWriter();
+  const { userId, perm } = await requireEditingPoint("cover_manage");
   const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   const [task] = await db

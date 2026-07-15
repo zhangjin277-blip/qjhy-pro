@@ -25,7 +25,6 @@ import { UserDeptTreePicker } from "./user-dept-tree-picker";
 interface PermState {
   enabled: boolean;
   scope: Scope;
-  can_edit: boolean;
 }
 
 type PermsMap = Record<ModuleKey, PermState>;
@@ -67,7 +66,7 @@ const STATUS_LABEL: Record<InviteCodeRow["status"], { label: string; color: stri
 
 function emptyPerms(): PermsMap {
   const init = {} as PermsMap;
-  for (const m of MODULE_KEYS) init[m] = { enabled: false, scope: "self", can_edit: false };
+  for (const m of MODULE_KEYS) init[m] = { enabled: false, scope: "self" };
   return init;
 }
 
@@ -121,9 +120,7 @@ export function InviteCodesTab() {
       .map(([k, v]) => ({
         module: k as ModuleKey,
         scope: v.scope,
-        can_edit: v.can_edit,
-        can_export: false,
-        can_admin: false,
+        points: [] as string[], // 外部账号只读 + 委托视图，不给操作点
       }));
 
     if (enabledPerms.length === 0) {
@@ -345,24 +342,6 @@ export function InviteCodesTab() {
                         </option>
                       ))}
                     </select>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="checkbox"
-                        id={`edit-${m}`}
-                        checked={perms[m].can_edit}
-                        onChange={(e) =>
-                          setPerms({
-                            ...perms,
-                            [m]: { ...perms[m], can_edit: e.target.checked },
-                          })
-                        }
-                        disabled={!perms[m].enabled}
-                        className="h-4 w-4"
-                      />
-                      <Label htmlFor={`edit-${m}`} className="text-xs font-normal">
-                        可编辑
-                      </Label>
-                    </div>
                   </div>
                 ))}
               </div>

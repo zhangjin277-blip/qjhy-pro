@@ -22,12 +22,12 @@ export async function requireMaterialViewer(): Promise<{
   return { userId, perm };
 }
 
-export async function requireMaterialWriter(): Promise<{
+export async function requireMaterialPoint(point: string): Promise<{
   userId: string;
   perm: ResolvedPermission;
 }> {
   const { userId } = await requireUser();
   const perm = await resolvePermission(userId, MODULE);
-  if (!perm.can_edit) throw new Error("无素材库编辑权限");
+  if (!perm.points.has(point)) throw new Error("无素材库编辑权限");
   return { userId, perm };
 }

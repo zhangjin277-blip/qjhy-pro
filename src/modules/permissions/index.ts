@@ -10,9 +10,18 @@
  * 兄弟文件 `./server` 中，避免 client bundle 误拉 postgres 驱动。
  */
 export type { Scope, Permission, PermissionSource, ResolvedPermission } from "./types";
-export type { ModuleKey } from "./modules";
+export { hasPoint } from "./types";
+export type { ModuleKey, PermissionPointDef } from "./modules";
 
-export { MODULE_KEYS, MODULE_LABEL, MODULE_DESC, isModuleKey } from "./modules";
+export {
+  MODULE_KEYS,
+  MODULE_LABEL,
+  MODULE_DESC,
+  MODULE_POINTS,
+  TOTAL_POINT_COUNT,
+  isModuleKey,
+  isPointKey,
+} from "./modules";
 
 export {
   ScopeSchema,

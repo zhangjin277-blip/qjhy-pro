@@ -28,10 +28,10 @@ import { notifyDeleteRequested, notifyDeleteReviewed } from "./notify";
 /**
  * 检查当前用户对某账号是否可写：
  * - emergency / admin → 直接 true
- * - can_edit === false → false（连权限位都没）
+ * - 无 account_edit 权限点 → false
  * - scope=all → true；scope=team → 看 target agent 是否在 team；scope=self → 看 target agent = userId
  * - delegated 非空 → target agent ∈ delegated
- * - 新建场景（targetAgent=undefined）→ 只看 can_edit
+ * - 新建场景（targetAgent=undefined）→ 只看 account_edit
  */
 async function canWriteAccount(
   userId: string,
@@ -40,9 +40,9 @@ async function canWriteAccount(
 ): Promise<boolean> {
   if (isEmergency) return true;
   const perm = await resolvePermission(userId, "live_account");
-  if (!perm.can_edit) return false;
+  if (!perm.points.has("account_edit")) return false;
 
-  // 新建账号：只校验 can_edit（还不存在的账号没 scope 可比）
+  // 新建账号：只校验 account_edit（还不存在的账号没 scope 可比）
   if (targetAgent === undefined) return true;
 
   if (perm.delegatedUserIds && perm.delegatedUserIds.length > 0) {
@@ -82,7 +82,7 @@ export async function upsertAccount(input: unknown) {
     if (!before) throw new AppError("LIVE_ACCOUNT_NOT_FOUND", "直播账号不存在", 404);
   }
 
-  // 权限：新建查 can_edit；更新查 can_edit + 目标账号在 scope 内
+  // 权限：新建查 account_edit；更新查 account_edit + 目标账号在 scope 内
   const targetAgent: string | null | undefined = isUpdate
     ? (before?.agent_dingtalk_user_id ?? null)
     : undefined;
@@ -172,8 +172,8 @@ export async function deleteAccount(input: unknown): Promise<DeleteAccountResult
   let isAdmin = ctx.isEmergency;
   if (!isAdmin) {
     const perm = await resolvePermission(userId, "live_account");
-    if (!perm.can_edit) return { ok: false, error: "无直播账号编辑权限" };
-    isAdmin = perm.can_admin;
+    if (!perm.points.has("delete_request")) return { ok: false, error: "无删除申请权限" };
+    isAdmin = perm.points.has("delete_review");
   }
   if (!isAdmin) {
     return {
@@ -241,8 +241,8 @@ export async function getAccountDeleteContext(input: unknown): Promise<DeleteCon
   let isAdmin = ctx.isEmergency;
   if (!isAdmin) {
     const perm = await resolvePermission(userId, "live_account");
-    if (!perm.can_edit) return { ok: false, error: "无直播账号编辑权限" };
-    isAdmin = perm.can_admin;
+    if (!perm.points.has("delete_request")) return { ok: false, error: "无删除申请权限" };
+    isAdmin = perm.points.has("delete_review");
   }
 
   const [account] = await db.select().from(live_account).where(eq(live_account.id, id));
@@ -325,9 +325,9 @@ export async function reviewAccountDeletion(input: unknown): Promise<SimpleResul
   let isAdmin = ctx.isEmergency;
   if (!isAdmin) {
     const perm = await resolvePermission(userId, "live_account");
-    isAdmin = perm.can_admin;
+    isAdmin = perm.points.has("delete_review");
   }
-  if (!isAdmin) return { ok: false, error: "需要直播账号管理员权限" };
+  if (!isAdmin) return { ok: false, error: "需要删除审批权限" };
 
   try {
     const res = await reviewDeleteRequest({
@@ -379,8 +379,8 @@ export async function cancelAccountDeleteRequest(input: unknown): Promise<Simple
   let isAdmin = ctx.isEmergency;
   if (!isAdmin) {
     const perm = await resolvePermission(userId, "live_account");
-    if (!perm.can_edit) return { ok: false, error: "无直播账号编辑权限" };
-    isAdmin = perm.can_admin;
+    if (!perm.points.has("delete_request")) return { ok: false, error: "无删除申请权限" };
+    isAdmin = perm.points.has("delete_review");
   }
 
   try {

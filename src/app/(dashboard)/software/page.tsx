@@ -12,7 +12,7 @@ export default async function SoftwarePage() {
   let canEdit = false;
   try {
     const { perm } = await requireSoftwareViewer();
-    canEdit = perm.can_edit;
+    canEdit = perm.points.has("item_edit");
   } catch {
     redirect("/dashboard");
   }

@@ -6,11 +6,12 @@ export type Scope = z.infer<typeof ScopeSchema>;
 
 export const ModuleKeySchema = z.enum(MODULE_KEYS);
 
+/** 权限点数组：板块内短 key（注册表校验在 action 层做，避免 schema 依赖 module 上下文） */
+const PointsSchema = z.array(z.string().min(1)).max(64);
+
 export const PermissionSchema = z.object({
   scope: ScopeSchema,
-  can_edit: z.boolean(),
-  can_export: z.boolean(),
-  can_admin: z.boolean(),
+  points: PointsSchema,
 });
 export type Permission = z.infer<typeof PermissionSchema>;
 
@@ -30,9 +31,8 @@ export const UpsertOverrideInput = z.object({
   user_id: z.string().min(1),
   module: ModuleKeySchema,
   scope: ScopeSchema.optional(),
-  can_edit: z.boolean().optional(),
-  can_export: z.boolean().optional(),
-  can_admin: z.boolean().optional(),
+  /** undefined = 不覆盖点集；数组 = 整体替换该板块点集 */
+  points: z.array(z.string().min(1)).max(64).optional(),
   reason: z.string().min(1, "必须填变更理由"),
   expires_at: z.string().datetime().optional(),
 });
@@ -49,9 +49,8 @@ export const UpsertOverrideBatchInput = z.object({
       z.object({
         module: ModuleKeySchema,
         scope: ScopeSchema.nullable(),
-        can_edit: z.boolean().nullable().optional(),
-        can_export: z.boolean().nullable().optional(),
-        can_admin: z.boolean().nullable().optional(),
+        /** null = 恢复岗位默认（不覆盖）；数组 = 整体替换该板块点集 */
+        points: z.array(z.string().min(1)).max(64).nullable().optional(),
       }),
     )
     .min(1),
@@ -76,9 +75,7 @@ export const UpsertRoleDefaultInput = z.object({
   position: z.string().min(1),
   module: ModuleKeySchema,
   scope: ScopeSchema,
-  can_edit: z.boolean(),
-  can_export: z.boolean(),
-  can_admin: z.boolean(),
+  points: z.array(z.string().min(1)).max(64),
   description: z.string().optional(),
 });
 export type UpsertRoleDefaultInput = z.infer<typeof UpsertRoleDefaultInput>;

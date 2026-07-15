@@ -20,12 +20,12 @@ export async function requireSoftwareViewer(): Promise<{
   return { userId, perm };
 }
 
-export async function requireSoftwareWriter(): Promise<{
+export async function requireSoftwarePoint(point: string): Promise<{
   userId: string;
   perm: ResolvedPermission;
 }> {
   const { userId } = await requireUser();
   const perm = await resolvePermission(userId, MODULE);
-  if (!perm.can_edit) throw new Error("无软件库上传/管理权限");
+  if (!perm.points.has(point)) throw new Error("无软件库上传/管理权限");
   return { userId, perm };
 }

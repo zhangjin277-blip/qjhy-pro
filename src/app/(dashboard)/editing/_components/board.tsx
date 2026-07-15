@@ -35,7 +35,7 @@ interface Props {
   products: ProductOption[];
   anchors: { id: string; name: string; businessLine: string }[];
   accounts: { id: string; name: string; product: string }[];
-  permissions: { canEdit: boolean; isAdmin: boolean };
+  permissions: { canAssign: boolean };
   fishCoverage: FishCoverage;
   todaySummary: TodaySummary;
   editorLoad: TodayEditorLoad[];

@@ -3,13 +3,13 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { software_item } from "@/db/schema/software";
-import { requireSoftwareWriter } from "../authz";
+import { requireSoftwarePoint } from "../authz";
 import { DeleteItemInput } from "../schema";
 
 /** 软删（NAS 文件保留，需要时可人工恢复）。 */
 export async function deleteItem(input: unknown): Promise<{ ok: true }> {
   const data = DeleteItemInput.parse(input);
-  await requireSoftwareWriter();
+  await requireSoftwarePoint("item_delete");
   const res = await db
     .update(software_item)
     .set({ deleted_at: new Date() })

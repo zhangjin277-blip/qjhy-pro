@@ -28,47 +28,48 @@ export function MAX_SCOPE(a: Scope, b: Scope): Scope {
   return SCOPE_RANK[a] >= SCOPE_RANK[b] ? a : b;
 }
 
+const EMPTY_POINTS: ReadonlySet<string> = new Set();
+
 const NULL_PERMISSION: Permission = {
   scope: "none",
-  can_edit: false,
-  can_export: false,
-  can_admin: false,
+  points: EMPTY_POINTS,
   delegatedUserIds: null,
 };
 
 /**
  * 三层叠加合并：role default + dept_leader + override = final
  *
- * 规则：
+ * 规则（spec 2026-07-06-permission-points-redesign）：
  * - scope: MAX(role, dept_leader ? team : none, override.scope ?? none)
- * - can_*: override 显式给了用 override，否则用 role
- * - 注意：override 不能"降低" scope（防止误删 dept_leader 也降权限）
+ *   —— override 不能"降低" scope（防止误删 dept_leader 也降权限）
+ * - points: override.points 非 null → 整体替换；null → 用岗位默认
+ * - dept_leader 只影响 scope，不加权限点
  */
 export function mergePermissions(
-  roleDefault: Permission,
+  roleDefault: { scope: Scope; points: string[] },
   isDeptLeader: boolean,
-  override: Partial<Permission> | null,
+  override: { scope?: Scope; points?: string[] | null } | null,
 ): Permission {
   const deptLeaderScope: Scope = isDeptLeader ? "team" : "none";
   const overrideScope: Scope = override?.scope ?? "none";
 
   const scope = MAX_SCOPE(MAX_SCOPE(roleDefault.scope, deptLeaderScope), overrideScope);
+  const points = new Set(
+    override?.points !== null && override?.points !== undefined
+      ? override.points
+      : roleDefault.points,
+  );
 
-  return {
-    scope,
-    can_edit: override?.can_edit ?? roleDefault.can_edit,
-    can_export: override?.can_export ?? roleDefault.can_export,
-    can_admin: override?.can_admin ?? roleDefault.can_admin,
-  };
+  return { scope, points };
 }
 
 /**
  * 查询给定用户在某个 module 的最终权限（含来源说明）。
  *
  * 步骤：
- * 1. 从 dingtalk_user 拿 title（钉钉岗位）
- * 2. 从 role_default_permission 按 (title, module) 拿默认权限（找不到 fallback 到 ("其他", module)）
- * 3. 从 dept_leader 看是否管部门
+ * 1. 从 dingtalk_user 拿 title（钉钉岗位）；user_position_override 优先
+ * 2. 从 role_default_permission 按 (position, module) 拿默认（找不到 fallback ("其他", module)）
+ * 3. 从 dept_leader 看是否管部门（只升 scope）
  * 4. 从 auth_permission_override 按 (user_id, module) 拿覆盖（且未过期）
  * 5. mergePermissions 合并
  */
@@ -98,14 +99,9 @@ export async function resolvePermission(
       ),
     );
 
-  let role: Permission = NULL_PERMISSION;
+  let role: { scope: Scope; points: string[] } = { scope: "none", points: [] };
   if (roleRow) {
-    role = {
-      scope: roleRow.scope,
-      can_edit: roleRow.can_edit,
-      can_export: roleRow.can_export,
-      can_admin: roleRow.can_admin,
-    };
+    role = { scope: roleRow.scope, points: roleRow.points };
   } else {
     const [fallbackRow] = await db
       .select()
@@ -117,12 +113,7 @@ export async function resolvePermission(
         ),
       );
     if (fallbackRow) {
-      role = {
-        scope: fallbackRow.scope,
-        can_edit: fallbackRow.can_edit,
-        can_export: fallbackRow.can_export,
-        can_admin: fallbackRow.can_admin,
-      };
+      role = { scope: fallbackRow.scope, points: fallbackRow.points };
     }
   }
 
@@ -145,12 +136,10 @@ export async function resolvePermission(
       ),
     );
 
-  const override: Partial<Permission> | null = overrideRow
+  const override = overrideRow
     ? {
         ...(overrideRow.scope !== null ? { scope: overrideRow.scope } : {}),
-        ...(overrideRow.can_edit !== null ? { can_edit: overrideRow.can_edit } : {}),
-        ...(overrideRow.can_export !== null ? { can_export: overrideRow.can_export } : {}),
-        ...(overrideRow.can_admin !== null ? { can_admin: overrideRow.can_admin } : {}),
+        points: overrideRow.points,
       }
     : null;
 
@@ -182,7 +171,7 @@ export async function resolvePermission(
 
 /**
  * 一次性算出某用户在 sidebar 上可见的 module 集合。
- * 可见 = scope !== "none" 或 can_admin === true。
+ * 可见 = scope !== "none" 或 开通了任意权限点。
  */
 export async function resolveVisibleModules(userId: string): Promise<Set<ModuleKey>> {
   const perms = await Promise.all(MODULE_KEYS.map((m) => resolvePermission(userId, m)));
@@ -190,7 +179,7 @@ export async function resolveVisibleModules(userId: string): Promise<Set<ModuleK
   MODULE_KEYS.forEach((m, i) => {
     const p = perms[i];
     if (!p) return;
-    if (p.scope !== "none" || p.can_admin) visible.add(m);
+    if (p.scope !== "none" || p.points.size > 0) visible.add(m);
   });
   return visible;
 }

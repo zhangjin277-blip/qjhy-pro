@@ -3,14 +3,14 @@ import { db } from "@/db/client";
 import { editing_task, dingtalk_user } from "@/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { writeEvent } from "../event-writer";
-import { requireEditingWriter } from "../authz";
+import { requireEditingPoint } from "../authz";
 import { buildEditingScopeWhere } from "../scope";
 import { AssignEditorInput } from "../schema";
 import { assertTransition } from "../state-machine";
 
 export async function assignEditor(input: unknown): Promise<{ updated: number; skipped: number }> {
   const data = AssignEditorInput.parse(input);
-  const { userId, perm } = await requireEditingWriter();
+  const { userId, perm } = await requireEditingPoint("task_assign");
   const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   // scope 外 / 已软删的任务直接选不出来 → 计入 skipped

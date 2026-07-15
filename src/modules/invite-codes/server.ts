@@ -233,9 +233,8 @@ export async function consumeInviteCodeAndCreateUser(input: {
           user_id: extUserId,
           module: p.module,
           scope: p.scope,
-          can_edit: p.can_edit,
-          can_export: p.can_export,
-          can_admin: p.can_admin,
+          // 历史邀请码 payload 无 points 字段 → 空数组（只读+委托视图）
+          points: p.points ?? [],
           reason: `邀请码注册：${normalized}`,
           expires_at: row.account_expire_at,
           delegated_user_ids: delegatedIds,

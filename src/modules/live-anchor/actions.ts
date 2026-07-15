@@ -8,20 +8,27 @@ import { AppError } from "@/lib/errors";
 import { eq } from "drizzle-orm";
 import { UpsertAnchorInput } from "./schema";
 
-async function requireLiveAnchorEdit(): Promise<{ userId: string }> {
+async function requireLiveAnchorPoint(
+  point: "anchor_edit" | "anchor_delete",
+): Promise<{ userId: string }> {
   const ctx = await getCurrentDingtalkUser();
   if (ctx.kind === "unauth") throw new AppError("AUTH_NOT_LOGGED_IN", "未登录", 401);
   if (ctx.kind === "user_not_synced")
     throw new AppError("AUTH_USER_NOT_SYNCED", "钉钉账号未同步", 403);
   if (ctx.isEmergency) return { userId: ctx.dingtalkUserId };
   const perm = await resolvePermission(ctx.dingtalkUserId, "live_anchor");
-  if (!perm.can_edit) throw new AppError("AUTH_FORBIDDEN", "无主播档案编辑权限", 403);
+  if (!perm.points.has(point))
+    throw new AppError(
+      "AUTH_FORBIDDEN",
+      point === "anchor_delete" ? "无主播档案删除权限" : "无主播档案编辑权限",
+      403,
+    );
   return { userId: ctx.dingtalkUserId };
 }
 
 export async function upsertAnchor(input: unknown) {
   const data = UpsertAnchorInput.parse(input);
-  const { userId } = await requireLiveAnchorEdit();
+  const { userId } = await requireLiveAnchorPoint("anchor_edit");
 
   const [before] = await db
     .select()
@@ -72,7 +79,7 @@ export async function upsertAnchor(input: unknown) {
 
 export async function deleteAnchor(input: unknown) {
   const { dingtalk_user_id } = UpsertAnchorInput.pick({ dingtalk_user_id: true }).parse(input);
-  const { userId } = await requireLiveAnchorEdit();
+  const { userId } = await requireLiveAnchorPoint("anchor_delete");
 
   const [before] = await db
     .select()

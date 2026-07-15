@@ -4,9 +4,8 @@ import type { Scope } from "@/modules/permissions";
 export interface InviteCodePermSpec {
   module: ModuleKey;
   scope: Scope;
-  can_edit: boolean;
-  can_export: boolean;
-  can_admin: boolean;
+  /** 该板块开通的权限点（外部账号通常留空 = 只读+委托视图） */
+  points?: string[];
 }
 
 export interface InviteCodeRow {

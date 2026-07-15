@@ -33,8 +33,8 @@ async function requireBindingEdit(): Promise<{ userId: string }> {
   if (ctx.kind === "user_not_synced")
     throw new AppError("AUTH_USER_NOT_SYNCED", "钉钉账号未同步", 403);
   if (ctx.isEmergency) return { userId: ctx.dingtalkUserId };
-  const perm = await resolvePermission(ctx.dingtalkUserId, "live_account");
-  if (!perm.can_edit) throw new AppError("AUTH_FORBIDDEN", "无排班编辑权限", 403);
+  const perm = await resolvePermission(ctx.dingtalkUserId, "live_anchor");
+  if (!perm.points.has("binding_edit")) throw new AppError("AUTH_FORBIDDEN", "无账号绑定权限", 403);
   return { userId: ctx.dingtalkUserId };
 }
 

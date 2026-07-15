@@ -1,149 +1,97 @@
 import { describe, it, expect } from "vitest";
 import { mergePermissions, scopeAtLeast, MAX_SCOPE } from "@/modules/permissions/resolve";
-import type { Permission } from "@/modules/permissions";
+import type { Scope } from "@/modules/permissions";
 
 describe("scopeAtLeast", () => {
   it("none < self < team < all", () => {
-    expect(scopeAtLeast("self", "none")).toBe(true);
-    expect(scopeAtLeast("none", "self")).toBe(false);
     expect(scopeAtLeast("all", "team")).toBe(true);
     expect(scopeAtLeast("team", "all")).toBe(false);
     expect(scopeAtLeast("self", "self")).toBe(true);
+    expect(scopeAtLeast("none", "self")).toBe(false);
   });
 });
 
 describe("MAX_SCOPE", () => {
   it("returns the strongest scope", () => {
-    expect(MAX_SCOPE("none", "self")).toBe("self");
-    expect(MAX_SCOPE("self", "team")).toBe("team");
-    expect(MAX_SCOPE("team", "all")).toBe("all");
-    expect(MAX_SCOPE("self", "self")).toBe("self");
-    expect(MAX_SCOPE("none", "none")).toBe("none");
-    expect(MAX_SCOPE("all", "none")).toBe("all");
+    const cases: [Scope, Scope, Scope][] = [
+      ["none", "self", "self"],
+      ["team", "self", "team"],
+      ["all", "team", "all"],
+      ["none", "none", "none"],
+    ];
+    for (const [a, b, want] of cases) {
+      expect(MAX_SCOPE(a, b)).toBe(want);
+    }
   });
 });
 
-describe("mergePermissions (三层叠加)", () => {
-  const NULL_PERM: Permission = {
-    scope: "none",
-    can_edit: false,
-    can_export: false,
-    can_admin: false,
-  };
+describe("mergePermissions (三层叠加 · 权限点模型)", () => {
+  const role = { scope: "self" as Scope, points: ["account_edit", "schedule_edit"] };
 
   it("only role default — no dept_leader, no override", () => {
-    const role: Permission = {
-      scope: "self",
-      can_edit: true,
-      can_export: false,
-      can_admin: false,
-    };
-    const result = mergePermissions(role, false, null);
-    expect(result.scope).toBe("self");
-    expect(result.can_edit).toBe(true);
-    expect(result.can_export).toBe(false);
+    const p = mergePermissions(role, false, null);
+    expect(p.scope).toBe("self");
+    expect([...p.points].sort()).toEqual(["account_edit", "schedule_edit"]);
   });
 
-  it("dept_leader=true upgrades scope to team", () => {
-    const role: Permission = {
-      scope: "self",
-      can_edit: false,
-      can_export: false,
-      can_admin: false,
-    };
-    const result = mergePermissions(role, true, null);
-    expect(result.scope).toBe("team");
+  it("dept_leader=true upgrades scope to team (points unchanged)", () => {
+    const p = mergePermissions(role, true, null);
+    expect(p.scope).toBe("team");
+    expect(p.points.has("account_edit")).toBe(true);
+    expect(p.points.size).toBe(2);
   });
 
   it("dept_leader doesn't downgrade if role is already higher", () => {
-    const role: Permission = {
-      scope: "all",
-      can_edit: true,
-      can_export: true,
-      can_admin: true,
-    };
-    const result = mergePermissions(role, true, null);
-    expect(result.scope).toBe("all"); // dept_leader's team < role's all → keeps all
+    const p = mergePermissions({ scope: "all", points: [] }, true, null);
+    expect(p.scope).toBe("all");
   });
 
   it("override.scope upgrades to higher", () => {
-    const role: Permission = {
-      scope: "self",
-      can_edit: false,
-      can_export: false,
-      can_admin: false,
-    };
-    const override = { scope: "all" as const };
-    const result = mergePermissions(role, false, override);
-    expect(result.scope).toBe("all");
+    const p = mergePermissions(role, false, { scope: "all" });
+    expect(p.scope).toBe("all");
   });
 
   it("override scope cannot downgrade (MAX semantics)", () => {
-    const role: Permission = {
-      scope: "all",
-      can_edit: true,
-      can_export: true,
-      can_admin: true,
-    };
-    const override = { scope: "none" as const };
-    const result = mergePermissions(role, true, override);
-    // MAX(role.all, dept_leader→team, override.none) = all
-    expect(result.scope).toBe("all");
+    const p = mergePermissions({ scope: "team", points: [] }, false, { scope: "self" });
+    expect(p.scope).toBe("team");
   });
 
-  it("partial override only overrides specified can_* fields", () => {
-    const role: Permission = {
-      scope: "self",
-      can_edit: true,
-      can_export: false,
-      can_admin: false,
-    };
-    const override = { can_export: true }; // 只 override can_export
-    const result = mergePermissions(role, false, override);
-    expect(result.scope).toBe("self"); // 来自 role
-    expect(result.can_edit).toBe(true); // 来自 role
-    expect(result.can_export).toBe(true); // 来自 override
-    expect(result.can_admin).toBe(false); // 来自 role
+  it("override.points = undefined → 沿用岗位默认点集", () => {
+    const p = mergePermissions(role, false, { scope: "all" });
+    expect([...p.points].sort()).toEqual(["account_edit", "schedule_edit"]);
   });
 
-  it("override can_* false explicitly overrides role's true", () => {
-    const role: Permission = {
-      scope: "all",
-      can_edit: true,
-      can_export: true,
-      can_admin: true,
-    };
-    const override = { can_admin: false };
-    const result = mergePermissions(role, false, override);
-    expect(result.can_admin).toBe(false); // 显式 false 应该生效
+  it("override.points = null → 同样沿用岗位默认（显式不覆盖）", () => {
+    const p = mergePermissions(role, false, { points: null });
+    expect([...p.points].sort()).toEqual(["account_edit", "schedule_edit"]);
   });
 
-  it("null override returns role unchanged (no dept_leader)", () => {
-    const role: Permission = {
-      scope: "self",
-      can_edit: true,
-      can_export: false,
-      can_admin: false,
-    };
-    const result = mergePermissions(role, false, null);
-    expect(result).toEqual(role);
+  it("override.points = 数组 → 整体替换（可收紧）", () => {
+    const p = mergePermissions(role, false, { points: ["account_edit"] });
+    expect([...p.points]).toEqual(["account_edit"]);
+    expect(p.points.has("schedule_edit")).toBe(false);
   });
 
-  it("NULL_PERM + no dept_leader + null override → NULL_PERM", () => {
-    const result = mergePermissions(NULL_PERM, false, null);
-    expect(result).toEqual(NULL_PERM);
+  it("override.points = [] → 清空该板块全部点", () => {
+    const p = mergePermissions(role, false, { points: [] });
+    expect(p.points.size).toBe(0);
+  });
+
+  it("override.points 可扩权（替换语义下给更多点）", () => {
+    const p = mergePermissions(role, false, {
+      points: ["account_edit", "schedule_edit", "delete_review"],
+    });
+    expect(p.points.has("delete_review")).toBe(true);
+  });
+
+  it("空 role + no dept_leader + null override → 全空", () => {
+    const p = mergePermissions({ scope: "none", points: [] }, false, null);
+    expect(p.scope).toBe("none");
+    expect(p.points.size).toBe(0);
   });
 
   it("dept_leader true + override scope=all stays at all", () => {
-    const role: Permission = {
-      scope: "none",
-      can_edit: false,
-      can_export: false,
-      can_admin: false,
-    };
-    const override = { scope: "all" as const, can_admin: true };
-    const result = mergePermissions(role, true, override);
-    expect(result.scope).toBe("all");
-    expect(result.can_admin).toBe(true);
+    const p = mergePermissions(role, true, { scope: "all" });
+    expect(p.scope).toBe("all");
   });
 });

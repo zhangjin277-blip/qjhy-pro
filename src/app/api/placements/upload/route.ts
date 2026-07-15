@@ -26,10 +26,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "AUTH_USER_NOT_SYNCED" }, { status: 403 });
   }
 
-  // 写权限校验：placement.can_edit；emergency 绕过（应急操作）
+  // 写权限校验：placement.upload 权限点；emergency 绕过（应急操作）
   if (!currentUser.isEmergency) {
     const perm = await resolvePermission(currentUser.dingtalkUserId, "placement");
-    if (!perm.can_edit) {
+    if (!perm.points.has("upload")) {
       return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     }
   }

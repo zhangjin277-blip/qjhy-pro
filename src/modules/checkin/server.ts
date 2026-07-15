@@ -395,7 +395,7 @@ export class ForceEndPermissionDenied extends Error {
 
 /**
  * 该 user 在任意 session 上是否有强制下播/改主播权限。
- * 通过：emergency / 代码白名单 / live_account.can_admin / 任意 dept_leader。
+ * 通过：emergency / 代码白名单 / live_account.session_correct 权限点 / 任意 dept_leader。
  */
 export async function canForceEndAnySession(
   operatorDingtalkUserId: string,
@@ -404,7 +404,7 @@ export async function canForceEndAnySession(
   if (isEmergency) return true;
   if (ANCHOR_USER_IDS_ALLOW.includes(operatorDingtalkUserId)) return true;
   const perm = await resolvePermission(operatorDingtalkUserId, "live_account");
-  if (perm.can_admin) return true;
+  if (perm.points.has("session_correct")) return true;
   const { dept_leader } = await import("@/db/schema");
   const [row] = await db
     .select({ dept_id: dept_leader.dept_id })
@@ -417,8 +417,8 @@ export async function canForceEndAnySession(
 /**
  * 具体某个 session 上是否有强制下播权限：
  * - emergency / 代码白名单 → 通过
- * - live_account.can_admin && scope=all → 通过
- * - live_account.can_admin && scope=team → 主播所在部门 ∈ 自己 dept_leader 范围
+ * - session_correct && scope=all → 通过
+ * - session_correct && scope=team → 主播所在部门 ∈ 自己 dept_leader 范围
  * - dept_leader 管辖主播所在部门 → 通过
  */
 async function canForceEndSession(
@@ -439,7 +439,7 @@ async function canForceEndSession(
   const anchorDepts = (row.dept_ids ?? []) as string[];
 
   const perm = await resolvePermission(operatorDingtalkUserId, "live_account");
-  if (perm.can_admin) {
+  if (perm.points.has("session_correct")) {
     if (perm.scope === "all") return true;
     if (perm.scope === "team") {
       // 复用 dept_leader 范围作为 team 边界

@@ -3,13 +3,13 @@ import { db } from "@/db/client";
 import { editing_task } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { writeEvent } from "../event-writer";
-import { requireEditingWriter } from "../authz";
+import { requireEditingPoint } from "../authz";
 import { buildEditingScopeWhere } from "../scope";
 import { SetPriorityInput } from "../schema";
 
 export async function setPriority(input: unknown): Promise<{ ok: true }> {
   const data = SetPriorityInput.parse(input);
-  const { userId, perm } = await requireEditingWriter();
+  const { userId, perm } = await requireEditingPoint("task_manage");
   const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   const [t] = await db

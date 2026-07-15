@@ -26,10 +26,10 @@ export async function deleteCover(input: unknown): Promise<{ ok: true }> {
   if (!t) throw new Error("task not found");
   if (!t.cover_image) return { ok: true };
 
-  // 权限：admin 或任务剪辑师
+  // 权限：封面管理点 或 任务剪辑师本人
   const perm = await resolvePermission(userId, "editing_workflow");
-  if (!perm.can_admin && t.editor_user_id !== userId) {
-    throw new Error("仅 admin 或任务剪辑师可删封面图");
+  if (!perm.points.has("cover_manage") && t.editor_user_id !== userId) {
+    throw new Error("仅有封面管理权限或任务剪辑师可删封面图");
   }
 
   const NAS = process.env.EDITING_NAS_PATH;

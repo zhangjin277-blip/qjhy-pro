@@ -1,110 +1,194 @@
 import { MODULE_KEYS, type ModuleKey } from "./modules";
-import type { Permission } from "./types";
+import type { Scope } from "./types";
 
 /**
- * 岗位 × 板块默认权限初始 seed。
- *
- * 每个岗位在 4 个 module 下用同一个 base scope（保留 v1 行为）；
- * 后续管理员可在 UI 单独调整某 module 的 scope。
- *
- * 新部署时通过 INSERT ... ON CONFLICT DO NOTHING 一次性写入 (position × module) 笛卡尔积。
+ * 旧三布尔 → 权限点翻译规则（与 0054 迁移 SQL 的 _translate_points 一致）。
+ * 原则：现状行为等价——原来 can_edit 能做的操作，翻译后对应点全给。
+ * 单测 tests/modules/permissions/role-defaults.test.ts 以此为快照基准。
  */
-const POSITION_BASE: (Permission & { position: string; description: string })[] = [
+export function translateLegacyPoints(
+  module: ModuleKey,
+  flags: { edit: boolean; export: boolean; admin: boolean },
+): string[] {
+  const pts: string[] = [];
+  switch (module) {
+    case "dashboard":
+    case "anchors":
+      if (flags.export) pts.push("export");
+      break;
+    case "crawler":
+      if (flags.edit) pts.push("run_jobs", "cookie_update", "field_alias");
+      break;
+    case "permissions":
+      if (flags.admin)
+        pts.push("manage_roles", "manage_overrides", "manage_dept_leaders", "invite_codes");
+      break;
+    case "live_account":
+      if (flags.edit)
+        pts.push(
+          "account_edit",
+          "delete_request",
+          "schedule_edit",
+          "room_edit",
+          "room_delete",
+          "floorplan_edit",
+        );
+      if (flags.admin) pts.push("delete_review", "session_correct");
+      break;
+    case "live_anchor":
+      if (flags.edit) pts.push("anchor_edit", "anchor_delete", "binding_edit");
+      break;
+    case "placement":
+      if (flags.edit) pts.push("upload");
+      break;
+    case "editing_workflow":
+      if (flags.edit)
+        pts.push(
+          "task_create",
+          "source_upload",
+          "task_claim",
+          "task_assign",
+          "edited_upload",
+          "review",
+          "publish",
+          "task_manage",
+          "cover_manage",
+          "material_upload",
+          "material_organize",
+          "material_delete",
+        );
+      if (flags.admin) pts.push("task_delete");
+      break;
+    case "software_library":
+      if (flags.edit) pts.push("item_edit", "item_delete");
+      break;
+    case "recording":
+      if (flags.edit) pts.push("task_manage", "file_delete");
+      break;
+    case "live_room":
+      break; // 无自有权限点（操作判 live_account）
+  }
+  return pts;
+}
+
+interface SeedBase {
+  position: string;
+  scope: Scope;
+  edit: boolean;
+  export: boolean;
+  admin: boolean;
+  description: string;
+}
+
+/**
+ * 岗位 × 板块默认权限初始 seed（新部署用；存量库走 0054 迁移翻译）。
+ * 语义与三布尔时代一致，经 translateLegacyPoints 转成权限点。
+ */
+const POSITION_BASE: SeedBase[] = [
   {
     position: "总监",
     scope: "all",
-    can_edit: true,
-    can_export: true,
-    can_admin: true,
+    edit: true,
+    export: true,
+    admin: true,
     description: "看所有数据，可管理",
   },
   {
     position: "老板",
     scope: "all",
-    can_edit: true,
-    can_export: true,
-    can_admin: true,
+    edit: true,
+    export: true,
+    admin: true,
     description: "看所有数据，可管理",
   },
   {
     position: "运营",
     scope: "self",
-    can_edit: true,
-    can_export: false,
-    can_admin: false,
+    edit: true,
+    export: false,
+    admin: false,
     description: "看自己负责主播",
   },
   {
     position: "主播",
     scope: "self",
-    can_edit: false,
-    can_export: false,
-    can_admin: false,
+    edit: false,
+    export: false,
+    admin: false,
     description: "看自己作为主播的数据",
   },
   {
     position: "剪辑",
     scope: "self",
-    can_edit: false,
-    can_export: false,
-    can_admin: false,
+    edit: false,
+    export: false,
+    admin: false,
     description: "看自己负责主播",
   },
   {
     position: "行政",
     scope: "none",
-    can_edit: false,
-    can_export: false,
-    can_admin: false,
+    edit: false,
+    export: false,
+    admin: false,
     description: "默认无权限",
   },
   {
     position: "财务",
     scope: "none",
-    can_edit: false,
-    can_export: true,
-    can_admin: false,
+    edit: false,
+    export: true,
+    admin: false,
     description: "默认无权限，按需开导出",
   },
   {
     position: "其他",
     scope: "none",
-    can_edit: false,
-    can_export: false,
-    can_admin: false,
+    edit: false,
+    export: false,
+    admin: false,
     description: "兜底",
   },
 ];
 
-export const ROLE_DEFAULTS_SEED: (Permission & {
+export const ROLE_DEFAULTS_SEED: {
   position: string;
   module: ModuleKey;
+  scope: Scope;
+  points: string[];
   description: string;
-})[] = POSITION_BASE.flatMap((row) =>
-  MODULE_KEYS.map((module) => ({
-    ...row,
-    module,
-    // 软件库：全员可见可下载（scope=all）；上传/管理仅总监/老板（与 0055 种子一致）。
-    // 必须显式覆盖全部权限字段——运营岗位 base 是 can_edit=true，沿用 base 会错误获得上传权。
-    ...(module === "software_library"
-      ? {
-          scope: "all" as const,
-          can_edit: row.position === "总监" || row.position === "老板",
-          can_export: false,
-          can_admin: row.position === "总监" || row.position === "老板",
-          description: "软件库：全员可下载，管理员可上传",
-        }
-      : {}),
-    // 直播录制：全员可见可下载（scope=all）；任务增删/暂停、删录像仅总监/老板（与 0056 种子一致）。
-    // 同软件库：必须显式覆盖全部权限字段，防运营岗 base can_edit=true 泄漏管理权。
-    ...(module === "recording"
-      ? {
-          scope: "all" as const,
-          can_edit: row.position === "总监" || row.position === "老板",
-          can_export: false,
-          can_admin: row.position === "总监" || row.position === "老板",
-          description: "直播录制：全员可看可下载，管理员可控制/删文件",
-        }
-      : {}),
-  })),
+}[] = POSITION_BASE.flatMap((row) =>
+  MODULE_KEYS.map((module) => {
+    const isBoss = row.position === "总监" || row.position === "老板";
+    // 软件库/直播录制：全员可见可下载（scope=all）；写操作仅总监/老板（沿革见 0055/0056 种子）
+    if (module === "software_library") {
+      return {
+        position: row.position,
+        module,
+        scope: "all" as const,
+        points: translateLegacyPoints(module, { edit: isBoss, export: false, admin: isBoss }),
+        description: "软件库：全员可下载，管理员可上传",
+      };
+    }
+    if (module === "recording") {
+      return {
+        position: row.position,
+        module,
+        scope: "all" as const,
+        points: translateLegacyPoints(module, { edit: isBoss, export: false, admin: isBoss }),
+        description: "直播录制：全员可看可下载，管理员可控制/删文件",
+      };
+    }
+    return {
+      position: row.position,
+      module,
+      scope: row.scope,
+      points: translateLegacyPoints(module, {
+        edit: row.edit,
+        export: row.export,
+        admin: row.admin,
+      }),
+      description: row.description,
+    };
+  }),
 );

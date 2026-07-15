@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { editing_task, live_account, live_room, dingtalk_user, live_anchor } from "@/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { writeEvent } from "../event-writer";
-import { requireEditingWriter } from "../authz";
+import { requireEditingPoint } from "../authz";
 import { buildEditingScopeWhere } from "../scope";
 import {
   buildEditedPath,
@@ -38,7 +38,7 @@ export interface UploadEditedParams {
 
 export async function uploadEdited(params: UploadEditedParams): Promise<{ ok: true }> {
   const data = Input.parse(params);
-  const { userId, perm } = await requireEditingWriter();
+  const { userId, perm } = await requireEditingPoint("edited_upload");
   const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   const [task] = await db

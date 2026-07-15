@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import {
   MODULE_KEYS,
   MODULE_LABEL,
+  MODULE_POINTS,
   type ModuleKey,
   type ResolvedPermission,
   type Scope,
@@ -138,14 +139,14 @@ export default async function ProfilePage() {
                 <tr className="border-b text-xs text-muted-foreground">
                   <th className="text-left py-2 pr-4">板块</th>
                   <th className="text-left py-2 pr-4">数据范围</th>
-                  <th className="text-left py-2 pr-4">编辑</th>
-                  <th className="text-left py-2 pr-4">导出</th>
-                  <th className="text-left py-2">管理</th>
+                  <th className="text-left py-2">已开通权限点</th>
                 </tr>
               </thead>
               <tbody>
                 {MODULE_KEYS.map((m) => {
                   const p = perms[m];
+                  const defs = MODULE_POINTS[m];
+                  const granted = defs.filter((d) => p.points.has(d.key));
                   return (
                     <tr key={m} className="border-b last:border-b-0">
                       <td className="py-2 pr-4 font-medium">{MODULE_LABEL[m]}</td>
@@ -156,9 +157,22 @@ export default async function ProfilePage() {
                           {SCOPE_LABEL[p.scope]}
                         </span>
                       </td>
-                      <td className="py-2 pr-4">{p.can_edit ? "✓" : "✗"}</td>
-                      <td className="py-2 pr-4">{p.can_export ? "✓" : "✗"}</td>
-                      <td className="py-2">{p.can_admin ? "✓" : "✗"}</td>
+                      <td className="py-2">
+                        {granted.length === 0 ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {granted.map((d) => (
+                              <span
+                                key={d.key}
+                                className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700"
+                              >
+                                {d.label}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}

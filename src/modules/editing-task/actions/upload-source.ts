@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { editing_task, live_account, live_room, dingtalk_user, live_anchor } from "@/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { writeEvent } from "../event-writer";
-import { requireEditingWriter } from "../authz";
+import { requireEditingPoint } from "../authz";
 import { buildEditingScopeWhere } from "../scope";
 import {
   buildSourcePath,
@@ -34,7 +34,7 @@ export async function uploadSource(params: UploadSourceParams): Promise<{ ok: tr
   const data = UploadSourceInput.parse(params);
   // 素材时长（秒）由前端读取后随上传传入；累加到 source_duration_sec（多素材=总时长）
   const durationSec = data.durationSec ?? null;
-  const { userId, perm } = await requireEditingWriter();
+  const { userId, perm } = await requireEditingPoint("source_upload");
   const scopeWhere = await buildEditingScopeWhere({ scope: perm.scope, userId });
 
   const [task] = await db

@@ -21,9 +21,8 @@ export const auth_invite_code = pgTable(
         {
           module: string;
           scope: "none" | "self" | "team" | "all";
-          can_edit: boolean;
-          can_export: boolean;
-          can_admin: boolean;
+          /** 板块权限点（外部账号通常留空）；历史行可能带旧 can_* 布尔，读取侧忽略 */
+          points?: string[];
         }[]
       >()
       .notNull(),

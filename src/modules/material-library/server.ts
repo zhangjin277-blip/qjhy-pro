@@ -8,4 +8,4 @@ export {
   type IngestInput,
   type IngestResult,
 } from "./storage";
-export { requireMaterialViewer, requireMaterialWriter } from "./authz";
+export { requireMaterialViewer, requireMaterialPoint } from "./authz";

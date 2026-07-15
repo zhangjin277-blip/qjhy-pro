@@ -5,7 +5,7 @@ export {
   type IngestSoftwareInput,
   type IngestSoftwareResult,
 } from "./storage";
-export { requireSoftwareViewer, requireSoftwareWriter } from "./authz";
+export { requireSoftwareViewer, requireSoftwarePoint } from "./authz";
 export {
   listCategories,
   listItems,

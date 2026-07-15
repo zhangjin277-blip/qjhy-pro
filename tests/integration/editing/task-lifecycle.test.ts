@@ -17,21 +17,25 @@ vi.mock("@/lib/auth/page-auth", () => ({
   getCurrentDingtalkUser: vi.fn(),
 }));
 
-// ── mock permissions（默认 can_admin=true，让 markPublished null videoId 通过）──
+// ── mock permissions（全点开通，让全流程通过）──
 vi.mock("@/modules/permissions/server", async () => {
   const actual = await vi.importActual<typeof import("@/modules/permissions/server")>(
     "@/modules/permissions/server",
   );
+  const { MODULE_POINTS } =
+    await vi.importActual<typeof import("@/modules/permissions")>("@/modules/permissions");
   return {
     ...actual,
-    resolvePermission: vi.fn().mockResolvedValue({
-      scope: "all",
-      can_view: true,
-      can_edit: true,
-      can_export: false,
-      can_admin: true,
-      source: "mock",
-    }),
+    resolvePermission: vi.fn().mockImplementation((_userId: string, module: string) =>
+      Promise.resolve({
+        scope: "all",
+        points: new Set(
+          (MODULE_POINTS[module as keyof typeof MODULE_POINTS] ?? []).map((p) => p.key),
+        ),
+        delegatedUserIds: null,
+        sources: [],
+      }),
+    ),
   };
 });
 

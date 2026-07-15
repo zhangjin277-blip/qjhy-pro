@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { requireRecordingWriter } from "../authz";
+import { requireRecordingPoint } from "../authz";
 import { deleteRecordingFile } from "../files";
 import { getRecorderSnapshot, recordingAnchorNames } from "../snapshot";
 import { DeleteRecordingFileInput } from "../schema";
@@ -14,7 +14,7 @@ import type { ActionResult } from "../types";
 export async function deleteRecording(input: unknown): Promise<ActionResult> {
   try {
     const data = DeleteRecordingFileInput.parse(input);
-    await requireRecordingWriter();
+    await requireRecordingPoint("file_delete");
     const snap = await getRecorderSnapshot(); // 离线时返回 online=false,集合可能为空,mtime 规则兜底
     await deleteRecordingFile(data.anchor, data.file, recordingAnchorNames(snap));
     revalidatePath("/recording/files");

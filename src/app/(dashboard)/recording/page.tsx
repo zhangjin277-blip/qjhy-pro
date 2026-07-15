@@ -8,7 +8,7 @@ export default async function RecordingPage() {
   let canEdit = false;
   try {
     const { perm } = await requireRecordingViewer();
-    canEdit = perm.can_edit;
+    canEdit = perm.points.has("task_manage");
   } catch {
     redirect("/dashboard");
   }

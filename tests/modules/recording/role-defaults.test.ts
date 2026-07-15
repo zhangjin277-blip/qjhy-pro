@@ -9,18 +9,17 @@ describe("recording 权限种子", () => {
     expect(rows.length).toBe(new Set(rows.map((r) => r.position)).size);
   });
 
-  it("全员 scope=all，can_export 关死", () => {
+  it("全员 scope=all", () => {
     for (const r of rows) {
       expect(r.scope).toBe("all");
-      expect(r.can_export).toBe(false);
     }
   });
 
-  it("仅总监/老板有 can_edit 与 can_admin", () => {
+  it("仅总监/老板有 task_manage 与 file_delete 点", () => {
     for (const r of rows) {
       const isBoss = r.position === "总监" || r.position === "老板";
-      expect(r.can_edit).toBe(isBoss);
-      expect(r.can_admin).toBe(isBoss);
+      expect(r.points.includes("task_manage")).toBe(isBoss);
+      expect(r.points.includes("file_delete")).toBe(isBoss);
     }
   });
 });

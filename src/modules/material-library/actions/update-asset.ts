@@ -3,13 +3,13 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { material_asset } from "@/db/schema/material";
-import { requireMaterialWriter } from "../authz";
+import { requireMaterialPoint } from "../authz";
 import { UpdateAssetInput } from "../schema";
 
 /** 改素材元信息：名称 / 标签 / 归属目录。 */
 export async function updateAsset(input: unknown): Promise<{ ok: true }> {
   const data = UpdateAssetInput.parse(input);
-  await requireMaterialWriter();
+  await requireMaterialPoint("material_upload");
 
   const patch: Partial<typeof material_asset.$inferInsert> = { updated_at: new Date() };
   if (data.name !== undefined) patch.name = data.name;

@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { requireRecordingWriter } from "../authz";
+import { requireRecordingPoint } from "../authz";
 import { recorderRequest } from "../client";
 import { ControlStreamerInput } from "../schema";
 import type { ActionResult } from "../types";
@@ -12,7 +12,7 @@ import type { ActionResult } from "../types";
 export async function controlStreamer(input: unknown): Promise<ActionResult> {
   try {
     const data = ControlStreamerInput.parse(input);
-    await requireRecordingWriter();
+    await requireRecordingPoint("task_manage");
     await recorderRequest("/api/v1/builtin_recorder/control", {
       action: data.action,
       platform: data.platform,

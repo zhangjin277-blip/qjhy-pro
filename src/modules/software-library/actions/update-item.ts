@@ -3,12 +3,12 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { software_category, software_item } from "@/db/schema/software";
-import { requireSoftwareWriter } from "../authz";
+import { requireSoftwarePoint } from "../authz";
 import { UpdateItemInput } from "../schema";
 
 export async function updateItem(input: unknown): Promise<{ ok: true }> {
   const data = UpdateItemInput.parse(input);
-  await requireSoftwareWriter();
+  await requireSoftwarePoint("item_edit");
 
   if (typeof data.categoryId === "number") {
     const [cat] = await db

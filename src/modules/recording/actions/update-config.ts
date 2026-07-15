@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { requireRecordingWriter } from "../authz";
+import { requireRecordingPoint } from "../authz";
 import { recorderRequest } from "../client";
 import { UpdateRecorderConfigInput } from "../schema";
 import type { ActionResult, RecorderConfig } from "../types";
@@ -12,7 +12,7 @@ import type { ActionResult, RecorderConfig } from "../types";
 export async function updateRecorderConfig(input: unknown): Promise<ActionResult> {
   try {
     const data = UpdateRecorderConfigInput.parse(input);
-    await requireRecordingWriter();
+    await requireRecordingPoint("task_manage");
     const current = await recorderRequest<RecorderConfig>("/api/v1/builtin_recorder/config");
     await recorderRequest("/api/v1/builtin_recorder/config", {
       ...current,
