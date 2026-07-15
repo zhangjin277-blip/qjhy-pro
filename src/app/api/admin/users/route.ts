@@ -54,19 +54,22 @@ export async function GET() {
 
   const posOverrideMap = new Map(allPosOverrides.map((r) => [r.user_id, r.position]));
 
-  // role default index: position → module → scope
-  const roleIndex = new Map<string, Map<string, Scope>>();
+  // role default index: position → module → {scope, points}
+  const roleIndex = new Map<string, Map<string, { scope: Scope; points: string[] }>>();
   for (const r of allRoleDefaults) {
     let inner = roleIndex.get(r.position);
     if (!inner) {
       inner = new Map();
       roleIndex.set(r.position, inner);
     }
-    inner.set(r.module, r.scope);
+    inner.set(r.module, { scope: r.scope, points: r.points ?? [] });
   }
 
-  // override index: user_id → module → scope|null
-  const overrideIndex = new Map<string, Map<string, Scope | null>>();
+  // override index: user_id → module → {scope|null, points|null}
+  const overrideIndex = new Map<
+    string,
+    Map<string, { scope: Scope | null; points: string[] | null }>
+  >();
   const now = Date.now();
   for (const o of allOverrides) {
     if (o.expires_at && o.expires_at.getTime() < now) continue;
@@ -75,7 +78,7 @@ export async function GET() {
       inner = new Map();
       overrideIndex.set(o.user_id, inner);
     }
-    inner.set(o.module, o.scope);
+    inner.set(o.module, { scope: o.scope, points: (o.points as string[] | null) ?? null });
   }
 
   // dept_leader set
@@ -87,15 +90,18 @@ export async function GET() {
     const userOverride = overrideIndex.get(u.user_id);
 
     const moduleScopes: Record<ModuleKey, Scope> = {} as Record<ModuleKey, Scope>;
+    const modulePoints: Record<ModuleKey, string[]> = {} as Record<ModuleKey, string[]>;
     for (const m of MODULE_KEYS) {
-      const roleScope =
-        roleIndex.get(position)?.get(m) ?? roleIndex.get("其他")?.get(m) ?? NULL_SCOPE;
+      const role = roleIndex.get(position)?.get(m) ?? roleIndex.get("其他")?.get(m) ?? null;
+      const roleScope = role?.scope ?? NULL_SCOPE;
       const leaderScope: Scope = isLeader ? "team" : "none";
-      const overrideScope = userOverride?.get(m) ?? null;
+      const ov = userOverride?.get(m) ?? null;
 
       let scope = maxScope(roleScope, leaderScope);
-      if (overrideScope) scope = maxScope(scope, overrideScope);
+      if (ov?.scope) scope = maxScope(scope, ov.scope);
       moduleScopes[m] = scope;
+      // points：override 非 null 整体替换，否则岗位默认（与 resolve 同语义）
+      modulePoints[m] = ov?.points ?? role?.points ?? [];
     }
 
     const dept_id = u.dept_ids[0] ?? null;
@@ -108,6 +114,7 @@ export async function GET() {
       assigned_position: posOverrideMap.get(u.user_id) ?? null,
       effective_position: position,
       module_scopes: moduleScopes,
+      module_points: modulePoints,
       opened_count: openedCount,
       total_count: MODULE_KEYS.length,
     };

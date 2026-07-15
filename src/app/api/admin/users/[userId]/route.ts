@@ -30,11 +30,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
   if (!user) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
   const targetPermEntries = await Promise.all(
-    MODULE_KEYS.map(async (m) => [m, await resolvePermission(userId, m)] as const),
+    MODULE_KEYS.map(async (m) => {
+      const p = await resolvePermission(userId, m);
+      // points 是 Set，JSON.stringify 会变 {} —— 序列化前转数组
+      return [m, { ...p, points: [...p.points] }] as const;
+    }),
   );
-  const targetPermissions: Record<ModuleKey, ResolvedPermission> = Object.fromEntries(
-    targetPermEntries,
-  ) as Record<ModuleKey, ResolvedPermission>;
+  const targetPermissions: Record<
+    ModuleKey,
+    Omit<ResolvedPermission, "points"> & { points: string[] }
+  > = Object.fromEntries(targetPermEntries) as never;
 
   const overrideRows = await db
     .select()

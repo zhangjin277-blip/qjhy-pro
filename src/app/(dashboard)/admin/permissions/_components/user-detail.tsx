@@ -20,6 +20,7 @@ import {
   MODULE_KEYS,
   MODULE_LABEL,
   MODULE_DESC,
+  MODULE_POINTS,
   type ModuleKey,
   type Scope,
   type ResolvedPermission,
@@ -36,13 +37,12 @@ interface UserDetail {
   dept_full: { dept_id: string; name: string; alias: string | null }[];
   assigned_position: string | null;
   effective_position: string;
-  permissions: Record<ModuleKey, ResolvedPermission>;
+  permissions: Record<ModuleKey, Omit<ResolvedPermission, "points"> & { points: string[] }>;
   overrides: {
     module: string;
     scope: Scope | null;
-    can_edit: boolean | null;
-    can_export: boolean | null;
-    can_admin: boolean | null;
+    /** null = 未覆盖（用岗位默认）；数组 = 整体替换 */
+    points: string[] | null;
     reason: string | null;
   }[];
   managedDepts: { dept_id: string; name: string; alias: string | null }[];
@@ -56,6 +56,7 @@ interface UserListRow {
   title: string | null;
   dept_id: string | null;
   module_scopes: Record<ModuleKey, Scope>;
+  module_points: Record<ModuleKey, string[]>;
 }
 
 interface DeptOption {
@@ -111,16 +112,15 @@ const WORKING_OPTIONS: { value: WorkingScope; label: string }[] = [
   { value: "all", label: "所有人" },
 ];
 
-type FlagState = "default" | "on" | "off";
-
 export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?: () => void }) {
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [working, setWorking] = useState<Record<ModuleKey, WorkingScope>>(
     {} as Record<ModuleKey, WorkingScope>,
   );
-  const [workingFlags, setWorkingFlags] = useState<
-    Record<ModuleKey, { can_edit: FlagState; can_export: FlagState; can_admin: FlagState }>
-  >({} as never);
+  /** 每板块权限点覆盖：null = 用岗位默认；数组 = 整体替换 */
+  const [workingPoints, setWorkingPoints] = useState<Record<ModuleKey, string[] | null>>(
+    {} as never,
+  );
   const [workingPosition, setWorkingPosition] = useState<string>("");
   const [positionOptions, setPositionOptions] = useState<string[]>([]);
   const [reason, setReason] = useState("");
@@ -145,23 +145,14 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
         setDetail(d);
         // 初始化 working：根据 overrides 判断每 module 是 default 还是有 override
         const init: Record<ModuleKey, WorkingScope> = {} as Record<ModuleKey, WorkingScope>;
-        const initFlags: Record<
-          ModuleKey,
-          { can_edit: FlagState; can_export: FlagState; can_admin: FlagState }
-        > = {} as never;
-        const flagOf = (v: boolean | null | undefined): FlagState =>
-          v === true ? "on" : v === false ? "off" : "default";
+        const initPoints: Record<ModuleKey, string[] | null> = {} as never;
         for (const m of MODULE_KEYS) {
           const ov = d.overrides.find((x) => x.module === m);
           init[m] = ov?.scope ? (ov.scope as Scope) : "default";
-          initFlags[m] = {
-            can_edit: flagOf(ov?.can_edit),
-            can_export: flagOf(ov?.can_export),
-            can_admin: flagOf(ov?.can_admin),
-          };
+          initPoints[m] = ov?.points ?? null;
         }
         setWorking(init);
-        setWorkingFlags(initFlags);
+        setWorkingPoints(initPoints);
         setWorkingPosition(d.effective_position);
         setDelegatedUserIds((d.delegated_users ?? []).map((u) => u.user_id));
       });
@@ -238,24 +229,18 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
 
   const dirty = useMemo(() => {
     if (!detail) return false;
-    const flagOf = (v: boolean | null | undefined): FlagState =>
-      v === true ? "on" : v === false ? "off" : "default";
+    const keyOf = (arr: string[] | null | undefined) =>
+      arr === null || arr === undefined ? "∅" : [...arr].sort().join(",");
     for (const m of MODULE_KEYS) {
       const ov = detail.overrides.find((x) => x.module === m);
       const initial: WorkingScope = ov?.scope ? (ov.scope as Scope) : "default";
       if (working[m] !== initial) return true;
-      // 编辑/导出/管理开关的变化也算变更（之前漏了，导致只改开关时按钮恒显示「无变更」）
-      const wf = workingFlags[m];
-      if (wf) {
-        if (wf.can_edit !== flagOf(ov?.can_edit)) return true;
-        if (wf.can_export !== flagOf(ov?.can_export)) return true;
-        if (wf.can_admin !== flagOf(ov?.can_admin)) return true;
-      }
+      if (keyOf(workingPoints[m]) !== keyOf(ov?.points ?? null)) return true;
     }
     if (workingPosition !== detail.effective_position) return true;
     if (delegatedDirty) return true;
     return false;
-  }, [detail, working, workingFlags, workingPosition, delegatedDirty]);
+  }, [detail, working, workingPoints, workingPosition, delegatedDirty]);
 
   const positionDirty = useMemo(() => {
     if (!detail) return false;
@@ -298,14 +283,10 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
         });
       }
       // 2. 写板块权限 override（含委托视图）
-      const flagVal = (s: FlagState): boolean | null =>
-        s === "on" ? true : s === "off" ? false : null;
       const entries = MODULE_KEYS.map((m) => ({
         module: m,
         scope: working[m] === "default" ? null : (working[m] as Scope),
-        can_edit: flagVal(workingFlags[m]?.can_edit ?? "default"),
-        can_export: flagVal(workingFlags[m]?.can_export ?? "default"),
-        can_admin: flagVal(workingFlags[m]?.can_admin ?? "default"),
+        points: workingPoints[m] ?? null,
       }));
       await upsertOverrideBatch({
         user_id: userId,
@@ -327,15 +308,19 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
 
   function applyReuseFromUser(target: UserListRow) {
     const next: Record<ModuleKey, WorkingScope> = { ...working };
+    const nextPoints: Record<ModuleKey, string[] | null> = { ...workingPoints };
     for (const m of MODULE_KEYS) {
       const s = target.module_scopes[m];
       // 若目标用户该 module = none 视为 default（即清掉 override）
       next[m] = s === "none" ? "default" : s;
+      // 权限点：整体替换为目标用户的生效点集
+      nextPoints[m] = [...(target.module_points?.[m] ?? [])];
     }
     setWorking(next);
+    setWorkingPoints(nextPoints);
     setReuseOpen(false);
     setReuseFilter("");
-    toast.success(`已套用 ${target.name} 的板块权限，记得填变更理由后保存`);
+    toast.success(`已套用 ${target.name} 的板块权限与权限点，记得填变更理由后保存`);
   }
 
   const filteredUsers = allUsers
@@ -673,7 +658,7 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium">快速复用其他员工权限</div>
                 <div className="text-xs text-muted-foreground">
-                  仅复制各板块 scope 配置（不复制岗位）
+                  复制各板块数据范围 + 权限点（不复制岗位）
                 </div>
               </div>
               <Button size="sm" onClick={() => setReuseOpen((v) => !v)}>
@@ -785,55 +770,84 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
                       ))}
                     </div>
                   </div>
-                  {(["can_edit", "can_export", "can_admin"] as const).map((flag) => {
-                    const flagLabel = {
-                      can_edit: "编辑",
-                      can_export: "导出",
-                      can_admin: "管理",
-                    }[flag];
-                    const cur = workingFlags[m]?.[flag] ?? "default";
-                    return (
-                      <div key={flag} className="flex items-center gap-3 flex-wrap">
-                        <span className="text-xs text-muted-foreground w-16 shrink-0">
-                          {flagLabel}
-                        </span>
+                  {MODULE_POINTS[m].length > 0 && (
+                    <div className="flex items-start gap-3 flex-wrap">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0 pt-1.5">
+                        权限点
+                      </span>
+                      <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="inline-flex rounded-md border bg-muted/50 p-0.5">
-                          {(
-                            [
-                              { v: "default", l: "使用默认" },
-                              { v: "on", l: "✓ 启用" },
-                              { v: "off", l: "✗ 禁用" },
-                            ] as const
-                          ).map((opt) => (
-                            <button
-                              key={opt.v}
-                              type="button"
-                              onClick={() =>
-                                setWorkingFlags((prev) => ({
-                                  ...prev,
-                                  [m]: {
-                                    ...(prev[m] ?? {
-                                      can_edit: "default",
-                                      can_export: "default",
-                                      can_admin: "default",
-                                    }),
-                                    [flag]: opt.v,
-                                  },
-                                }))
-                              }
-                              className={`px-3 py-1 text-xs rounded transition-colors ${
-                                cur === opt.v
-                                  ? "bg-background text-primary font-medium shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground"
-                              }`}
-                            >
-                              {opt.l}
-                            </button>
-                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setWorkingPoints((prev) => ({ ...prev, [m]: null }))}
+                            className={`px-3 py-1 text-xs rounded transition-colors ${
+                              workingPoints[m] === null || workingPoints[m] === undefined
+                                ? "bg-background text-primary font-medium shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            使用岗位默认
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setWorkingPoints((prev) => ({
+                                ...prev,
+                                // 进入自定义：以当前生效点集为起点
+                                [m]: prev[m] ?? [...eff.points],
+                              }))
+                            }
+                            className={`px-3 py-1 text-xs rounded transition-colors ${
+                              workingPoints[m] !== null && workingPoints[m] !== undefined
+                                ? "bg-background text-primary font-medium shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            自定义（{(workingPoints[m] ?? eff.points).length}/
+                            {MODULE_POINTS[m].length}）
+                          </button>
+                        </div>
+                        <div
+                          className={`flex flex-wrap gap-x-4 gap-y-1 ${
+                            workingPoints[m] === null || workingPoints[m] === undefined
+                              ? "pointer-events-none opacity-50"
+                              : ""
+                          }`}
+                        >
+                          {MODULE_POINTS[m].map((d) => {
+                            const activeSet = workingPoints[m] ?? eff.points;
+                            const checked = activeSet.includes(d.key);
+                            return (
+                              <label
+                                key={d.key}
+                                className="flex cursor-pointer items-center gap-1 text-xs"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) =>
+                                    setWorkingPoints((prev) => {
+                                      const cur = new Set(prev[m] ?? eff.points);
+                                      if (e.target.checked) cur.add(d.key);
+                                      else cur.delete(d.key);
+                                      return { ...prev, [m]: [...cur] };
+                                    })
+                                  }
+                                  className="h-3.5 w-3.5"
+                                />
+                                {d.label}
+                                {d.sensitive && (
+                                  <span className="rounded bg-red-50 px-1 text-[10px] font-semibold text-red-600">
+                                    敏
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
                 </div>
               </section>
             );
