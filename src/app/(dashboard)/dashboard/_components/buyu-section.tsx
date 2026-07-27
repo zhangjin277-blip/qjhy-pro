@@ -54,10 +54,10 @@ export function BuyuSection({ dateFrom, dateTo }: Props): React.JSX.Element {
     <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <header className="mb-3 flex items-baseline gap-2">
         <h3 className="text-[14px] font-semibold text-slate-900">捕鱼大作战 · 投放数据</h3>
-        <span className="text-[11px] text-slate-400">
+        <span className="text-[11px] text-slate-500">
           {dateFrom} ~ {dateTo}
         </span>
-        {loading && <span className="text-[11px] text-slate-400">加载中…</span>}
+        {loading && <span className="text-[11px] text-slate-500">加载中…</span>}
       </header>
 
       {error ? (
@@ -191,13 +191,13 @@ function invertVs(vs: { text: string; kind: "up" | "down" | "flat" | "none" }): 
 function Card({ label, value, vs, hint, sparkline }: CardSpec): React.JSX.Element {
   return (
     <div className="rounded-md border border-slate-100 bg-slate-50/40 px-3 py-2.5">
-      <div className="text-[11px] text-[#86909c]">{label}</div>
+      <div className="text-[11px] font-medium text-[#667085]">{label}</div>
       <div className="mt-1 flex items-baseline justify-between gap-2">
         <span className="text-[20px] font-semibold leading-none tracking-tight text-slate-900 tabular-nums">
           {value}
         </span>
         {sparkline.length >= 2 && (
-          <Sparkline data={sparkline} width={64} height={20} className="shrink-0 opacity-70" />
+          <Sparkline data={sparkline} width={64} height={20} className="shrink-0 opacity-90" />
         )}
       </div>
       <div className="mt-1.5 flex items-center gap-2 text-[11px]">
@@ -205,12 +205,12 @@ function Card({ label, value, vs, hint, sparkline }: CardSpec): React.JSX.Elemen
           className={cn(
             vs.kind === "up" && "text-change-up",
             vs.kind === "down" && "text-change-down",
-            (vs.kind === "flat" || vs.kind === "none") && "text-[#86909c]",
+            (vs.kind === "flat" || vs.kind === "none") && "text-[#667085]",
           )}
         >
           {vs.text}
         </span>
-        <span className="text-[#86909c]">{hint}</span>
+        <span className="text-[#667085]">{hint}</span>
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ export function Sparkline({
   stroke = "var(--chart-current)",
   fill = false,
   fillColor,
+  fillOpacity = 0.18,
   strokeWidth = 1.5,
   className,
 }: {
@@ -27,6 +28,8 @@ export function Sparkline({
   fill?: boolean;
   /** 给定时面积用此纯色填充（不画渐变），适合深色底上的白色水波 */
   fillColor?: string;
+  /** 渐变面积的顶部透明度 */
+  fillOpacity?: number;
   strokeWidth?: number;
   className?: string;
 }): React.JSX.Element {
@@ -35,24 +38,24 @@ export function Sparkline({
   const w = width;
   const h = height;
 
-  const flatLine = (
+  const flatLine = (lineStroke = "var(--chart-baseline)", lineWidth = 1) => (
     <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className={className} aria-hidden="true">
       <line
         x1={pad}
         y1={h / 2}
         x2={w - pad}
         y2={h / 2}
-        stroke="var(--chart-baseline)"
-        strokeWidth="1"
+        stroke={lineStroke}
+        strokeWidth={lineWidth}
         strokeDasharray="2,3"
       />
     </svg>
   );
 
-  if (!data || data.length < 2) return flatLine;
+  if (!data || data.length < 2) return flatLine();
   const max = Math.max(...data);
   const min = Math.min(...data);
-  if (max === min) return flatLine;
+  if (max === min) return flatLine(stroke, strokeWidth);
 
   const stepX = (w - pad * 2) / (data.length - 1);
   const range = max - min;
@@ -74,7 +77,7 @@ export function Sparkline({
           {!fillColor && (
             <defs>
               <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor={stroke} stopOpacity="0.18" />
+                <stop offset="0" stopColor={stroke} stopOpacity={fillOpacity} />
                 <stop offset="1" stopColor={stroke} stopOpacity="0" />
               </linearGradient>
             </defs>

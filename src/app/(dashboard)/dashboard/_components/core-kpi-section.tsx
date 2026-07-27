@@ -66,15 +66,15 @@ function CompareRow({
         : formatChineseNumber(prev);
   const vs = formatVsPrevShort(cur, prev);
   return (
-    <div className="flex items-center justify-between text-[12px]">
-      <span className="text-[#86909c]">{label}</span>
+    <div className="flex min-w-0 items-center justify-between gap-1 text-[11px] sm:text-[12px]">
+      <span className="text-[#667085]">{label}</span>
       <span>
         <span className="text-[#4e5969]">{prevDisplay}</span>{" "}
         <span
           className={cn(
             vs.kind === "up" && "text-change-up",
             vs.kind === "down" && "text-change-down",
-            (vs.kind === "flat" || vs.kind === "none") && "text-[#86909c]",
+            (vs.kind === "flat" || vs.kind === "none") && "text-[#667085]",
           )}
         >
           {vs.text}
@@ -103,16 +103,16 @@ function KpiCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "card-surface block w-full text-left p-5 rounded-xl bg-[var(--bg-kpi-card)]",
+        "card-surface group block min-h-[164px] min-w-0 w-full rounded-lg bg-[var(--bg-kpi-card)] p-3 text-left sm:p-4",
         "shadow-[inset_0_0_0_1px_rgba(226,232,240,0.34),0_4px_12px_-10px_rgba(40,55,120,0.16)]",
         "transition-colors hover:bg-[var(--hover-bg)] hover:ring-1 hover:ring-inset hover:ring-[var(--hover-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
       )}
       aria-label={`${label} 详情`}
     >
-      <div className="text-[13px] text-[#86909c]">{label}</div>
-      <div className="mt-3 leading-[1.1] tracking-[-0.02em] text-[#1d2129] font-bold tabular-nums">
-        <span className="text-[40px]">{body}</span>
-        {unit ? <span className="text-[20px] font-medium ml-1 text-[#4e5969]">{unit}</span> : null}
+      <div className="text-[13px] font-medium text-[#667085]">{label}</div>
+      <div className="mt-2 font-bold leading-[1.1] text-[#1d2129] tabular-nums">
+        <span className="text-[32px]">{body}</span>
+        {unit ? <span className="ml-1 text-[15px] font-medium text-[#4e5969]">{unit}</span> : null}
       </div>
       <div className="mt-3 space-y-1">
         {/* 后端 prev_day = 往前推一个等长周期：单日时即前一日；多天时即上一周期。
@@ -134,17 +134,18 @@ function KpiCard({
         )}
       </div>
       {value.trend && value.trend.length >= 2 && (
-        <div className="mt-2.5">
+        <div className="mt-2 border-t border-[#e5e9f2] pt-2">
+          <div className="mb-1 text-[10.5px] font-medium text-[#667085]">近 14 天趋势</div>
           <Sparkline
             data={value.trend}
             width={220}
-            height={34}
-            stroke="#1677ff"
+            height={36}
+            stroke="#2563eb"
             fill
-            strokeWidth={2}
+            fillOpacity={0.3}
+            strokeWidth={2.4}
             className="w-full"
           />
-          <div className="mt-0.5 text-right text-[10px] text-[#c9cdd4]">近 14 天</div>
         </div>
       )}
     </button>
@@ -176,19 +177,19 @@ export function CoreKpiSection({
 }): React.JSX.Element {
   const singleDay = rangeFrom === rangeTo;
   return (
-    <section className="glass-panel rounded-2xl px-4 py-5 md:px-4">
+    <section className="glass-panel rounded-xl px-4 py-4">
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h2 className="text-[15px] font-semibold tracking-tight">核心数据</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           {preset === "custom" ? (
-            <div className="flex items-center gap-1.5 text-[13px]">
+            <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
               <input
                 type="date"
                 value={customFrom}
                 onChange={(e) => onCustomChange({ from: e.target.value, to: customTo })}
                 className="h-7 rounded-md border border-input px-2 text-[13px] bg-white"
               />
-              <span className="text-[#86909c]">~</span>
+              <span className="text-[#667085]">~</span>
               <input
                 type="date"
                 value={customTo}
@@ -198,7 +199,7 @@ export function CoreKpiSection({
             </div>
           ) : null}
           <div
-            className="flex gap-1 text-[13px] bg-[#f3f5fb] rounded-lg p-1"
+            className="flex max-w-full flex-wrap gap-1 rounded-lg bg-[#f3f5fb] p-1 text-[13px] sm:flex-nowrap sm:overflow-x-auto"
             role="tablist"
             aria-label="时间范围"
           >
@@ -212,10 +213,10 @@ export function CoreKpiSection({
                   aria-selected={active}
                   onClick={() => onPresetChange(p.id)}
                   className={cn(
-                    "px-3 py-1 rounded-md transition-colors",
+                    "shrink-0 rounded-md px-2.5 py-1 transition-colors sm:px-3",
                     active
                       ? "bg-white shadow-sm text-[#1d2129] font-medium"
-                      : "text-[#86909c] hover:text-[#4e5969]",
+                      : "text-[#667085] hover:text-[#344054]",
                   )}
                 >
                   {p.label}
@@ -226,7 +227,7 @@ export function CoreKpiSection({
         </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         {KPI_DEFS.map((def) => {
           const v: CoreKpiValue = core?.[def.key] ?? {
             current: 0,
@@ -246,7 +247,7 @@ export function CoreKpiSection({
         })}
       </div>
 
-      {loading ? <p className="text-[12px] text-[#86909c] mt-3 px-1">加载中…</p> : null}
+      {loading ? <p className="mt-3 px-1 text-[12px] text-[#667085]">加载中…</p> : null}
     </section>
   );
 }

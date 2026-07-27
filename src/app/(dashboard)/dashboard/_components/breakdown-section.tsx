@@ -9,47 +9,31 @@ import type {
   ProjectKey,
   Section2Metric,
 } from "@/modules/dashboard";
-import { formatChineseNumber, formatVsPrevRatio, splitChineseNumber } from "./format";
-import { Sparkline } from "./sparkline";
+import { formatVsPrevRatio, splitChineseNumber } from "./format";
 
-type BreakdownItem = DashboardOverviewResponse["breakdown"][number];
-
-// 顺序即展示顺序：流水在最前（2026-06-12 应用户要求）
-const METRIC_TABS: { id: Section2Metric; label: string }[] = [
+const METRIC_DEFS: { id: Section2Metric; label: string }[] = [
   { id: "flow", label: "流水" },
-  { id: "total_fan_ticket", label: "音浪" },
-  { id: "active_anchor_count", label: "开播主播数" },
-  { id: "new_anchor_count", label: "新入驻主播数" },
-  { id: "first_live_anchor_count", label: "首次开播主播数" },
   { id: "live_flow", label: "直播流水" },
   { id: "video_flow", label: "短视频流水" },
-  { id: "install_or_activate", label: "安装/激活" },
-  { id: "show_uv", label: "曝光" },
-  { id: "watch_uv", label: "进直播间UV" },
+  { id: "total_fan_ticket", label: "音浪" },
+  { id: "install_or_activate", label: "安装 / 激活" },
+  { id: "show_uv", label: "曝光人数" },
+  { id: "watch_uv", label: "进房人数" },
+  { id: "active_anchor_count", label: "开播主播" },
+  { id: "new_anchor_count", label: "新入驻" },
+  { id: "first_live_anchor_count", label: "首次开播" },
 ];
 
-const PROJECT_LABEL: Record<ProjectKey, string> = {
-  ddz: "斗地主",
-  three: "三国冰河时代",
-};
-const PROJECT_CAT: Record<ProjectKey, string> = {
-  ddz: "棋牌系",
-  three: "SLG",
-};
-/** 项目主题色（与 product_config accent 一致）：[深, 浅] 渐变端点 */
-const PROJECT_GRADIENT: Record<ProjectKey, [string, string]> = {
-  ddz: ["#b48a3c", "#d4a853"],
-  three: ["#7e4bd0", "#a855f7"],
-};
-const PROJECT_DOT: Record<ProjectKey, string> = {
-  ddz: "#d4a853",
-  three: "#a855f7",
+const PROJECT_META: Record<ProjectKey, { label: string; category: string; color: string }> = {
+  ddz: { label: "斗地主", category: "棋牌系", color: "#c49a45" },
+  three: { label: "三国冰河时代", category: "SLG", color: "#8b5cf6" },
 };
 
-const GROUP_META: { key: Exclude<GroupKey, "all">; label: string; color: string; bar: string }[] = [
-  { key: "online", label: "线上", color: "#1677ff", bar: "#1677ff" },
-  { key: "offline", label: "线下", color: "#ff7d00", bar: "#ff7d00" },
-  { key: "other", label: "其他", color: "#a9b0bc", bar: "#c9cdd4" },
+const GROUPS: { key: GroupKey; label: string; color?: string }[] = [
+  { key: "all", label: "总计" },
+  { key: "online", label: "线上", color: "#1677ff" },
+  { key: "offline", label: "线下", color: "#ff7d00" },
+  { key: "other", label: "其他", color: "#a9b0bc" },
 ];
 
 export interface BreakdownClick {
@@ -65,212 +49,174 @@ function isAnchorCountMetric(metric: Section2Metric): boolean {
     metric === "first_live_anchor_count"
   );
 }
-function isLargePersonMetric(metric: Section2Metric): boolean {
-  return metric === "install_or_activate" || metric === "show_uv" || metric === "watch_uv";
+
+function isPersonMetric(metric: Section2Metric): boolean {
+  return (
+    isAnchorCountMetric(metric) ||
+    metric === "install_or_activate" ||
+    metric === "show_uv" ||
+    metric === "watch_uv"
+  );
 }
 
-function splitForMetric(metric: Section2Metric, value: number): { body: string; unit: string } {
-  if (isAnchorCountMetric(metric)) {
-    return { body: value.toLocaleString("zh-CN"), unit: "人" };
+function formatMetricValue(metric: Section2Metric, value: number): string {
+  if (isAnchorCountMetric(metric)) return `${value.toLocaleString("zh-CN")} 人`;
+  const formatted = splitChineseNumber(value);
+  if (isPersonMetric(metric)) {
+    return `${formatted.body}${formatted.unit ? ` ${formatted.unit}` : ""} 人`;
   }
-  if (isLargePersonMetric(metric)) {
-    const split = splitChineseNumber(value);
-    return { body: split.body, unit: split.unit ? `${split.unit} 人` : "人" };
-  }
-  return splitChineseNumber(value);
+  return `${formatted.body}${formatted.unit ? ` ${formatted.unit}` : ""}`;
 }
 
-/** install_or_activate 在 ddz 显示「安装」、three 显示「激活」 */
-function metricLabelFor(metric: Section2Metric, project: ProjectKey): string {
+function metricLabel(metric: Section2Metric, project: ProjectKey): string {
   if (metric === "install_or_activate") return project === "ddz" ? "安装" : "激活";
-  return METRIC_TABS.find((t) => t.id === metric)?.label ?? metric;
+  return METRIC_DEFS.find((item) => item.id === metric)?.label ?? metric;
 }
 
-function VsText({ vs }: { vs: { kind: string; text: string } }): React.JSX.Element {
-  return (
-    <span
-      className={cn(
-        vs.kind === "up" && "text-change-up",
-        vs.kind === "down" && "text-change-down",
-        (vs.kind === "flat" || vs.kind === "none") && "text-[#86909c]",
-      )}
-    >
-      {vs.text}
-    </span>
-  );
+function emptyProject(project: ProjectKey): ProjectBreakdown {
+  const cell = (group: GroupKey): GroupCellValue => ({
+    project,
+    group,
+    value: 0,
+    vs_prev: null,
+    anchor_count: 0,
+    sparkline: [],
+  });
+  return {
+    project,
+    total: cell("all"),
+    online: cell("online"),
+    offline: cell("offline"),
+    other: cell("other"),
+  };
 }
 
-/** 项目色大总卡：大数字 + 环比 + 主播数 + 底部走势水波 */
-function HeroCard({
+function MetricCell({
+  cell,
   metric,
-  pb,
-  onClick,
-}: {
-  metric: Section2Metric;
-  pb: ProjectBreakdown;
-  onClick: (c: BreakdownClick) => void;
-}): React.JSX.Element {
-  const cell = pb.total;
-  const notApplicable = cell.not_applicable === true;
-  const [from, to] = PROJECT_GRADIENT[pb.project];
-  const { body, unit } = splitForMetric(metric, cell.value);
-  const vs = formatVsPrevRatio(cell.vs_prev);
-
-  return (
-    <button
-      type="button"
-      disabled={notApplicable}
-      onClick={() => onClick({ metric, project: pb.project, group: "all" })}
-      className={cn(
-        "relative flex items-center gap-2 overflow-hidden rounded-xl px-4 py-3 text-left text-white transition-transform",
-        "hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-        notApplicable && "cursor-not-allowed opacity-60",
-      )}
-      style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
-      aria-label={`${PROJECT_LABEL[pb.project]} 总 ${metricLabelFor(metric, pb.project)} 详情`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="text-[12px] opacity-85">总{metricLabelFor(metric, pb.project)}</div>
-        {notApplicable ? (
-          <div className="mt-0.5 text-[30px] font-bold leading-[1.1]">—</div>
-        ) : (
-          <div className="mt-0.5 font-bold leading-[1.1] tracking-[-0.02em] tabular-nums">
-            <span className="text-[30px]">{body}</span>
-            {unit ? (
-              <span className="ml-0.5 text-[15px] font-medium opacity-90">{unit}</span>
-            ) : null}
-          </div>
-        )}
-        <div className="mt-1 text-[11.5px] opacity-90">
-          {notApplicable ? (
-            "不适用"
-          ) : (
-            <>
-              较前 7 日 {vs.text} · {cell.anchor_count} 名主播
-            </>
-          )}
-        </div>
-      </div>
-      {/* 右侧走势水波（真实 sparkline，白色半透明面积，贴底） */}
-      {!notApplicable && cell.sparkline.length >= 2 && (
-        <div className="pointer-events-none w-[42%] shrink-0 self-end opacity-55">
-          <Sparkline
-            data={cell.sparkline}
-            width={240}
-            height={50}
-            stroke="rgba(255,255,255,0.9)"
-            fillColor="rgba(255,255,255,0.3)"
-            strokeWidth={1.5}
-            className="block w-full"
-          />
-        </div>
-      )}
-    </button>
-  );
-}
-
-/** 线上/线下/其他 卫星小卡：数值 + 环比 + 占比条 */
-function SatCard({
-  metric,
-  pb,
+  project,
   group,
   onClick,
 }: {
+  cell: GroupCellValue;
   metric: Section2Metric;
-  pb: ProjectBreakdown;
-  group: Exclude<GroupKey, "all">;
-  onClick: (c: BreakdownClick) => void;
+  project: ProjectKey;
+  group: GroupKey;
+  onClick: (payload: BreakdownClick) => void;
 }): React.JSX.Element {
-  const meta = GROUP_META.find((g) => g.key === group);
-  const cell: GroupCellValue = pb[group];
-  const notApplicable = cell.not_applicable === true || pb.total.not_applicable === true;
-  const sum = pb.online.value + pb.offline.value + pb.other.value;
-  const pct = sum > 0 ? (cell.value / sum) * 100 : 0;
-  const { body, unit } = splitForMetric(metric, cell.value);
+  const notApplicable = cell.not_applicable === true;
   const vs = formatVsPrevRatio(cell.vs_prev);
-
   return (
     <button
       type="button"
       disabled={notApplicable}
-      onClick={() => onClick({ metric, project: pb.project, group })}
+      onClick={() => onClick({ metric, project, group })}
       className={cn(
-        "rounded-xl border border-[#eef1f7] bg-gradient-to-b from-[#fbfcfe] to-[#f8fafd] p-3 text-left",
-        "transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_20px_-12px_rgba(22,119,255,0.3)]",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-        notApplicable && "cursor-not-allowed opacity-50 hover:translate-y-0 hover:shadow-none",
+        "group/cell flex min-h-14 w-full flex-col justify-center px-3 py-2 text-left transition-colors",
+        "hover:bg-[#f3f6ff] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40",
+        group === "all" && "bg-[#fafbfe]",
+        notApplicable && "cursor-not-allowed text-[#98a2b3] hover:bg-transparent",
       )}
-      aria-label={`${PROJECT_LABEL[pb.project]} ${meta?.label} ${metricLabelFor(metric, pb.project)} 详情`}
+      aria-label={`${PROJECT_META[project].label} ${GROUPS.find((item) => item.key === group)?.label} ${metricLabel(metric, project)}详情`}
     >
-      <div className="flex items-center gap-1.5 text-[12px] text-[#86909c]">
-        <span
-          className="inline-block h-[7px] w-[7px] rounded-full"
-          style={{ background: meta?.color }}
-        />
-        {meta?.label}
-      </div>
-      {notApplicable ? (
-        <div className="mt-1 text-[22px] font-bold text-[#c9cdd4]">—</div>
-      ) : (
-        <div className="mt-1 font-bold leading-[1.15] tabular-nums text-[#1d2129]">
-          <span className="text-[22px]">{body}</span>
-          {unit ? (
-            <span className="ml-0.5 text-[12px] font-medium text-[#4e5969]">{unit}</span>
-          ) : null}
-        </div>
-      )}
-      <div className="mt-1 text-[11px] text-[#86909c]">
-        {notApplicable ? (
-          "不适用"
-        ) : (
-          <>
-            <VsText vs={vs} /> · 占 {pct.toFixed(0)}% · {cell.anchor_count} 主播
-          </>
+      <span
+        className={cn(
+          "whitespace-nowrap text-[13px] font-semibold tabular-nums text-[#1d2129]",
+          group === "all" && "text-[14px]",
+          notApplicable && "text-[#98a2b3]",
         )}
-      </div>
-      <div className="mt-2 h-[4px] overflow-hidden rounded-full bg-[#f0f2f7]">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: meta?.bar }} />
-      </div>
+      >
+        {notApplicable ? "—" : formatMetricValue(metric, cell.value)}
+      </span>
+      <span
+        className={cn(
+          "mt-0.5 text-[10.5px] font-medium tabular-nums text-[#667085]",
+          vs.kind === "up" && "text-change-up",
+          vs.kind === "down" && "text-change-down",
+        )}
+      >
+        {notApplicable ? "不适用" : vs.text}
+      </span>
     </button>
   );
 }
 
-/** 单项目区块：项目头 + (大总卡 | 线上 | 线下 | 其他) */
-function ProjectRow({
-  metric,
-  pb,
+function ProjectMatrix({
+  project,
+  rows,
+  loading,
+  compareLabel,
   onCellClick,
 }: {
-  metric: Section2Metric;
-  pb: ProjectBreakdown;
-  onCellClick: (c: BreakdownClick) => void;
+  project: ProjectKey;
+  rows: DashboardOverviewResponse["breakdown"];
+  loading: boolean;
+  compareLabel: string;
+  onCellClick: (payload: BreakdownClick) => void;
 }): React.JSX.Element {
-  const sum = pb.online.value + pb.offline.value + pb.other.value;
+  const meta = PROJECT_META[project];
+  const fallback = emptyProject(project);
   return (
-    <div className="rounded-xl border border-[#f0f2f7] p-3.5">
-      <div className="mb-3 flex items-center gap-2.5">
-        <span
-          className="h-[9px] w-[9px] rounded-[3px]"
-          style={{ background: PROJECT_DOT[pb.project] }}
-        />
-        <span className="text-[14px] font-bold">{PROJECT_LABEL[pb.project]}</span>
-        <span className="rounded-[5px] bg-[#f3f5fb] px-2 py-0.5 text-[11px] text-[#86909c]">
-          {PROJECT_CAT[pb.project]}
+    <div className="min-w-0 overflow-hidden rounded-lg border border-[#e8ebf2] bg-white">
+      <div className="flex items-center gap-2 border-b border-[#e8ebf2] px-4 py-3">
+        <span className="h-2.5 w-2.5 rounded-sm" style={{ background: meta.color }} />
+        <h3 className="text-[14px] font-semibold text-[#1d2129]">{meta.label}</h3>
+        <span className="rounded bg-[#f3f5fb] px-1.5 py-0.5 text-[10.5px] text-[#667085]">
+          {meta.category}
         </span>
-        <span className="ml-auto text-[11.5px] tabular-nums text-[#86909c]">
-          {pb.total.not_applicable
-            ? ""
-            : `合计 ${formatChineseNumber(sum)} · ${pb.total.anchor_count} 主播`}
-        </span>
+        <span className="ml-auto text-[11px] text-[#667085]">数值 / {compareLabel}</span>
       </div>
-      <div className="space-y-2.5">
-        <HeroCard metric={metric} pb={pb} onClick={onCellClick} />
-        <div className="grid grid-cols-3 gap-2.5">
-          <SatCard metric={metric} pb={pb} group="online" onClick={onCellClick} />
-          <SatCard metric={metric} pb={pb} group="offline" onClick={onCellClick} />
-          <SatCard metric={metric} pb={pb} group="other" onClick={onCellClick} />
+
+      <div className="overflow-x-auto overscroll-x-contain">
+        <div className="min-w-[620px]">
+          <div className="grid grid-cols-[132px_repeat(4,minmax(110px,1fr))] border-b border-[#e8ebf2] bg-[#f8f9fc]">
+            <div className="sticky left-0 z-20 bg-[#f8f9fc] px-4 py-2 text-[11px] font-medium text-[#667085] shadow-[1px_0_0_#edf0f5]">
+              指标
+            </div>
+            {GROUPS.map((group) => (
+              <div
+                key={group.key}
+                className="flex items-center gap-1.5 border-l border-[#edf0f5] px-3 py-2 text-[11px] font-medium text-[#4e5969]"
+              >
+                {group.color ? (
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: group.color }} />
+                ) : null}
+                {group.label}
+              </div>
+            ))}
+          </div>
+
+          {METRIC_DEFS.map((definition) => {
+            const row = rows.find((item) => item.metric === definition.id)?.[project] ?? fallback;
+            return (
+              <div
+                key={definition.id}
+                className="grid grid-cols-[132px_repeat(4,minmax(110px,1fr))] border-b border-[#edf0f5] last:border-b-0"
+              >
+                <div className="sticky left-0 z-10 flex items-center bg-white px-4 py-2 text-[12px] font-medium text-[#4e5969] shadow-[1px_0_0_#edf0f5]">
+                  {metricLabel(definition.id, project)}
+                </div>
+                {GROUPS.map((group) => (
+                  <div key={group.key} className="border-l border-[#edf0f5]">
+                    <MetricCell
+                      cell={group.key === "all" ? row.total : row[group.key]}
+                      metric={definition.id}
+                      project={project}
+                      group={group.key}
+                      onClick={onCellClick}
+                    />
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
+      {loading ? (
+        <div className="border-t border-[#edf0f5] px-4 py-2 text-[11px] text-[#667085]">
+          正在更新数据…
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -278,87 +224,43 @@ function ProjectRow({
 export function BreakdownSection({
   data,
   loading,
-  metric,
-  onMetricChange,
+  singleDay,
   onCellClick,
 }: {
   data: DashboardOverviewResponse | null;
   loading: boolean;
-  metric: Section2Metric;
-  onMetricChange: (m: Section2Metric) => void;
-  onCellClick: (c: BreakdownClick) => void;
+  singleDay: boolean;
+  onCellClick: (payload: BreakdownClick) => void;
 }): React.JSX.Element {
-  const item: BreakdownItem | undefined = data?.breakdown.find((b) => b.metric === metric);
-
-  const emptyCell: GroupCellValue = {
-    project: "ddz",
-    group: "all",
-    value: 0,
-    vs_prev: null,
-    anchor_count: 0,
-    sparkline: [],
-  };
-  const emptyPb = (project: ProjectKey): ProjectBreakdown => ({
-    project,
-    total: { ...emptyCell, project, group: "all" },
-    online: { ...emptyCell, project, group: "online" },
-    offline: { ...emptyCell, project, group: "offline" },
-    other: { ...emptyCell, project, group: "other" },
-  });
-
-  const ddz = item?.ddz ?? emptyPb("ddz");
-  const three = item?.three ?? emptyPb("three");
-
+  const rows = data?.breakdown ?? [];
+  const compareLabel = singleDay ? "较前一日" : "较上一周期";
   return (
     <section>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold tracking-tight">业务细分</h2>
-        <div className="flex items-center gap-4 text-[12px] text-[#86909c]">
-          {GROUP_META.map((g) => (
-            <span key={g.key} className="flex items-center">
-              <span
-                className="mr-1 inline-block h-2 w-2 rounded-sm align-middle"
-                style={{ background: g.color }}
-              />
-              {g.label}
-            </span>
-          ))}
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2 px-1">
+        <div>
+          <h2 className="text-[15px] font-semibold text-[#1d2129]">业务细分</h2>
+          <p className="mt-0.5 text-[11.5px] text-[#667085]">
+            同屏查看全部指标，点击数值可下钻主播明细
+          </p>
         </div>
+        <span className="text-[11px] text-[#667085]">涨跌对比：{compareLabel}</span>
       </div>
-
-      <div className="rounded-xl bg-white px-4 pb-4 pt-4 shadow-[0_1px_0_0_rgba(0,0,0,0.02),0_4px_12px_-8px_rgba(0,0,0,0.04)]">
-        <div className="mb-4 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="指标">
-          {METRIC_TABS.map((t) => {
-            const active = metric === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => onMetricChange(t.id)}
-                className={cn(
-                  "whitespace-nowrap rounded-full px-3.5 py-1 text-[12.5px] transition-colors",
-                  active
-                    ? "bg-primary font-semibold text-white"
-                    : "bg-[#f3f5fb] text-[#4e5969] hover:bg-[#e8f3ff] hover:text-primary",
-                )}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-          <ProjectRow metric={metric} pb={ddz} onCellClick={onCellClick} />
-          <ProjectRow metric={metric} pb={three} onCellClick={onCellClick} />
-        </div>
+      <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
+        <ProjectMatrix
+          project="ddz"
+          rows={rows}
+          loading={loading}
+          compareLabel={compareLabel}
+          onCellClick={onCellClick}
+        />
+        <ProjectMatrix
+          project="three"
+          rows={rows}
+          loading={loading}
+          compareLabel={compareLabel}
+          onCellClick={onCellClick}
+        />
       </div>
-
-      <p className="mt-3 px-1 text-[12px] text-[#86909c]">
-        ▸ 点击任意卡片下钻该分组的主播明细{loading ? " · 加载中…" : ""}
-      </p>
     </section>
   );
 }

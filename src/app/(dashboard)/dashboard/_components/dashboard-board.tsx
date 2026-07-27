@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type {
-  CoreKpiResponse,
-  DashboardOverviewResponse,
-  Section2Metric,
-} from "@/modules/dashboard";
+import type { CoreKpiResponse, DashboardOverviewResponse } from "@/modules/dashboard";
 import { CoreKpiSection, type TimePreset } from "./core-kpi-section";
 import { BreakdownSection, type BreakdownClick } from "./breakdown-section";
 import { DashboardDrawer, type DrawerOpenPayload } from "./dashboard-drawer";
@@ -67,8 +63,6 @@ export function DashboardBoard(): React.JSX.Element {
       to: toIsoDate(new Date(now.getTime() - 86400_000)),
     };
   });
-  // 默认流水（2026-06-12 应用户要求，流水 tab 也排在最前）
-  const [metric, setMetric] = useState<Section2Metric>("flow");
   const [data, setData] = useState<DashboardOverviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,8 +141,7 @@ export function DashboardBoard(): React.JSX.Element {
       <BreakdownSection
         data={data}
         loading={loading}
-        metric={metric}
-        onMetricChange={setMetric}
+        singleDay={range.from === range.to}
         onCellClick={handleCellClick}
       />
       <BuyuSection dateFrom={range.from} dateTo={range.to} />
