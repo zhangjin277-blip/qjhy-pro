@@ -8,6 +8,7 @@ export const BUSINESS_LINE_VALUES = [
   "斗地主",
   "麻将",
   "三国:冰河时代",
+  "造化仙府",
 ] as const;
 export const BusinessLine = z.enum(BUSINESS_LINE_VALUES);
 export type BusinessLine = z.infer<typeof BusinessLine>;

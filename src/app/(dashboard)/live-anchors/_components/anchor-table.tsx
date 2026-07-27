@@ -29,6 +29,10 @@ const BUSINESS_LINE_STYLES: Record<string, { gradient: string; chip: string }> =
     gradient: "from-emerald-400 to-emerald-600",
     chip: "bg-emerald-100 text-emerald-800 border-emerald-200",
   },
+  造化仙府: {
+    gradient: "from-rose-400 to-rose-600",
+    chip: "bg-rose-100 text-rose-800 border-rose-200",
+  },
   // 历史值 "捕鱼"（迁移期残留）兜底
   捕鱼: {
     gradient: "from-blue-400 to-blue-600",

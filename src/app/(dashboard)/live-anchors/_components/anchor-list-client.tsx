@@ -49,6 +49,7 @@ export function AnchorListClient({ initialAnchors, bindingsByAnchor, deptUsers }
       斗地主: 0,
       麻将: 0,
       "三国:冰河时代": 0,
+      造化仙府: 0,
     };
     for (const a of initialAnchors) {
       const k = a.business_line as BusinessLineTabKey;

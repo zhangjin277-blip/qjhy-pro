@@ -1,5 +1,5 @@
 /**
- * 业务线 → Tailwind class 集合。设计稿里 6 条业务线各一色。
+ * 业务线 → Tailwind class 集合。各业务线使用独立配色。
  * - gradient: 头像 / 顶部色条 / 频谱条
  * - chipBg / chipFg / chipBd: chip 内底色/文字/边
  * - dotGradient: pill tab + chip 上的小圆点（用 gradient class，配合 bg-gradient-to-br）
@@ -56,6 +56,13 @@ export const BUSINESS_LINE_STYLES: Record<string, BusinessLineStyle> = {
     chipBd: "border-emerald-200",
     ringTint: "shadow-emerald-100",
   },
+  造化仙府: {
+    gradient: "from-rose-400 to-rose-600",
+    chipBg: "bg-rose-100",
+    chipFg: "text-rose-700",
+    chipBd: "border-rose-200",
+    ringTint: "shadow-rose-100",
+  },
   // 历史值兜底
   捕鱼: {
     gradient: "from-blue-400 to-blue-600",
@@ -87,6 +94,7 @@ export const BUSINESS_LINE_TABS = [
   { key: "斗地主", label: "斗地主" },
   { key: "麻将", label: "麻将" },
   { key: "三国:冰河时代", label: "三国:冰河时代" },
+  { key: "造化仙府", label: "造化仙府" },
 ] as const;
 
 export type BusinessLineTabKey = (typeof BUSINESS_LINE_TABS)[number]["key"];

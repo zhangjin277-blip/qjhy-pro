@@ -106,6 +106,7 @@ const BUSINESS_LINES = [
   "斗地主",
   "麻将",
   "三国:冰河时代",
+  "造化仙府",
 ] as const;
 type BusinessLineValue = (typeof BUSINESS_LINES)[number];
 const EMPLOYMENT_TYPES = ["正式", "合作", "试播"] as const;
