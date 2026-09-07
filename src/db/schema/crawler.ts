@@ -16,7 +16,7 @@ import {
  * Cookie 失效 status='expired' → 队列暂停 → 钉钉告警 → admin 扫码续期重置 active。
  */
 export const crawler_cookie_session = pgTable("crawler_cookie_session", {
-  basecamp: text("basecamp", { enum: ["cs", "nc1", "nc2", "kuaishou"] }).primaryKey(),
+  basecamp: text("basecamp", { enum: ["cs", "nc1", "nc2", "kuaishou", "lingji"] }).primaryKey(),
   cookies: jsonb("cookies").notNull().$type<Record<string, string>>(), // {sid_guard, sessionid, msToken, ttwid, passport_csrf_token, ...}
   captured_at: timestamp("captured_at").notNull().defaultNow(),
   expires_at: timestamp("expires_at"),

@@ -6,7 +6,16 @@ import reactHooks from "eslint-plugin-react-hooks";
 import nextPlugin from "@next/eslint-plugin-next";
 
 export default tseslint.config(
-  { ignores: [".next", "node_modules", "dist", "src/db/migrations", ".claude/worktrees/**"] },
+  {
+    ignores: [
+      ".next",
+      "node_modules",
+      "dist",
+      "**/dist/**",
+      "src/db/migrations",
+      ".claude/worktrees/**",
+    ],
+  },
   {
     files: ["**/*.cjs"],
     languageOptions: {
@@ -57,6 +66,28 @@ export default tseslint.config(
         "error",
         {
           zones: [
+            {
+              target: [
+                "./src/app/**",
+                "./src/components/**",
+                "./src/lib/**",
+                "./src/worker/**",
+                "./src/modules/!(business-recruitment)/**",
+              ],
+              from: "./src/modules/business-recruitment/!(index|server).ts",
+              message: "跨模块只允许 import 对方的 index.ts。详见 CONTRIBUTING.md 第 10.2 节。",
+            },
+            {
+              target: [
+                "./src/app/**",
+                "./src/components/**",
+                "./src/lib/**",
+                "./src/worker/**",
+                "./src/modules/!(people-performance)/**",
+              ],
+              from: "./src/modules/people-performance/!(index|server).ts",
+              message: "跨模块只允许 import 对方的 index.ts。详见 CONTRIBUTING.md 第 10.2 节。",
+            },
             {
               target: [
                 "./src/app/**",
@@ -209,7 +240,8 @@ export default tseslint.config(
                 "./src/modules/!(placement-attribution)/**",
               ],
               from: "./src/modules/placement-attribution/!(server).ts",
-              message: "placement-attribution 是纯 server-only 模块，只允许 import server.ts。详见 CONTRIBUTING.md 第 10.2 节。",
+              message:
+                "placement-attribution 是纯 server-only 模块，只允许 import server.ts。详见 CONTRIBUTING.md 第 10.2 节。",
             },
             {
               target: [
@@ -231,7 +263,8 @@ export default tseslint.config(
                 "./src/modules/!(checkin)/**",
               ],
               from: "./src/modules/checkin/!(index|queries|server).ts",
-              message: "跨模块只允许 import 对方的 index.ts / server.ts / queries.ts。详见 CONTRIBUTING.md 第 10.2 节。",
+              message:
+                "跨模块只允许 import 对方的 index.ts / server.ts / queries.ts。详见 CONTRIBUTING.md 第 10.2 节。",
             },
             {
               target: [

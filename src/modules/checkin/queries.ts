@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/db/client";
-import { and, asc, eq, gte, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, ilike, lt, or, sql } from "drizzle-orm";
 import { live_session_log, live_account, dingtalk_user } from "@/db/schema";
 
 export interface CheckinDaySession {
@@ -39,6 +39,11 @@ export interface CheckinDayResult {
   accounts: CheckinDayAccount[];
 }
 
+export interface CheckinRangeOptions {
+  product?: string;
+  accountQuery?: string;
+}
+
 /**
  * 拉指定日期当天的所有 session_log。
  *
@@ -49,19 +54,43 @@ export interface CheckinDayResult {
  * @param product 可选，按 live_account.product 过滤
  */
 export async function getCheckinDay(date: string, product?: string): Promise<CheckinDayResult> {
-  // 业务日窗口：当天 0:00 → 次日 9:00（33h），覆盖跨夜班
-  const dayStart = new Date(date + "T00:00:00");
-  const dayEnd = new Date(date + "T00:00:00");
-  dayEnd.setDate(dayEnd.getDate() + 1);
-  dayEnd.setHours(9);
+  return getCheckinRange(date, date, { product }, true);
+}
 
-  const dayWindow = or(
-    and(gte(live_session_log.start_at, dayStart), lt(live_session_log.start_at, dayEnd)),
-    eq(live_session_log.status, "in_progress"),
+/**
+ * 拉取起止业务日内的 session，每个场次只返回一次。
+ * 结束日延伸至次日 09:00，与单日页面的跨夜班口径一致。
+ */
+export async function getCheckinRange(
+  dateFrom: string,
+  dateTo: string,
+  options: CheckinRangeOptions = {},
+  includeAnyInProgress = false,
+): Promise<CheckinDayResult> {
+  const rangeStart = new Date(dateFrom + "T00:00:00");
+  const rangeEnd = new Date(dateTo + "T00:00:00");
+  rangeEnd.setDate(rangeEnd.getDate() + 1);
+  rangeEnd.setHours(9);
+
+  const startedInRange = and(
+    gte(live_session_log.start_at, rangeStart),
+    lt(live_session_log.start_at, rangeEnd),
   );
-  if (!dayWindow) throw new Error("getCheckinDay: failed to build day-window predicate");
-  const conditions = [dayWindow];
-  if (product) conditions.push(eq(live_account.product, product));
+  const rangeWindow = includeAnyInProgress
+    ? or(startedInRange, eq(live_session_log.status, "in_progress"))
+    : startedInRange;
+  if (!rangeWindow) throw new Error("getCheckinRange: failed to build range predicate");
+
+  const conditions = [rangeWindow];
+  if (options.product) conditions.push(eq(live_account.product, options.product));
+  const accountQuery = options.accountQuery?.trim();
+  if (accountQuery) {
+    const accountMatch = or(
+      ilike(live_account.account_name, `%${accountQuery}%`),
+      ilike(live_account.placement_label, `%${accountQuery}%`),
+    );
+    if (accountMatch) conditions.push(accountMatch);
+  }
 
   const rows = await db
     .select({
@@ -246,7 +275,7 @@ export async function getCheckinDay(date: string, product?: string): Promise<Che
   }
 
   return {
-    date,
+    date: dateFrom,
     accounts: [...map.values()],
   };
 }

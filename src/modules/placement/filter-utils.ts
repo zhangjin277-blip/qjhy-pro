@@ -25,6 +25,40 @@ function addDays(isoDay: string, days: number): string {
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+export interface TimeRangeSelection {
+  start_hour: number;
+  end_hour: number;
+  account_id?: string;
+  page: number;
+}
+
+function integerParam(value: string | string[] | undefined): number | null {
+  if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
+  return Number(value);
+}
+
+/**
+ * 解析「时段查询」的小时条件。投放源数据只有小时粒度，因此 UI/查询都使用整点。
+ * end_hour 小于 start_hour 时表示跨午夜；两者相同表示全天。
+ */
+export function resolveTimeRangeSelection(
+  searchParams: Record<string, string | string[] | undefined>,
+): TimeRangeSelection {
+  const rawStart = integerParam(searchParams.startHour);
+  const rawEnd = integerParam(searchParams.endHour);
+  const start_hour = rawStart != null && rawStart >= 0 && rawStart <= 23 ? rawStart : 0;
+  const end_hour = rawEnd != null && rawEnd >= 1 && rawEnd <= 24 ? rawEnd : 24;
+  const account = typeof searchParams.accountId === "string" ? searchParams.accountId.trim() : "";
+  const rawPage = integerParam(searchParams.page);
+
+  return {
+    start_hour,
+    end_hour,
+    account_id: account || undefined,
+    page: rawPage != null && rawPage >= 1 ? rawPage : 1,
+  };
+}
+
 export function resolveFilter(
   searchParams: Record<string, string | string[] | undefined>,
   now: Date = new Date(),

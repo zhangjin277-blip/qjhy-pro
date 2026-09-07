@@ -37,6 +37,7 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NODE_ENV: production
       EDITING_NAS_PATH: /mnt/qjhy-edit
+      PROJECT_ASSETS_PATH: /mnt/qjhy-edit/project-assets
     ports:
       - "3000:3000"
     volumes:

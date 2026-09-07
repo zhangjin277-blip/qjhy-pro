@@ -20,6 +20,8 @@ export {
   queryCheckinByAccount,
   queryTrend,
   queryAnchorLabels,
+  queryPlacementAccounts,
+  queryPlacementTimeRange,
   queryKpiSummary,
   querySubAccountsAll,
   queryAccountHourly,
@@ -37,6 +39,9 @@ export {
   type SubAccountRow,
   type AccountHourlyRow,
   type AnchorLabelOption,
+  type PlacementAccountOption,
+  type PlacementTimeRangeRow,
+  type PlacementTimeRangeResult,
   type ScheduleYesterdayKpi,
   type ScheduleYesterdayHourly,
 } from "./queries";

@@ -110,7 +110,7 @@ export function AnchorBentoCard({ anchor, bindings, onEdit }: AnchorBentoCardPro
         {/* meta grid 2 cols */}
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-slate-500">
           <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">业务线</div>
-          <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">合作模式</div>
+          <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">主播类型</div>
           <div>
             <span
               className={`inline-flex items-center gap-1.5 rounded border px-1.5 py-px text-[11px] font-medium ${s.chipBg} ${s.chipFg} ${s.chipBd}`}
@@ -121,23 +121,30 @@ export function AnchorBentoCard({ anchor, bindings, onEdit }: AnchorBentoCardPro
           </div>
           <div>
             <span
+              className={`inline-flex items-center rounded border px-1.5 py-px text-[11px] font-medium ${anchor.anchor_type === "竞价主播" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}
+            >
+              {anchor.anchor_type ?? "生态主播"}
+            </span>
+          </div>
+
+          <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">合作模式</div>
+          <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">艺名</div>
+          <div>
+            <span
               className={`inline-flex items-center rounded border px-1.5 py-px text-[11px] font-medium ${employmentChip(anchor.employment_type)}`}
             >
               {anchor.employment_type}
             </span>
           </div>
-
-          <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">艺名</div>
-          <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">职级</div>
           <div className="truncate text-slate-700">
             {anchor.external_name ?? <span className="text-slate-300">—</span>}
           </div>
+
+          <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">职级</div>
+          <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">试播日</div>
           <div className="truncate text-slate-700">
             {anchor.title ?? <span className="text-slate-300">—</span>}
           </div>
-
-          <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">试播日</div>
-          <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">签约日</div>
           <div className="font-mono text-[11px] tabular-nums text-slate-700">
             {anchor.trial_start_date ? (
               formatDate(anchor.trial_start_date)
@@ -145,6 +152,9 @@ export function AnchorBentoCard({ anchor, bindings, onEdit }: AnchorBentoCardPro
               <span className="text-slate-300">—</span>
             )}
           </div>
+
+          <div className="text-[10.5px] uppercase tracking-[0.06em] text-slate-400">签约日</div>
+          <div />
           <div className="font-mono text-[11px] tabular-nums text-slate-700">
             {anchor.contract_date ? (
               formatDate(anchor.contract_date)
@@ -152,6 +162,7 @@ export function AnchorBentoCard({ anchor, bindings, onEdit }: AnchorBentoCardPro
               <span className="text-slate-300">未签约</span>
             )}
           </div>
+          <div />
         </div>
 
         {anchor.leave_date && (

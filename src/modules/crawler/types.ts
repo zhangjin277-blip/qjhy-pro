@@ -13,6 +13,7 @@ export const JOB_NAMES = {
   BACKFILL_KUAISHOU_TREND: "crawler:backfill_kuaishou_trend", // 快手历史流水分时回补（断档期补礼物数据）
   FETCH_VIDEO: "crawler:fetch_video", // 抖音线下运营组主播视频作品快照（每天 12:00）
   SYNC_DOUYIN_LIVE_ROOMS: "crawler:sync_douyin_live_rooms", // 抖音公会「正在直播」快照（5min，平面图在播+开播时间）
+  SYNC_ZHAOHUA_OFFICIAL_REPLAYS: "crawler:sync_zhaohua_official_replays", // 造化仙府官号灵机下播复盘
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];

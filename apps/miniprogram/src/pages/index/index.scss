@@ -1,0 +1,261 @@
+.page-shell {
+  min-height: 100vh;
+  padding-bottom: 48px;
+}
+
+.summary-band {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 36px 28px 28px;
+  background: #ffffff;
+  border-bottom: 1px solid #e3e8ee;
+}
+
+.brand,
+.summary-title,
+.date-label,
+.date-value,
+.metric-label,
+.metric-value,
+.metric-change,
+.metric-anchor,
+.section-title,
+.updated-at,
+.error-title,
+.error-message {
+  display: block;
+}
+
+.brand {
+  color: #3d6b5d;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.summary-title {
+  margin-top: 8px;
+  color: #17202a;
+  font-size: 40px;
+  font-weight: 700;
+}
+
+.date-block {
+  min-width: 220px;
+  padding: 12px 14px;
+  border: 1px solid #dce3e8;
+  border-radius: 6px;
+  background: #f8fafb;
+  text-align: right;
+}
+
+.date-label {
+  color: #84909d;
+  font-size: 22px;
+}
+
+.date-value {
+  color: #35404b;
+  font-size: 25px;
+  font-weight: 600;
+}
+
+.date-value-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.date-chevron {
+  color: #3d6b5d;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.project-switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 24px 28px 0;
+  padding: 6px;
+  background: #e7ebef;
+  border-radius: 8px;
+}
+
+.project-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 64px;
+  padding: 0 8px;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 6px;
+  color: #66727e;
+  font-size: 22px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-button--active {
+  background: #ffffff;
+  color: #17202a;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(20, 29, 38, 0.1);
+}
+
+.content-section {
+  padding: 30px 28px 0;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.section-title {
+  font-size: 28px;
+  font-weight: 650;
+}
+
+.refresh-button,
+.retry-button {
+  margin: 0;
+  background: #ffffff;
+  border: 1px solid #cbd3db;
+  border-radius: 6px;
+  color: #35404b;
+  font-size: 23px;
+}
+
+.refresh-button {
+  height: 54px;
+  padding: 0 24px;
+  line-height: 52px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.metric-card {
+  min-width: 0;
+  min-height: 190px;
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid #e0e5ea;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.metric-card--pressed {
+  background: #f6f9f8;
+}
+
+.metric-card:first-child {
+  grid-column: 1 / -1;
+  border-left: 6px solid #3d6b5d;
+}
+
+.metric-label {
+  color: #687480;
+  font-size: 24px;
+}
+
+.metric-value {
+  margin-top: 18px;
+  color: #17202a;
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.metric-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.metric-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 20px;
+  color: #3d6b5d;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.metric-link-arrow {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.metric-change,
+.metric-anchor {
+  overflow: hidden;
+  font-size: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-change--up {
+  color: #c53b32;
+}
+
+.metric-change--down {
+  color: #16845b;
+}
+
+.metric-change--flat,
+.metric-anchor {
+  color: #8a949e;
+}
+
+.updated-at {
+  margin-top: 20px;
+  color: #929ca6;
+  font-size: 20px;
+  text-align: right;
+}
+
+.state-line,
+.error-state {
+  margin: 100px 28px 0;
+  text-align: center;
+}
+
+.state-line {
+  color: #7b8792;
+  font-size: 26px;
+}
+
+.error-title {
+  color: #2b3540;
+  font-size: 30px;
+  font-weight: 650;
+}
+
+.error-message {
+  margin-top: 12px;
+  color: #7b8792;
+  font-size: 24px;
+}
+
+.retry-button {
+  width: 220px;
+  height: 66px;
+  margin: 28px auto 0;
+  line-height: 64px;
+}

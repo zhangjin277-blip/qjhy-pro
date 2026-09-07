@@ -10,6 +10,10 @@ import { runCronAttributionSweep } from "@/modules/placement-attribution/server"
 import { runEditingCleanup } from "./jobs/editing-cleanup";
 import { runAnchorPenaltyJob } from "./jobs/anchor-penalty";
 import { sweepRetention } from "@/modules/live-recording/server";
+import { runPerformanceSweep } from "@/modules/people-performance/server";
+// Worker 需要直接调用同步实现；避免导入业务模块 barrel 时把 Server Actions 带入 worker。
+// eslint-disable-next-line import/no-restricted-paths
+import { syncRecruitmentDatesFromAnchorProfiles } from "@/modules/business-recruitment/auto-match";
 
 // Phase 1: 钉钉同步
 // ⚠️ 必须错开整点（02:00:00）：钉钉 /topapi/v2/department/listsub 在整点被全网应用挤爆
@@ -102,6 +106,25 @@ registerJob({
   },
 });
 
+// 线上招募日期每日中午刷新：使用当天最新的主播档案，补齐空的入会/首次开播日期。
+registerJob({
+  name: "sync-recruitment-dates",
+  schedule: "0 12 * * *",
+  task: async () => {
+    const result = await syncRecruitmentDatesFromAnchorProfiles();
+    console.log(`[sync-recruitment-dates] done`, result);
+  },
+});
+
+// 造化仙府官号灵机下播复盘（每日拉前一天，支持监控页范围补数）。
+registerJob({
+  name: "sync-zhaohua-official-replays",
+  schedule: "30 10 * * *",
+  task: async () => {
+    await enqueue(JOB_NAMES.SYNC_ZHAOHUA_OFFICIAL_REPLAYS, {});
+  },
+});
+
 // 剪辑任务软删文件清理（每天 03:00，物理删除 30 天前软删的任务及关联文件）
 registerJob({
   name: "editing-cleanup",
@@ -131,6 +154,17 @@ registerJob({
       const mb = (r.freedBytes / 1024 ** 2).toFixed(0);
       console.log(`[live-recording-retention] 删除 ${r.deleted} 个录像,释放 ${mb} MB`);
     }
+  },
+});
+
+registerJob({
+  name: "people-performance-sweep",
+  schedule: "0 9 * * *",
+  task: async () => {
+    const result = await runPerformanceSweep();
+    console.log(
+      `[people-performance] opened=${result.opened} selfReviewsOpened=${result.selfReviewsOpened} reminders=${result.reminders}`,
+    );
   },
 });
 

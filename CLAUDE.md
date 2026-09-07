@@ -30,6 +30,8 @@ Next.js 16.2.4 + TypeScript strict + PostgreSQL 16 + Drizzle ORM + better-auth 1
 
 ## 关键架构经验（Phase 1 末发现，必须遵守）
 
+**协作数据必须服务端持久化**：团队共同查看或编辑的业务数据必须落 PostgreSQL/NAS，并明确鉴权、并发冲突和刷新策略。`localStorage`、`sessionStorage`、IndexedDB 只能用于个人偏好、草稿、缓存或首次迁移，禁止作为共享业务数据的唯一数据源。新项目板块在写 UI 前必须先确定持久化方案。
+
 **模块 index.ts vs server.ts 双入口**：
 - `src/modules/[feature]/index.ts` 只导 client-safe（types / Zod schemas / Server Actions）
 - `src/modules/[feature]/server.ts` 导 server-only（含 DB 客户端等 Node.js 模块），加 `import "server-only"` tripwire
@@ -105,6 +107,10 @@ pnpm worker                          # 另开终端，钉钉同步等定时任�
 - **老中台 PRO3**：容器 `miracle-pro-cs`，目录 `/volume1/docker/miracle-pro-cs/`，SQLite 在 `server/database.sqlite`
 
 > 完整部署一条龙（build amd64 → save → scp -O → load → recreate）、8 个踩坑、反向 dump：见 memory `qjhy-pro-nas-deployment.md`。Mac(ARM64)→NAS(amd64) build **必须** `--platform linux/amd64`。
+
+> Web 镜像必须从当前完整工作区构建，禁止从隔离的旧发布目录构建。`Dockerfile.web` 会调用 `scripts/verify-web-release-routes.mjs` 校验招聘、项目中心、人员绩效、运营目标和小程序 API；缺少任一核心路由时构建必须失败，不能部署。
+
+> Web 发布后不能只检查容器 `running`。必须确认 `qjhy-web` 带有正确的 Compose labels、`.Config.User` 符合 NAS 目录权限（生产当前为 `0:0`）、`/mnt/qjhy-edit` 等挂载仍存在，并在容器内对 `source/edited/cover` 做真实读写检查。若容器缺少 Compose labels，先处理孤立容器，禁止直接认为 `docker compose up --force-recreate` 已应用 compose 配置。
 
 ## 已知小尾巴（Phase 2 时一起修）
 

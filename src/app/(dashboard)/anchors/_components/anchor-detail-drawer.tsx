@@ -99,9 +99,11 @@ function compareDelta(
 // ─── 主组件 ──────────────────────────────────────────────────────────────────
 
 export interface AnchorDetailDrawerProps {
-  anchor: AnchorListRow | null;
+  anchor: AnchorDetailIdentity | null;
   dateFrom: string;
   dateTo: string;
+  /** 非主播明细页面复用抽屉时，用于请求对应业务范围内的数据权限。 */
+  accessContext?: "business_recruitment";
   /** 顶部 KPI 卡片对应的列 */
   kpiColumns: ColumnDef[];
   /** 列表当前显示的所有列（drawer 据此动态渲染 sparkline + 表格）*/
@@ -109,10 +111,24 @@ export interface AnchorDetailDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
+export type AnchorDetailIdentity = Pick<
+  AnchorListRow,
+  | "anchor_id"
+  | "nick_name"
+  | "is_threekingdoms"
+  | "avatar"
+  | "aweme_display_id"
+  | "broker_name"
+  | "recruit_broker_name"
+> & {
+  projectLabel?: string;
+};
+
 export function AnchorDetailDrawer({
   anchor,
   dateFrom,
   dateTo,
+  accessContext,
   kpiColumns,
   visibleColumns,
   onOpenChange,
@@ -134,14 +150,22 @@ export function AnchorDetailDrawer({
     setError(null);
     setData(null);
     const ctrl = new AbortController();
+    const projectQuery = anchor.projectLabel === "造化仙府" ? "&project=zhaohua" : "";
+    const accessContextQuery = accessContext
+      ? `&access_context=${encodeURIComponent(accessContext)}`
+      : "";
     fetch(
-      `/api/anchors/${encodeURIComponent(anchor.anchor_id)}/daily?date_from=${dateFrom}&date_to=${dateTo}`,
+      `/api/anchors/${encodeURIComponent(anchor.anchor_id)}/daily?date_from=${dateFrom}&date_to=${dateTo}${projectQuery}${accessContextQuery}`,
       { signal: ctrl.signal },
     )
       .then(async (r) => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}));
-          throw new Error(body.error ?? `HTTP ${r.status}`);
+          throw new Error(
+            body.error === "FORBIDDEN"
+              ? "暂无权限查看该主播明细"
+              : (body.error ?? `HTTP ${r.status}`),
+          );
         }
         return r.json();
       })
@@ -151,7 +175,7 @@ export function AnchorDetailDrawer({
       })
       .finally(() => setLoading(false));
     return () => ctrl.abort();
-  }, [anchor, dateFrom, dateTo]);
+  }, [accessContext, anchor, dateFrom, dateTo]);
 
   const periodDays = useMemo(() => {
     const ms = Date.parse(dateTo) - Date.parse(dateFrom);
@@ -179,7 +203,10 @@ export function AnchorDetailDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[1280px] !max-w-[80vw] gap-0 p-0 sm:max-w-none">
+      <SheetContent
+        side="right"
+        className="w-[calc(100vw-16px)] !max-w-[calc(100vw-16px)] gap-0 p-0 sm:w-[1280px] sm:!max-w-[80vw] sm:max-w-none"
+      >
         <SheetTitle className="sr-only">{anchor?.nick_name ?? "主播"}日明细</SheetTitle>
         <SheetDescription className="sr-only">
           单个主播在 {dateFrom} 至 {dateTo} 的日明细数据
@@ -209,7 +236,7 @@ export function AnchorDetailDrawer({
 // ─── 抽屉内容 ────────────────────────────────────────────────────────────────
 
 interface DrawerInnerProps {
-  anchor: AnchorListRow;
+  anchor: AnchorDetailIdentity;
   dateFrom: string;
   dateTo: string;
   periodDays: number;
@@ -243,11 +270,11 @@ function DrawerInner({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b bg-card px-8 pt-6 pb-4">
+      <div className="border-b bg-card px-4 pt-5 pb-4 sm:px-8 sm:pt-6">
         <div className="text-muted-foreground mb-3 text-xs">
           主播明细 · <span className="text-foreground/70">{anchor.nick_name}</span> · 数据详情
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-start gap-3 sm:items-center sm:gap-4">
           {anchor.avatar ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -260,14 +287,14 @@ function DrawerInner({
             <div className="size-13 shrink-0 rounded-full bg-muted" />
           )}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-3">
-              <span className="text-lg font-semibold text-foreground">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:gap-x-3">
+              <span className="w-full text-base font-semibold text-foreground sm:w-auto sm:text-lg">
                 {anchor.nick_name || "—"}
               </span>
               <span className="inline-flex h-5 items-center rounded bg-primary/10 px-2 text-xs font-medium text-primary">
-                {anchor.is_threekingdoms ? "三国" : "斗地主"}
+                {anchor.projectLabel ?? (anchor.is_threekingdoms ? "三国" : "斗地主")}
               </span>
-              {anchor.recruit_broker_name && (
+              {anchor.recruit_broker_name && anchor.recruit_broker_name !== anchor.projectLabel && (
                 <span className="bg-muted text-muted-foreground inline-flex h-5 items-center rounded px-2 text-xs font-medium">
                   {anchor.recruit_broker_name}
                 </span>
@@ -281,7 +308,7 @@ function DrawerInner({
                 </span>
               )}
               <span>
-                UID <span className="text-foreground/70">{anchor.anchor_id}</span>
+                UID <span className="break-all text-foreground/70">{anchor.anchor_id}</span>
               </span>
               {anchor.broker_name && (
                 <span>
@@ -298,21 +325,21 @@ function DrawerInner({
         </div>
 
         <div className="mt-4 border-t pt-3">
-          <div className="text-muted-foreground flex items-center gap-2 text-xs">
+          <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <span>📅</span>
             <span className="text-foreground/80">
               {dateFrom} ~ {dateTo}
             </span>
-            <span className="ml-1">· 共 {periodDays} 天</span>
-            <span className="ml-3 text-muted-foreground/70">
-              指标跟随列表当前选择（KPI {kpiCols.length} 项 · 全部 {tableCols.length} 项）
+            <span>· 共 {periodDays} 天</span>
+            <span className="w-full text-muted-foreground/70 sm:ml-3 sm:w-auto">
+              当前视图指标（KPI {kpiCols.length} 项 · 全部 {tableCols.length} 项）
             </span>
           </div>
         </div>
       </div>
 
       {/* Body */}
-      <div className="bg-background flex-1 overflow-y-auto px-7 py-5">
+      <div className="bg-background flex-1 overflow-y-auto px-3 py-4 sm:px-7 sm:py-5">
         {error && (
           <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-lg border p-4 text-sm">
             数据加载失败：{error}
@@ -320,7 +347,7 @@ function DrawerInner({
         )}
 
         {/* 核心 KPI 卡 */}
-        {kpiCols.length > 0 && (
+        {!error && kpiCols.length > 0 && (
           <SectionBlock label="核心指标" hint="点击卡片切换上方趋势图">
             <KpiGrid
               cols={kpiCols}
@@ -335,7 +362,7 @@ function DrawerInner({
         )}
 
         {/* 趋势图 */}
-        {selectedCol && (
+        {!error && selectedCol && (
           <SectionBlock label={`趋势走势 · ${selectedCol.label}`} hint="虚线为同期对比">
             <TrendChart
               cur={cur}
@@ -348,7 +375,7 @@ function DrawerInner({
         )}
 
         {/* sparkline 网格 */}
-        {sparkCols.length > 0 && (
+        {!error && sparkCols.length > 0 && (
           <SectionBlock label="其它指标" hint="点击任一卡片切换上方趋势图">
             <SparkGrid
               cols={sparkCols}
@@ -363,7 +390,7 @@ function DrawerInner({
         )}
 
         {/* 日明细表 */}
-        <DailyTable cols={tableCols} rows={cur} loading={loading} />
+        {!error ? <DailyTable cols={tableCols} rows={cur} loading={loading} /> : null}
       </div>
     </div>
   );
@@ -381,11 +408,13 @@ function SectionBlock({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mb-4 rounded-lg border bg-card p-4 last:mb-0">
-      <div className="mb-3 flex items-center gap-2">
+    <section className="mb-4 rounded-lg border bg-card p-3 sm:p-4 last:mb-0">
+      <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="bg-primary block h-3 w-[3px] rounded" />
         <span className="text-foreground/80 text-xs font-medium tracking-wide">{label}</span>
-        {hint && <span className="text-muted-foreground ml-auto text-xs">{hint}</span>}
+        {hint && (
+          <span className="text-muted-foreground w-full text-xs sm:ml-auto sm:w-auto">{hint}</span>
+        )}
       </div>
       {children}
     </section>
@@ -414,14 +443,14 @@ function KpiGrid({
   const colCount = Math.min(cols.length, 6);
   const gridCols =
     colCount <= 3
-      ? "grid-cols-3"
+      ? "sm:grid-cols-3"
       : colCount === 4
-        ? "grid-cols-4"
+        ? "sm:grid-cols-4"
         : colCount === 5
-          ? "grid-cols-5"
-          : "grid-cols-6";
+          ? "sm:grid-cols-5"
+          : "sm:grid-cols-6";
   return (
-    <div className={cn("grid gap-2.5", gridCols)}>
+    <div className={cn("grid grid-cols-2 gap-2.5", gridCols)}>
       {cols.map((col) => (
         <KpiCard
           key={col.key}
@@ -525,7 +554,7 @@ function SparkGrid({
   onSelect: (k: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-6 gap-2">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
       {cols.map((col) => (
         <SparkCard
           key={col.key}

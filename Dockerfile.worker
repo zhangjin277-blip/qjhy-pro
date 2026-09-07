@@ -32,4 +32,4 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV NODE_OPTIONS=--conditions=react-server
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-CMD ["pnpm", "exec", "tsx", "src/worker/index.ts"]
+CMD ["./node_modules/.bin/tsx", "src/worker/index.ts"]

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveFilter } from "@/modules/placement/filter-utils";
+import { resolveFilter, resolveTimeRangeSelection } from "@/modules/placement/filter-utils";
 
 // 2026-06-09T17:30:00Z = 北京 2026-06-10 01:30（北京凌晨，UTC 日期还在前一天）
 const BJ_EARLY_MORNING = new Date("2026-06-09T17:30:00Z");
@@ -51,5 +51,36 @@ describe("resolveFilter — 预设按北京时区取日期", () => {
     );
     expect(f.date_from).toBe("2026-06-01");
     expect(f.date_to).toBe("2026-06-08");
+  });
+});
+
+describe("resolveTimeRangeSelection", () => {
+  it("默认查询全天", () => {
+    expect(resolveTimeRangeSelection({})).toEqual({
+      start_hour: 0,
+      end_hour: 24,
+      account_id: undefined,
+      page: 1,
+    });
+  });
+
+  it("保留跨午夜小时与主播", () => {
+    expect(
+      resolveTimeRangeSelection({
+        startHour: "15",
+        endHour: "9",
+        accountId: "account-1",
+        page: "3",
+      }),
+    ).toEqual({ start_hour: 15, end_hour: 9, account_id: "account-1", page: 3 });
+  });
+
+  it("非法小时回退到全天", () => {
+    expect(resolveTimeRangeSelection({ startHour: "25", endHour: "0" })).toEqual({
+      start_hour: 0,
+      end_hour: 24,
+      account_id: undefined,
+      page: 1,
+    });
   });
 });

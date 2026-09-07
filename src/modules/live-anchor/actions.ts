@@ -38,6 +38,7 @@ export async function upsertAnchor(input: unknown) {
   const values = {
     dingtalk_user_id: data.dingtalk_user_id,
     business_line: data.business_line,
+    anchor_type: data.anchor_type,
     employment_type: data.employment_type,
     work_status: data.work_status,
     trial_start_date: data.trial_start_date ?? null,
@@ -54,6 +55,7 @@ export async function upsertAnchor(input: unknown) {
       target: live_anchor.dingtalk_user_id,
       set: {
         business_line: values.business_line,
+        anchor_type: values.anchor_type,
         employment_type: values.employment_type,
         work_status: values.work_status,
         trial_start_date: values.trial_start_date,

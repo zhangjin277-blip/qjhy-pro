@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { eq, sql, type SQL } from "drizzle-orm";
 import { dingtalk_user } from "@/db/schema";
 import { resolvePermission, getManagedDeptIds } from "@/modules/permissions/server";
+import type { TimeRangeSelection } from "./filter-utils";
 
 /**
  * Placement 数据可见范围（按 placement_row.attributed_dingtalk_user_id 过滤）。
@@ -837,6 +838,174 @@ export async function queryAccountHourly(
 export interface AnchorLabelOption {
   label: string; // placement_label，用于过滤
   account_name: string | null; // 代表 account_name，用于展示
+}
+
+export interface PlacementAccountOption {
+  account_id: string;
+  account_name: string;
+  placement_label: string | null;
+}
+
+/** 时段查询的直播账号选项；权限仍按投放归因主播范围约束。 */
+export async function queryPlacementAccounts(
+  filter: BoardFilter,
+): Promise<PlacementAccountOption[]> {
+  const result = await db.execute(sql`
+    SELECT
+      a.id AS account_id,
+      a.account_name,
+      a.placement_label
+    FROM placement_row p
+    JOIN live_account a ON a.id = p.live_account_id
+    WHERE p.date BETWEEN ${filter.date_from}::date AND (${filter.date_to}::date + 1)
+    ${datasetClause(filter.dataset_ids)}
+    ${scopeClause(filter.scope)}
+    GROUP BY a.id, a.account_name, a.placement_label
+    ORDER BY a.account_name
+  `);
+  return result as unknown as PlacementAccountOption[];
+}
+
+export interface PlacementTimeRangeRow {
+  /** 所属查询日；跨夜后的凌晨数据仍归到前一天的窗口。 */
+  window_date: string;
+  date: string;
+  hour: number;
+  anchor_user_id: string;
+  anchor_name: string;
+  account_name: string;
+  placement_label: string | null;
+  cost: number;
+  activations: number;
+  payment: number;
+}
+
+export interface PlacementTimeRangeResult {
+  rows: PlacementTimeRangeRow[];
+  total: number;
+  page: number;
+  page_size: number;
+  summary: {
+    cost: number;
+    activations: number;
+    payment: number;
+  };
+}
+
+const TIME_RANGE_PAGE_SIZE = 100;
+
+/**
+ * 按「基准日期 × 每日小时窗口 × 开播记录主播」查看小时投放。
+ * 例：from=to=08-01, 15→09 会取 08-01 15:00 至 08-02 09:00（左闭右开）。
+ */
+export async function queryPlacementTimeRange(
+  filter: BoardFilter & TimeRangeSelection,
+  options: { pageSize?: number } = {},
+): Promise<PlacementTimeRangeResult> {
+  const pageSize = Math.max(1, Math.min(options.pageSize ?? TIME_RANGE_PAGE_SIZE, 1_000_000));
+  const crossesMidnight = filter.end_hour < filter.start_hour;
+  const isFullDay = filter.end_hour === filter.start_hour;
+  const timeClause = isFullDay
+    ? sql`p.date BETWEEN ${filter.date_from}::date AND ${filter.date_to}::date`
+    : crossesMidnight
+      ? sql`(
+          (p.date BETWEEN ${filter.date_from}::date AND ${filter.date_to}::date AND p.hour >= ${filter.start_hour})
+          OR
+          (p.date BETWEEN (${filter.date_from}::date + 1) AND (${filter.date_to}::date + 1) AND p.hour < ${filter.end_hour})
+        )`
+      : sql`p.date BETWEEN ${filter.date_from}::date AND ${filter.date_to}::date
+          AND p.hour >= ${filter.start_hour} AND p.hour < ${filter.end_hour}`;
+  const windowDate = crossesMidnight
+    ? sql`CASE WHEN p.hour < ${filter.end_hour} THEN (p.date - 1)::text ELSE p.date::text END`
+    : sql`p.date::text`;
+  const accountClause = filter.account_id
+    ? sql`AND p.live_account_id = ${filter.account_id}`
+    : sql``;
+
+  const summaryResult = (await db.execute(sql`
+    WITH grouped AS (
+      SELECT
+        p.date,
+        p.hour,
+        l.anchor_dingtalk_user_id,
+        a.id AS account_id,
+        SUM(p.cost_yuan)::float AS cost,
+        SUM(p.activations)::int AS activations,
+        SUM(p.payment_yuan)::float AS payment
+      FROM placement_row p
+      JOIN live_account a ON a.id = p.live_account_id
+      JOIN live_session_log l
+        ON l.live_account_id = p.live_account_id
+       AND ((p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes') AT TIME ZONE 'Asia/Shanghai') >= l.start_at
+       AND ((p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes') AT TIME ZONE 'Asia/Shanghai') < COALESCE(l.end_at, now())
+      WHERE ${timeClause}
+      ${datasetClause(filter.dataset_ids)}
+      ${scopeClause(filter.scope)}
+      ${accountClause}
+      GROUP BY p.date, p.hour, l.anchor_dingtalk_user_id, a.id
+    )
+    SELECT
+      COUNT(*)::int AS total,
+      COALESCE(SUM(cost), 0)::float AS cost,
+      COALESCE(SUM(activations), 0)::int AS activations,
+      COALESCE(SUM(payment), 0)::float AS payment
+    FROM grouped
+  `)) as unknown as { total: number; cost: number; activations: number; payment: number }[];
+
+  const summary = summaryResult[0] ?? { total: 0, cost: 0, activations: 0, payment: 0 };
+  const total = Number(summary.total);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(filter.page, totalPages);
+  const offset = (page - 1) * pageSize;
+
+  const result = await db.execute(sql`
+      SELECT
+        ${windowDate} AS window_date,
+        p.date::text AS date,
+        p.hour,
+        l.anchor_dingtalk_user_id AS anchor_user_id,
+        COALESCE(du.name, l.anchor_dingtalk_user_id) AS anchor_name,
+        a.account_name,
+        a.placement_label,
+        SUM(p.cost_yuan)::float AS cost,
+        SUM(p.activations)::int AS activations,
+        SUM(p.payment_yuan)::float AS payment
+      FROM placement_row p
+      JOIN live_account a ON a.id = p.live_account_id
+      JOIN live_session_log l
+        ON l.live_account_id = p.live_account_id
+       AND ((p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes') AT TIME ZONE 'Asia/Shanghai') >= l.start_at
+       AND ((p.date::timestamp + interval '1 hour' * p.hour + interval '30 minutes') AT TIME ZONE 'Asia/Shanghai') < COALESCE(l.end_at, now())
+      LEFT JOIN dingtalk_user du ON du.user_id = l.anchor_dingtalk_user_id
+      WHERE ${timeClause}
+      ${datasetClause(filter.dataset_ids)}
+      ${scopeClause(filter.scope)}
+      ${accountClause}
+      GROUP BY window_date, p.date, p.hour, l.anchor_dingtalk_user_id, du.name,
+        a.id, a.account_name, a.placement_label
+      ORDER BY window_date DESC, p.date, p.hour, a.account_name
+      LIMIT ${pageSize}
+      OFFSET ${offset}
+    `);
+
+  const rows = (result as unknown as PlacementTimeRangeRow[]).map((row) => ({
+    ...row,
+    hour: Number(row.hour),
+    cost: Number(row.cost),
+    activations: Number(row.activations),
+    payment: Number(row.payment),
+  }));
+  return {
+    rows,
+    total,
+    page,
+    page_size: pageSize,
+    summary: {
+      cost: Number(summary.cost),
+      activations: Number(summary.activations),
+      payment: Number(summary.payment),
+    },
+  };
 }
 
 export async function queryAnchorLabels(filter: BoardFilter): Promise<AnchorLabelOption[]> {

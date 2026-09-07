@@ -97,6 +97,8 @@ src/app/(dashboard)/[feature]/page.tsx
 | editing-task | `src/modules/editing-task/` | 剪辑任务状态机 + 事件流 + 扣分 | Phase 3.0 (2026-05-26) |
 | editing-editor | `src/modules/editing-editor/` | 剪辑师视图 + 工作量统计 | Phase 3.0 |
 | editing-storage | `src/modules/editing-storage/` | NAS 文件存储健康检查 + 上传/下载 | Phase 3.0 |
+| people-performance | `src/modules/people-performance/` | 非主播人员试用期 + 月度/季度绩效流程 | Phase 3.1 |
+| business-recruitment | `src/modules/business-recruitment/` | 主播候选人登记、商务初评、运营复评与签约跟进 | Phase 3.2 |
 
 > 每加一个业务模块，PR 里必须更新此表 + 在 `eslint.config.mjs` 加 zone。
 

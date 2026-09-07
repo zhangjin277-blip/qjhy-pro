@@ -14,6 +14,7 @@ describe("translateLegacyPoints（0054 迁移翻译规则）", () => {
     }
     expect(snap).toEqual({
       dashboard: [],
+      project_zhaohua: ["project_edit"],
       anchors: [],
       crawler: ["run_jobs", "cookie_update", "field_alias"],
       permissions: [],
@@ -44,6 +45,8 @@ describe("translateLegacyPoints（0054 迁移翻译规则）", () => {
       ],
       software_library: ["item_edit", "item_delete"],
       recording: ["task_manage", "file_delete"],
+      people_performance: [],
+      business_recruitment: ["candidate_edit", "operation_review", "signing_manage"],
     });
   });
 
@@ -57,6 +60,9 @@ describe("translateLegacyPoints（0054 迁移翻译规则）", () => {
     expect(
       translateLegacyPoints("permissions", { edit: false, export: false, admin: true }),
     ).toEqual(["manage_roles", "manage_overrides", "manage_dept_leaders", "invite_codes"]);
+    expect(
+      translateLegacyPoints("people_performance", { edit: false, export: false, admin: true }),
+    ).toEqual(["manage_profiles", "manage_process", "calibrate"]);
   });
 
   it("export=true 只给 dashboard/anchors 的 export 点", () => {
@@ -81,8 +87,8 @@ describe("translateLegacyPoints（0054 迁移翻译规则）", () => {
     }
   });
 
-  it("注册表总点数 = 38", () => {
+  it("注册表总点数 = 46", () => {
     const total = Object.values(MODULE_POINTS).reduce((s, pts) => s + pts.length, 0);
-    expect(total).toBe(38);
+    expect(total).toBe(46);
   });
 });

@@ -82,6 +82,7 @@ const DATED_JOBS = new Set([
   "crawler:fetch_game",
 ]);
 const KS_HISTORY = "crawler:sync_kuaishou_history_live";
+const LINGJI_HISTORY = "crawler:sync_zhaohua_official_replays";
 const DATELESS_JOBS = new Set([
   "crawler:sync_kuaishou_members",
   "crawler:sync_kuaishou_today_live",
@@ -148,6 +149,12 @@ export async function GET(): Promise<NextResponse> {
       } else if (r.completed_cst) {
         // cron 默认窗口 [前天, 昨天]（相对运行日）
         putCell(r.name, shiftDate(r.completed_cst, -2), r);
+        putCell(r.name, shiftDate(r.completed_cst, -1), r);
+      }
+    } else if (r.name === LINGJI_HISTORY) {
+      if (r.from_date && r.to_date) {
+        for (let d = r.from_date; d <= r.to_date; d = shiftDate(d, 1)) putCell(r.name, d, r);
+      } else if (r.completed_cst) {
         putCell(r.name, shiftDate(r.completed_cst, -1), r);
       }
     } else if (DATELESS_JOBS.has(r.name)) {

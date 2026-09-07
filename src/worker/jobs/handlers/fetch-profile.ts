@@ -1,5 +1,9 @@
 import { db } from "@/db/client";
 import { anchor_profile } from "@/db/schema";
+// Worker intentionally imports the server-side sync helper directly; importing the
+// module barrel would also load Server Actions and authz into the worker bundle.
+// eslint-disable-next-line import/no-restricted-paths
+import { syncRecruitmentDatesFromAnchorProfiles } from "@/modules/business-recruitment/auto-match";
 import { openDouyinPage, CookieExpiredError } from "@/lib/puppeteer";
 import {
   getActiveCookies,
@@ -49,6 +53,12 @@ export async function fetchProfileHandler(
         target: anchor_profile.anchor_id,
         set: dbRow,
       });
+    }
+    // 主播档案更新后，精确按抖音号/UID 补齐商务招募的日期字段。
+    // 该同步只填空值，人工确认过的日期不会被覆盖。
+    const recruitmentSync = await syncRecruitmentDatesFromAnchorProfiles();
+    if (recruitmentSync.matched > 0 || recruitmentSync.conflicts > 0) {
+      console.log("[fetch-profile] recruitment dates", recruitmentSync);
     }
     console.log(`[fetch-profile] synced ${rows.length} anchors for ${basecamp}`);
     return { rows: rows.length };

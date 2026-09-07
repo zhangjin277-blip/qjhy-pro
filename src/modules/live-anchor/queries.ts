@@ -66,6 +66,7 @@ export async function listAnchors(
       // anchor fields
       dingtalk_user_id: live_anchor.dingtalk_user_id,
       business_line: live_anchor.business_line,
+      anchor_type: live_anchor.anchor_type,
       employment_type: live_anchor.employment_type,
       work_status: live_anchor.work_status,
       trial_start_date: live_anchor.trial_start_date,

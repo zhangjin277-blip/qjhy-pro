@@ -15,3 +15,4 @@ export type {
   DrawerTopAnchor,
   DrawerDetailResponse,
 } from "./types";
+export { PROJECT_KEYS, PROJECT_LABELS, ZHAOHUA_RECRUIT_BROKER_NAME } from "./types";

@@ -24,6 +24,7 @@ export function DatasetTabs({ counts }: DatasetTabsProps) {
     } else {
       usp.set("ds", id);
     }
+    usp.delete("page");
     router.push(`/placements?${usp.toString()}`);
   }
 

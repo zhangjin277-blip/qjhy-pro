@@ -14,6 +14,8 @@ export const live_anchor = pgTable(
       .references(() => dingtalk_user.user_id),
 
     business_line: text("business_line").notNull(), // 拆到产品级：'捕鱼大作战' | '途游休闲捕鱼' | '电玩捕鱼' | '斗地主' | '麻将' | '三国:冰河时代'
+    // 主播类型：用于区分生态主播与竞价主播；存量记录默认按生态主播处理
+    anchor_type: text("anchor_type").notNull().default("生态主播"),
     employment_type: text("employment_type").notNull(), // '正式' | '合作' | '试播'
     work_status: text("work_status").notNull().default("active"), // 'active' | 'rest' | 'leave'
 

@@ -12,6 +12,9 @@ export function translateLegacyPoints(
 ): string[] {
   const pts: string[] = [];
   switch (module) {
+    case "project_zhaohua":
+      if (flags.edit) pts.push("project_edit");
+      break;
     case "dashboard":
     case "anchors":
       if (flags.export) pts.push("export");
@@ -65,6 +68,13 @@ export function translateLegacyPoints(
     case "recording":
       if (flags.edit) pts.push("task_manage", "file_delete");
       break;
+    case "people_performance":
+      if (flags.admin) pts.push("manage_profiles", "manage_process", "calibrate");
+      break;
+    case "business_recruitment":
+      if (flags.edit) pts.push("candidate_edit", "operation_review", "signing_manage");
+      if (flags.admin) pts.push("demand_manage");
+      break;
     case "live_room":
       break; // 无自有权限点（操作判 live_account）
   }
@@ -108,6 +118,22 @@ const POSITION_BASE: SeedBase[] = [
     export: false,
     admin: false,
     description: "看自己负责主播",
+  },
+  {
+    position: "商务",
+    scope: "none",
+    edit: false,
+    export: false,
+    admin: false,
+    description: "默认仅开通商务招募",
+  },
+  {
+    position: "线上商务",
+    scope: "none",
+    edit: false,
+    export: false,
+    admin: false,
+    description: "默认仅开通商务招募",
   },
   {
     position: "主播",
@@ -160,6 +186,33 @@ export const ROLE_DEFAULTS_SEED: {
 }[] = POSITION_BASE.flatMap((row) =>
   MODULE_KEYS.map((module) => {
     const isBoss = row.position === "总监" || row.position === "老板";
+    if (module === "business_recruitment") {
+      const isBusiness = row.position === "商务" || row.position === "线上商务";
+      const isOperator = row.position === "运营";
+      return {
+        position: row.position,
+        module,
+        scope: isBoss
+          ? ("all" as const)
+          : isBusiness || isOperator
+            ? ("self" as const)
+            : ("none" as const),
+        points: isBoss
+          ? ["candidate_edit", "operation_review", "signing_manage"]
+          : isBusiness
+            ? ["candidate_edit"]
+            : isOperator
+              ? ["operation_review", "signing_manage"]
+              : [],
+        description: isBoss
+          ? "商务招募全流程管理"
+          : isBusiness
+            ? "登记并维护本人招募的候选人"
+            : isOperator
+              ? "复评并跟进分配给本人的候选人"
+              : "默认无权限",
+      };
+    }
     // 软件库/直播录制：全员可见可下载（scope=all）；写操作仅总监/老板（沿革见 0055/0056 种子）
     if (module === "software_library") {
       return {
@@ -177,6 +230,16 @@ export const ROLE_DEFAULTS_SEED: {
         scope: "all" as const,
         points: translateLegacyPoints(module, { edit: isBoss, export: false, admin: isBoss }),
         description: "直播录制：全员可看可下载，管理员可控制/删文件",
+      };
+    }
+    if (module === "people_performance") {
+      const isHr = row.position === "行政";
+      return {
+        position: row.position,
+        module,
+        scope: isBoss || isHr ? ("all" as const) : ("self" as const),
+        points: isBoss || isHr ? ["manage_profiles", "manage_process", "calibrate"] : [],
+        description: isBoss || isHr ? "人员绩效全流程管理" : "查看并处理本人绩效",
       };
     }
     return {

@@ -13,6 +13,9 @@ export const BUSINESS_LINE_VALUES = [
 export const BusinessLine = z.enum(BUSINESS_LINE_VALUES);
 export type BusinessLine = z.infer<typeof BusinessLine>;
 
+export const AnchorType = z.enum(["生态主播", "竞价主播"]);
+export type AnchorType = z.infer<typeof AnchorType>;
+
 export const EmploymentType = z.enum(["正式", "合作", "试播"]);
 export type EmploymentType = z.infer<typeof EmploymentType>;
 
@@ -22,6 +25,7 @@ export type WorkStatus = z.infer<typeof WorkStatus>;
 export const UpsertAnchorInput = z.object({
   dingtalk_user_id: z.string().min(1),
   business_line: BusinessLine,
+  anchor_type: AnchorType.default("生态主播"),
   employment_type: EmploymentType,
   work_status: WorkStatus.default("active"),
   trial_start_date: z.string().date().optional().nullable(),

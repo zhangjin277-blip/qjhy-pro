@@ -2,15 +2,59 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { db } from "@/db/client";
-import { anchor_profile, broker_user_mapping, dingtalk_user } from "@/db/schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import {
+  anchor_profile,
+  broker_user_mapping,
+  business_recruitment_candidate,
+  dingtalk_user,
+} from "@/db/schema";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { hasPoint } from "@/modules/permissions";
 import { resolvePermission, getManagedDeptIds } from "@/modules/permissions/server";
 import { getAnchorDaily } from "@/modules/anchors/server";
+// API route needs the recruitment scope resolver to authorize this cross-module data view.
+/* eslint-disable import/no-restricted-paths */
+import {
+  recruitmentScopeCondition,
+  resolveRecruitmentAccess,
+} from "@/modules/business-recruitment/authz";
+/* eslint-enable import/no-restricted-paths */
 
 const ParamsSchema = z.object({
   date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
+
+async function canViewViaBusinessRecruitment(anchorId: string): Promise<boolean> {
+  const access = await resolveRecruitmentAccess();
+  const scopeCondition = await recruitmentScopeCondition(access);
+  const [profile] = await db
+    .select({
+      awemeDisplayId: anchor_profile.aweme_display_id,
+      awemeShortId: anchor_profile.aweme_short_id,
+    })
+    .from(anchor_profile)
+    .where(eq(anchor_profile.anchor_id, anchorId))
+    .limit(1);
+  if (!profile) return false;
+
+  const accountIds = [profile.awemeDisplayId, profile.awemeShortId].filter(
+    (value): value is string => Boolean(value),
+  );
+  const candidateMatch =
+    accountIds.length > 0
+      ? or(
+          eq(business_recruitment_candidate.uid, anchorId),
+          inArray(business_recruitment_candidate.account_id, accountIds),
+        )
+      : eq(business_recruitment_candidate.uid, anchorId);
+  const [candidate] = await db
+    .select({ id: business_recruitment_candidate.id })
+    .from(business_recruitment_candidate)
+    .where(scopeCondition ? and(candidateMatch, scopeCondition) : candidateMatch)
+    .limit(1);
+  return Boolean(candidate);
+}
 
 /**
  * GET /api/anchors/:id/daily?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD
@@ -46,8 +90,31 @@ export async function GET(
   }
   const { date_from, date_to } = parsed.data;
 
+  if (currentUser.isEmergency) {
+    const data = await getAnchorDaily(anchorId, date_from, date_to);
+    return NextResponse.json(data);
+  }
+
   // ── 权限检查 ─────────────────────────────────────────────
   const dingtalkUserId = currentUser.dingtalkUserId;
+  // 造化项目内的主播明细由项目权限控制，避免用户还要额外开通“主播明细”板块。
+  // 仅接受项目页面明确传入的项目标识，不改变主播明细模块其他入口的权限逻辑。
+  const project = sp.get("project");
+  if (project === "zhaohua") {
+    const projectPerm = await resolvePermission(dingtalkUserId, "project_zhaohua");
+    if (projectPerm.scope !== "none" || hasPoint(projectPerm, "project_edit")) {
+      const data = await getAnchorDaily(anchorId, date_from, date_to);
+      return NextResponse.json(data);
+    }
+  }
+
+  if (
+    sp.get("access_context") === "business_recruitment" &&
+    (await canViewViaBusinessRecruitment(anchorId))
+  ) {
+    const data = await getAnchorDaily(anchorId, date_from, date_to);
+    return NextResponse.json(data);
+  }
 
   const perm = await resolvePermission(dingtalkUserId, "anchors");
   if (perm.scope === "none") {

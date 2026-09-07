@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "mini:dev": "pnpm --dir apps/miniprogram dev:weapp",
+    "mini:build": "pnpm --dir apps/miniprogram build:weapp",
     "worker": "NODE_OPTIONS=\"--conditions=react-server\" tsx --env-file=.env.local src/worker/index.ts",
     "typecheck": "tsc --noEmit",
     "build": "next build",

@@ -12,6 +12,7 @@ export const JOB_LABEL: Record<string, string> = {
   "crawler:sync_kuaishou_history_live": "快手·历史直播",
   "crawler:sync_kuaishou_today_live": "快手·今日实时",
   "crawler:sync_kuaishou_live_snapshot": "快手·直播趋势快照",
+  "crawler:sync_zhaohua_official_replays": "抖音灵机·官号复盘",
 };
 
 export const STATE_LABEL: Record<string, string> = {
@@ -47,6 +48,11 @@ export function formatOutputSummary(output: Record<string, unknown> | null): str
   const fail = num("fail");
   const unmatched = num("unmatched");
   const skippedHistory = num("skippedHistory");
+  const upserted = num("upserted");
+  const skipped = num("skipped");
+  if (upserted !== null) {
+    return skipped && skipped > 0 ? `${upserted} 场 · 跳过 ${skipped}` : `${upserted} 场`;
+  }
   if (inserted !== null && updated !== null) {
     const parts = [`+${inserted}`, `~${updated}`];
     if (skippedHistory !== null && skippedHistory > 0) parts.push(`跳${skippedHistory}`);

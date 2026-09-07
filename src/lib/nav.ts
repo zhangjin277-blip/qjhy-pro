@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  FolderKanban,
   HardDriveDownload,
   Home,
   MonitorPlay,
@@ -7,6 +8,7 @@ import {
   Settings2,
   Shield,
   UserCircle2,
+  ClipboardCheck,
   Users,
   Video,
   type LucideIcon,
@@ -49,13 +51,31 @@ export const NAV: NavItem[] = [
     module: "dashboard",
   },
   {
+    key: "projects",
+    label: "项目中心",
+    icon: FolderKanban,
+    children: [
+      {
+        key: "project-zhaohua",
+        label: "造化仙府",
+        href: "/projects/zhaohua",
+        module: "project_zhaohua",
+      },
+    ],
+  },
+  {
     key: "anchor",
     label: "主播管理",
     icon: Users,
     children: [
       { key: "anchor-detail", label: "主播明细", href: "/anchors", module: "anchors" },
       { key: "anchor-list", label: "主播列表", href: "/anchors/list", disabled: true },
-      { key: "anchor-recruit", label: "主播招募", href: "/anchors/recruit", disabled: true },
+      {
+        key: "anchor-recruit",
+        label: "商务招募",
+        href: "/anchors/recruit",
+        module: "business_recruitment",
+      },
       { key: "anchor-profile", label: "主播档案", href: "/anchors/profile", disabled: true },
       { key: "anchor-flow", label: "关系流转", href: "/anchors/flow", disabled: true },
     ],
@@ -117,6 +137,22 @@ export const NAV: NavItem[] = [
         module: "editing_workflow",
       },
     ],
+  },
+  {
+    key: "people-performance",
+    label: "人员管理",
+    icon: ClipboardCheck,
+    single: true,
+    href: "/people-performance",
+    module: "people_performance",
+  },
+  {
+    key: "operations-performance",
+    label: "运营目标",
+    icon: ClipboardCheck,
+    single: true,
+    href: "/operations-performance",
+    module: "dashboard",
   },
   {
     key: "software",

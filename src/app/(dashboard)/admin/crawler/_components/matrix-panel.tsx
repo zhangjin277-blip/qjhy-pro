@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { rerunCrawl, backfillRange, triggerKuaishouSync } from "@/modules/crawler";
+import {
+  backfillRange,
+  rerunCrawl,
+  saveCookieAction,
+  triggerKuaishouSync,
+  triggerZhaohuaOfficialReplay,
+} from "@/modules/crawler";
 import { formatOutputSummary } from "../_lib/job-meta";
 
 // ---- API 返回类型（与 /api/admin/crawler/matrix 对齐）----
@@ -49,6 +55,7 @@ const BYTE_ROWS: DatedRow[] = [
   { job: "crawler:fetch_game", label: "推广游戏", backfill: null },
 ];
 const KS_HISTORY = "crawler:sync_kuaishou_history_live";
+const LINGJI_HISTORY = "crawler:sync_zhaohua_official_replays";
 const DATELESS_ROWS: { job: string; label: string; freq: string; trigger?: "members" | "today" }[] =
   [
     {
@@ -72,12 +79,13 @@ const COOKIE_NAME: Record<string, string> = {
   nc1: "百应 Cookie (nc1)",
   nc2: "百应 Cookie (nc2)",
   kuaishou: "快手 Cookie",
+  lingji: "官号灵机 Cookie",
 };
 
 // ---- 弹层状态 ----
 interface PopTarget {
   kind: "cell" | "day";
-  job?: DatedRow | { job: typeof KS_HISTORY; label: string };
+  job?: DatedRow | { job: typeof KS_HISTORY | typeof LINGJI_HISTORY; label: string };
   date: string;
   cell: MatrixCell | null;
   anchor: { x: number; y: number };
@@ -160,7 +168,13 @@ export function MatrixPanel(): React.JSX.Element {
   };
 
   const renderCell = (
-    row: DatedRow | { job: typeof KS_HISTORY; label: string; backfill?: null },
+    row:
+      | DatedRow
+      | {
+          job: typeof KS_HISTORY | typeof LINGJI_HISTORY;
+          label: string;
+          backfill?: null;
+        },
     date: string,
   ): React.JSX.Element => {
     const cell = data.cells[row.job]?.[date] ?? null;
@@ -169,7 +183,7 @@ export function MatrixPanel(): React.JSX.Element {
       "h-9 min-w-[72px] cursor-pointer rounded-lg text-center align-middle text-[11px] transition-transform hover:scale-105";
     if (!cell) {
       // 字节系数据日 = 次日采集，今天没记录属正常；显示中性「未到」
-      const label = isToday && row.job !== KS_HISTORY ? "未到" : "—";
+      const label = isToday && row.job !== KS_HISTORY && row.job !== LINGJI_HISTORY ? "未到" : "—";
       return (
         <td
           key={date}
@@ -231,6 +245,22 @@ export function MatrixPanel(): React.JSX.Element {
             runAction(
               () => triggerKuaishouSync({ type: "history", fromDate: date, toDate: date }),
               `快手历史直播 ${date} 已入队`,
+            )
+          }
+          className="w-full rounded-md bg-blue-500 py-1.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+        >
+          {busy ? "入队中..." : "重跑这一天"}
+        </button>
+      );
+    }
+    if (job.job === LINGJI_HISTORY) {
+      return (
+        <button
+          disabled={busy}
+          onClick={() =>
+            runAction(
+              () => triggerZhaohuaOfficialReplay({ fromDate: date, toDate: date }),
+              `官号复盘 ${date} 已入队`,
             )
           }
           className="w-full rounded-md bg-blue-500 py-1.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50"
@@ -302,6 +332,8 @@ export function MatrixPanel(): React.JSX.Element {
         <span className="text-muted-foreground ml-auto text-xs">30 秒自动刷新</span>
       </div>
 
+      <LingjiCookieForm onDone={reload} />
+
       {/* 矩阵 */}
       <div className="bg-card rounded-lg border p-4">
         <div className="mb-2 flex items-center justify-between">
@@ -368,6 +400,16 @@ export function MatrixPanel(): React.JSX.Element {
                 <td></td>
               </tr>
             ))}
+            <tr>
+              <td colSpan={9} className="pt-2.5 text-[11px] font-bold tracking-wide text-cyan-700">
+                抖音 · 灵机官号
+              </td>
+            </tr>
+            <tr>
+              <td className="whitespace-nowrap pr-3 text-xs text-slate-600">下播复盘</td>
+              {data.days.map((d) => renderCell({ job: LINGJI_HISTORY, label: "官号下播复盘" }, d))}
+              <td></td>
+            </tr>
             <tr>
               <td
                 colSpan={9}
@@ -506,11 +548,100 @@ export function MatrixPanel(): React.JSX.Element {
   );
 }
 
+function parseCookieHeader(header: string): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  for (const part of header.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator <= 0) continue;
+    const name = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (name && value) cookies[name] = value;
+  }
+  return cookies;
+}
+
+/** 灵机凭证只允许覆盖写入；服务端不会把已保存的 Cookie 返回给页面。 */
+function LingjiCookieForm({ onDone }: { onDone: () => Promise<void> }): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [header, setHeader] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-xs text-blue-600 hover:underline"
+      >
+        更新官号灵机 Cookie
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-slate-50/60 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-medium text-slate-700">更新官号灵机登录凭证</p>
+        <button
+          type="button"
+          onClick={() => {
+            setHeader("");
+            setOpen(false);
+          }}
+          className="text-xs text-slate-400 hover:text-slate-700"
+        >
+          取消
+        </button>
+      </div>
+      <textarea
+        value={header}
+        onChange={(event) => setHeader(event.target.value)}
+        rows={3}
+        autoComplete="off"
+        spellCheck={false}
+        placeholder="粘贴请求头中的完整 Cookie（name=value; name2=value2）"
+        className="mt-2 w-full resize-y rounded-md border border-input bg-white px-3 py-2 font-mono text-[11px] outline-none focus:border-blue-400"
+      />
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <p className="text-[11px] text-slate-400">保存后只显示有效状态，不回显凭证内容。</p>
+        <button
+          type="button"
+          disabled={busy || header.trim().length === 0}
+          onClick={async () => {
+            const cookies = parseCookieHeader(header);
+            if (Object.keys(cookies).length === 0) {
+              toast.error("没有识别到有效 Cookie");
+              return;
+            }
+            setBusy(true);
+            try {
+              await saveCookieAction({ basecamp: "lingji", cookies });
+              setHeader("");
+              setOpen(false);
+              toast.success("官号灵机 Cookie 已更新");
+              await onDone();
+            } catch (error) {
+              toast.error(`更新失败：${(error as Error).message}`);
+            } finally {
+              setBusy(false);
+            }
+          }}
+          className="rounded-md bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+        >
+          {busy ? "保存中..." : "保存凭证"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** 补更早范围（矩阵 7 天覆盖不到的历史，保留原 backfillRange 能力） */
 function BackfillForm({ onDone }: { onDone: () => Promise<void> }): React.JSX.Element {
   const today = new Date().toISOString().slice(0, 10);
   const monthAgo = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
-  const [job, setJob] = useState<BackfillJob | "ks_history" | "ks_gift">("daily");
+  const [job, setJob] = useState<BackfillJob | "ks_history" | "ks_gift" | "lingji_history">(
+    "daily",
+  );
   const [from, setFrom] = useState(monthAgo);
   const [to, setTo] = useState(today);
   const [busy, setBusy] = useState(false);
@@ -519,7 +650,9 @@ function BackfillForm({ onDone }: { onDone: () => Promise<void> }): React.JSX.El
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-slate-50/60 px-3 py-2.5">
       <select
         value={job}
-        onChange={(e) => setJob(e.target.value as BackfillJob | "ks_history" | "ks_gift")}
+        onChange={(e) =>
+          setJob(e.target.value as BackfillJob | "ks_history" | "ks_gift" | "lingji_history")
+        }
         className="bg-card h-8 rounded border border-input px-2 text-xs"
       >
         <option value="daily">主播日报</option>
@@ -529,6 +662,7 @@ function BackfillForm({ onDone }: { onDone: () => Promise<void> }): React.JSX.El
         <option value="game">推广游戏</option>
         <option value="ks_history">快手·历史直播</option>
         <option value="ks_gift">快手·补礼物数据（流水分时）</option>
+        <option value="lingji_history">抖音灵机·官号复盘</option>
       </select>
       <input
         type="date"
@@ -554,6 +688,9 @@ function BackfillForm({ onDone }: { onDone: () => Promise<void> }): React.JSX.El
             } else if (job === "ks_gift") {
               await triggerKuaishouSync({ type: "gift", fromDate: from, toDate: to });
               toast.success(`快手补礼物数据 ${from} ~ ${to} 已入队（需先有历史直播场次）`);
+            } else if (job === "lingji_history") {
+              await triggerZhaohuaOfficialReplay({ fromDate: from, toDate: to });
+              toast.success(`官号复盘 ${from} ~ ${to} 已入队`);
             } else {
               const r = await backfillRange({ job, from, to, basecamp: "cs" });
               toast.success(`已入队 ${r.days} 天（${from} ~ ${to}）`);

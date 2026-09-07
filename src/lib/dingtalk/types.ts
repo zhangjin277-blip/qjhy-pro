@@ -80,3 +80,22 @@ export const DingtalkUserListResponse = z.object({
   request_id: z.string().optional(),
 });
 export type DingtalkUserListResponse = z.infer<typeof DingtalkUserListResponse>;
+
+export const DingtalkUserDetail = z.object({
+  userid: z.string(),
+  unionid: z.string().optional(),
+  name: z.string(),
+  mobile: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+  dept_id_list: z.array(z.number()).optional(),
+  hired_date: z.union([z.number(), z.string()]).nullable().optional(),
+  active: z.boolean().optional(),
+});
+export type DingtalkUserDetail = z.infer<typeof DingtalkUserDetail>;
+
+export const DingtalkUserDetailResponse = z.object({
+  errcode: z.number(),
+  errmsg: z.string().optional(),
+  result: DingtalkUserDetail.optional(),
+  request_id: z.string().optional(),
+});

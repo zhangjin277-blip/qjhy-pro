@@ -16,14 +16,15 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils/cn";
-import type {
-  DrawerDailyRow,
-  DrawerDetailResponse,
-  DrawerKpiBlock,
-  DrawerMetric,
-  DrawerTopAnchor,
-  GroupKey,
-  ProjectKey,
+import {
+  PROJECT_LABELS,
+  type DrawerDailyRow,
+  type DrawerDetailResponse,
+  type DrawerKpiBlock,
+  type DrawerMetric,
+  type DrawerTopAnchor,
+  type GroupKey,
+  type ProjectKey,
 } from "@/modules/dashboard";
 import { formatChineseNumber } from "./format";
 
@@ -46,10 +47,6 @@ interface DashboardDrawerProps {
   onClose: () => void;
 }
 
-const PROJECT_LABEL: Record<ProjectKey, string> = {
-  ddz: "斗地主",
-  three: "三国",
-};
 const GROUP_LABEL: Record<GroupKey, string> = {
   all: "总",
   online: "线上",
@@ -60,7 +57,7 @@ const GROUP_LABEL: Record<GroupKey, string> = {
 function buildBreadcrumb(p: DrawerOpenPayload): string {
   if (!p.project) return "核心数据 / 全业务";
   const groupLabel = !p.group || p.group === "all" ? "总" : GROUP_LABEL[p.group];
-  return `业务细分 / ${PROJECT_LABEL[p.project]} / ${groupLabel}`;
+  return `业务细分 / ${PROJECT_LABELS[p.project]} / ${groupLabel}`;
 }
 
 /** 单位推断：人 / h / 中文缩写 */

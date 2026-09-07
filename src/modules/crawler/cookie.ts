@@ -4,7 +4,7 @@ import { crawler_cookie_session } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { notifyCookieExpired } from "@/lib/notify";
 
-export type Basecamp = "cs" | "nc1" | "nc2" | "kuaishou";
+export type Basecamp = "cs" | "nc1" | "nc2" | "kuaishou" | "lingji";
 
 export interface CookieRecord {
   basecamp: Basecamp;
@@ -39,7 +39,7 @@ export async function markCookieExpired(basecamp: Basecamp): Promise<void> {
     )
     .returning({ basecamp: crawler_cookie_session.basecamp });
   if (rows.length === 0) return; // 已是 expired，不重复通知
-  const platform = basecamp === "kuaishou" ? "快手" : "抖音";
+  const platform = basecamp === "kuaishou" ? "快手" : basecamp === "lingji" ? "抖音灵机" : "抖音";
   await notifyCookieExpired({ platform, basecamp });
 }
 

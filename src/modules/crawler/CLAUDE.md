@@ -20,6 +20,7 @@ cron(worker/index.ts) → `enqueue` → pg-boss(`pgboss.job` 表) → handler(wo
 ## Cookie
 
 - 存 `crawler_cookie_session`（PK=basecamp，jsonb cookies）。失效→`markCookieExpired`（只在 active→expired 转换时通知：报错机器人 + COOKIE_ALERT_DINGTALK_WEBHOOK「更新」机器人）
+- **抖音 cs cookie 续期 + 断档补数完整 runbook：见本目录 `COOKIE-RENEWAL.md`**（约 28 天掉一次；chrome-devtools MCP 开 union.bytedance.com → 用户登录 → 抓请求头 cookie → SQL 写 NAS → dispatch-check-ready 补数）
 - 快手续期流程见 memory qjhy-pro-crawler-architecture「快手 cookie 续期流程」：关键 `kuaishou.web.cp.api_st` 是 HttpOnly，只能从浏览器网络请求头抓
 - jigou/666 的接口**纯 Node fetch 即可**（不需要 __NS_sig3 签名）；抖音百应必须 puppeteer（要前端 SDK 签名）
 

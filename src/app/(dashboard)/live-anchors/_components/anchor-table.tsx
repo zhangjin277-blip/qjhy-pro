@@ -142,6 +142,7 @@ export function AnchorTable({
               {[
                 { label: "姓名", w: "18%" },
                 { label: "业务线", w: "8%" },
+                { label: "主播类型", w: "9%" },
                 { label: "雇佣类型", w: "8%" },
                 { label: "试播日", w: "9%" },
                 { label: "签约日", w: "9%" },
@@ -193,6 +194,19 @@ export function AnchorTable({
                     {/* 业务线 */}
                     <td className="px-3 py-[11px] align-top">
                       <BusinessLineChip value={anchor.business_line} />
+                    </td>
+
+                    {/* 雇佣类型 */}
+                    <td className="px-3 py-[11px] align-top">
+                      <span
+                        className={
+                          anchor.anchor_type === "竞价主播"
+                            ? "inline-flex items-center rounded-sm border border-violet-200 bg-violet-50 px-[7px] py-[1px] text-[11px] font-medium text-violet-700"
+                            : "inline-flex items-center rounded-sm border border-emerald-200 bg-emerald-50 px-[7px] py-[1px] text-[11px] font-medium text-emerald-700"
+                        }
+                      >
+                        {anchor.anchor_type ?? "生态主播"}
+                      </span>
                     </td>
 
                     {/* 雇佣类型 */}

@@ -89,6 +89,38 @@ export async function triggerKuaishouSync(input: unknown): Promise<{ ok: true }>
   return { ok: true };
 }
 
+const TriggerZhaohuaOfficialReplayInput = z.object({
+  fromDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  toDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+});
+
+/** 手动触发造化仙府官号灵机下播复盘采集；不传日期时由 Worker 拉前一天。 */
+export async function triggerZhaohuaOfficialReplay(input: unknown): Promise<{ ok: true }> {
+  const data = TriggerZhaohuaOfficialReplayInput.parse(input);
+  if ((data.fromDate && !data.toDate) || (!data.fromDate && data.toDate)) {
+    throw new Error("日期范围不完整");
+  }
+  if (data.fromDate && data.toDate && data.fromDate > data.toDate) {
+    throw new Error("开始日期不能晚于结束日期");
+  }
+  const { userId } = await requirePoint("crawler", "run_jobs");
+  await enqueue(JOB_NAMES.SYNC_ZHAOHUA_OFFICIAL_REPLAYS, data);
+  await writeAuditLog({
+    user_id: userId,
+    action: "CRAWLER_ZHAOHUA_OFFICIAL_REPLAY_TRIGGER",
+    target_type: "crawler",
+    target_id: data.fromDate ? `${data.fromDate}~${data.toDate}` : "yesterday",
+    after: data as Record<string, unknown>,
+  });
+  return { ok: true };
+}
+
 /** 按类型 × 日期范围批量入队（每天一个 job）。用于补漏数据，不触发其它采集任务。*/
 export async function backfillRange(input: unknown): Promise<{ ok: true; days: number }> {
   const data = BackfillRangeInput.parse(input);
@@ -115,8 +147,10 @@ export async function backfillRange(input: unknown): Promise<{ ok: true; days: n
 }
 
 const SaveCookieInput = z.object({
-  basecamp: z.enum(["cs", "nc1", "nc2"]),
-  cookies: z.record(z.string(), z.string()),
+  basecamp: z.enum(["cs", "nc1", "nc2", "kuaishou", "lingji"]),
+  cookies: z.record(z.string(), z.string()).refine((cookies) => Object.keys(cookies).length > 0, {
+    message: "Cookie 不能为空",
+  }),
 });
 export async function saveCookieAction(input: unknown): Promise<{ ok: true }> {
   const data = SaveCookieInput.parse(input);

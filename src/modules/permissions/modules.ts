@@ -7,6 +7,7 @@
 
 export const MODULE_KEYS = [
   "dashboard",
+  "project_zhaohua",
   "anchors",
   "crawler",
   "permissions",
@@ -17,12 +18,15 @@ export const MODULE_KEYS = [
   "editing_workflow",
   "software_library",
   "recording",
+  "people_performance",
+  "business_recruitment",
 ] as const;
 
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
 export const MODULE_LABEL: Record<ModuleKey, string> = {
   dashboard: "工作台",
+  project_zhaohua: "造化仙府",
   anchors: "主播明细",
   crawler: "爬虫监控",
   permissions: "权限管理",
@@ -33,10 +37,13 @@ export const MODULE_LABEL: Record<ModuleKey, string> = {
   editing_workflow: "剪辑工作流",
   software_library: "软件库",
   recording: "直播录制",
+  people_performance: "人员绩效",
+  business_recruitment: "商务招募",
 };
 
 export const MODULE_DESC: Record<ModuleKey, string> = {
   dashboard: "业务看板 / 数据总览",
+  project_zhaohua: "项目中心 / 造化仙府项目协作与执行数据",
   anchors: "主播列表 / 编辑 / 导出",
   crawler: "抖音 / 快手数据爬取（仅 admin）",
   permissions: "用户角色与权限分配（仅 admin）",
@@ -47,6 +54,8 @@ export const MODULE_DESC: Record<ModuleKey, string> = {
   editing_workflow: "剪辑任务全链路看板 / 派单 / 审核 / 发布",
   software_library: "工作软件上传下载 / 分类管理",
   recording: "直播录制任务与录像文件管理",
+  people_performance: "非主播员工试用期与正式绩效考核",
+  business_recruitment: "主播候选人登记、初评、复评与签约跟进",
 };
 
 export function isModuleKey(value: string): value is ModuleKey {
@@ -71,6 +80,7 @@ export interface PermissionPointDef {
 
 export const MODULE_POINTS: Record<ModuleKey, PermissionPointDef[]> = {
   dashboard: [{ key: "export", label: "导出", section: "数据" }],
+  project_zhaohua: [{ key: "project_edit", label: "项目数据编辑", section: "项目协作" }],
   anchors: [{ key: "export", label: "导出 CSV", section: "数据" }],
   crawler: [
     { key: "run_jobs", label: "重跑 / 补数", section: "采集" },
@@ -122,6 +132,17 @@ export const MODULE_POINTS: Record<ModuleKey, PermissionPointDef[]> = {
   recording: [
     { key: "task_manage", label: "录制任务管理", section: "录制" },
     { key: "file_delete", label: "删除录像", section: "录制", sensitive: true },
+  ],
+  people_performance: [
+    { key: "manage_profiles", label: "人员档案与周期管理", section: "人员" },
+    { key: "manage_process", label: "代办与流程调整", section: "流程", sensitive: true },
+    { key: "calibrate", label: "HR校准与定级", section: "结果", sensitive: true },
+  ],
+  business_recruitment: [
+    { key: "candidate_edit", label: "候选人登记 / 商务初评", section: "招募" },
+    { key: "demand_manage", label: "招聘需求维护", section: "招募" },
+    { key: "operation_review", label: "运营复评 / 带教分配", section: "复评" },
+    { key: "signing_manage", label: "入会 / 签约 / 开播维护", section: "跟进" },
   ],
 };
 

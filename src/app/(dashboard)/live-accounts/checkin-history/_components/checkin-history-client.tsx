@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { Download, LoaderCircle, X } from "lucide-react";
+import { toast } from "sonner";
 import type { CheckinDayResult } from "@/modules/checkin/queries";
 import { fetchCheckinDay, insertManualSessionAction, listAnchorsForCorrection } from "../actions";
 import { CheckinGantt } from "./checkin-gantt";
@@ -20,6 +22,34 @@ const PRODUCTS = [
   { value: "电玩捕鱼", label: "电玩捕鱼" },
 ];
 
+type ExportPreset = "lastMonth" | "thisMonth" | "last7Days";
+
+function toLocalIsoDate(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getExportPreset(preset: ExportPreset): { dateFrom: string; dateTo: string } {
+  const today = new Date();
+  if (preset === "lastMonth") {
+    return {
+      dateFrom: toLocalIsoDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
+      dateTo: toLocalIsoDate(new Date(today.getFullYear(), today.getMonth(), 0)),
+    };
+  }
+  if (preset === "thisMonth") {
+    return {
+      dateFrom: toLocalIsoDate(new Date(today.getFullYear(), today.getMonth(), 1)),
+      dateTo: toLocalIsoDate(today),
+    };
+  }
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  return { dateFrom: toLocalIsoDate(sevenDaysAgo), dateTo: toLocalIsoDate(today) };
+}
+
 export function CheckinHistoryClient({
   initialData,
   initialDate,
@@ -31,6 +61,12 @@ export function CheckinHistoryClient({
   const [accountQuery, setAccountQuery] = useState("");
   const [data, setData] = useState<CheckinDayResult>(initialData);
   const [isPending, startTransition] = useTransition();
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportDialog, setExportDialog] = useState<{
+    dateFrom: string;
+    dateTo: string;
+    error: string | null;
+  } | null>(null);
 
   // 补时长 dialog
   const [insertDialog, setInsertDialog] = useState<{
@@ -105,65 +141,55 @@ export function CheckinHistoryClient({
     };
   }, [filteredData]);
 
-  function downloadCsv(): void {
-    const rows: string[][] = [
-      [
-        "产品",
-        "账号",
-        "平台",
-        "主播",
-        "开始时间",
-        "结束时间",
-        "时长(min)",
-        "礼物流水(元)",
-        "消耗(元)",
-        "激活",
-        "激活单价",
-        "付费(元)",
-        "ARPU",
-        "状态",
-        "关闭方式",
-      ],
-    ];
-    for (const acc of filteredData.accounts) {
-      for (const s of acc.sessions) {
-        const cpa =
-          s.cost_yuan != null && s.activations != null && s.activations > 0
-            ? (s.cost_yuan / s.activations).toFixed(2)
-            : "";
-        const arpu =
-          s.payment_yuan != null && s.activations != null && s.activations > 0
-            ? (s.payment_yuan / s.activations).toFixed(2)
-            : "";
-        rows.push([
-          acc.product,
-          acc.account_name,
-          acc.platform,
-          s.anchor_name,
-          new Date(s.start_at).toLocaleString("zh-CN"),
-          s.end_at ? new Date(s.end_at).toLocaleString("zh-CN") : "",
-          s.duration_seconds != null ? Math.round(s.duration_seconds / 60).toString() : "",
-          s.income_cents != null ? (s.income_cents / 100).toFixed(2) : "",
-          s.cost_yuan != null ? s.cost_yuan.toFixed(2) : "",
-          s.activations != null ? Math.round(s.activations).toString() : "",
-          cpa,
-          s.payment_yuan != null ? s.payment_yuan.toFixed(2) : "",
-          arpu,
-          s.status,
-          s.closed_by ?? "",
-        ]);
-      }
+  async function downloadCsv(): Promise<void> {
+    if (!exportDialog || isExporting) return;
+    if (!exportDialog.dateFrom || !exportDialog.dateTo) {
+      setExportDialog({ ...exportDialog, error: "请选择开始和结束日期" });
+      return;
     }
-    const csv = rows
-      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `checkin-history-${date}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+
+    const rangeDays =
+      Math.floor(
+        (new Date(`${exportDialog.dateTo}T12:00:00`).getTime() -
+          new Date(`${exportDialog.dateFrom}T12:00:00`).getTime()) /
+          86_400_000,
+      ) + 1;
+    if (rangeDays < 1) {
+      setExportDialog({ ...exportDialog, error: "结束日期不能早于开始日期" });
+      return;
+    }
+    if (rangeDays > 93) {
+      setExportDialog({ ...exportDialog, error: "单次最多导出 93 天" });
+      return;
+    }
+
+    setIsExporting(true);
+    setExportDialog({ ...exportDialog, error: null });
+    try {
+      const params = new URLSearchParams({
+        date_from: exportDialog.dateFrom,
+        date_to: exportDialog.dateTo,
+      });
+      if (product) params.set("product", product);
+      if (accountQuery.trim()) params.set("account_query", accountQuery.trim());
+      const response = await fetch(`/api/checkin-history/export?${params.toString()}`);
+      if (!response.ok) throw new Error((await response.text()) || "导出失败");
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `checkin-history-${exportDialog.dateFrom}_${exportDialog.dateTo}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setExportDialog(null);
+      toast.success("CSV 已导出");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "导出失败";
+      setExportDialog((current) => (current ? { ...current, error: message } : current));
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   return (
@@ -242,9 +268,10 @@ export function CheckinHistoryClient({
           )}
           <button
             type="button"
-            onClick={downloadCsv}
-            className="rounded border border-slate-300 bg-white px-3 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50"
+            onClick={() => setExportDialog({ ...getExportPreset("lastMonth"), error: null })}
+            className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-50"
           >
+            <Download className="size-3.5" aria-hidden="true" />
             导出 CSV
           </button>
         </div>
@@ -264,6 +291,129 @@ export function CheckinHistoryClient({
             onChanged={() => refresh(date, product)}
           />
         </>
+      )}
+
+      {exportDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => !isExporting && setExportDialog(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="export-dialog-title"
+            className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 id="export-dialog-title" className="text-sm font-semibold text-slate-800">
+                  导出开播记录
+                </h2>
+                <p className="mt-1 text-[11.5px] text-slate-500">选择需要导出的业务日期范围</p>
+              </div>
+              <button
+                type="button"
+                title="关闭"
+                aria-label="关闭"
+                disabled={isExporting}
+                onClick={() => setExportDialog(null)}
+                className="grid size-8 place-items-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mb-4 flex gap-2" aria-label="快捷日期范围">
+              {(
+                [
+                  ["lastMonth", "上个月"],
+                  ["thisMonth", "本月"],
+                  ["last7Days", "近 7 日"],
+                ] as const
+              ).map(([preset, label]) => (
+                <button
+                  key={preset}
+                  type="button"
+                  disabled={isExporting}
+                  onClick={() => setExportDialog({ ...getExportPreset(preset), error: null })}
+                  className="rounded border border-slate-300 px-3 py-1.5 text-[12px] text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-[12px] text-slate-600">
+                <span className="mb-1 block">开始日期</span>
+                <input
+                  type="date"
+                  value={exportDialog.dateFrom}
+                  disabled={isExporting}
+                  onChange={(event) =>
+                    setExportDialog({
+                      ...exportDialog,
+                      dateFrom: event.target.value,
+                      error: null,
+                    })
+                  }
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </label>
+              <label className="text-[12px] text-slate-600">
+                <span className="mb-1 block">结束日期</span>
+                <input
+                  type="date"
+                  value={exportDialog.dateTo}
+                  disabled={isExporting}
+                  onChange={(event) =>
+                    setExportDialog({
+                      ...exportDialog,
+                      dateTo: event.target.value,
+                      error: null,
+                    })
+                  }
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </label>
+            </div>
+
+            <div className="mt-3 rounded bg-slate-50 px-3 py-2 text-[11.5px] text-slate-500">
+              产品：{PRODUCTS.find((item) => item.value === product)?.label ?? "全部"}
+              {accountQuery.trim() ? ` · 账号搜索：${accountQuery.trim()}` : ""}
+            </div>
+            {exportDialog.error && (
+              <p className="mt-3 text-[12px] text-red-600" role="alert">
+                {exportDialog.error}
+              </p>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={isExporting}
+                onClick={() => setExportDialog(null)}
+                className="rounded border border-slate-300 px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={isExporting}
+                onClick={() => void downloadCsv()}
+                className="inline-flex min-w-24 items-center justify-center gap-1.5 rounded bg-primary px-3 py-1.5 text-[12px] font-medium text-white hover:bg-primary/90 disabled:opacity-60"
+              >
+                {isExporting ? (
+                  <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Download className="size-3.5" aria-hidden="true" />
+                )}
+                {isExporting ? "导出中..." : "开始导出"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {insertDialog && (

@@ -102,3 +102,33 @@ export async function openKuaishouPage(cookies: Record<string, string>): Promise
 
   return page;
 }
+
+/** 打开抖音灵机主播后台，供官号下播复盘采集使用。 */
+export async function openLingjiPage(cookies: Record<string, string>): Promise<Page> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setUserAgent(
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+  );
+
+  console.log("[puppeteer/lingji] setting cookies for", Object.keys(cookies).length, "keys");
+  await page.setCookie(
+    ...Object.entries(cookies).map(([name, value]) => ({
+      name,
+      value,
+      domain: ".douyin.com",
+      path: "/",
+    })),
+  );
+
+  await page.goto("https://anchor.douyin.com/anchor/review", {
+    waitUntil: "networkidle2",
+    timeout: 90_000,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 6000));
+  if (!page.url().includes("/anchor/review")) {
+    throw new Error(`Lingji login unavailable, redirected to ${page.url()}`);
+  }
+  return page;
+}

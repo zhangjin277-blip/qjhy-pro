@@ -13,26 +13,31 @@ import type {
   DrawerMetric,
   DrawerTopAnchor,
   ProjectBreakdown,
+  ProjectKey,
   Section2Metric,
 } from "./types";
+import { PROJECT_LABELS, ZHAOHUA_RECRUIT_BROKER_NAME } from "./types";
 
 /** 空响应（scope=reject 时用，所有数值 0、列表空） */
 function emptyOverview(dateFrom: string, dateTo: string): DashboardOverviewResponse {
   const zeroValue = { current: 0, prev_day: 0, prev_week: 0 };
-  const zeroCell = {
-    project: "ddz" as const,
-    group: "all" as const,
-    value: 0,
-    vs_prev: null,
-    anchor_count: 0,
-    sparkline: [],
-  };
-  const zeroProject: ProjectBreakdown = {
-    project: "ddz",
-    total: { ...zeroCell, group: "all" },
-    online: { ...zeroCell, group: "online" },
-    offline: { ...zeroCell, group: "offline" },
-    other: { ...zeroCell, group: "other" },
+  const zeroProject = (project: ProjectKey): ProjectBreakdown => {
+    const zeroCell = (group: ProjectBreakdown["total"]["group"]) => ({
+      project,
+      group,
+      value: 0,
+      prev_value: 0,
+      vs_prev: null,
+      anchor_count: 0,
+      sparkline: [],
+    });
+    return {
+      project,
+      total: zeroCell("all"),
+      online: zeroCell("online"),
+      offline: zeroCell("offline"),
+      other: zeroCell("other"),
+    };
   };
   const metrics: Section2Metric[] = [
     "total_fan_ticket",
@@ -58,8 +63,9 @@ function emptyOverview(dateFrom: string, dateTo: string): DashboardOverviewRespo
     },
     breakdown: metrics.map((m) => ({
       metric: m,
-      ddz: { ...zeroProject, project: "ddz" },
-      three: { ...zeroProject, project: "three" },
+      ddz: zeroProject("ddz"),
+      three: zeroProject("three"),
+      zhaohua: zeroProject("zhaohua"),
     })),
   };
 }
@@ -67,7 +73,7 @@ function emptyOverview(dateFrom: string, dateTo: string): DashboardOverviewRespo
 /**
  * Dashboard 核心 SQL：每个 anchor 映射到 (project, group)
  *
- * 项目（is_threekingdoms）：true → three / false → ddz
+ * 项目：招募经纪人=造化仙府 → zhaohua；否则 is_threekingdoms → three / ddz
  * 分组（broker_name → dingtalk_user → dept → entity_alias.alias）：
  *   - "线上运营" → online
  *   - "线下运营" → offline
@@ -89,7 +95,11 @@ function anchorGroupCte(scope: DashboardScope): SQL {
       SELECT
         ap.anchor_id,
         ap.is_threekingdoms,
-        CASE WHEN ap.is_threekingdoms THEN 'three' ELSE 'ddz' END AS project,
+        CASE
+          WHEN ap.recruit_broker_name = ${ZHAOHUA_RECRUIT_BROKER_NAME} THEN 'zhaohua'
+          WHEN ap.is_threekingdoms THEN 'three'
+          ELSE 'ddz'
+        END AS project,
         CASE
           WHEN ea.alias = '线上运营' THEN 'online'
           WHEN ea.alias = '线下运营' THEN 'offline'
@@ -157,6 +167,7 @@ async function fetchCorePeriod(
           FROM anchor_game_promo_daily agp
           JOIN anchor_profile ap ON ap.anchor_id = agp.anchor_id
           WHERE ap.is_threekingdoms = FALSE
+            AND ap.recruit_broker_name <> ${ZHAOHUA_RECRUIT_BROKER_NAME}
             AND agp.biz_mode = 'cps_all'
             AND agp.date >= ${dateFrom} AND agp.date <= ${dateTo}
             AND ${scopeAnchorWhere(scope, sql`agp.anchor_id`)}
@@ -165,7 +176,7 @@ async function fetchCorePeriod(
           SELECT SUM(mg.before_divided_income)
           FROM anchor_minigame_daily mg
           JOIN anchor_profile ap ON ap.anchor_id = mg.anchor_id
-          WHERE ap.is_threekingdoms = TRUE
+          WHERE (ap.is_threekingdoms = TRUE OR ap.recruit_broker_name = ${ZHAOHUA_RECRUIT_BROKER_NAME})
             AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
             AND ${scopeAnchorWhere(scope, sql`mg.anchor_id`)}
         ), 0)::numeric AS flow
@@ -359,7 +370,7 @@ async function fetchGroupBreakdown(
   scope: DashboardScope,
 ): Promise<
   {
-    project: "ddz" | "three";
+    project: ProjectKey;
     group: "online" | "offline" | "other";
     value: number;
     anchor_count: number;
@@ -383,7 +394,7 @@ async function fetchGroupBreakdown(
     `);
     const rows = result as unknown as Record<string, unknown>[];
     return rows.map((r) => ({
-      project: String(r.project) as "ddz" | "three",
+      project: String(r.project) as ProjectKey,
       group: String(r.group) as "online" | "offline" | "other",
       value: Number(r.value ?? 0),
       anchor_count: Number(r.anchor_count ?? 0),
@@ -407,7 +418,7 @@ async function fetchGroupBreakdown(
     `);
     const rows = result as unknown as Record<string, unknown>[];
     return rows.map((r) => ({
-      project: String(r.project) as "ddz" | "three",
+      project: String(r.project) as ProjectKey,
       group: String(r.group) as "online" | "offline" | "other",
       value: Number(r.value ?? 0),
       anchor_count: Number(r.anchor_count ?? 0),
@@ -433,14 +444,14 @@ async function fetchGroupBreakdown(
     `);
     const rows = result as unknown as Record<string, unknown>[];
     return rows.map((r) => ({
-      project: String(r.project) as "ddz" | "three",
+      project: String(r.project) as ProjectKey,
       group: String(r.group) as "online" | "offline" | "other",
       value: Number(r.value ?? 0),
       anchor_count: Number(r.anchor_count ?? 0),
     }));
   }
 
-  // ─── flow（Section 1 流水：斗地主 cps_all 全 scene 派生 + 三国 minigame before_divided） ──────────────
+  // ─── flow（斗地主 CPS；造化/三国小游戏） ────────────────────────────────
   if (metric === "flow") {
     const result = await db.execute(sql`
       WITH ${anchorGroupCte(scope)},
@@ -458,21 +469,21 @@ async function fetchGroupBreakdown(
           AND agp.date >= ${dateFrom} AND agp.date <= ${dateTo}
         GROUP BY ag.project, ag."group"
       ),
-      three_part AS (
+      minigame_part AS (
         SELECT ag.project, ag."group",
           SUM(mg.before_divided_income)::numeric AS value,
           COUNT(DISTINCT ag.anchor_id)::int AS anchor_count
         FROM anchor_minigame_daily mg
         JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-        WHERE ag.project = 'three'
+        WHERE ag.project IN ('three', 'zhaohua')
           AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
         GROUP BY ag.project, ag."group"
       )
-      SELECT * FROM ddz_part UNION ALL SELECT * FROM three_part
+      SELECT * FROM ddz_part UNION ALL SELECT * FROM minigame_part
     `);
     const rows = result as unknown as Record<string, unknown>[];
     return rows.map((r) => ({
-      project: String(r.project) as "ddz" | "three",
+      project: String(r.project) as ProjectKey,
       group: String(r.group) as "online" | "offline" | "other",
       value: Number(r.value ?? 0),
       anchor_count: Number(r.anchor_count ?? 0),
@@ -494,17 +505,17 @@ async function fetchGroupBreakdown(
     `);
     const rows = result as unknown as Record<string, unknown>[];
     return rows.map((r) => ({
-      project: String(r.project) as "ddz" | "three",
+      project: String(r.project) as ProjectKey,
       group: String(r.group) as "online" | "offline" | "other",
       value: Number(r.value ?? 0),
       anchor_count: Number(r.anchor_count ?? 0),
     }));
   }
 
-  // ─── live_flow / video_flow：斗地主用 game_promo cps_all + scene；三国 live_flow 用 minigame；三国 video_flow = 0 ─
+  // ─── live_flow / video_flow：斗地主 CPS；造化/三国直播小游戏 ─────────────
   if (metric === "live_flow" || metric === "video_flow") {
     const scene = metric === "live_flow" ? "live" : "video";
-    // 斗地主分支：cps_all + promote_scene 限定
+    // CPS 项目分支：cps_all + promote_scene 限定
     const ddzPart = sql`
       ddz_part AS (
         SELECT ag.project, ag."group",
@@ -522,21 +533,21 @@ async function fetchGroupBreakdown(
         GROUP BY ag.project, ag."group"
       )
     `;
-    // 三国分支：仅 live_flow 有数据
+    // 造化/三国分支：仅 live_flow 有数据
     const threePart =
       metric === "live_flow"
         ? sql`,
-      three_part AS (
+      minigame_part AS (
         SELECT ag.project, ag."group",
           SUM(mg.before_divided_income)::numeric AS value,
           COUNT(DISTINCT ag.anchor_id)::int AS anchor_count
         FROM anchor_minigame_daily mg
         JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-        WHERE ag.project = 'three'
+        WHERE ag.project IN ('three', 'zhaohua')
           AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
         GROUP BY ag.project, ag."group"
       )
-      SELECT * FROM ddz_part UNION ALL SELECT * FROM three_part
+      SELECT * FROM ddz_part UNION ALL SELECT * FROM minigame_part
     `
         : sql`
       SELECT * FROM ddz_part
@@ -547,14 +558,14 @@ async function fetchGroupBreakdown(
     `);
     const rows = result as unknown as Record<string, unknown>[];
     return rows.map((r) => ({
-      project: String(r.project) as "ddz" | "three",
+      project: String(r.project) as ProjectKey,
       group: String(r.group) as "online" | "offline" | "other",
       value: Number(r.value ?? 0),
       anchor_count: Number(r.anchor_count ?? 0),
     }));
   }
 
-  // ─── install_or_activate：斗地主 = cps install_finish；三国 = minigame gm_active_ucnt ─
+  // ─── install_or_activate：斗地主 = cps install_finish；造化/三国 = minigame gm_active_ucnt ─
   if (metric === "install_or_activate") {
     const result = await db.execute(sql`
       WITH ${anchorGroupCte(scope)},
@@ -575,7 +586,7 @@ async function fetchGroupBreakdown(
           COUNT(DISTINCT ag.anchor_id)::int AS anchor_count
         FROM anchor_minigame_daily mg
         JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-        WHERE ag.project = 'three'
+        WHERE ag.project IN ('three', 'zhaohua')
           AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
         GROUP BY ag.project, ag."group"
       )
@@ -583,7 +594,7 @@ async function fetchGroupBreakdown(
     `);
     const rows = result as unknown as Record<string, unknown>[];
     return rows.map((r) => ({
-      project: String(r.project) as "ddz" | "three",
+      project: String(r.project) as ProjectKey,
       group: String(r.group) as "online" | "offline" | "other",
       value: Number(r.value ?? 0),
       anchor_count: Number(r.anchor_count ?? 0),
@@ -596,7 +607,7 @@ async function fetchGroupBreakdown(
 /** sparkline：日级数组（升序，按 dateFrom..dateTo 取数据库返回的天，没数据的日子简单丢弃） */
 async function fetchSparkline(
   metric: Section2Metric,
-  project: "ddz" | "three",
+  project: ProjectKey,
   group: "online" | "offline" | "other",
   dateFrom: string,
   dateTo: string,
@@ -661,7 +672,7 @@ async function fetchSparkline(
     return (result as unknown as Record<string, unknown>[]).map((r) => Number(r.v ?? 0));
   }
 
-  // flow（Section 1 流水）：斗地主 cps_all 全 scene 派生 / 三国 minigame
+  // flow：斗地主 CPS；造化/三国小游戏
   if (metric === "flow") {
     if (project === "ddz") {
       const result = await db.execute(sql`
@@ -673,7 +684,7 @@ async function fetchSparkline(
           ), 0)::numeric AS v
         FROM anchor_game_promo_daily agp
         JOIN anchor_group ag ON ag.anchor_id = agp.anchor_id
-        WHERE ag.project = 'ddz' AND ag."group" = ${group}
+        WHERE ag.project = ${project} AND ag."group" = ${group}
           AND agp.biz_mode = 'cps_all'
           AND agp.date >= ${dateFrom} AND agp.date <= ${dateTo}
         GROUP BY agp.date ORDER BY agp.date
@@ -685,7 +696,7 @@ async function fetchSparkline(
       SELECT mg.date AS d, COALESCE(SUM(mg.before_divided_income), 0)::numeric AS v
       FROM anchor_minigame_daily mg
       JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-      WHERE ag.project = 'three' AND ag."group" = ${group}
+      WHERE ag.project IN ('three', 'zhaohua') AND ag."group" = ${group}
         AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
       GROUP BY mg.date ORDER BY mg.date
     `);
@@ -718,7 +729,7 @@ async function fetchSparkline(
           ), 0)::numeric AS v
         FROM anchor_game_promo_daily agp
         JOIN anchor_group ag ON ag.anchor_id = agp.anchor_id
-        WHERE ag.project = 'ddz' AND ag."group" = ${group}
+      WHERE ag.project = ${project} AND ag."group" = ${group}
           AND agp.biz_mode = 'cps_all' AND agp.promote_scene = ${scene}
           AND agp.date >= ${dateFrom} AND agp.date <= ${dateTo}
         GROUP BY agp.date ORDER BY agp.date
@@ -731,7 +742,7 @@ async function fetchSparkline(
       SELECT mg.date AS d, COALESCE(SUM(mg.before_divided_income), 0)::numeric AS v
       FROM anchor_minigame_daily mg
       JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-      WHERE ag.project = 'three' AND ag."group" = ${group}
+      WHERE ag.project IN ('three', 'zhaohua') AND ag."group" = ${group}
         AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
       GROUP BY mg.date ORDER BY mg.date
     `);
@@ -746,7 +757,7 @@ async function fetchSparkline(
           COALESCE(SUM(agp.promote_install_finish_ucnt_1d), 0)::numeric AS v
         FROM anchor_game_promo_daily agp
         JOIN anchor_group ag ON ag.anchor_id = agp.anchor_id
-        WHERE ag.project = 'ddz' AND ag."group" = ${group}
+        WHERE ag.project = ${project} AND ag."group" = ${group}
           AND agp.biz_mode = 'cps'
           AND agp.date >= ${dateFrom} AND agp.date <= ${dateTo}
         GROUP BY agp.date ORDER BY agp.date
@@ -758,7 +769,7 @@ async function fetchSparkline(
       SELECT mg.date AS d, COALESCE(SUM(mg.gm_active_ucnt), 0)::numeric AS v
       FROM anchor_minigame_daily mg
       JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-      WHERE ag.project = 'three' AND ag."group" = ${group}
+      WHERE ag.project IN ('three', 'zhaohua') AND ag."group" = ${group}
         AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
       GROUP BY mg.date ORDER BY mg.date
     `);
@@ -773,7 +784,7 @@ export async function getSection2Breakdown(
   dateFrom: string,
   dateTo: string,
   scope: DashboardScope,
-): Promise<{ ddz: ProjectBreakdown; three: ProjectBreakdown }> {
+): Promise<Record<ProjectKey, ProjectBreakdown>> {
   const days =
     Math.round((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400_000) + 1;
   const prevFrom = shiftDate(dateFrom, -days);
@@ -791,14 +802,17 @@ export async function getSection2Breakdown(
   const prevMap = new Map<string, number>();
   prev.forEach((r) => prevMap.set(`${r.project}:${r.group}`, r.value));
 
-  // sparklines（6 个 cell × N 天）
-  const sparklineKeys: ["ddz" | "three", "online" | "offline" | "other"][] = [
+  // sparklines（9 个 cell × N 天）
+  const sparklineKeys: [ProjectKey, "online" | "offline" | "other"][] = [
     ["ddz", "online"],
     ["ddz", "offline"],
     ["ddz", "other"],
     ["three", "online"],
     ["three", "offline"],
     ["three", "other"],
+    ["zhaohua", "online"],
+    ["zhaohua", "offline"],
+    ["zhaohua", "other"],
   ];
   const sparklines = await Promise.all(
     sparklineKeys.map(([p, g]) => fetchSparkline(metric, p, g, dateFrom, dateTo, scope)),
@@ -806,12 +820,33 @@ export async function getSection2Breakdown(
   const sparkMap = new Map<string, number[]>();
   sparklineKeys.forEach(([p, g], i) => sparkMap.set(`${p}:${g}`, sparklines[i] ?? []));
 
-  function isNotApplicable(project: "ddz" | "three"): boolean {
+  const rodResult = await db.execute(sql`
+    WITH ${anchorGroupCte(scope)}, minigame_live AS (
+      SELECT anchor_id, date
+      FROM anchor_minigame_daily
+      WHERE date >= ${dateFrom} AND date <= ${dateTo}
+        AND COALESCE(live_duration, 0) > 0
+      GROUP BY anchor_id, date
+    )
+    SELECT ag.project, ag."group", COUNT(DISTINCT ad.anchor_id)::numeric AS rod_anchor_count
+    FROM anchor_daily ad
+    JOIN anchor_group ag ON ag.anchor_id = ad.anchor_id
+    JOIN minigame_live mg ON mg.anchor_id = ad.anchor_id AND mg.date = ad.date
+    WHERE ad.date >= ${dateFrom} AND ad.date <= ${dateTo}
+      AND COALESCE(ad.live_duration_1d, 0) > 0
+    GROUP BY ag.project, ag."group"
+  `);
+  const rodMap = new Map<string, number>();
+  (rodResult as unknown as Record<string, unknown>[]).forEach((row) => {
+    rodMap.set(`${row.project}:${row.group}`, Number(row.rod_anchor_count ?? 0));
+  });
+
+  function isNotApplicable(project: ProjectKey): boolean {
     return project === "three" && metric === "video_flow";
   }
 
   function buildCell(
-    project: "ddz" | "three",
+    project: ProjectKey,
     group: "online" | "offline" | "other",
   ): ProjectBreakdown["online"] {
     const notApplicable = isNotApplicable(project);
@@ -820,6 +855,7 @@ export async function getSection2Breakdown(
         project,
         group,
         value: 0,
+        prev_value: null,
         vs_prev: null,
         anchor_count: 0,
         sparkline: [],
@@ -834,13 +870,15 @@ export async function getSection2Breakdown(
       project,
       group,
       value,
+      prev_value: prevValue,
       vs_prev: vsPrev,
       anchor_count: cur?.anchor_count ?? 0,
+      rod_anchor_count: rodMap.get(`${project}:${group}`) ?? 0,
       sparkline: sparkMap.get(`${project}:${group}`) ?? [],
     };
   }
 
-  function buildProject(project: "ddz" | "three"): ProjectBreakdown {
+  function buildProject(project: ProjectKey): ProjectBreakdown {
     const online = buildCell(project, "online");
     const offline = buildCell(project, "offline");
     const other = buildCell(project, "other");
@@ -852,6 +890,7 @@ export async function getSection2Breakdown(
           project,
           group: "all",
           value: 0,
+          prev_value: null,
           vs_prev: null,
           anchor_count: 0,
           sparkline: [],
@@ -875,6 +914,7 @@ export async function getSection2Breakdown(
         project,
         group: "all",
         value: totalValue,
+        prev_value: prevTotal,
         vs_prev: totalVsPrev,
         anchor_count: totalCount,
         sparkline: [],
@@ -888,6 +928,7 @@ export async function getSection2Breakdown(
   return {
     ddz: buildProject("ddz"),
     three: buildProject("three"),
+    zhaohua: buildProject("zhaohua"),
   };
 }
 
@@ -927,10 +968,6 @@ export async function getDashboardOverview(
 
 /* ──────────────────── 抽屉详情（重构：一次性查 9 维度日级数据） ──────────────────── */
 
-const PROJECT_LABEL: Record<"ddz" | "three", string> = {
-  ddz: "斗地主",
-  three: "三国",
-};
 const GROUP_LABEL: Record<"all" | "online" | "offline" | "other", string> = {
   all: "总",
   online: "线上",
@@ -940,7 +977,7 @@ const GROUP_LABEL: Record<"all" | "online" | "offline" | "other", string> = {
 
 function buildTitle(filters: DrawerDetailFilters): string {
   if (!filters.project) return "全业务";
-  const project = PROJECT_LABEL[filters.project];
+  const project = PROJECT_LABELS[filters.project];
   const group = filters.group ? GROUP_LABEL[filters.group] : "总";
   return `${project} · ${group}`;
 }
@@ -988,8 +1025,8 @@ async function fetchDailyMatrix(
     GROUP BY ad.date ORDER BY ad.date
   `);
 
-  // flow（Section 1）：斗地主 cps_all 全 scene + 三国 minigame
-  const ddzFlowP = db.execute(sql`
+  // flow（Section 1）：斗地主/造化仙府 cps_all 全 scene + 三国 minigame
+  const gamePromoFlowP = db.execute(sql`
     WITH ${anchorGroupCte(scope)}
     SELECT agp.date AS d,
       COALESCE(SUM(
@@ -1011,7 +1048,7 @@ async function fetchDailyMatrix(
       COALESCE(SUM(mg.before_divided_income), 0)::numeric AS v
     FROM anchor_minigame_daily mg
     JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-    WHERE ag.project = 'three'
+    WHERE ag.project IN ('three', 'zhaohua')
       AND ${groupFilter(filters)}
       AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
     GROUP BY mg.date ORDER BY mg.date
@@ -1046,8 +1083,8 @@ async function fetchDailyMatrix(
   `);
 
   // ─── Section 2：5 个 metric ────────────────────────────
-  // live_flow（ddz）/ live_flow（three） / video_flow（ddz only） / install_or_activate（ddz） / install_or_activate（three）
-  const ddzLiveFlowP = db.execute(sql`
+  // live/video/install：斗地主与造化仙府走 CPS，三国走 minigame
+  const gamePromoLiveFlowP = db.execute(sql`
     WITH ${anchorGroupCte(scope)}
     SELECT agp.date AS d,
       COALESCE(SUM(
@@ -1069,13 +1106,13 @@ async function fetchDailyMatrix(
       COALESCE(SUM(mg.before_divided_income), 0)::numeric AS v
     FROM anchor_minigame_daily mg
     JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-    WHERE ag.project = 'three'
+    WHERE ag.project IN ('three', 'zhaohua')
       AND ${groupFilter(filters)}
       AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
     GROUP BY mg.date ORDER BY mg.date
   `);
 
-  const ddzVideoFlowP = db.execute(sql`
+  const gamePromoVideoFlowP = db.execute(sql`
     WITH ${anchorGroupCte(scope)}
     SELECT agp.date AS d,
       COALESCE(SUM(
@@ -1091,7 +1128,7 @@ async function fetchDailyMatrix(
     GROUP BY agp.date ORDER BY agp.date
   `);
 
-  const ddzInstallP = db.execute(sql`
+  const gamePromoInstallP = db.execute(sql`
     WITH ${anchorGroupCte(scope)}
     SELECT agp.date AS d,
       COALESCE(SUM(agp.promote_install_finish_ucnt_1d), 0)::numeric AS v
@@ -1110,7 +1147,7 @@ async function fetchDailyMatrix(
       COALESCE(SUM(mg.gm_active_ucnt), 0)::numeric AS v
     FROM anchor_minigame_daily mg
     JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-    WHERE ag.project = 'three'
+    WHERE ag.project IN ('three', 'zhaohua')
       AND ${groupFilter(filters)}
       AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
     GROUP BY mg.date ORDER BY mg.date
@@ -1140,27 +1177,27 @@ async function fetchDailyMatrix(
 
   const [
     adailyR,
-    ddzFlowR,
+    gamePromoFlowR,
     threeFlowR,
     newR,
     firstLiveR,
-    ddzLiveR,
+    gamePromoLiveR,
     threeLiveR,
-    ddzVideoR,
-    ddzInstallR,
+    gamePromoVideoR,
+    gamePromoInstallR,
     threeActiveR,
     showUvR,
     watchUvR,
   ] = await Promise.all([
     adailyP,
-    ddzFlowP,
+    gamePromoFlowP,
     threeFlowP,
     newP,
     firstLiveP,
-    ddzLiveFlowP,
+    gamePromoLiveFlowP,
     threeLiveFlowP,
-    ddzVideoFlowP,
-    ddzInstallP,
+    gamePromoVideoFlowP,
+    gamePromoInstallP,
     threeActiveP,
     showUvP,
     watchUvP,
@@ -1190,36 +1227,38 @@ async function fetchDailyMatrix(
     activeMap.set(String(r.d), Number(r.active_anchor_count ?? 0));
   });
 
-  const ddzFlowMap = toMap(ddzFlowR);
+  const gamePromoFlowMap = toMap(gamePromoFlowR);
   const threeFlowMap = toMap(threeFlowR);
 
-  // Section 1 flow：合并 ddz cps_all 全 scene + 三国 minigame（按 filters.project 限制）
+  // Section 1 flow：合并 CPS 项目 + 三国 minigame（按 filters.project 限制）
   let flowMap: Map<string, number>;
-  if (filters.project === "ddz") flowMap = ddzFlowMap;
-  else if (filters.project === "three") flowMap = threeFlowMap;
-  else flowMap = unionFlow(ddzFlowMap, threeFlowMap);
+  if (filters.project === "ddz") flowMap = gamePromoFlowMap;
+  else if (filters.project === "three" || filters.project === "zhaohua") flowMap = threeFlowMap;
+  else flowMap = unionFlow(gamePromoFlowMap, threeFlowMap);
 
-  // live_flow：ddz scene=live + 三国 minigame（按 filters.project 限制）
-  const ddzLiveMap = toMap(ddzLiveR);
+  // live_flow：CPS scene=live + 三国 minigame（按 filters.project 限制）
+  const gamePromoLiveMap = toMap(gamePromoLiveR);
   const threeLiveMap = toMap(threeLiveR);
   let liveFlowMap: Map<string, number>;
-  if (filters.project === "ddz") liveFlowMap = ddzLiveMap;
-  else if (filters.project === "three") liveFlowMap = threeLiveMap;
-  else liveFlowMap = unionFlow(ddzLiveMap, threeLiveMap);
+  if (filters.project === "ddz") liveFlowMap = gamePromoLiveMap;
+  else if (filters.project === "three" || filters.project === "zhaohua") liveFlowMap = threeLiveMap;
+  else liveFlowMap = unionFlow(gamePromoLiveMap, threeLiveMap);
 
-  // video_flow：仅斗地主有数据；三国 → 0（filters.project='three' 时返回空）
-  const ddzVideoMap = toMap(ddzVideoR);
+  // video_flow：CPS 项目有数据；三国 → 0（filters.project='three' 时返回空）
+  const gamePromoVideoMap = toMap(gamePromoVideoR);
   let videoFlowMap: Map<string, number>;
-  if (filters.project === "three") videoFlowMap = new Map();
-  else videoFlowMap = ddzVideoMap;
+  if (filters.project === "three" || filters.project === "zhaohua") videoFlowMap = new Map();
+  else videoFlowMap = gamePromoVideoMap;
 
-  // install_or_activate：ddz install_finish + 三国 gm_active（按 filters.project 限制）
-  const ddzInstallMap = toMap(ddzInstallR);
+  // install_or_activate：CPS install_finish + 三国 gm_active（按 filters.project 限制）
+  const gamePromoInstallMap = toMap(gamePromoInstallR);
   const threeActiveMap = toMap(threeActiveR);
   let installOrActivateMap: Map<string, number>;
-  if (filters.project === "ddz") installOrActivateMap = ddzInstallMap;
-  else if (filters.project === "three") installOrActivateMap = threeActiveMap;
-  else installOrActivateMap = unionFlow(ddzInstallMap, threeActiveMap);
+  if (filters.project && filters.project !== "three" && filters.project !== "zhaohua") {
+    installOrActivateMap = gamePromoInstallMap;
+  } else if (filters.project === "three" || filters.project === "zhaohua")
+    installOrActivateMap = threeActiveMap;
+  else installOrActivateMap = unionFlow(gamePromoInstallMap, threeActiveMap);
 
   // 用 metric 名作 key
   const result = new Map<DrawerMetric, Map<string, number>>();
@@ -1309,8 +1348,8 @@ function aggregateMetric(
  * - new_anchor_count        → JOIN anchor_profile，按 join_time 降序，全量返回
  * - active_anchor_count     → 按开播天数（COUNT(date) WHERE live_duration_1d > 0）降序，Top 20
  * - total_fan_ticket        → 按 SUM(total_fan_ticket) 降序，Top 20
- * - flow / live_flow / video_flow → 项目分支聚合（ddz=cps_all、scene=live/video；three=minigame），Top 20
- * - install_or_activate     → 项目分支（ddz=install_finish；three=gm_active），Top 20
+ * - flow / live_flow / video_flow → 项目分支聚合（CPS 项目=cps_all、scene=live/video；three=minigame），Top 20
+ * - install_or_activate     → 项目分支（CPS 项目=install_finish；three=gm_active），Top 20
  * - show_uv / watch_uv      → SUM(portrait.{col})，Top 20
  *
  * 总数（total_anchors）：count of anchors with metric_value > 0（在筛选 + 周期内）
@@ -1442,7 +1481,7 @@ async function fetchTopAnchors(
   }
 
   // ─── flow / live_flow / video_flow / install_or_activate ─────────────────
-  // 项目分支：ddz 用 anchor_game_promo_daily / 三国 用 anchor_minigame_daily
+  // 项目分支：斗地主/造化仙府用 anchor_game_promo_daily / 三国用 anchor_minigame_daily
   if (
     metric === "flow" ||
     metric === "live_flow" ||
@@ -1535,7 +1574,7 @@ async function countPortraitTotal(
  * flow / live_flow / video_flow / install_or_activate 的项目分支聚合。
  *
  * 单项目（filters.project 限定）→ 直接走对应分支；
- * 跨项目 → 跑 ddz + three 分支再 UNION 后聚合（per anchor sum），全集排序 Top 20。
+ * 跨项目 → 跑 CPS + three 分支再 UNION 后聚合（per anchor sum），全集排序 Top 20。
  */
 async function fetchTopAnchorsProjectBranched(
   filters: DrawerDetailFilters,
@@ -1544,8 +1583,8 @@ async function fetchTopAnchorsProjectBranched(
 ): Promise<{ rows: DrawerTopAnchor[]; total: number }> {
   const { date_from: dateFrom, date_to: dateTo } = filters;
 
-  // ddz 分支 SQL 片段（计算 per-anchor metric_value）
-  function ddzPart(): SQL {
+  // CPS 项目分支 SQL 片段（计算 per-anchor metric_value）
+  function gamePromoPart(): SQL {
     if (metric === "flow") {
       return sql`
         SELECT agp.anchor_id,
@@ -1577,7 +1616,7 @@ async function fetchTopAnchorsProjectBranched(
         GROUP BY agp.anchor_id
       `;
     }
-    // install_or_activate（ddz）= cps install_finish
+    // install_or_activate（CPS 项目）= cps install_finish
     return sql`
       SELECT agp.anchor_id,
         COALESCE(SUM(agp.promote_install_finish_ucnt_1d), 0)::numeric AS v
@@ -1599,7 +1638,7 @@ async function fetchTopAnchorsProjectBranched(
           COALESCE(SUM(mg.gm_active_ucnt), 0)::numeric AS v
         FROM anchor_minigame_daily mg
         JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-        WHERE ag.project = 'three' AND ${groupFilter(filters)}
+        WHERE ag.project IN ('three', 'zhaohua') AND ${groupFilter(filters)}
           AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
         GROUP BY mg.anchor_id
       `;
@@ -1610,7 +1649,7 @@ async function fetchTopAnchorsProjectBranched(
         SUM(mg.before_divided_income)::numeric AS v
       FROM anchor_minigame_daily mg
       JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-      WHERE ag.project = 'three' AND ${groupFilter(filters)}
+      WHERE ag.project IN ('three', 'zhaohua') AND ${groupFilter(filters)}
         AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
       GROUP BY mg.anchor_id
     `;
@@ -1618,8 +1657,8 @@ async function fetchTopAnchorsProjectBranched(
 
   // 选择哪些分支参与 union（按 filters.project 限制）
   const parts: SQL[] = [];
-  if (filters.project !== "three") parts.push(ddzPart());
-  if (filters.project !== "ddz") {
+  if (filters.project !== "three" && filters.project !== "zhaohua") parts.push(gamePromoPart());
+  if (!filters.project || filters.project === "three" || filters.project === "zhaohua") {
     const tp = threePart();
     if (tp) parts.push(tp);
   }
@@ -1710,9 +1749,8 @@ export async function getDrawerDetail(
     { key: "video_flow", label: "短视频流水" },
     {
       key: "install_or_activate",
-      // 在 ddz 上下文显示「安装」，在 three 上下文显示「激活」，跨项目时显示「安装/激活」
-      label:
-        filters.project === "ddz" ? "安装" : filters.project === "three" ? "激活" : "安装/激活",
+      // 在 CPS 项目上下文显示「安装」，在 three 上下文显示「激活」，跨项目时显示「安装/激活」
+      label: filters.project === "ddz" ? "安装" : filters.project ? "激活" : "安装/激活",
       unit: "人",
     },
     { key: "show_uv", label: "曝光人数", unit: "人" },

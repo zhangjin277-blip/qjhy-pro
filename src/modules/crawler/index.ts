@@ -5,6 +5,7 @@ export {
   rerunCrawl,
   backfillRange,
   triggerKuaishouSync,
+  triggerZhaohuaOfficialReplay,
   saveCookieAction,
   upsertFieldAlias,
 } from "./actions";

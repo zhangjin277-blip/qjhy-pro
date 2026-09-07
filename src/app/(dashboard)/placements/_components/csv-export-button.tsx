@@ -6,6 +6,7 @@ interface CsvExportButtonProps {
   rows: Record<string, unknown>[];
   filename: string;
   columns: { key: string; label: string }[];
+  label?: string;
 }
 
 function escapeCsv(v: unknown): string {
@@ -15,7 +16,12 @@ function escapeCsv(v: unknown): string {
   return s;
 }
 
-export function CsvExportButton({ rows, filename, columns }: CsvExportButtonProps) {
+export function CsvExportButton({
+  rows,
+  filename,
+  columns,
+  label = "导出 CSV",
+}: CsvExportButtonProps) {
   const handleClick = () => {
     const header = columns.map((c) => escapeCsv(c.label)).join(",");
     const body = rows.map((r) => columns.map((c) => escapeCsv(r[c.key])).join(",")).join("\n");
@@ -31,7 +37,7 @@ export function CsvExportButton({ rows, filename, columns }: CsvExportButtonProp
 
   return (
     <Button size="sm" variant="outline" onClick={handleClick} disabled={rows.length === 0}>
-      导出 CSV
+      {label}
     </Button>
   );
 }

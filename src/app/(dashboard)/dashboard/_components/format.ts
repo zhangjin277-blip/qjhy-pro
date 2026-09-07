@@ -49,19 +49,15 @@ export function formatVsPrevShort(
 
 /**
  * 用 vs_prev (number | null) 直接生成短同比文本（用于 Section 2）。
- * vs_prev 已经是 (cur - prev) / prev 的比值（小数形式，如 0.052 表示 +5.2%）。
- *
- * NOTE: 我们不假设 API 返回的 vs_prev 单位 —— 如果 |x| ≤ 1 当作小数处理；
- * 否则当作百分点处理，再除 100。这样兼容两种约定，避免误差炸出 ↑520%。
+ * vs_prev 是百分点，如 0.52 表示 +0.52%，5.2 表示 +5.2%。
  */
 export function formatVsPrevRatio(vs: number | null): {
   text: string;
   kind: "up" | "down" | "flat" | "none";
 } {
   if (vs === null || vs === undefined) return { text: "—", kind: "none" };
-  const ratio = Math.abs(vs) <= 1 ? vs : vs / 100;
-  if (Math.abs(ratio) < 0.0001) return { text: "持平", kind: "flat" };
-  const pct = ratio * 100;
+  const pct = vs;
+  if (Math.abs(pct) < 0.01) return { text: "持平", kind: "flat" };
   const arrow = pct > 0 ? "↑" : "↓";
   const abs = Math.abs(pct);
   const display = abs >= 10 ? abs.toFixed(0) : abs.toFixed(1);
@@ -69,6 +65,16 @@ export function formatVsPrevRatio(vs: number | null): {
     text: `${arrow}${display}%`,
     kind: pct > 0 ? "up" : "down",
   };
+}
+
+export function getAbsoluteChange(
+  current: number,
+  previous: number | null,
+): { value: number | null; kind: "up" | "down" | "flat" | "none" } {
+  if (previous === null) return { value: null, kind: "none" };
+  const value = current - previous;
+  if (Math.abs(value) < 0.000001) return { value: 0, kind: "flat" };
+  return { value, kind: value > 0 ? "up" : "down" };
 }
 
 /** 「合计 X · N 主播」展示用 */

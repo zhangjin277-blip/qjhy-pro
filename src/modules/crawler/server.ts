@@ -82,3 +82,8 @@ export {
 export { fetchVideoListForAnchor, type VideoSnapshotRow } from "./adapters/video-list";
 export { fetchDouyinLiveRooms, type DouyinLiveRoomRow } from "./adapters/douyin-live-rooms";
 export { resolveOfflineOpAnchors, type OfflineOpAnchor } from "./offline-op-anchors";
+export {
+  fetchLingjiHistory,
+  fetchLingjiReplay,
+  type LingjiReplayRow,
+} from "./adapters/zhaohua-official-replay";

@@ -21,7 +21,9 @@ COPY . .
 ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 ENV AUTH_SECRET=build_time_placeholder_secret_value
 ENV EMERGENCY_LOGIN_PASSWORD=build_time_placeholder_password
-RUN pnpm build
+# Webpack is the stable production bundler for this workspace. Turbopack can
+# stall indefinitely during the amd64 image build on the ARM development host.
+RUN ./node_modules/.bin/next build --webpack && node scripts/verify-web-release-routes.mjs
 
 FROM base AS runner
 WORKDIR /app
@@ -30,7 +32,9 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-USER nextjs
+# Production NAS media directories are root-owned (0700). Keep the image default
+# aligned with docker-compose so direct container recreation cannot break media I/O.
+USER root
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"

@@ -22,8 +22,10 @@ import {
   DingtalkAccessTokenResponse,
   DingtalkDeptListResponse,
   DingtalkUserListResponse,
+  DingtalkUserDetailResponse,
   type DingtalkDept,
   type DingtalkUser,
+  type DingtalkUserDetail,
 } from "./types";
 
 const DingtalkGetByUnionidResponse = z.object({
@@ -297,6 +299,19 @@ export async function fetchAllUsers(): Promise<DingtalkUser[]> {
   return Array.from(userMap.values());
 }
 
+/** 拉取单个人员的花名册详情，包括入职日期、岗位和完整部门列表。 */
+export async function fetchUserDetail(userId: string): Promise<DingtalkUserDetail> {
+  const response = await callTopApi(
+    "/topapi/v2/user/get",
+    { userid: userId, language: "zh_CN" },
+    DingtalkUserDetailResponse,
+  );
+  if (!response.result) {
+    throw new AppError("DINGTALK_USER_NOT_FOUND", "钉钉花名册中未找到该人员", 404, { userId });
+  }
+  return response.result;
+}
+
 /**
  * 通过钉钉 unionId 反查 userid（钉钉企业内通讯录的 userid）。
  *
@@ -320,6 +335,45 @@ export async function fetchUseridByUnionid(unionid: string): Promise<string | nu
     }
     throw err;
   }
+}
+
+const WorkNotificationResponse = z.object({
+  errcode: z.number(),
+  errmsg: z.string().optional(),
+  task_id: z.number().optional(),
+  request_id: z.string().optional(),
+});
+
+/** 使用企业内部应用向指定员工发送工作通知。未配置 AgentId 时返回 false。 */
+export async function sendWorkNotification(args: {
+  userIds: string[];
+  title: string;
+  content: string;
+  url: string;
+}): Promise<boolean> {
+  if (!env.DINGTALK_AGENT_ID || args.userIds.length === 0) return false;
+  const agentId = Number(env.DINGTALK_AGENT_ID);
+  if (!Number.isSafeInteger(agentId)) {
+    throw new AppError("DINGTALK_AGENT_ID_INVALID", "DINGTALK_AGENT_ID 必须是数字", 500);
+  }
+  await callTopApi(
+    "/topapi/message/corpconversation/asyncsend_v2",
+    {
+      agent_id: agentId,
+      userid_list: args.userIds.join(","),
+      to_all_user: false,
+      msg: {
+        msgtype: "oa",
+        oa: {
+          message_url: args.url,
+          head: { bgcolor: "FF3370FF", text: "绩效考核" },
+          body: { title: args.title, content: args.content },
+        },
+      },
+    },
+    WorkNotificationResponse,
+  );
+  return true;
 }
 
 /**

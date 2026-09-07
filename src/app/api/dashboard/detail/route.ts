@@ -5,9 +5,15 @@ import {
   resolveDashboardScope,
   type DashboardScope,
 } from "@/modules/dashboard/server";
-import type { DrawerDetailFilters, DrawerMetric, GroupKey, ProjectKey } from "@/modules/dashboard";
+import {
+  PROJECT_KEYS,
+  type DrawerDetailFilters,
+  type DrawerMetric,
+  type GroupKey,
+  type ProjectKey,
+} from "@/modules/dashboard";
 
-const PROJECT_SET: ReadonlySet<ProjectKey> = new Set(["ddz", "three"]);
+const PROJECT_SET: ReadonlySet<ProjectKey> = new Set(PROJECT_KEYS);
 const GROUP_SET: ReadonlySet<GroupKey> = new Set(["all", "online", "offline", "other"]);
 const METRIC_SET: ReadonlySet<DrawerMetric> = new Set([
   "total_fan_ticket",

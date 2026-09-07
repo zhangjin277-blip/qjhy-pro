@@ -7,7 +7,9 @@ export {
   fetchAllDepartments,
   fetchUsersInDepartment,
   fetchAllUsers,
+  fetchUserDetail,
   fetchUseridByUnionid,
+  sendWorkNotification,
 } from "./client";
 
-export type { DingtalkDept, DingtalkUser } from "./types";
+export type { DingtalkDept, DingtalkUser, DingtalkUserDetail } from "./types";

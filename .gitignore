@@ -58,6 +58,8 @@ Thumbs.db
 
 # Next.js auto-generated
 next-env.d.ts
+.next-current-hung/
+.next-webpack-backup/
 
 # 设计稿预览（HTML mockup，不进 git）
 .tmp-design-preview/
@@ -70,3 +72,4 @@ next-env.d.ts
 *.tar
 _temp/
 tmp/
+.tmp/

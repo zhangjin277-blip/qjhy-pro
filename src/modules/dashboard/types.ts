@@ -4,7 +4,16 @@
  */
 
 /** 项目维度 */
-export type ProjectKey = "ddz" | "three";
+export const PROJECT_KEYS = ["ddz", "three", "zhaohua"] as const;
+export type ProjectKey = (typeof PROJECT_KEYS)[number];
+
+export const PROJECT_LABELS: Record<ProjectKey, string> = {
+  ddz: "斗地主",
+  three: "三国冰河时代",
+  zhaohua: "造化仙府",
+};
+
+export const ZHAOHUA_RECRUIT_BROKER_NAME = "造化仙府";
 
 /** 分组维度（按运营经纪人所在钉钉部门 alias 派生） */
 export type GroupKey = "all" | "online" | "offline" | "other";
@@ -20,12 +29,12 @@ export type Section1Metric =
 /**
  * Section 2 metric（9 个，按 project 公式分支）。
  * - total_fan_ticket    音浪（SUM(total_fan_ticket) from anchor_daily）
- * - flow                流水（斗地主 cps_all 全 scene 派生 / 三国 minigame before_divided）
+ * - flow                流水（斗地主/造化仙府 cps_all 全 scene 派生 / 三国 minigame before_divided）
  * - active_anchor_count 开播主播数（DISTINCT anchor_id WHERE live_duration_1d > 0）
  * - new_anchor_count    新入驻主播数（COUNT WHERE join_time IN range from anchor_profile）
- * - live_flow           直播流水（斗地主 cps_all + scene=live 派生 / 三国 minigame before_divided）
- * - video_flow          短视频流水（斗地主 cps_all + scene=video 派生 / 三国 暂为 0）
- * - install_or_activate 安装·激活（斗地主 cps 安装 ucnt / 三国 minigame gm_active_ucnt）
+ * - live_flow           直播流水（斗地主/造化仙府 cps_all + scene=live 派生 / 三国 minigame before_divided）
+ * - video_flow          短视频流水（斗地主/造化仙府 cps_all + scene=video 派生 / 三国 暂为 0）
+ * - install_or_activate 安装·激活（斗地主/造化仙府 cps 安装 ucnt / 三国 minigame gm_active_ucnt）
  * - show_uv             曝光人数（统一 anchor_portrait_daily.show_uv）
  * - watch_uv            进直播间 UV（统一 anchor_portrait_daily.watch_uv）
  */
@@ -70,8 +79,12 @@ export interface GroupCellValue {
   project: ProjectKey;
   group: GroupKey;
   value: number;
+  /** 上一对比周期原值，用于展示精确差值 */
+  prev_value: number | null;
   vs_prev: number | null;
   anchor_count: number;
+  /** 区间内同时有开播时长和小游戏开播时长的主播数（挂摇杆） */
+  rod_anchor_count?: number;
   sparkline: number[];
   /** 是否「不适用」（如三国 video_flow）。true 时 cell 渲染为 "—" */
   not_applicable?: boolean;
@@ -93,6 +106,7 @@ export interface DashboardOverviewResponse {
     metric: Section2Metric;
     ddz: ProjectBreakdown;
     three: ProjectBreakdown;
+    zhaohua: ProjectBreakdown;
   }[];
 }
 

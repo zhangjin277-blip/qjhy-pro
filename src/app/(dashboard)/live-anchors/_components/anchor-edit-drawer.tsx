@@ -170,6 +170,7 @@ export function AnchorEditDrawer({
   // Form state
   const [selectedUserId, setSelectedUserId] = useState("");
   const [businessLine, setBusinessLine] = useState<BusinessLineValue>("捕鱼大作战");
+  const [anchorType, setAnchorType] = useState<"生态主播" | "竞价主播">("生态主播");
   const [employmentType, setEmploymentType] = useState<"正式" | "合作" | "试播">("正式");
   const [workStatus, setWorkStatus] = useState<"active" | "rest" | "leave">("active");
   const [trialStartDate, setTrialStartDate] = useState("");
@@ -185,6 +186,7 @@ export function AnchorEditDrawer({
     if (anchor) {
       setSelectedUserId(anchor.dingtalk_user_id);
       setBusinessLine(anchor.business_line as BusinessLineValue);
+      setAnchorType(anchor.anchor_type as "生态主播" | "竞价主播");
       setEmploymentType(anchor.employment_type as "正式" | "合作" | "试播");
       setWorkStatus(anchor.work_status as "active" | "rest" | "leave");
       setTrialStartDate(anchor.trial_start_date ?? "");
@@ -194,6 +196,7 @@ export function AnchorEditDrawer({
     } else {
       setSelectedUserId("");
       setBusinessLine("捕鱼大作战");
+      setAnchorType("生态主播");
       setEmploymentType("正式");
       setWorkStatus("active");
       setTrialStartDate("");
@@ -215,6 +218,7 @@ export function AnchorEditDrawer({
         await upsertAnchor({
           dingtalk_user_id: selectedUserId,
           business_line: businessLine,
+          anchor_type: anchorType,
           employment_type: employmentType,
           work_status: workStatus,
           trial_start_date: trialStartDate || null,
@@ -305,6 +309,17 @@ export function AnchorEditDrawer({
                         {b}
                       </option>
                     ))}
+                  </select>
+                </FormField>
+
+                <FormField label="主播类型 *">
+                  <select
+                    className={selectCls}
+                    value={anchorType}
+                    onChange={(e) => setAnchorType(e.target.value as typeof anchorType)}
+                  >
+                    <option value="生态主播">生态主播</option>
+                    <option value="竞价主播">竞价主播</option>
                   </select>
                 </FormField>
 

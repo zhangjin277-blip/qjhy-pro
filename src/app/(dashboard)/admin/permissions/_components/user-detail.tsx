@@ -886,6 +886,8 @@ function moduleEmoji(m: ModuleKey): string {
   switch (m) {
     case "dashboard":
       return "📊";
+    case "project_zhaohua":
+      return "🧭";
     case "anchors":
       return "👥";
     case "crawler":
@@ -906,5 +908,9 @@ function moduleEmoji(m: ModuleKey): string {
       return "🧰";
     case "recording":
       return "🎥";
+    case "people_performance":
+      return "📋";
+    case "business_recruitment":
+      return "📝";
   }
 }

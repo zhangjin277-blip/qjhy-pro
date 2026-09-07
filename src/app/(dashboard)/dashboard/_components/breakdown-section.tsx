@@ -1,15 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
-import type {
-  DashboardOverviewResponse,
-  GroupCellValue,
-  GroupKey,
-  ProjectBreakdown,
-  ProjectKey,
-  Section2Metric,
+import {
+  PROJECT_LABELS,
+  type DashboardOverviewResponse,
+  type GroupCellValue,
+  type GroupKey,
+  type ProjectBreakdown,
+  type ProjectKey,
+  type Section2Metric,
 } from "@/modules/dashboard";
-import { formatVsPrevRatio, splitChineseNumber } from "./format";
+import { formatVsPrevRatio, getAbsoluteChange, splitChineseNumber } from "./format";
+
+type CompareMode = "percent" | "absolute";
 
 const METRIC_DEFS: { id: Section2Metric; label: string }[] = [
   { id: "flow", label: "流水" },
@@ -25,8 +29,9 @@ const METRIC_DEFS: { id: Section2Metric; label: string }[] = [
 ];
 
 const PROJECT_META: Record<ProjectKey, { label: string; category: string; color: string }> = {
-  ddz: { label: "斗地主", category: "棋牌系", color: "#c49a45" },
-  three: { label: "三国冰河时代", category: "SLG", color: "#8b5cf6" },
+  ddz: { label: PROJECT_LABELS.ddz, category: "棋牌系", color: "#c49a45" },
+  three: { label: PROJECT_LABELS.three, category: "SLG", color: "#8b5cf6" },
+  zhaohua: { label: PROJECT_LABELS.zhaohua, category: "仙侠", color: "#0f9f8f" },
 };
 
 const GROUPS: { key: GroupKey; label: string; color?: string }[] = [
@@ -78,6 +83,7 @@ function emptyProject(project: ProjectKey): ProjectBreakdown {
     project,
     group,
     value: 0,
+    prev_value: null,
     vs_prev: null,
     anchor_count: 0,
     sparkline: [],
@@ -96,16 +102,31 @@ function MetricCell({
   metric,
   project,
   group,
+  compareMode,
   onClick,
 }: {
   cell: GroupCellValue;
   metric: Section2Metric;
   project: ProjectKey;
   group: GroupKey;
+  compareMode: CompareMode;
   onClick: (payload: BreakdownClick) => void;
 }): React.JSX.Element {
   const notApplicable = cell.not_applicable === true;
   const vs = formatVsPrevRatio(cell.vs_prev);
+  const absolute = getAbsoluteChange(cell.value, cell.prev_value);
+  const compare =
+    compareMode === "percent"
+      ? vs
+      : {
+          kind: absolute.kind,
+          text:
+            absolute.value === null
+              ? "—"
+              : absolute.kind === "flat"
+                ? "持平"
+                : `${absolute.kind === "up" ? "↑" : "↓"}${formatMetricValue(metric, Math.abs(absolute.value))}`,
+        };
   return (
     <button
       type="button"
@@ -131,11 +152,11 @@ function MetricCell({
       <span
         className={cn(
           "mt-0.5 text-[10.5px] font-medium tabular-nums text-[#667085]",
-          vs.kind === "up" && "text-change-up",
-          vs.kind === "down" && "text-change-down",
+          compare.kind === "up" && "text-change-up",
+          compare.kind === "down" && "text-change-down",
         )}
       >
-        {notApplicable ? "不适用" : vs.text}
+        {notApplicable ? "不适用" : compare.text}
       </span>
     </button>
   );
@@ -145,13 +166,13 @@ function ProjectMatrix({
   project,
   rows,
   loading,
-  compareLabel,
+  compareMode,
   onCellClick,
 }: {
   project: ProjectKey;
   rows: DashboardOverviewResponse["breakdown"];
   loading: boolean;
-  compareLabel: string;
+  compareMode: CompareMode;
   onCellClick: (payload: BreakdownClick) => void;
 }): React.JSX.Element {
   const meta = PROJECT_META[project];
@@ -164,7 +185,9 @@ function ProjectMatrix({
         <span className="rounded bg-[#f3f5fb] px-1.5 py-0.5 text-[10.5px] text-[#667085]">
           {meta.category}
         </span>
-        <span className="ml-auto text-[11px] text-[#667085]">数值 / {compareLabel}</span>
+        <span className="ml-auto text-[11px] text-[#667085]">
+          数值 / {compareMode === "percent" ? "百分比" : "差值"}
+        </span>
       </div>
 
       <div className="overflow-x-auto overscroll-x-contain">
@@ -203,6 +226,7 @@ function ProjectMatrix({
                       metric={definition.id}
                       project={project}
                       group={group.key}
+                      compareMode={compareMode}
                       onClick={onCellClick}
                     />
                   </div>
@@ -232,6 +256,7 @@ export function BreakdownSection({
   singleDay: boolean;
   onCellClick: (payload: BreakdownClick) => void;
 }): React.JSX.Element {
+  const [compareMode, setCompareMode] = useState<CompareMode>("percent");
   const rows = data?.breakdown ?? [];
   const compareLabel = singleDay ? "较前一日" : "较上一周期";
   return (
@@ -243,21 +268,57 @@ export function BreakdownSection({
             同屏查看全部指标，点击数值可下钻主播明细
           </p>
         </div>
-        <span className="text-[11px] text-[#667085]">涨跌对比：{compareLabel}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-[#667085]">{compareLabel}</span>
+          <div
+            className="flex rounded-md bg-[#e9edf5] p-0.5 text-[11px]"
+            role="group"
+            aria-label="涨跌展示方式"
+          >
+            {(
+              [
+                ["percent", "百分比"],
+                ["absolute", "差值"],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={compareMode === mode}
+                onClick={() => setCompareMode(mode)}
+                className={cn(
+                  "rounded px-2.5 py-1 transition-colors",
+                  compareMode === mode
+                    ? "bg-white font-medium text-[#1d2129] shadow-sm"
+                    : "text-[#667085] hover:text-[#344054]",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-      <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 2xl:grid-cols-3">
         <ProjectMatrix
           project="ddz"
           rows={rows}
           loading={loading}
-          compareLabel={compareLabel}
+          compareMode={compareMode}
           onCellClick={onCellClick}
         />
         <ProjectMatrix
           project="three"
           rows={rows}
           loading={loading}
-          compareLabel={compareLabel}
+          compareMode={compareMode}
+          onCellClick={onCellClick}
+        />
+        <ProjectMatrix
+          project="zhaohua"
+          rows={rows}
+          loading={loading}
+          compareMode={compareMode}
           onCellClick={onCellClick}
         />
       </div>
