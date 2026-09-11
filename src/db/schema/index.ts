@@ -7,6 +7,7 @@ export * from "./auth";
 export * from "./brokers";
 export * from "./business-recruitment";
 export * from "./crawler";
+export * from "./courses";
 export * from "./dingtalk";
 export * from "./daily-schedule";
 export * from "./douyin-live-room";

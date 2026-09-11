@@ -19,6 +19,17 @@ export interface PeopleListRow {
   currentCycleLabel: string | null;
   currentStage: PerformanceStage | null;
   periodEnd: string | null;
+  overdueDate: string | null;
+  needsMyAction: boolean;
+}
+
+export interface PerformanceScoreStatisticsRow {
+  userId: string;
+  name: string;
+  cycleId: string;
+  cycleLabel: string;
+  periodStart: string;
+  score: number | null;
 }
 
 export interface PerformanceGoalView {
@@ -54,6 +65,7 @@ export interface PerformanceCycleView {
   finalScore: number | null;
   finalGrade: string | null;
   probationResult: string | null;
+  confirmationDeadline: string | null;
   goals: PerformanceGoalView[];
 }
 

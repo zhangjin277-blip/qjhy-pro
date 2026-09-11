@@ -70,7 +70,17 @@ describe("people performance scoring", () => {
   });
 
   it("maps default grades", () => {
-    expect([95, 85, 70, 60, 59, 56].map(gradeForScore)).toEqual(["S", "A", "B", "C", "D", "D"]);
+    expect([95, 90, 89.9, 80, 79.9, 70, 69.9, 60, 59.9].map(gradeForScore)).toEqual([
+      "S",
+      "S",
+      "A",
+      "A",
+      "B",
+      "B",
+      "C",
+      "C",
+      "D",
+    ]);
   });
 
   it("combines direct and skip-level manager totals at 40/60", () => {

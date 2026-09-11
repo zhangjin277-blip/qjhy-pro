@@ -8,6 +8,7 @@ import {
   Settings2,
   Shield,
   UserCircle2,
+  BookOpen,
   ClipboardCheck,
   Users,
   Video,
@@ -142,9 +143,20 @@ export const NAV: NavItem[] = [
     key: "people-performance",
     label: "人员管理",
     icon: ClipboardCheck,
-    single: true,
-    href: "/people-performance",
-    module: "people_performance",
+    children: [
+      {
+        key: "people-performance-list",
+        label: "人员绩效",
+        href: "/people-performance",
+        module: "people_performance",
+      },
+      {
+        key: "people-performance-statistics",
+        label: "绩效统计",
+        href: "/people-performance/statistics",
+        module: "people_performance",
+      },
+    ],
   },
   {
     key: "operations-performance",
@@ -153,6 +165,14 @@ export const NAV: NavItem[] = [
     single: true,
     href: "/operations-performance",
     module: "dashboard",
+  },
+  {
+    key: "courses",
+    label: "课程中心",
+    icon: BookOpen,
+    single: true,
+    href: "/courses",
+    module: "courses",
   },
   {
     key: "software",

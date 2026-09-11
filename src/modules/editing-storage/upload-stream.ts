@@ -1,12 +1,14 @@
 import "server-only";
 import busboy from "busboy";
 import { createHash, randomBytes } from "node:crypto";
-import { createWriteStream } from "node:fs";
-import { mkdir, open, rename, unlink } from "node:fs/promises";
-import { Readable } from "node:stream";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdir, open, rename, stat, unlink } from "node:fs/promises";
+import { Readable, Transform, Writable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { dirname, join, resolve } from "node:path";
 
 const TMP_DIR = ".tmp";
+export const UPLOAD_CHUNK_BYTES = 32 * 1024 * 1024;
 
 export interface ParsedUpload {
   fields: Record<string, string>;
@@ -24,6 +26,82 @@ function fullInside(nasRoot: string, relPath: string): string {
     throw new Error(`path outside NAS root: ${relPath}`);
   }
   return full;
+}
+
+function chunkRelPath(uploadId: string): string {
+  if (!/^[a-f0-9-]{36}$/i.test(uploadId)) throw new Error("invalid upload id");
+  return join(TMP_DIR, `chunk-${uploadId}`);
+}
+
+export async function appendUploadChunk(
+  req: Request,
+  nasRoot: string,
+  uploadId: string,
+  offset: number,
+  expectedBytes: number,
+): Promise<number> {
+  if (!req.body) throw new Error("empty request body");
+  if (!Number.isSafeInteger(offset) || offset < 0) throw new Error("invalid chunk offset");
+  if (
+    !Number.isSafeInteger(expectedBytes) ||
+    expectedBytes < 1 ||
+    expectedBytes > UPLOAD_CHUNK_BYTES
+  ) {
+    throw new Error("invalid chunk size");
+  }
+
+  const full = fullInside(nasRoot, chunkRelPath(uploadId));
+  await mkdir(dirname(full), { recursive: true });
+  const currentBytes = await stat(full)
+    .then((s) => s.size)
+    .catch((e: NodeJS.ErrnoException) => {
+      if (e.code === "ENOENT") return 0;
+      throw e;
+    });
+  if (currentBytes !== offset) throw new Error(`chunk offset mismatch: expected ${currentBytes}`);
+
+  let received = 0;
+  const counter = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      received += chunk.length;
+      if (received > expectedBytes) callback(new Error("chunk exceeds declared size"));
+      else callback(null, chunk);
+    },
+  });
+  await pipeline(
+    Readable.fromWeb(req.body as never),
+    counter,
+    createWriteStream(full, { flags: offset === 0 ? "w" : "a" }),
+  );
+  if (received !== expectedBytes) throw new Error("incomplete chunk");
+  return offset + received;
+}
+
+export async function finishChunkedUpload(
+  nasRoot: string,
+  uploadId: string,
+  expectedBytes: number,
+): Promise<{ md5: string; bytes: number; tmpRelPath: string }> {
+  const tmpRelPath = chunkRelPath(uploadId);
+  const full = fullInside(nasRoot, tmpRelPath);
+  const info = await stat(full);
+  if (info.size !== expectedBytes)
+    throw new Error(`incomplete upload: received ${info.size} bytes`);
+  const hash = createHash("md5");
+  await pipeline(
+    createReadStream(full),
+    new Writable({
+      write(chunk: Buffer, _encoding, callback) {
+        hash.update(chunk);
+        callback();
+      },
+    }),
+  );
+  return { md5: hash.digest("hex"), bytes: info.size, tmpRelPath };
+}
+
+export async function removeChunkedUpload(nasRoot: string, uploadId: string): Promise<void> {
+  await removeFile(nasRoot, chunkRelPath(uploadId));
 }
 
 /**

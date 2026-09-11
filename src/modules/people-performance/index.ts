@@ -8,6 +8,7 @@ export {
   CycleIdInput,
   PersonIdInput,
   BulkConfigureProfilesInput,
+  BulkOpenSelfReviewInput,
 } from "./schema";
 export { STAGE_LABEL } from "./state-machine";
 export {
@@ -24,6 +25,7 @@ export type {
   PerformanceCycleView,
   PerformanceGoalView,
   PerformanceEventView,
+  PerformanceScoreStatisticsRow,
 } from "./types";
 export {
   getPeoplePerformanceDetailAction,
@@ -36,7 +38,9 @@ export {
   submitPerformanceGoals,
   reviewPerformanceGoals,
   openPerformanceSelfReview,
+  bulkOpenPerformanceSelfReview,
   submitPerformanceSelfReview,
+  withdrawPerformanceSelfReview,
   submitPerformanceManagerReview,
   submitPerformanceSkipManagerReview,
   calibratePerformance,

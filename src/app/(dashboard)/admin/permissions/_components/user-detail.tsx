@@ -912,5 +912,7 @@ function moduleEmoji(m: ModuleKey): string {
       return "📋";
     case "business_recruitment":
       return "📝";
+    case "courses":
+      return "📚";
   }
 }

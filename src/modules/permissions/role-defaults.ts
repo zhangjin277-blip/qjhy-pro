@@ -213,6 +213,24 @@ export const ROLE_DEFAULTS_SEED: {
               : "默认无权限",
       };
     }
+    if (module === "courses") {
+      return {
+        position: row.position,
+        module,
+        scope: isBoss ? ("all" as const) : ("all" as const),
+        points: isBoss
+          ? [
+              "course_edit",
+              "course_upload",
+              "course_delete",
+              "exam_manage",
+              "learning_stats",
+              "training_manage",
+            ]
+          : [],
+        description: isBoss ? "课程中心完整管理" : "课程中心：全员学习，管理员维护",
+      };
+    }
     // 软件库/直播录制：全员可见可下载（scope=all）；写操作仅总监/老板（沿革见 0055/0056 种子）
     if (module === "software_library") {
       return {

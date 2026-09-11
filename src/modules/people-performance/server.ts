@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte, lt, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db/client";
@@ -19,8 +19,9 @@ import {
 import { AppError } from "@/lib/errors";
 
 import { resolvePerformanceAccess } from "./authz";
+import { isPerformanceActionAssignedToUser } from "./action-assignment";
 import { selectCurrentCycle } from "./cycle-selection";
-import { buildProbationPeriods, buildQuarterMonths, getQuarterPeriod } from "./date-utils";
+import { addDays, buildProbationPeriods, buildQuarterMonths, getQuarterPeriod } from "./date-utils";
 import {
   belongsToPerformanceDepartment,
   resolvePerformanceDepartmentIds,
@@ -32,6 +33,7 @@ import type {
   PeoplePerformanceDetail,
   PerformanceCycleView,
   PerformanceEventView,
+  PerformanceScoreStatisticsRow,
 } from "./types";
 
 const manager = alias(dingtalk_user, "performance_manager");
@@ -139,6 +141,8 @@ export async function listPeoplePerformance(): Promise<PeopleListRow[]> {
         stage: performance_cycle.stage,
         periodEnd: performance_cycle.period_end,
         periodStart: performance_cycle.period_start,
+        managerUserId: performance_cycle.manager_user_id,
+        skipManagerUserId: performance_cycle.skip_manager_user_id,
       })
       .from(performance_cycle)
       .where(ne(performance_cycle.kind, "quarterly"))
@@ -164,6 +168,7 @@ export async function listPeoplePerformance(): Promise<PeopleListRow[]> {
       const cycle = selectCurrentCycle(
         cyclesByUser.get(person.userId) ?? [],
         person.employmentStatus,
+        todayInShanghai(),
       );
       return {
         userId: person.userId,
@@ -179,8 +184,48 @@ export async function listPeoplePerformance(): Promise<PeopleListRow[]> {
         currentCycleLabel: cycle?.label ?? null,
         currentStage: cycle?.stage ?? null,
         periodEnd: cycle?.periodEnd ?? null,
+        overdueDate: cycle ? addDays(cycle.periodEnd, cycle.kind === "monthly" ? 11 : 1) : null,
+        needsMyAction: cycle
+          ? isPerformanceActionAssignedToUser(access, {
+              stage: cycle.stage,
+              userId: cycle.userId,
+              managerUserId: cycle.managerUserId,
+              skipManagerUserId: cycle.skipManagerUserId,
+            })
+          : false,
       } satisfies PeopleListRow;
     });
+}
+
+export async function getPerformanceScoreStatistics(): Promise<PerformanceScoreStatisticsRow[]> {
+  const people = await listPeoplePerformance();
+  const userIds = people.map((person) => person.userId);
+  if (userIds.length === 0) return [];
+
+  const rows = await db
+    .select({
+      userId: performance_cycle.user_id,
+      name: dingtalk_user.name,
+      cycleId: performance_cycle.id,
+      cycleLabel: performance_cycle.label,
+      periodStart: performance_cycle.period_start,
+      score: performance_cycle.final_score,
+    })
+    .from(performance_cycle)
+    .innerJoin(dingtalk_user, eq(dingtalk_user.user_id, performance_cycle.user_id))
+    .where(
+      and(inArray(performance_cycle.user_id, userIds), ne(performance_cycle.kind, "quarterly")),
+    )
+    .orderBy(desc(performance_cycle.period_start), asc(dingtalk_user.name));
+
+  return rows.map((row) => ({
+    userId: row.userId,
+    name: row.name,
+    cycleId: row.cycleId,
+    cycleLabel: row.cycleLabel,
+    periodStart: row.periodStart,
+    score: row.score === null ? null : Number(row.score),
+  }));
 }
 
 export async function getPeoplePerformanceDetail(userId: string): Promise<PeoplePerformanceDetail> {
@@ -247,6 +292,10 @@ export async function getPeoplePerformanceDetail(userId: string): Promise<People
     finalScore: numberOrNull(cycle.final_score),
     finalGrade: cycle.final_grade,
     probationResult: cycle.probation_result,
+    confirmationDeadline:
+      cycle.stage === "employee_confirm"
+        ? new Date(cycle.updated_at.getTime() + 72 * 60 * 60 * 1000).toISOString()
+        : null,
     goals: goalRows
       .filter((goal) => goal.cycle_id === cycle.id)
       .map((goal) => ({
@@ -419,6 +468,7 @@ export async function runPerformanceSweep(): Promise<{
   opened: number;
   selfReviewsOpened: number;
   reminders: number;
+  autoConfirmed: number;
 }> {
   const today = todayInShanghai();
   await ensureRegularQuarter(today);
@@ -473,27 +523,85 @@ export async function runPerformanceSweep(): Promise<{
     await notifyCycleStage(cycle.id, "self_review", `stage:self_review`);
   }
   let reminders = 0;
-  if (today.endsWith("-01")) {
-    const outstanding = await db
+  const probationCycles = await db
+    .select()
+    .from(performance_cycle)
+    .where(and(eq(performance_cycle.kind, "probation"), ne(performance_cycle.stage, "completed")));
+  for (const cycle of probationCycles) {
+    if (addDays(today, 10) !== cycle.period_end) continue;
+    await notifyCycleStage(cycle.id, cycle.stage, `probation-due-10:${cycle.period_end}`);
+    reminders++;
+  }
+
+  if (today.endsWith("-03")) {
+    const selfReviewCycles = await db
       .select()
       .from(performance_cycle)
       .where(
-        inArray(performance_cycle.stage, [
-          "goal_setting",
-          "goal_review",
-          "self_review",
-          "manager_review",
-          "skip_manager_review",
-          "hr_calibration",
-          "employee_confirm",
-        ]),
+        and(eq(performance_cycle.kind, "monthly"), eq(performance_cycle.stage, "self_review")),
       );
-    for (const cycle of outstanding) {
-      await notifyCycleStage(cycle.id, cycle.stage, `monthly-reminder:${today}`);
+    for (const cycle of selfReviewCycles) {
+      await notifyCycleStage(cycle.id, cycle.stage, `monthly-self-review:${today}`);
       reminders++;
     }
   }
-  return { opened, selfReviewsOpened, reminders };
+
+  if (today.endsWith("-07")) {
+    const managerReviewCycles = await db
+      .select()
+      .from(performance_cycle)
+      .where(
+        and(
+          eq(performance_cycle.kind, "monthly"),
+          inArray(performance_cycle.stage, ["manager_review", "skip_manager_review"]),
+        ),
+      );
+    for (const cycle of managerReviewCycles) {
+      await notifyCycleStage(cycle.id, cycle.stage, `monthly-manager-review:${today}`);
+      reminders++;
+    }
+  }
+  const autoConfirmed = await autoConfirmExpiredPerformanceResults();
+  return { opened, selfReviewsOpened, reminders, autoConfirmed };
+}
+
+export async function autoConfirmExpiredPerformanceResults(): Promise<number> {
+  const cutoff = new Date(Date.now() - 72 * 60 * 60 * 1000);
+  const confirmable = await db
+    .select({ id: performance_cycle.id })
+    .from(performance_cycle)
+    .where(
+      and(
+        eq(performance_cycle.stage, "employee_confirm"),
+        lt(performance_cycle.updated_at, cutoff),
+      ),
+    );
+  let autoConfirmed = 0;
+  for (const cycle of confirmable) {
+    const [updated] = await db
+      .update(performance_cycle)
+      .set({
+        stage: "completed",
+        confirmed_at: new Date(),
+        completed_at: new Date(),
+        updated_at: new Date(),
+      })
+      .where(
+        and(eq(performance_cycle.id, cycle.id), eq(performance_cycle.stage, "employee_confirm")),
+      )
+      .returning({ id: performance_cycle.id });
+    if (!updated) continue;
+    autoConfirmed++;
+    await db.insert(performance_event).values({
+      cycle_id: cycle.id,
+      actor_user_id: null,
+      event_type: "result_auto_confirmed",
+      from_stage: "employee_confirm",
+      to_stage: "completed",
+      payload: { reason: "超过72小时未确认" },
+    });
+  }
+  return autoConfirmed;
 }
 
 export type { PeopleEmploymentStatus };

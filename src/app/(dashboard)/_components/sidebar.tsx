@@ -35,10 +35,29 @@ export function Sidebar({
   const activeSection = useMemo(() => findActiveSectionKey(pathname), [pathname]);
 
   const [openSections, setOpenSections] = useState<Set<string>>(() => {
-    const init = new Set<string>();
-    if (activeSection) init.add(activeSection);
-    return init;
+    // 默认展开所有有可见子项的分组；用户仍可通过分组标题手动收起。
+    return new Set(
+      nav.filter((item) => !item.single && item.children.length > 0).map((item) => item.key),
+    );
   });
+
+  // 权限变化导致新分组出现时，也保持默认展开；不覆盖用户已手动收起的分组。
+  useEffect(() => {
+    const sectionKeys = nav
+      .filter((item) => !item.single && item.children.length > 0)
+      .map((item) => item.key);
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const key of sectionKeys) {
+        if (!next.has(key)) {
+          next.add(key);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [nav]);
 
   // 路径变化时确保对应 section 展开
   useEffect(() => {

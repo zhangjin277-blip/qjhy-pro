@@ -47,6 +47,7 @@ describe("translateLegacyPoints（0054 迁移翻译规则）", () => {
       recording: ["task_manage", "file_delete"],
       people_performance: [],
       business_recruitment: ["candidate_edit", "operation_review", "signing_manage"],
+      courses: [],
     });
   });
 
@@ -87,8 +88,8 @@ describe("translateLegacyPoints（0054 迁移翻译规则）", () => {
     }
   });
 
-  it("注册表总点数 = 46", () => {
+  it("注册表总点数 = 52", () => {
     const total = Object.values(MODULE_POINTS).reduce((s, pts) => s + pts.length, 0);
-    expect(total).toBe(46);
+    expect(total).toBe(52);
   });
 });

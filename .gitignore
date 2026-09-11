@@ -70,6 +70,7 @@ next-env.d.ts
 
 # 大型素材 / 备份
 *.tar
+.local-backups/
 _temp/
 tmp/
 .tmp/

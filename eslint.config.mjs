@@ -9,6 +9,8 @@ export default tseslint.config(
   {
     ignores: [
       ".next",
+      ".next-current-hung/**",
+      ".next-webpack-backup/**",
       "node_modules",
       "dist",
       "**/dist/**",

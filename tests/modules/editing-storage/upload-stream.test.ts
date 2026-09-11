@@ -3,6 +3,8 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  appendUploadChunk,
+  finishChunkedUpload,
   moveTempExclusive,
   moveTempWithSeq,
   parseUploadToTemp,
@@ -130,5 +132,27 @@ describe("parseUploadToTemp", () => {
   it("rejects non-multipart requests", async () => {
     const req = new Request("http://localhost/x", { method: "POST", body: "{}" });
     await expect(parseUploadToTemp(req, NAS)).rejects.toThrow(/multipart/);
+  });
+});
+
+describe("chunked upload", () => {
+  it("appends ordered chunks and computes the final hash", async () => {
+    const uploadId = "12345678-1234-1234-1234-123456789abc";
+    const first = new Request("http://localhost/upload", { method: "PUT", body: "hello " });
+    const second = new Request("http://localhost/upload", { method: "PUT", body: "world" });
+
+    await expect(appendUploadChunk(first, NAS, uploadId, 0, 6)).resolves.toBe(6);
+    await expect(appendUploadChunk(second, NAS, uploadId, 6, 5)).resolves.toBe(11);
+    const finished = await finishChunkedUpload(NAS, uploadId, 11);
+
+    expect(finished.md5).toBe("5eb63bbbe01eeed093cb22bb8f5acdc3");
+    expect(await readFile(join(NAS, finished.tmpRelPath), "utf8")).toBe("hello world");
+    await removeFile(NAS, finished.tmpRelPath);
+  });
+
+  it("rejects an out-of-order chunk", async () => {
+    const uploadId = "abcdefab-1234-1234-1234-123456789abc";
+    const req = new Request("http://localhost/upload", { method: "PUT", body: "later" });
+    await expect(appendUploadChunk(req, NAS, uploadId, 10, 5)).rejects.toThrow(/offset mismatch/);
   });
 });

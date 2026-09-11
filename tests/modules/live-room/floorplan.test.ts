@@ -378,13 +378,18 @@ describe("deriveRoomView", () => {
     });
   });
 
-  it("idle + 今天班次已全部结束 → scheduled=null", () => {
+  it("idle + 今天班次已全部结束 → 保留最后一班排班", () => {
     const view = deriveRoomView(
       [acc({ schedule: [{ anchorName: "甲", slots: [["09:00", "12:00"]] }] })],
       1,
       "22:00",
     );
-    expect(view.scheduled).toBeNull();
+    expect(view.scheduled).toEqual({
+      anchorName: "甲",
+      start: "09:00",
+      end: "12:00",
+      current: false,
+    });
   });
 
   it("在播/休/空房不带 scheduled", () => {

@@ -22,7 +22,7 @@ describe("people performance state machine", () => {
   it("allows HR calibration to return to the applicable manager review", () => {
     expect(canTransition("hr_calibration", "manager_review")).toBe(true);
     expect(canTransition("hr_calibration", "skip_manager_review")).toBe(true);
-    expect(canTransition("employee_confirm", "hr_calibration")).toBe(false);
+    expect(canTransition("employee_confirm", "hr_calibration")).toBe(true);
   });
 
   it("rejects skipped stages", () => {

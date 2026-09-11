@@ -20,6 +20,7 @@ export const MODULE_KEYS = [
   "recording",
   "people_performance",
   "business_recruitment",
+  "courses",
 ] as const;
 
 export type ModuleKey = (typeof MODULE_KEYS)[number];
@@ -39,6 +40,7 @@ export const MODULE_LABEL: Record<ModuleKey, string> = {
   recording: "直播录制",
   people_performance: "人员绩效",
   business_recruitment: "商务招募",
+  courses: "课程中心",
 };
 
 export const MODULE_DESC: Record<ModuleKey, string> = {
@@ -56,6 +58,7 @@ export const MODULE_DESC: Record<ModuleKey, string> = {
   recording: "直播录制任务与录像文件管理",
   people_performance: "非主播员工试用期与正式绩效考核",
   business_recruitment: "主播候选人登记、初评、复评与签约跟进",
+  courses: "课程学习、课程资源和考试管理",
 };
 
 export function isModuleKey(value: string): value is ModuleKey {
@@ -143,6 +146,14 @@ export const MODULE_POINTS: Record<ModuleKey, PermissionPointDef[]> = {
     { key: "demand_manage", label: "招聘需求维护", section: "招募" },
     { key: "operation_review", label: "运营复评 / 带教分配", section: "复评" },
     { key: "signing_manage", label: "入会 / 签约 / 开播维护", section: "跟进" },
+  ],
+  courses: [
+    { key: "course_edit", label: "课程创建 / 编辑", section: "课程" },
+    { key: "course_upload", label: "封面 / 视频上传", section: "课程" },
+    { key: "course_delete", label: "课程删除", section: "课程", sensitive: true },
+    { key: "exam_manage", label: "考试配置", section: "考试" },
+    { key: "learning_stats", label: "学习数据统计", section: "学习" },
+    { key: "training_manage", label: "主播培训管理", section: "培训" },
   ],
 };
 

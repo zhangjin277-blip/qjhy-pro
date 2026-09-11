@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight,
   BriefcaseBusiness,
   Building2,
   ChevronRight,
@@ -13,7 +11,6 @@ import {
   Music2,
   Radio,
   Settings2,
-  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -21,7 +18,6 @@ import {
   type AnchorDetailIdentity,
 } from "@/app/(dashboard)/anchors/_components/anchor-detail-drawer";
 import { ALL_COLUMNS } from "@/app/(dashboard)/anchors/_components/column-presets";
-import { KpiGrid, type KpiItem } from "@/components/patterns/kpi-grid";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useProjectSharedState } from "@/hooks/use-project-shared-state";
@@ -162,14 +158,43 @@ function EcosystemView({
   const [operatorSummaries, setOperatorSummaries] = useState<OperatorSummary[]>([]);
   const [anchorProfiles, setAnchorProfiles] = useState<AnchorProfileSummary[]>([]);
   const [anchorMetrics, setAnchorMetrics] = useState<AnchorMetricSummary[]>([]);
-  const [now, setNow] = useState(() => new Date());
+  const [realtimeLiveUids, setRealtimeLiveUids] = useState<Set<string>>(() => new Set());
   const [ranking, setRanking] = useState<{
     operator: string | null;
     key: keyof Omit<AnchorMetricSummary, "operator" | "anchorId">;
   } | null>(null);
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 30_000);
-    return () => window.clearInterval(timer);
+    const controller = new AbortController();
+    const refreshRealtimeStatus = () => {
+      fetch("/api/projects/zhaohua/ecology-live-status", {
+        signal: controller.signal,
+        cache: "no-store",
+      })
+        .then((response) =>
+          response.ok ? response.json() : Promise.reject(new Error("live-status")),
+        )
+        .then((body: { rows?: { platformUid?: string }[] }) => {
+          setRealtimeLiveUids(
+            new Set(
+              (body.rows ?? [])
+                .map((row) => row.platformUid?.trim())
+                .filter((uid): uid is string => Boolean(uid)),
+            ),
+          );
+        })
+        .catch((error: unknown) => {
+          if (!(error instanceof DOMException && error.name === "AbortError")) {
+            // Preserve the last successful snapshot during a transient API error.
+            console.warn("[zhaohua] realtime live status refresh failed", error);
+          }
+        });
+    };
+    refreshRealtimeStatus();
+    const timer = window.setInterval(refreshRealtimeStatus, 30_000);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
   }, []);
   useEffect(() => {
     setSummaryFrom(dateFrom);
@@ -222,13 +247,8 @@ function EcosystemView({
   }, [selectedAnchor]);
   const liveCount = anchors.filter((anchor) => anchor.stage === "已开播").length;
   const trainingCount = anchors.filter(
-    (anchor) => anchor.source === "线下自营" && anchor.stage !== "已开播",
-  ).length;
-  const offlineLiveCount = anchors.filter(
-    (anchor) => anchor.source === "线下自营" && anchor.stage === "已开播",
-  ).length;
-  const institutionLiveCount = anchors.filter(
-    (anchor) => anchor.source === "线上机构" && anchor.stage === "已开播",
+    (anchor) =>
+      anchor.source === "线下自营" && (anchor.stage === "培训中" || anchor.stage === "试岗中"),
   ).length;
   const institutionGroups = Array.from(
     new Set(
@@ -244,51 +264,32 @@ function EcosystemView({
     (total, group) => total + group.anchors.length,
     0,
   );
-  const kpis: KpiItem[] = [
-    {
-      key: "pool",
-      label: "线下主播池",
-      value: `${anchors.length} 人`,
-      footer: "线下 + 线上机构",
-    },
-    {
-      key: "live",
-      label: "已开播",
-      value: `${liveCount} 人`,
-      footer: `线下 ${offlineLiveCount} · 机构 ${institutionLiveCount}`,
-    },
-    { key: "training", label: "培训 / 试岗", value: `${trainingCount} 人`, footer: "不含线上机构" },
-    {
-      key: "operator",
-      label: "线下运营",
-      value: `${operators.length} 人`,
-      footer: "负责人 丁友发",
-    },
-  ];
-
   return (
     <div className="space-y-5">
-      <BusinessHeader
-        title="线下主播"
-        subtitle="线下自营主播孵化与线上机构协同经营"
-        icon={UsersRound}
-        tone="bg-emerald-50 text-emerald-700 ring-emerald-100"
-        status="运营中"
-        links={[
-          { label: "主播明细", href: "/anchors" },
-          { label: "线上招募", href: "/anchors/recruit" },
-        ]}
-      />
-
-      <KpiGrid items={kpis} />
-
       <section>
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h3 className="text-[15px] font-semibold text-slate-900">运营分工</h3>
-            <p className="mt-0.5 text-xs text-slate-500">丁友发统筹线下孵化运营并兼管线上机构</p>
+        <div className="mb-3 flex flex-wrap items-center gap-3 md:flex-nowrap">
+          <div className="order-first flex shrink-0 items-center rounded-md border border-slate-200/80 bg-white/70 px-3 py-1.5">
+            <span className="mr-3 shrink-0 text-[11px] font-medium text-slate-400">人员概览</span>
+            <div className="flex items-center divide-x divide-slate-200">
+              {[
+                ["主播池", `${anchors.length}人`],
+                ["已开播", `${liveCount}人`],
+                ["培训/试岗", `${trainingCount}人`],
+                ["运营", `${operators.length}人`],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-center gap-1 px-3 first:pl-0 last:pr-0"
+                >
+                  <span className="whitespace-nowrap text-[11px] text-slate-500">{label}</span>
+                  <strong className="whitespace-nowrap text-xs font-semibold tabular-nums text-slate-800">
+                    {value}
+                  </strong>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="order-last ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
             <div className="flex rounded-md border border-slate-200 bg-slate-50 p-0.5">
               {(
                 [
@@ -342,7 +343,9 @@ function EcosystemView({
             const activeAssigned = assigned.filter((anchor) => anchor.stage !== "离职");
             const resignedAssigned = assigned.filter((anchor) => anchor.stage === "离职");
             const assignedLive = assigned.filter((anchor) => anchor.stage === "已开播").length;
-            const assignedTraining = assigned.length - assignedLive;
+            const assignedTraining = assigned.filter(
+              (anchor) => anchor.stage === "培训中" || anchor.stage === "试岗中",
+            ).length;
             const summary = summaryByOperator.get(operator.name);
             return (
               <article
@@ -424,7 +427,7 @@ function EcosystemView({
                           <AnchorProfileCell
                             anchor={anchor}
                             profile={profileByAnchor.get(anchor.anchorId ?? "")}
-                            isOnAir={isAnchorOnAir(anchor, now)}
+                            isOnAir={isAnchorOnAir(anchor, realtimeLiveUids)}
                           />
                           <span className="flex flex-col gap-0.5 text-[11px] tabular-nums text-slate-500">
                             {anchor.liveTimeSlots?.filter((slot) => slot.start && slot.end)
@@ -477,7 +480,7 @@ function EcosystemView({
                             <AnchorProfileCell
                               anchor={anchor}
                               profile={profileByAnchor.get(anchor.anchorId ?? "")}
-                              isOnAir={isAnchorOnAir(anchor, now)}
+                              isOnAir={isAnchorOnAir(anchor, realtimeLiveUids)}
                             />
                             <span className="flex flex-col gap-0.5 text-[11px] tabular-nums text-slate-500">
                               {anchor.liveTimeSlots?.filter((slot) => slot.start && slot.end)
@@ -1020,88 +1023,19 @@ function OfficialView(): React.JSX.Element {
   );
 }
 
-function BusinessHeader({
-  title,
-  subtitle,
-  icon: Icon,
-  tone,
-  status,
-  links,
-}: {
-  title: string;
-  subtitle: string;
-  icon: LucideIcon;
-  tone: string;
-  status: string;
-  links: { label: string; href: string }[];
-}): React.JSX.Element {
-  return (
-    <section className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex min-w-0 items-start gap-3">
-        <span
-          className={cn(
-            "flex size-10 shrink-0 items-center justify-center rounded-lg ring-1",
-            tone,
-          )}
-        >
-          <Icon className="size-5" />
-        </span>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-            <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-              {status}
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:border-primary/30 hover:text-primary"
-          >
-            {link.label}
-            <ArrowRight className="size-3.5" />
-          </Link>
-        ))}
-      </div>
-    </section>
+function isAnchorOnAir(anchor: EcologyAnchorRecord, realtimeLiveUids: Set<string>): boolean {
+  return [anchor.anchorId, anchor.douyinId].some((uid) =>
+    Boolean(uid && realtimeLiveUids.has(uid.trim())),
   );
-}
-
-function isAnchorOnAir(anchor: EcologyAnchorRecord, now: Date): boolean {
-  if (anchor.stage !== "已开播") return false;
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  return (anchor.liveTimeSlots ?? []).some((slot) => {
-    const parse = (value: string): number | null => {
-      const match = value.match(/^(\d{1,2}):(\d{2})$/);
-      if (!match) return null;
-      return Number(match[1]) * 60 + Number(match[2]);
-    };
-    const start = parse(slot.start);
-    const end = parse(slot.end);
-    if (start === null || end === null || start === end) return false;
-    return start < end
-      ? currentMinutes >= start && currentMinutes < end
-      : currentMinutes >= start || currentMinutes < end;
-  });
 }
 
 function getAnchorLiveRoomUrl(
   anchor: EcologyAnchorRecord,
   profile?: AnchorProfileSummary,
 ): string | null {
-  if (anchor.liveRoomUrl?.trim()) return anchor.liveRoomUrl.trim();
-  if (anchor.realName === "吴思君" || anchor.liveName.includes("杜康"))
-    return "https://live.douyin.com/844388807672";
-  return anchor.anchorId
-    ? `https://live.douyin.com/${encodeURIComponent(anchor.anchorId)}`
-    : profile?.douyinId
-      ? `https://live.douyin.com/${encodeURIComponent(profile.douyinId)}`
-      : null;
+  // 抖音直播间统一使用抖音号（display ID），不能使用平台 UID。
+  const douyinId = anchor.douyinId?.trim() || profile?.douyinId?.trim();
+  return douyinId ? `https://live.douyin.com/${encodeURIComponent(douyinId)}` : null;
 }
 
 function formatStageLabel(stage: AnchorStage, note?: string): string {
@@ -1140,9 +1074,11 @@ function StageBadge({ stage, note }: { stage: AnchorStage; note?: string }): Rea
         "rounded px-1.5 py-0.5 text-xs font-medium",
         stage === "已开播"
           ? "bg-emerald-50 text-emerald-700"
-          : stage === "培训中"
-            ? "bg-blue-50 text-blue-700"
-            : "bg-amber-50 text-amber-700",
+          : stage === "封号"
+            ? "bg-red-50 text-red-700"
+            : stage === "培训中"
+              ? "bg-blue-50 text-blue-700"
+              : "bg-amber-50 text-amber-700",
       )}
       title={note}
     >

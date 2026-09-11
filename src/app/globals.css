@@ -1,6 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* 评分直接键盘输入，隐藏 number 输入框的浏览器自带上下调节按钮。 */
+.performance-score-input::-webkit-inner-spin-button,
+.performance-score-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.performance-score-input {
+  -moz-appearance: textfield;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================

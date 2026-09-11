@@ -11,6 +11,15 @@ interface Props {
   products: ProductOption[];
 }
 
+function createUploadId(): string {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function NewTaskDialog({ onClose }: Props) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -24,7 +33,11 @@ export function NewTaskDialog({ onClose }: Props) {
   const [priority, setPriority] = useState<"normal" | "urgent">("normal");
   const [urgentReason, setUrgentReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+    percent?: number;
+  } | null>(null);
 
   // 前端读取视频时长（秒），失败返回 null（不阻塞上传）
   function readVideoDurationSec(f: File): Promise<number | null> {
@@ -45,14 +58,52 @@ export function NewTaskDialog({ onClose }: Props) {
 
   async function uploadFileToTask(taskId: number, f: File): Promise<void> {
     const durationSec = await readVideoDurationSec(f);
-    const fd = new FormData();
-    fd.append("taskId", String(taskId));
-    fd.append("file", f);
-    if (durationSec != null) fd.append("durationSec", String(durationSec));
-    const res = await fetch("/api/editing/upload-source", { method: "POST", body: fd });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      throw new Error((j as { error?: string }).error ?? "素材上传失败");
+    const uploadId = createUploadId();
+    const chunkBytes = 32 * 1024 * 1024;
+    let offset = 0;
+    try {
+      while (offset < f.size) {
+        const chunk = f.slice(offset, Math.min(offset + chunkBytes, f.size));
+        const res = await fetch("/api/editing/upload-source", {
+          method: "PUT",
+          headers: {
+            "x-upload-id": uploadId,
+            "x-upload-offset": String(offset),
+            "x-upload-chunk-bytes": String(chunk.size),
+          },
+          body: chunk,
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          nextOffset?: number;
+        };
+        if (!res.ok || json.nextOffset == null) throw new Error(json.error ?? "素材分片上传失败");
+        offset = json.nextOffset;
+        setProgress((current) =>
+          current ? { ...current, percent: Math.round((offset / f.size) * 100) } : current,
+        );
+      }
+
+      const res = await fetch("/api/editing/upload-source", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          uploadId,
+          taskId,
+          fileName: f.name,
+          fileBytes: f.size,
+          durationSec,
+        }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error ?? "素材上传完成处理失败");
+      }
+    } catch (error) {
+      await fetch(`/api/editing/upload-source?uploadId=${encodeURIComponent(uploadId)}`, {
+        method: "DELETE",
+      }).catch(() => undefined);
+      throw error;
     }
   }
 
@@ -62,7 +113,7 @@ export function NewTaskDialog({ onClose }: Props) {
     let failed = 0;
 
     if (mode === "independent" || files.length === 1) {
-      setProgress({ done: 0, total: files.length });
+      setProgress({ done: 0, total: files.length, percent: 0 });
       let idx = 0;
       for (const f of files) {
         try {
@@ -82,7 +133,7 @@ export function NewTaskDialog({ onClose }: Props) {
           toast.error(`${f.name}: ${err instanceof Error ? err.message : "失败"}`);
         }
         idx++;
-        setProgress({ done: idx, total: files.length });
+        setProgress({ done: idx, total: files.length, percent: undefined });
       }
     } else {
       // merged mode: 1 个任务，所有文件上传到它
@@ -96,7 +147,7 @@ export function NewTaskDialog({ onClose }: Props) {
           urgentReason: priority === "urgent" ? urgentReason.trim() || null : null,
         });
 
-        setProgress({ done: 0, total: files.length });
+        setProgress({ done: 0, total: files.length, percent: 0 });
         let idx = 0;
         for (const f of files) {
           try {
@@ -107,7 +158,7 @@ export function NewTaskDialog({ onClose }: Props) {
             toast.error(`${f.name}: ${err instanceof Error ? err.message : "失败"}`);
           }
           idx++;
-          setProgress({ done: idx, total: files.length });
+          setProgress({ done: idx, total: files.length, percent: undefined });
         }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "创建任务失败");
@@ -138,7 +189,7 @@ export function NewTaskDialog({ onClose }: Props) {
 
   const buttonLabel =
     submitting && progress
-      ? `上传 ${progress.done}/${progress.total} ...`
+      ? `上传 ${progress.done}/${progress.total}${progress.percent == null ? "" : ` · ${progress.percent}%`} ...`
       : submitting
         ? "创建中..."
         : "创建并上传";

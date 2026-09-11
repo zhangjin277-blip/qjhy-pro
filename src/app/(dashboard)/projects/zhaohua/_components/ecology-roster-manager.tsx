@@ -24,7 +24,7 @@ import type {
 
 type ManagerView = "anchors" | "operators";
 
-const STAGES: AnchorStage[] = ["已开播", "培训中", "试岗中", "离职"];
+const STAGES: AnchorStage[] = ["已开播", "培训中", "试岗中", "封号", "离职"];
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
   const minutes = index * 30;
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
@@ -111,6 +111,7 @@ export function validateEcologyRoster(roster: EcologyRosterState): string | null
 function stageTone(stage: AnchorStage): string {
   if (stage === "已开播") return "bg-emerald-50 text-emerald-700";
   if (stage === "培训中") return "bg-blue-50 text-blue-700";
+  if (stage === "封号") return "bg-red-50 text-red-700";
   if (stage === "离职") return "bg-slate-100 text-slate-500";
   return "bg-amber-50 text-amber-700";
 }

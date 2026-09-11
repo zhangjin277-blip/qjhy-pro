@@ -112,8 +112,16 @@ export const CalibrateInput = z.object({
 });
 
 export const CycleIdInput = z.object({ cycleId: z.string().min(1) });
+export const ReturnPerformanceInput = z.object({
+  cycleId: z.string().min(1),
+  targetStage: z.enum(["self_review", "manager_review", "skip_manager_review", "hr_calibration"]),
+});
 export const PersonIdInput = z.object({ userId: z.string().min(1) });
+export const BulkOpenSelfReviewInput = z.object({
+  cycleIds: z.array(z.string().min(1)).min(1).max(200),
+});
 
 export type SaveProfileInput = z.infer<typeof SaveProfileInput>;
 export type SubmitGoalsInput = z.infer<typeof SubmitGoalsInput>;
 export type BulkConfigureProfilesInput = z.infer<typeof BulkConfigureProfilesInput>;
+export type BulkOpenSelfReviewInput = z.infer<typeof BulkOpenSelfReviewInput>;

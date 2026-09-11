@@ -28,14 +28,18 @@ RUN ./node_modules/.bin/next build --webpack && node scripts/verify-web-release-
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV COURSE_NAS_PATH=/mnt/miracle-courses
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/http-request-timeout.mjs ./http-request-timeout.mjs
 # Production NAS media directories are root-owned (0700). Keep the image default
 # aligned with docker-compose so direct container recreation cannot break media I/O.
 USER root
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV HTTP_REQUEST_TIMEOUT_MS=600000
+ENV NODE_OPTIONS="--import=/app/http-request-timeout.mjs"
 CMD ["node", "server.js"]

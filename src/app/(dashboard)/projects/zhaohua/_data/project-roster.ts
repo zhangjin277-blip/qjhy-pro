@@ -1,4 +1,4 @@
-export type AnchorStage = "已开播" | "培训中" | "试岗中" | "离职";
+export type AnchorStage = "已开播" | "培训中" | "试岗中" | "封号" | "离职";
 export type AnchorType = "生态主播" | "竞价主播";
 
 export interface EcologyAnchorRecord {

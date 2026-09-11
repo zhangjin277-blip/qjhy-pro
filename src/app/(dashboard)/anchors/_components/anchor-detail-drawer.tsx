@@ -19,6 +19,7 @@ import {
 import type { AnchorDailyResponse, AnchorDailyRow, AnchorListRow } from "@/modules/anchors";
 import { formatChineseNumber, formatCellValue } from "./format";
 import type { ColumnDef } from "./column-presets";
+import { AnchorTrainingPanel } from "./anchor-training-panel";
 
 // ─── 工具：选择哪些列适合做 chart / sparkline ────────────────────────────────
 type ChartableFmt = "number" | "duration" | "percent";
@@ -340,6 +341,7 @@ function DrawerInner({
 
       {/* Body */}
       <div className="bg-background flex-1 overflow-y-auto px-3 py-4 sm:px-7 sm:py-5">
+        <AnchorTrainingPanel anchorId={anchor.anchor_id} />
         {error && (
           <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-lg border p-4 text-sm">
             数据加载失败：{error}

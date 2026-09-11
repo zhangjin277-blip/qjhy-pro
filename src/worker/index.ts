@@ -10,7 +10,10 @@ import { runCronAttributionSweep } from "@/modules/placement-attribution/server"
 import { runEditingCleanup } from "./jobs/editing-cleanup";
 import { runAnchorPenaltyJob } from "./jobs/anchor-penalty";
 import { sweepRetention } from "@/modules/live-recording/server";
-import { runPerformanceSweep } from "@/modules/people-performance/server";
+import {
+  autoConfirmExpiredPerformanceResults,
+  runPerformanceSweep,
+} from "@/modules/people-performance/server";
 // Worker 需要直接调用同步实现；避免导入业务模块 barrel 时把 Server Actions 带入 worker。
 // eslint-disable-next-line import/no-restricted-paths
 import { syncRecruitmentDatesFromAnchorProfiles } from "@/modules/business-recruitment/auto-match";
@@ -163,8 +166,19 @@ registerJob({
   task: async () => {
     const result = await runPerformanceSweep();
     console.log(
-      `[people-performance] opened=${result.opened} selfReviewsOpened=${result.selfReviewsOpened} reminders=${result.reminders}`,
+      `[people-performance] opened=${result.opened} selfReviewsOpened=${result.selfReviewsOpened} reminders=${result.reminders} autoConfirmed=${result.autoConfirmed}`,
     );
+  },
+});
+
+registerJob({
+  name: "people-performance-auto-confirm",
+  schedule: "* * * * *",
+  task: async () => {
+    const autoConfirmed = await autoConfirmExpiredPerformanceResults();
+    if (autoConfirmed > 0) {
+      console.log(`[people-performance-auto-confirm] confirmed=${autoConfirmed}`);
+    }
   },
 });
 

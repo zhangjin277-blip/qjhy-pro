@@ -37,11 +37,13 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NODE_ENV: production
       EDITING_NAS_PATH: /mnt/qjhy-edit
+      COURSE_NAS_PATH: /mnt/miracle-courses
       PROJECT_ASSETS_PATH: /mnt/qjhy-edit/project-assets
     ports:
       - "3000:3000"
     volumes:
       - editing_nas:/mnt/qjhy-edit
+      - course_nas:/mnt/miracle-courses
 
   worker:
     build:
@@ -74,3 +76,10 @@ volumes:
       type: nfs
       o: "addr=172.16.39.61,nolock,soft,rw"
       device: ":/volume1/docker/miracle-pro-cs/server/uploads/editing"
+  # 课程中心继续读写 Miracle Pro3 的原课程资源目录，不复制媒体文件。
+  course_nas:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=172.16.39.61,nolock,soft,rw"
+      device: ":/volume1/docker/miracle-pro-cs/server/uploads/courses"

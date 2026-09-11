@@ -323,7 +323,11 @@ function pickScheduled(entries: ScheduleEntry[], nowHHmm: string): ScheduledView
   const upcoming = flat
     .filter((s) => s.start > nowHHmm)
     .sort((a, b) => a.start.localeCompare(b.start))[0];
-  return upcoming ? { ...upcoming, current: false } : null;
+  if (upcoming) return { ...upcoming, current: false };
+
+  // 当天班次已结束时仍保留最后一班，避免无在播信号的房卡丢失排班信息。
+  const latest = [...flat].sort((a, b) => b.start.localeCompare(a.start))[0];
+  return latest ? { ...latest, current: false } : null;
 }
 
 /** 允许提前到岗的分钟数：开播时间在某班开始前 60min 内也算这一班的 */

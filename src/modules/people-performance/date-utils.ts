@@ -90,8 +90,8 @@ export function buildQuarterMonths(value: string): CyclePeriod[] {
 }
 
 export function gradeForScore(score: number): "S" | "A" | "B" | "C" | "D" {
-  if (score >= 95) return "S";
-  if (score >= 85) return "A";
+  if (score >= 90) return "S";
+  if (score >= 80) return "A";
   if (score >= 70) return "B";
   if (score >= 60) return "C";
   return "D";

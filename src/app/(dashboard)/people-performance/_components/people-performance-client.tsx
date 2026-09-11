@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   AlertTriangle,
   ChevronRight,
@@ -13,6 +13,7 @@ import {
 
 import { DataToolbar } from "@/components/patterns/data-toolbar";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -22,6 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Table,
   TableBody,
@@ -32,6 +35,7 @@ import {
 } from "@/components/ui/table";
 import {
   STAGE_LABEL,
+  bulkOpenPerformanceSelfReview,
   type PeopleListRow,
   type PerformanceManagerOption,
 } from "@/modules/people-performance";
@@ -56,17 +60,22 @@ export function PeoplePerformanceClient({
   initialRows,
   initialUserId,
   canManageProfiles,
+  canManageProcess,
   managerOptions,
 }: {
   initialRows: PeopleListRow[];
   initialUserId: string | null;
   canManageProfiles: boolean;
+  canManageProcess: boolean;
   managerOptions: PerformanceManagerOption[];
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [stage, setStage] = useState("all");
   const [title, setTitle] = useState("all");
+  const [cyclePeriod, setCyclePeriod] = useState("all");
+  const [myAction, setMyAction] = useState("all");
+  const [hideUnconfigured, setHideUnconfigured] = useState(true);
   const [quickFilter, setQuickFilter] = useState<"all" | "probation" | "pending" | "overdue">(
     "all",
   );
@@ -74,12 +83,22 @@ export function PeoplePerformanceClient({
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false);
+  const [confirmBulkSelfReview, setConfirmBulkSelfReview] = useState(false);
+  const [bulkAdvancing, startBulkAdvancing] = useTransition();
+  const router = useRouter();
   const today = new Date().toISOString().slice(0, 10);
   const titleOptions = useMemo(
     () =>
       [...new Set(initialRows.map((row) => row.title?.trim()).filter(Boolean) as string[])].sort(
         (a, b) => a.localeCompare(b, "zh-CN"),
       ),
+    [initialRows],
+  );
+  const cycleOptions = useMemo(
+    () =>
+      [
+        ...new Set(initialRows.map((row) => row.currentCycleLabel).filter(Boolean) as string[]),
+      ].sort((a, b) => b.localeCompare(a, "zh-CN")),
     [initialRows],
   );
 
@@ -94,6 +113,8 @@ export function PeoplePerformanceClient({
       }
       if (status !== "all" && (row.employmentStatus ?? "unconfigured") !== status) return false;
       if (stage !== "all" && (row.currentStage ?? "unconfigured") !== stage) return false;
+      if (cyclePeriod !== "all" && row.currentCycleLabel !== cyclePeriod) return false;
+      if (myAction === "needed" && !row.needsMyAction) return false;
       if (title === "__unset__" && row.title) return false;
       if (title !== "all" && title !== "__unset__" && row.title !== title) return false;
       if (quickFilter === "probation" && row.employmentStatus !== "probation") return false;
@@ -102,20 +123,30 @@ export function PeoplePerformanceClient({
       }
       if (
         quickFilter === "overdue" &&
-        (!row.periodEnd || row.periodEnd >= today || row.currentStage === "completed")
+        (!row.overdueDate || row.overdueDate > today || row.currentStage === "completed")
       ) {
         return false;
       }
       return true;
     });
-  }, [initialRows, query, quickFilter, stage, status, title, today]);
+  }, [cyclePeriod, initialRows, myAction, query, quickFilter, stage, status, title, today]);
 
   const overdueCount = initialRows.filter(
-    (row) => row.periodEnd && row.periodEnd < today && row.currentStage !== "completed",
+    (row) => row.overdueDate && row.overdueDate <= today && row.currentStage !== "completed",
   ).length;
+  const unconfiguredCount = rows.filter((row) => !row.employmentStatus).length;
+  const visibleRows = hideUnconfigured
+    ? rows.filter((row) => row.employmentStatus)
+    : [
+        ...rows.filter((row) => row.employmentStatus),
+        ...rows.filter((row) => !row.employmentStatus),
+      ];
   const selectedRows = initialRows.filter((row) => selectedUserIds.has(row.userId));
+  const selectedSelfReviewRows = selectedRows.filter(
+    (row) => row.currentStage === "in_progress" && row.currentCycleId,
+  );
   const allVisibleSelected =
-    rows.length > 0 && rows.every((row) => selectedUserIds.has(row.userId));
+    visibleRows.length > 0 && visibleRows.every((row) => selectedUserIds.has(row.userId));
 
   const toggleSelected = (userId: string) => {
     setSelectedUserIds((current) => {
@@ -139,6 +170,8 @@ export function PeoplePerformanceClient({
             setStatus("all");
             setStage("all");
             setTitle("all");
+            setCyclePeriod("all");
+            setMyAction("all");
             setQuery("");
           }}
         />
@@ -150,6 +183,7 @@ export function PeoplePerformanceClient({
             setQuickFilter("probation");
             setStatus("all");
             setStage("all");
+            setMyAction("all");
           }}
         />
         <Summary
@@ -162,6 +196,7 @@ export function PeoplePerformanceClient({
             setQuickFilter("pending");
             setStatus("all");
             setStage("all");
+            setMyAction("all");
           }}
         />
         <Summary
@@ -174,6 +209,7 @@ export function PeoplePerformanceClient({
             setQuickFilter("overdue");
             setStatus("all");
             setStage("all");
+            setMyAction("all");
           }}
         />
       </div>
@@ -198,7 +234,15 @@ export function PeoplePerformanceClient({
               }}
             >
               <SelectTrigger className="w-[130px]">
-                <SelectValue placeholder="人员状态" />
+                <SelectValue>
+                  {(value) =>
+                    value === "all"
+                      ? "全部状态"
+                      : value === "unconfigured"
+                        ? "未配置"
+                        : (STATUS_LABEL[value as keyof typeof STATUS_LABEL] ?? "人员状态")
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部状态</SelectItem>
@@ -216,7 +260,15 @@ export function PeoplePerformanceClient({
               }}
             >
               <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="当前环节" />
+                <SelectValue>
+                  {(value) =>
+                    value === "all"
+                      ? "全部环节"
+                      : value === "unconfigured"
+                        ? "未配置"
+                        : (STAGE_LABEL[value as keyof typeof STAGE_LABEL] ?? "当前环节")
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部环节</SelectItem>
@@ -236,7 +288,15 @@ export function PeoplePerformanceClient({
               }}
             >
               <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="岗位" />
+                <SelectValue>
+                  {(value) =>
+                    value === "all"
+                      ? "全部岗位"
+                      : value === "__unset__"
+                        ? "未设置岗位"
+                        : value || "岗位"
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部岗位</SelectItem>
@@ -248,10 +308,44 @@ export function PeoplePerformanceClient({
                 ))}
               </SelectContent>
             </Select>
+            <Select
+              value={cyclePeriod}
+              onValueChange={(value) => {
+                setCyclePeriod(value ?? "all");
+                setQuickFilter("all");
+              }}
+            >
+              <SelectTrigger className="w-[170px]">
+                <SelectValue>
+                  {(value) => (value === "all" ? "全部考核周期" : value || "考核周期")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部考核周期</SelectItem>
+                {cycleOptions.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {value}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </>
         }
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={myAction === "needed" ? "default" : "outline"}
+              onClick={() => {
+                setMyAction((value) => (value === "needed" ? "all" : "needed"));
+                setQuickFilter("all");
+              }}
+            >
+              需要我处理
+              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs leading-5 text-white">
+                {initialRows.filter((row) => row.needsMyAction).length}
+              </span>
+            </Button>
             {canManageProfiles && (
               <>
                 <Button size="sm" variant="outline" onClick={() => setSpreadsheetOpen(true)}>
@@ -269,8 +363,31 @@ export function PeoplePerformanceClient({
                 </Button>
               </>
             )}
+            {canManageProcess && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={selectedSelfReviewRows.length === 0 || bulkAdvancing}
+                onClick={() => setConfirmBulkSelfReview(true)}
+              >
+                批量开启自评
+                {selectedSelfReviewRows.length > 0 ? `（${selectedSelfReviewRows.length}）` : ""}
+              </Button>
+            )}
+            {unconfiguredCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setHideUnconfigured((value) => !value)}
+              >
+                {hideUnconfigured ? "展开未配置" : "折叠未配置"}
+                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-slate-200 px-1.5 text-xs leading-5 text-slate-700">
+                  {unconfiguredCount}
+                </span>
+              </Button>
+            )}
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <SlidersHorizontal className="size-3.5" />共 {rows.length} 人
+              <SlidersHorizontal className="size-3.5" />共 {visibleRows.length} 人
             </div>
           </div>
         }
@@ -280,7 +397,7 @@ export function PeoplePerformanceClient({
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50/80">
-              {canManageProfiles && (
+              {(canManageProfiles || canManageProcess) && (
                 <TableHead className="w-10">
                   <input
                     type="checkbox"
@@ -291,7 +408,7 @@ export function PeoplePerformanceClient({
                       const checked = event.target.checked;
                       setSelectedUserIds((current) => {
                         const next = new Set(current);
-                        for (const row of rows) {
+                        for (const row of visibleRows) {
                           if (checked) next.add(row.userId);
                           else next.delete(row.userId);
                         }
@@ -307,18 +424,18 @@ export function PeoplePerformanceClient({
               <TableHead>人员状态</TableHead>
               <TableHead>当前考核</TableHead>
               <TableHead>当前环节</TableHead>
-              <TableHead>截止日期</TableHead>
+              <TableHead>逾期日期</TableHead>
               <TableHead className="w-[100px] text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((row) => (
+            {visibleRows.map((row) => (
               <TableRow
                 key={row.userId}
                 className="cursor-pointer hover:bg-blue-50/50"
                 onClick={() => setOpenUserId(row.userId)}
               >
-                {canManageProfiles && (
+                {(canManageProfiles || canManageProcess) && (
                   <TableCell onClick={(event) => event.stopPropagation()}>
                     <input
                       type="checkbox"
@@ -351,7 +468,7 @@ export function PeoplePerformanceClient({
                 </TableCell>
                 <TableCell>{row.currentCycleLabel ?? "-"}</TableCell>
                 <TableCell>{row.currentStage ? STAGE_LABEL[row.currentStage] : "-"}</TableCell>
-                <TableCell>{row.periodEnd ?? "-"}</TableCell>
+                <TableCell>{row.overdueDate ?? "-"}</TableCell>
                 <TableCell className="text-right">
                   <Button
                     type="button"
@@ -368,10 +485,10 @@ export function PeoplePerformanceClient({
                 </TableCell>
               </TableRow>
             ))}
-            {rows.length === 0 && (
+            {visibleRows.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={canManageProfiles ? 9 : 8}
+                  colSpan={canManageProfiles || canManageProcess ? 9 : 8}
                   className="h-28 text-center text-muted-foreground"
                 >
                   没有符合条件的人员
@@ -385,7 +502,7 @@ export function PeoplePerformanceClient({
       <Sheet open={openUserId !== null} onOpenChange={(open) => !open && setOpenUserId(null)}>
         <SheetContent
           side="right"
-          className="!w-[1080px] !max-w-[94vw] gap-0 p-0 sm:!max-w-[1080px]"
+          className="!w-[1560px] !max-w-[96vw] gap-0 p-0 sm:!max-w-[1560px]"
           showCloseButton={false}
         >
           <SheetTitle className="sr-only">人员考核详情</SheetTitle>
@@ -407,6 +524,32 @@ export function PeoplePerformanceClient({
           />
         </>
       )}
+      <ConfirmDialog
+        open={confirmBulkSelfReview}
+        onOpenChange={setConfirmBulkSelfReview}
+        title="批量开启员工自评？"
+        description={`将结束所选${selectedSelfReviewRows.length}个执行中周期，并立即开启员工自评。其他环节的周期不会变更。`}
+        confirmText="确认开启"
+        onConfirm={() =>
+          startBulkAdvancing(async () => {
+            try {
+              const result = await bulkOpenPerformanceSelfReview({
+                cycleIds: selectedSelfReviewRows.flatMap((row) =>
+                  row.currentCycleId ? [row.currentCycleId] : [],
+                ),
+              });
+              toast.success(
+                `已开启${result.opened}个自评周期${result.skipped ? `，跳过${result.skipped}个` : ""}`,
+              );
+              setConfirmBulkSelfReview(false);
+              setSelectedUserIds(new Set());
+              router.refresh();
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "批量开启自评失败");
+            }
+          })
+        }
+      />
     </>
   );
 }

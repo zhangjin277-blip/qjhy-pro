@@ -28,8 +28,14 @@ const ALLOWED: Partial<Record<PerformanceStage, PerformanceStage[]>> = {
     "cancelled",
   ],
   skip_manager_review: ["manager_review", "hr_calibration", "completed", "cancelled"],
-  hr_calibration: ["manager_review", "skip_manager_review", "employee_confirm", "cancelled"],
-  employee_confirm: ["completed", "cancelled"],
+  hr_calibration: [
+    "self_review",
+    "manager_review",
+    "skip_manager_review",
+    "employee_confirm",
+    "cancelled",
+  ],
+  employee_confirm: ["completed", "hr_calibration", "cancelled"],
 };
 
 export function canTransition(from: PerformanceStage, to: PerformanceStage): boolean {

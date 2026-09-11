@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
+  AlertTriangle,
   Check,
   ChevronRight,
   Circle,
   FastForward,
   Plus,
   RefreshCw,
-  RotateCcw,
   Trash2,
   X,
 } from "lucide-react";
@@ -44,6 +44,7 @@ import {
   submitPerformanceManagerReview,
   submitPerformanceSkipManagerReview,
   submitPerformanceSelfReview,
+  withdrawPerformanceSelfReview,
   type PeoplePerformanceDetail,
   type PerformanceCycleView,
 } from "@/modules/people-performance";
@@ -387,6 +388,7 @@ function CyclePanel({
 }) {
   const [confirmSelfReview, setConfirmSelfReview] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmReturnToHr, setConfirmReturnToHr] = useState(false);
   const [advancing, startAdvancing] = useTransition();
   const defaultTab = canHandleCurrentStage(detail, cycle)
     ? "form"
@@ -429,7 +431,44 @@ function CyclePanel({
               结束执行并开启自评
             </Button>
           )}
+          {cycle.stage === "manager_review" &&
+            (detail.capabilities.actorUserId === detail.person.userId ||
+              detail.capabilities.manageAll) && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={loading || advancing}
+                onClick={() =>
+                  startAdvancing(async () => {
+                    try {
+                      await withdrawPerformanceSelfReview({ cycleId: cycle.id });
+                      toast.success("已撤回自评，可重新填写");
+                      onChanged();
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "撤回失败");
+                    }
+                  })
+                }
+              >
+                撤回并修改自评
+              </Button>
+            )}
           {cycle.finalGrade && <Grade grade={cycle.finalGrade} score={cycle.finalScore} />}
+          {cycle.stage === "employee_confirm" &&
+            (detail.capabilities.calibrate || detail.capabilities.manageAll) && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={loading || advancing}
+                onClick={() => setConfirmReturnToHr(true)}
+                className="border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
+              >
+                <AlertTriangle />
+                撤回到HR校准
+              </Button>
+            )}
         </div>
       </div>
       <Tabs defaultValue={defaultTab}>
@@ -492,6 +531,28 @@ function CyclePanel({
               onChanged();
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "操作失败");
+            }
+          })
+        }
+      />
+      <ConfirmDialog
+        open={confirmReturnToHr}
+        onOpenChange={setConfirmReturnToHr}
+        title="确认撤回到HR校准？"
+        description="撤回后将清除当前最终得分和等级，HR需要重新校准。该操作会记录在变更记录中。"
+        confirmText="确认撤回"
+        variant="danger"
+        onConfirm={() =>
+          startAdvancing(async () => {
+            try {
+              await returnPerformanceForReview({
+                cycleId: cycle.id,
+                targetStage: "hr_calibration",
+              });
+              toast.success("已撤回到HR校准");
+              onChanged();
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "撤回失败");
             }
           })
         }
@@ -681,6 +742,11 @@ function AssessmentForm({
   );
   const [probationResult, setProbationResult] = useState(cycle.probationResult ?? "passed");
   const [pending, startTransition] = useTransition();
+  const [confirmGoalReturn, setConfirmGoalReturn] = useState(false);
+  const [confirmAssessmentReturn, setConfirmAssessmentReturn] = useState(false);
+  const [returnStage, setReturnStage] = useState<
+    "self_review" | "manager_review" | "skip_manager_review"
+  >("self_review");
   const actor = detail.capabilities.actorUserId;
   const isEmployee = actor === detail.person.userId || detail.capabilities.manageAll;
   const isManager = actor === cycle.managerUserId || detail.capabilities.manageAll;
@@ -697,14 +763,53 @@ function AssessmentForm({
         toast.error(error instanceof Error ? error.message : "操作失败");
       }
     });
+  const performReturn = () =>
+    run(
+      () => returnPerformanceForReview({ cycleId: cycle.id, targetStage: returnStage }),
+      `已退回${STAGE_LABEL[returnStage]}`,
+    );
 
   if (cycle.kind === "quarterly") return <QuarterSummary detail={detail} cycle={cycle} />;
   return (
     <div className="space-y-3">
       {goals.map((goal, index) => (
-        <section key={goal.id ?? index} className="rounded-md border bg-white p-4">
+        <section key={goal.id ?? index} className="rounded-md border bg-white p-3">
           <div className="mb-3 flex items-center justify-between">
-            <div className="font-medium">目标 {index + 1}</div>
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <Label className="shrink-0 text-base font-semibold">目标名称</Label>
+                {cycle.stage === "goal_setting" ? (
+                  <Textarea
+                    aria-label={`目标${index + 1}名称`}
+                    className="min-h-8 w-full resize-none py-1.5 text-sm leading-6"
+                    value={goal.title}
+                    onChange={(event) => updateGoal(index, { title: event.target.value })}
+                  />
+                ) : (
+                  <div className="flex min-h-8 max-w-[520px] items-center truncate rounded-lg border border-input bg-slate-50 px-2.5 py-1.5 text-sm leading-6 text-slate-700">
+                    {goal.title || "未命名目标"}
+                  </div>
+                )}
+              </div>
+              <div className="flex w-[150px] shrink-0 items-center gap-2">
+                <Label className="shrink-0">权重</Label>
+                {cycle.stage === "goal_setting" ? (
+                  <Input
+                    aria-label={`目标${index + 1}权重`}
+                    className="w-[90px] border-amber-300 bg-amber-50 text-center font-semibold text-amber-700 focus-visible:border-amber-500 focus-visible:ring-amber-300"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={goal.weight}
+                    onChange={(event) => updateGoal(index, { weight: Number(event.target.value) })}
+                  />
+                ) : (
+                  <span className="inline-flex min-h-9 min-w-[68px] items-center justify-center rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-sm font-semibold text-amber-700">
+                    {goal.weight}%
+                  </span>
+                )}
+              </div>
+            </div>
             {cycle.stage === "goal_setting" && goals.length > 1 && (
               <Button
                 variant="ghost"
@@ -715,125 +820,129 @@ function AssessmentForm({
               </Button>
             )}
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Field label="目标名称">
-              {cycle.stage === "goal_setting" ? (
-                <Textarea
-                  className="min-h-16"
-                  value={goal.title}
-                  onChange={(event) => updateGoal(index, { title: event.target.value })}
-                />
-              ) : (
-                <ReadOnlyGoalText value={goal.title} />
+          <div className="overflow-x-auto pb-1">
+            <div className="grid min-w-[900px] grid-cols-3 gap-3">
+              <Field label="目标说明">
+                {cycle.stage === "goal_setting" ? (
+                  <Textarea
+                    value={goal.description}
+                    onChange={(event) => updateGoal(index, { description: event.target.value })}
+                  />
+                ) : (
+                  <ReadOnlyGoalText value={goal.description} />
+                )}
+              </Field>
+              <Field label="衡量标准 / 目标值">
+                {cycle.stage === "goal_setting" ? (
+                  <Textarea
+                    value={goal.targetValue}
+                    onChange={(event) =>
+                      updateGoal(index, {
+                        targetValue: event.target.value,
+                        metric: event.target.value,
+                      })
+                    }
+                  />
+                ) : (
+                  <ReadOnlyGoalText value={goal.targetValue} />
+                )}
+              </Field>
+              {(cycle.stage === "self_review" || goal.completion) && (
+                <Field label="完成情况">
+                  <Textarea
+                    disabled={cycle.stage !== "self_review"}
+                    value={goal.completion ?? ""}
+                    onChange={(event) => updateGoal(index, { completion: event.target.value })}
+                  />
+                </Field>
               )}
-            </Field>
-            <Field label="权重（%）">
-              <Input
-                disabled={cycle.stage !== "goal_setting"}
-                type="number"
-                min={1}
-                max={100}
-                value={goal.weight}
-                onChange={(event) => updateGoal(index, { weight: Number(event.target.value) })}
-              />
-            </Field>
-            <Field label="目标说明">
-              {cycle.stage === "goal_setting" ? (
-                <Textarea
-                  value={goal.description}
-                  onChange={(event) => updateGoal(index, { description: event.target.value })}
-                />
-              ) : (
-                <ReadOnlyGoalText value={goal.description} />
-              )}
-            </Field>
-            <Field label="衡量标准 / 目标值">
-              {cycle.stage === "goal_setting" ? (
-                <Textarea
-                  value={goal.targetValue}
-                  onChange={(event) =>
-                    updateGoal(index, {
-                      targetValue: event.target.value,
-                      metric: event.target.value,
-                    })
-                  }
-                />
-              ) : (
-                <ReadOnlyGoalText value={goal.targetValue} />
-              )}
-            </Field>
-            {(cycle.stage === "self_review" || goal.completion) && (
-              <Field label="完成情况">
-                <Textarea
-                  disabled={cycle.stage !== "self_review"}
-                  value={goal.completion ?? ""}
-                  onChange={(event) => updateGoal(index, { completion: event.target.value })}
-                />
-              </Field>
-            )}
-            {(cycle.stage === "self_review" || goal.selfScore !== undefined) && (
-              <Field label="自评分">
-                <Input
-                  disabled={cycle.stage !== "self_review"}
-                  type="number"
-                  min={0}
-                  max={goal.weight}
-                  value={goal.selfScore ?? ""}
-                  onChange={(event) => updateGoal(index, { selfScore: Number(event.target.value) })}
-                />
-              </Field>
-            )}
-            {(cycle.stage === "manager_review" || goal.managerScore !== undefined) && (
-              <Field label="直接上级评分">
-                <Input
-                  disabled={cycle.stage !== "manager_review"}
-                  type="number"
-                  min={0}
-                  max={goal.weight}
-                  value={goal.managerScore ?? ""}
-                  onChange={(event) =>
-                    updateGoal(index, { managerScore: Number(event.target.value) })
-                  }
-                />
-              </Field>
-            )}
-            {(cycle.stage === "manager_review" || goal.managerComment) && (
-              <Field label="直接上级评语">
-                <Textarea
-                  disabled={cycle.stage !== "manager_review"}
-                  value={goal.managerComment ?? ""}
-                  onChange={(event) => updateGoal(index, { managerComment: event.target.value })}
-                />
-              </Field>
-            )}
-            {(cycle.stage === "skip_manager_review" || goal.skipManagerScore !== undefined) && (
-              <Field label="隔级上级评分">
-                <Input
-                  disabled={cycle.stage !== "skip_manager_review"}
-                  type="number"
-                  min={0}
-                  max={goal.weight}
-                  value={goal.skipManagerScore ?? ""}
-                  onChange={(event) =>
-                    updateGoal(index, { skipManagerScore: Number(event.target.value) })
-                  }
-                />
-              </Field>
-            )}
-            {(cycle.stage === "skip_manager_review" || goal.skipManagerComment) && (
-              <Field label="隔级上级评语">
-                <Textarea
-                  disabled={cycle.stage !== "skip_manager_review"}
-                  value={goal.skipManagerComment ?? ""}
-                  onChange={(event) =>
-                    updateGoal(index, { skipManagerComment: event.target.value })
-                  }
-                />
-              </Field>
+            </div>
+            {(cycle.stage === "self_review" ||
+              cycle.stage === "manager_review" ||
+              cycle.stage === "skip_manager_review" ||
+              cycle.stage === "hr_calibration" ||
+              cycle.stage === "employee_confirm" ||
+              cycle.stage === "completed" ||
+              goal.selfScore !== undefined ||
+              goal.managerScore !== undefined ||
+              goal.skipManagerScore !== undefined) && (
+              <div className="mt-3 ml-auto grid w-full max-w-[720px] grid-cols-3 gap-4">
+                <div className="flex items-center justify-end gap-2">
+                  <Label className="shrink-0 text-base font-semibold">自评分</Label>
+                  <Input
+                    className="performance-score-input w-[80px] appearance-none text-base"
+                    disabled={cycle.stage !== "self_review"}
+                    type="number"
+                    min={0}
+                    max={goal.weight}
+                    value={goal.selfScore ?? ""}
+                    onChange={(event) =>
+                      updateGoal(index, {
+                        selfScore:
+                          event.target.value === "" ? undefined : Number(event.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <Label className="shrink-0 text-base font-semibold">直接上级评分</Label>
+                  <Input
+                    className="performance-score-input w-[80px] appearance-none text-base"
+                    disabled={cycle.stage !== "manager_review"}
+                    type="number"
+                    min={0}
+                    max={goal.weight}
+                    value={goal.managerScore ?? ""}
+                    onChange={(event) =>
+                      updateGoal(index, {
+                        managerScore:
+                          event.target.value === "" ? undefined : Number(event.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <Label className="shrink-0 text-base font-semibold">隔级上级评分</Label>
+                  <Input
+                    className="performance-score-input w-[80px] appearance-none text-base"
+                    disabled={cycle.stage !== "skip_manager_review"}
+                    type="number"
+                    min={0}
+                    max={goal.weight}
+                    value={goal.skipManagerScore ?? ""}
+                    onChange={(event) =>
+                      updateGoal(index, {
+                        skipManagerScore:
+                          event.target.value === "" ? undefined : Number(event.target.value),
+                      })
+                    }
+                  />
+                </div>
+              </div>
             )}
           </div>
         </section>
       ))}
+      {(cycle.managerSummary || cycle.skipManagerSummary) && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {cycle.managerSummary && cycle.stage !== "manager_review" && (
+            <div className="rounded-md border border-blue-100 bg-blue-50/60 p-3">
+              <div className="text-xs font-medium text-blue-700">直接上级整体评语</div>
+              <div className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+                {cycle.managerSummary}
+              </div>
+            </div>
+          )}
+          {cycle.skipManagerSummary && cycle.stage !== "skip_manager_review" && (
+            <div className="rounded-md border border-indigo-100 bg-indigo-50/60 p-3">
+              <div className="text-xs font-medium text-indigo-700">隔级上级整体评语</div>
+              <div className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+                {cycle.skipManagerSummary}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {cycle.stage === "goal_setting" && isEmployee && (
         <Button
           variant="outline"
@@ -872,15 +981,11 @@ function AssessmentForm({
           />
           <div className="flex gap-2">
             <Button
-              variant="outline"
+              variant="destructive"
               disabled={pending}
-              onClick={() =>
-                run(
-                  () => reviewGoals({ cycleId: cycle.id, approved: false, comment }),
-                  "目标已退回",
-                )
-              }
+              onClick={() => setConfirmGoalReturn(true)}
             >
+              <AlertTriangle />
               退回修改
             </Button>
             <Button
@@ -932,6 +1037,15 @@ function AssessmentForm({
       {cycle.stage === "manager_review" && isManager && (
         <ReviewFooter label="直接上级整体评语" value={summary} onChange={setSummary}>
           <Button
+            type="button"
+            variant="destructive"
+            disabled={pending}
+            onClick={() => setConfirmAssessmentReturn(true)}
+          >
+            <AlertTriangle />
+            退回员工自评
+          </Button>
+          <Button
             disabled={pending}
             onClick={() =>
               run(
@@ -969,12 +1083,40 @@ function AssessmentForm({
       )}
       {cycle.stage === "skip_manager_review" && isSkipManager && (
         <ReviewFooter label="隔级上级整体评语" value={summary} onChange={setSummary}>
+          <div className="flex items-center gap-2">
+            <Select
+              value={returnStage}
+              onValueChange={(value) => value && setReturnStage(value as typeof returnStage)}
+            >
+              <SelectTrigger className="w-[150px]">
+                <SelectValue>
+                  {(value) => STAGE_LABEL[value as keyof typeof STAGE_LABEL] ?? "退回到"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manager_review">直属上级评估</SelectItem>
+                <SelectItem value="self_review">员工自评</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={pending}
+              onClick={() => setConfirmAssessmentReturn(true)}
+            >
+              <AlertTriangle />
+              退回
+            </Button>
+          </div>
           <Button
             disabled={pending}
             onClick={() =>
               run(
-                () =>
-                  submitPerformanceSkipManagerReview({
+                () => {
+                  if (goals.some((goal) => goal.skipManagerScore === undefined)) {
+                    throw new Error("请完成所有目标的隔级上级评分后再提交");
+                  }
+                  return submitPerformanceSkipManagerReview({
                     cycleId: cycle.id,
                     summary,
                     goals: goals.map((goal) => ({
@@ -982,7 +1124,8 @@ function AssessmentForm({
                       score: goal.skipManagerScore,
                       comment: goal.skipManagerComment,
                     })),
-                  }),
+                  });
+                },
                 cycle.requiresFinalReview ? "隔级评估已提交" : "评估已完成",
               )
             }
@@ -1023,19 +1166,29 @@ function AssessmentForm({
             <Textarea value={comment} onChange={(event) => setComment(event.target.value)} />
           </Field>
           <div className="mt-3 flex justify-end gap-2">
-            <Button
-              variant="outline"
-              disabled={pending}
-              onClick={() =>
-                run(
-                  () => returnPerformanceForReview({ cycleId: cycle.id }),
-                  cycle.kind === "probation" || !cycle.skipManagerUserId
-                    ? "已退回直接上级评估"
-                    : "已退回隔级评估",
-                )
-              }
+            <Select
+              value={returnStage}
+              onValueChange={(value) => value && setReturnStage(value as typeof returnStage)}
             >
-              <RotateCcw />
+              <SelectTrigger className="w-[170px]">
+                <SelectValue>
+                  {(value) => STAGE_LABEL[value as keyof typeof STAGE_LABEL] ?? "选择退回环节"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="self_review">员工自评</SelectItem>
+                <SelectItem value="manager_review">直属上级评估</SelectItem>
+                {cycle.kind !== "probation" && cycle.skipManagerUserId && (
+                  <SelectItem value="skip_manager_review">隔级上级评估</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={() => setConfirmAssessmentReturn(true)}
+            >
+              <AlertTriangle />
               退回评估
             </Button>
             <Button
@@ -1058,20 +1211,61 @@ function AssessmentForm({
         </section>
       )}
       {cycle.stage === "employee_confirm" && isEmployee && (
-        <ActionBar>
-          <span>请确认最终得分与等级。</span>
-          <div>
-            <Button
-              disabled={pending}
-              onClick={() =>
-                run(() => confirmPerformanceResult({ cycleId: cycle.id }), "考核结果已确认")
-              }
-            >
-              确认结果
-            </Button>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-6 rounded-md border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-950">
+            <div>
+              <div className="text-sm font-medium text-emerald-700">最终得分</div>
+              <div className="mt-1 text-2xl font-semibold">
+                {cycle.finalScore ?? "-"}
+                {cycle.finalScore !== null && <span className="ml-1 text-base">分</span>}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-emerald-700">最终评级</div>
+              <div className="mt-1 text-2xl font-semibold">{cycle.finalGrade ?? "-"}</div>
+            </div>
           </div>
-        </ActionBar>
+          <div className="flex items-center gap-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-base font-semibold text-blue-900">
+            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-blue-600 text-sm text-white">
+              i
+            </span>
+            结果确认截止时间：{formatConfirmationDeadline(cycle.confirmationDeadline)}
+          </div>
+          <ActionBar>
+            <span>请在截止时间前确认最终得分与等级；逾期系统将自动确认。</span>
+            <div>
+              <Button
+                disabled={pending}
+                onClick={() =>
+                  run(() => confirmPerformanceResult({ cycleId: cycle.id }), "考核结果已确认")
+                }
+              >
+                确认结果
+              </Button>
+            </div>
+          </ActionBar>
+        </div>
       )}
+      <ConfirmDialog
+        open={confirmGoalReturn}
+        onOpenChange={setConfirmGoalReturn}
+        title="确认退回目标修改？"
+        description="退回后，员工需要修改目标并重新提交审核。该操作会记录在变更记录中。"
+        confirmText="确认退回"
+        variant="danger"
+        onConfirm={() =>
+          run(() => reviewGoals({ cycleId: cycle.id, approved: false, comment }), "目标已退回")
+        }
+      />
+      <ConfirmDialog
+        open={confirmAssessmentReturn}
+        onOpenChange={setConfirmAssessmentReturn}
+        title={`确认退回到${STAGE_LABEL[returnStage]}？`}
+        description="退回后，下游已经填写的评分、评语或校准结果将被清除，需要相关人员重新提交。该操作会记录在变更记录中。"
+        confirmText="确认退回"
+        variant="danger"
+        onConfirm={performReturn}
+      />
     </div>
   );
 }
@@ -1212,6 +1406,20 @@ function Grade({ grade, score }: { grade: string; score: number | null }) {
       </div>
     </div>
   );
+}
+
+function formatConfirmationDeadline(value: string | null): string {
+  if (!value) return "待计算";
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+    .format(new Date(value))
+    .replaceAll("/", "-");
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

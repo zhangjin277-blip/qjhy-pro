@@ -26,10 +26,12 @@ import { notifyCycleStage } from "./notify";
 import {
   CalibrateInput,
   BulkConfigureProfilesInput,
+  BulkOpenSelfReviewInput,
   CycleIdInput,
   ManagerReviewInput,
   PersonIdInput,
   ReviewGoalsInput,
+  ReturnPerformanceInput,
   SaveProfileInput,
   SelfReviewInput,
   SubmitGoalsInput,
@@ -708,6 +710,58 @@ export async function openPerformanceSelfReview(input: unknown): Promise<{ ok: t
   return { ok: true };
 }
 
+export async function bulkOpenPerformanceSelfReview(input: unknown): Promise<{
+  ok: true;
+  opened: number;
+  skipped: number;
+}> {
+  const data = BulkOpenSelfReviewInput.parse(input);
+  const access = await resolvePerformanceAccess();
+  if (!access.manageAll) {
+    throw new AppError("AUTH_FORBIDDEN", "无流程调整权限", 403);
+  }
+
+  const openedIds: string[] = [];
+  let skipped = 0;
+  await db.transaction(async (tx) => {
+    const cycles = await tx
+      .select({ id: performance_cycle.id, stage: performance_cycle.stage })
+      .from(performance_cycle)
+      .where(inArray(performance_cycle.id, data.cycleIds));
+    const cycleMap = new Map(cycles.map((cycle) => [cycle.id, cycle.stage]));
+    for (const cycleId of data.cycleIds) {
+      if (cycleMap.get(cycleId) !== "in_progress") {
+        skipped++;
+        continue;
+      }
+      const [updated] = await tx
+        .update(performance_cycle)
+        .set({ stage: "self_review", updated_at: new Date() })
+        .where(and(eq(performance_cycle.id, cycleId), eq(performance_cycle.stage, "in_progress")))
+        .returning({ id: performance_cycle.id });
+      if (!updated) {
+        skipped++;
+        continue;
+      }
+      openedIds.push(updated.id);
+      await tx.insert(performance_event).values({
+        cycle_id: updated.id,
+        actor_user_id: access.userId,
+        event_type: "self_review_opened_manually",
+        from_stage: "in_progress",
+        to_stage: "self_review",
+        payload: { reason: "bulk" },
+      });
+    }
+  });
+  await Promise.all(
+    openedIds.map((cycleId) =>
+      notifyCycleStage(cycleId, "self_review", `bulk:self_review:${Date.now()}`),
+    ),
+  );
+  return { ok: true, opened: openedIds.length, skipped };
+}
+
 export async function submitPerformanceSelfReview(input: unknown): Promise<{ ok: true }> {
   const data = SelfReviewInput.parse(input);
   const [access, cycle] = await Promise.all([
@@ -747,6 +801,43 @@ export async function submitPerformanceSelfReview(input: unknown): Promise<{ ok:
     });
   });
   await notifyCycleStage(cycle.id, "manager_review", "stage:manager_review");
+  return { ok: true };
+}
+
+export async function withdrawPerformanceSelfReview(input: unknown): Promise<{ ok: true }> {
+  const data = CycleIdInput.parse(input);
+  const [access, cycle] = await Promise.all([
+    resolvePerformanceAccess(),
+    requireCycle(data.cycleId),
+  ]);
+  if (access.userId !== cycle.user_id && !access.manageAll) {
+    throw new AppError("AUTH_FORBIDDEN", "只有员工本人可以撤回自评", 403);
+  }
+  assertStage(cycle.stage, "self_review");
+  const goals = await db
+    .select({
+      managerScore: performance_goal.manager_score,
+      skipManagerScore: performance_goal.skip_manager_score,
+    })
+    .from(performance_goal)
+    .where(eq(performance_goal.cycle_id, cycle.id));
+  if (goals.some((goal) => goal.managerScore !== null || goal.skipManagerScore !== null)) {
+    throw new AppError("PERFORMANCE_SELF_REVIEW_LOCKED", "上级已开始评分，不能撤回自评", 409);
+  }
+  const [updated] = await db
+    .update(performance_cycle)
+    .set({ stage: "self_review", updated_at: new Date() })
+    .where(and(eq(performance_cycle.id, cycle.id), eq(performance_cycle.stage, "manager_review")))
+    .returning({ id: performance_cycle.id });
+  if (!updated) throw new AppError("PERFORMANCE_CONCURRENT_UPDATE", "环节已被其他人处理", 409);
+  await db.insert(performance_event).values({
+    cycle_id: cycle.id,
+    actor_user_id: access.userId,
+    event_type: "self_review_withdrawn",
+    from_stage: "manager_review",
+    to_stage: "self_review",
+  });
+  await notifyCycleStage(cycle.id, "self_review", `withdraw:self_review:${Date.now()}`);
   return { ok: true };
 }
 
@@ -955,33 +1046,71 @@ export async function calibratePerformance(input: unknown): Promise<{ ok: true }
 }
 
 export async function returnPerformanceForReview(input: unknown): Promise<{ ok: true }> {
-  const data = CycleIdInput.parse(input);
+  const data = ReturnPerformanceInput.parse(input);
   const [access, cycle] = await Promise.all([
     resolvePerformanceAccess(),
     requireCycle(data.cycleId),
   ]);
-  if (!access.calibrate && !access.manageAll) {
-    throw new AppError("AUTH_FORBIDDEN", "只有HR可以退回评估", 403);
+  const target = data.targetStage;
+  const isManager = access.userId === cycle.manager_user_id;
+  const isSkipManager = access.userId === cycle.skip_manager_user_id;
+  const allowed =
+    access.manageAll ||
+    (cycle.stage === "hr_calibration" && access.calibrate) ||
+    (cycle.stage === "employee_confirm" && access.calibrate && target === "hr_calibration") ||
+    (cycle.stage === "skip_manager_review" &&
+      isSkipManager &&
+      (target === "self_review" || target === "manager_review")) ||
+    (cycle.stage === "manager_review" && isManager && target === "self_review");
+  if (!allowed) throw new AppError("AUTH_FORBIDDEN", "无权退回到该评估环节", 403);
+  if (
+    target === "skip_manager_review" &&
+    (!cycle.skip_manager_user_id || cycle.kind === "probation")
+  ) {
+    throw new AppError("PERFORMANCE_STAGE_INVALID", "该考核未配置隔级评估", 400);
   }
-  const previous: PerformanceStage =
-    cycle.kind !== "probation" && cycle.skip_manager_user_id
-      ? "skip_manager_review"
-      : "manager_review";
-  assertStage(cycle.stage, previous);
+  assertStage(cycle.stage, target);
+  const clearManager =
+    target === "self_review" || (cycle.stage === "hr_calibration" && target === "manager_review");
+  const clearSkip = target !== "hr_calibration";
   const [updated] = await db
     .update(performance_cycle)
-    .set({ stage: previous, updated_at: new Date() })
-    .where(and(eq(performance_cycle.id, cycle.id), eq(performance_cycle.stage, "hr_calibration")))
+    .set({
+      stage: target,
+      ...(cycle.stage === "hr_calibration" || target === "hr_calibration"
+        ? {
+            hr_comment: null,
+            final_score: null,
+            final_grade: null,
+            probation_result: null,
+            completed_at: null,
+          }
+        : {}),
+      ...(clearManager ? { manager_summary: null } : {}),
+      ...(clearSkip ? { skip_manager_summary: null } : {}),
+      updated_at: new Date(),
+    })
+    .where(and(eq(performance_cycle.id, cycle.id), eq(performance_cycle.stage, cycle.stage)))
     .returning({ id: performance_cycle.id });
   if (!updated) throw new AppError("PERFORMANCE_CONCURRENT_UPDATE", "环节已被其他人处理", 409);
+  if (clearManager || clearSkip) {
+    await db
+      .update(performance_goal)
+      .set({
+        ...(clearManager ? { manager_score: null, manager_comment: null } : {}),
+        ...(clearSkip ? { skip_manager_score: null, skip_manager_comment: null } : {}),
+        updated_at: new Date(),
+      })
+      .where(eq(performance_goal.cycle_id, cycle.id));
+  }
   await db.insert(performance_event).values({
     cycle_id: cycle.id,
     actor_user_id: access.userId,
     event_type: "calibration_returned_for_review",
-    from_stage: "hr_calibration",
-    to_stage: previous,
+    from_stage: cycle.stage,
+    to_stage: target,
   });
-  await notifyCycleStage(cycle.id, previous, `return:review:${Date.now()}`);
+  await notifyCycleStage(cycle.id, target, `return:review:${Date.now()}`);
   return { ok: true };
 }
 

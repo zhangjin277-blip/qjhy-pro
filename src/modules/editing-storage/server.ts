@@ -22,6 +22,10 @@ export {
 } from "./nas";
 export {
   parseUploadToTemp,
+  appendUploadChunk,
+  finishChunkedUpload,
+  removeChunkedUpload,
+  UPLOAD_CHUNK_BYTES,
   moveTemp,
   moveTempExclusive,
   moveTempWithSeq,
