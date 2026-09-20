@@ -1,6 +1,7 @@
 import "server-only";
 import type { Page } from "puppeteer-core";
 import { pageFetch } from "@/lib/puppeteer";
+import { dedupeOfficialWorks } from "@/modules/ai-comic/video-dedupe";
 
 const WORK_LIST = "https://creator.douyin.com/janus/douyin/creator/pc/work_list";
 const DASHBOARD = "https://creator.douyin.com/janus/douyin/creator/data/overview/dashboard";
@@ -76,7 +77,7 @@ export async function fetchOfficialVideoWorks(
     if (!Number.isFinite(next) || next === cursor) break;
     cursor = next;
   }
-  return rows;
+  return dedupeOfficialWorks(rows);
 }
 
 export async function fetchOfficialDailyMetrics(

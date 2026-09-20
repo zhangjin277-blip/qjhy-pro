@@ -5,6 +5,7 @@ import { db } from "@/db/client";
 import { auth } from "@/lib/auth";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { resolvePermission } from "@/modules/permissions/server";
+import { dedupeOfficialWorks } from "@/modules/ai-comic/video-dedupe";
 import {
   zhaohua_official_video_daily,
   zhaohua_official_video_hourly,
@@ -72,11 +73,12 @@ export async function GET(request: Request) {
     )
     .orderBy(desc(zhaohua_official_video_snapshot.snapshot_date));
   const seen = new Set<string>();
-  const videos = snapshots.filter((video) => {
+  const latestVideos = snapshots.filter((video) => {
     if (seen.has(video.item_id)) return false;
     seen.add(video.item_id);
     return true;
   });
+  const videos = itemId ? latestVideos : dedupeOfficialWorks(latestVideos);
   const hourlyHistory = itemId
     ? await db
         .select()
