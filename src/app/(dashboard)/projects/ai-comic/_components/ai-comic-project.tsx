@@ -651,7 +651,7 @@ export function AiComicProject(): React.JSX.Element {
                     value={compact(totals.like + totals.comment + totals.share)}
                     icon={Heart}
                   />
-                  <Kpi label="净增粉丝" value={compact(totals.fans)} icon={Users} />
+                  <Kpi label="作品涨粉" value={compact(totals.fans)} icon={Users} />
                 </div>
                 <div className="mt-6 border-t border-slate-100 pt-4">
                   <div className="flex items-center justify-between text-xs">
