@@ -888,6 +888,8 @@ function moduleEmoji(m: ModuleKey): string {
       return "📊";
     case "project_zhaohua":
       return "🧭";
+    case "project_ai_comic":
+      return "✨";
     case "anchors":
       return "👥";
     case "crawler":

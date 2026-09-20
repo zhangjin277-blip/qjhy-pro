@@ -128,6 +128,15 @@ registerJob({
   },
 });
 
+// 造化仙府官号创作者中心视频明细与每日汇总（每小时刷新一次）。
+registerJob({
+  name: "sync-zhaohua-official-videos",
+  schedule: "15 * * * *",
+  task: async () => {
+    await enqueue(JOB_NAMES.SYNC_ZHAOHUA_OFFICIAL_VIDEOS, {});
+  },
+});
+
 // 剪辑任务软删文件清理（每天 03:00，物理删除 30 天前软删的任务及关联文件）
 registerJob({
   name: "editing-cleanup",

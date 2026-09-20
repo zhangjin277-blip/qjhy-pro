@@ -62,6 +62,12 @@ export const NAV: NavItem[] = [
         href: "/projects/zhaohua",
         module: "project_zhaohua",
       },
+      {
+        key: "project-ai-comic",
+        label: "AI漫剧",
+        href: "/projects/ai-comic",
+        module: "project_ai_comic",
+      },
     ],
   },
   {

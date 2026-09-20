@@ -14,6 +14,7 @@ import { backfillKuaishouTrendHandler } from "./backfill-kuaishou-trend";
 import { fetchVideoHandler } from "./fetch-video";
 import { syncDouyinLiveRoomsHandler } from "./sync-douyin-live-rooms";
 import { syncZhaohuaOfficialReplaysHandler } from "./sync-zhaohua-official-replays";
+import { syncZhaohuaOfficialVideosHandler } from "./sync-zhaohua-official-videos";
 import type PgBoss from "pg-boss";
 
 // batchSize=1: one job at a time, avoids rate-limit / Cookie contention.
@@ -119,6 +120,10 @@ export async function registerCrawlerHandlers(): Promise<void> {
     if (job === undefined) return undefined;
     const data = (job.data ?? {}) as { fromDate?: string; toDate?: string };
     return await wrap(() => syncZhaohuaOfficialReplaysHandler(data));
+  });
+  await boss.work(JOB_NAMES.SYNC_ZHAOHUA_OFFICIAL_VIDEOS, { batchSize: 1 }, async (jobs) => {
+    if (jobs.at(0) === undefined) return undefined;
+    return await wrap(() => syncZhaohuaOfficialVideosHandler());
   });
   console.log("[crawler] all 15 handlers registered");
 }

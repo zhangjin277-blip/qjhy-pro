@@ -12,11 +12,14 @@ import {
 /**
  * 爬虫 Cookie 储存。
  * basecamp 列名沿用历史（最初设计给抖音大区 cs/nc1/nc2），现在也作通用 cookie key。
- * Phase 2.3 加 'kuaishou'：快手机构后台只有一套机构，单值即可。
+ * Phase 2.3 加 'kuaishou'：快手机构后台 Cookie。
+ * AI 漫剧创作者后台另用 'kuaishou_creator'，不可与工会直播 Cookie 混用。
  * Cookie 失效 status='expired' → 队列暂停 → 钉钉告警 → admin 扫码续期重置 active。
  */
 export const crawler_cookie_session = pgTable("crawler_cookie_session", {
-  basecamp: text("basecamp", { enum: ["cs", "nc1", "nc2", "kuaishou", "lingji"] }).primaryKey(),
+  basecamp: text("basecamp", {
+    enum: ["cs", "nc1", "nc2", "kuaishou", "kuaishou_creator", "lingji", "douyin_creator"],
+  }).primaryKey(),
   cookies: jsonb("cookies").notNull().$type<Record<string, string>>(), // {sid_guard, sessionid, msToken, ttwid, passport_csrf_token, ...}
   captured_at: timestamp("captured_at").notNull().defaultNow(),
   expires_at: timestamp("expires_at"),

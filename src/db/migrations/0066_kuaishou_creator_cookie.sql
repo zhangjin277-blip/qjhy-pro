@@ -1,0 +1,3 @@
+-- AI 漫剧快手创作者后台使用独立 Cookie 槽位，避免覆盖工会直播 Cookie。
+-- crawler_cookie_session.basecamp 是 text，不需要改 PostgreSQL enum。
+-- 新槽位在首次扫码/保存后创建，不复制现有 kuaishou Cookie。

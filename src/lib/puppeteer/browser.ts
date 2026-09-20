@@ -103,6 +103,34 @@ export async function openKuaishouPage(cookies: Record<string, string>): Promise
   return page;
 }
 
+/** 打开快手创作者后台，供作品分析/数据中心采集使用。 */
+export async function openKuaishouCreatorPage(cookies: Record<string, string>): Promise<Page> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setUserAgent(
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+  );
+  const cookieEntries = Object.entries(cookies).map(([name, value]) => ({
+    name,
+    value,
+    domain: ".kuaishou.com",
+    path: "/",
+  }));
+  await page.setCookie(...cookieEntries);
+  console.log("[puppeteer/kuaishou-creator] navigating to works page");
+  await page.goto("https://cp.kuaishou.com/statistics/works", {
+    waitUntil: "networkidle2",
+    timeout: 60_000,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+  if (!page.url().includes("cp.kuaishou.com")) {
+    throw new Error(`Kuaishou creator login unavailable, redirected to ${page.url()}`);
+  }
+  console.log("[puppeteer/kuaishou-creator] page ready, url=", page.url());
+  return page;
+}
+
 /** 打开抖音灵机主播后台，供官号下播复盘采集使用。 */
 export async function openLingjiPage(cookies: Record<string, string>): Promise<Page> {
   const browser = await getBrowser();
@@ -129,6 +157,32 @@ export async function openLingjiPage(cookies: Record<string, string>): Promise<P
   await new Promise((resolve) => setTimeout(resolve, 6000));
   if (!page.url().includes("/anchor/review")) {
     throw new Error(`Lingji login unavailable, redirected to ${page.url()}`);
+  }
+  return page;
+}
+
+/** 打开抖音创作者中心，供官号视频与数据中心采集使用。 */
+export async function openDouyinCreatorPage(cookies: Record<string, string>): Promise<Page> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setUserAgent(
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+  );
+  await page.setCookie(
+    ...Object.entries(cookies).map(([name, value]) => ({
+      name,
+      value,
+      domain: ".douyin.com",
+      path: "/",
+    })),
+  );
+  await page.goto("https://creator.douyin.com/creator-micro/data-center/operation", {
+    waitUntil: "networkidle2",
+    timeout: 90_000,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+  if (!page.url().includes("creator.douyin.com/creator-micro")) {
+    throw new Error(`Douyin creator login unavailable, redirected to ${page.url()}`);
   }
   return page;
 }

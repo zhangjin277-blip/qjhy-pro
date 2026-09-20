@@ -127,6 +127,55 @@
       "when": 1782298637460,
       "tag": "0017_late_lady_ursula",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789891200000,
+      "tag": "0061_zhaohua_official_videos",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789894800000,
+      "tag": "0062_ai_comic_project_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789894801000,
+      "tag": "0063_ai_comic_video_metrics",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789894802000,
+      "tag": "0064_ai_comic_fan_metrics",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789894803000,
+      "tag": "0065_ai_comic_video_hourly",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789894804000,
+      "tag": "0066_kuaishou_creator_cookie",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789894805000,
+      "tag": "0067_kuaishou_ai_comic_video",
+      "breakpoints": true
     }
   ]
 }

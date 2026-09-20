@@ -8,6 +8,7 @@
 export const MODULE_KEYS = [
   "dashboard",
   "project_zhaohua",
+  "project_ai_comic",
   "anchors",
   "crawler",
   "permissions",
@@ -28,6 +29,7 @@ export type ModuleKey = (typeof MODULE_KEYS)[number];
 export const MODULE_LABEL: Record<ModuleKey, string> = {
   dashboard: "工作台",
   project_zhaohua: "造化仙府",
+  project_ai_comic: "AI漫剧",
   anchors: "主播明细",
   crawler: "爬虫监控",
   permissions: "权限管理",
@@ -46,6 +48,7 @@ export const MODULE_LABEL: Record<ModuleKey, string> = {
 export const MODULE_DESC: Record<ModuleKey, string> = {
   dashboard: "业务看板 / 数据总览",
   project_zhaohua: "项目中心 / 造化仙府项目协作与执行数据",
+  project_ai_comic: "项目中心 / AI漫剧多平台内容数据",
   anchors: "主播列表 / 编辑 / 导出",
   crawler: "抖音 / 快手数据爬取（仅 admin）",
   permissions: "用户角色与权限分配（仅 admin）",
@@ -84,6 +87,7 @@ export interface PermissionPointDef {
 export const MODULE_POINTS: Record<ModuleKey, PermissionPointDef[]> = {
   dashboard: [{ key: "export", label: "导出", section: "数据" }],
   project_zhaohua: [{ key: "project_edit", label: "项目数据编辑", section: "项目协作" }],
+  project_ai_comic: [{ key: "project_edit", label: "项目数据编辑", section: "项目协作" }],
   anchors: [{ key: "export", label: "导出 CSV", section: "数据" }],
   crawler: [
     { key: "run_jobs", label: "重跑 / 补数", section: "采集" },

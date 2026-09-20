@@ -147,7 +147,7 @@ export async function backfillRange(input: unknown): Promise<{ ok: true; days: n
 }
 
 const SaveCookieInput = z.object({
-  basecamp: z.enum(["cs", "nc1", "nc2", "kuaishou", "lingji"]),
+  basecamp: z.enum(["cs", "nc1", "nc2", "kuaishou", "kuaishou_creator", "lingji"]),
   cookies: z.record(z.string(), z.string()).refine((cookies) => Object.keys(cookies).length > 0, {
     message: "Cookie 不能为空",
   }),

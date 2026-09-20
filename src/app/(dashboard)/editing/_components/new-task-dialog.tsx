@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createTask } from "@/modules/editing-task";
+import { isSourceRemarkRequired } from "@/modules/editing-task/source-remark-rule";
 import { searchLiveAccounts, type AccountSearchResult } from "../actions";
 import type { ProductOption } from "@/modules/product-config";
 import { toast } from "sonner";
@@ -38,6 +39,7 @@ export function NewTaskDialog({ onClose }: Props) {
     total: number;
     percent?: number;
   } | null>(null);
+  const remarkRequired = isSourceRemarkRequired(selected?.product);
 
   // 前端读取视频时长（秒），失败返回 null（不阻塞上传）
   function readVideoDurationSec(f: File): Promise<number | null> {
@@ -183,6 +185,10 @@ export function NewTaskDialog({ onClose }: Props) {
       toast.error("捕鱼系任务必须选择主播");
       return;
     }
+    if (remarkRequired && !remark.trim()) {
+      toast.error(`${selected.product}的剪辑要求为必填项`);
+      return;
+    }
     setSubmitting(true);
     await doCreate();
   }
@@ -324,12 +330,15 @@ export function NewTaskDialog({ onClose }: Props) {
           </div>
 
           <div>
-            <label className="text-sm font-medium">剪辑要求</label>
+            <label className="text-sm font-medium">
+              剪辑要求 {remarkRequired && <span className="text-red-500">*</span>}
+            </label>
             <textarea
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
               rows={3}
-              placeholder="（可空）"
+              placeholder={remarkRequired ? "请输入剪辑要求（必填）" : "（可空）"}
+              required={remarkRequired}
               className="mt-1 w-full rounded border border-border px-3 py-2 text-sm"
             />
           </div>
@@ -411,7 +420,9 @@ export function NewTaskDialog({ onClose }: Props) {
             取消
           </button>
           <button
-            disabled={!selected || files.length === 0 || submitting}
+            disabled={
+              !selected || files.length === 0 || submitting || (remarkRequired && !remark.trim())
+            }
             onClick={submit}
             className="rounded bg-blue-500 px-4 py-2 text-sm text-white disabled:opacity-50 hover:bg-blue-600"
           >

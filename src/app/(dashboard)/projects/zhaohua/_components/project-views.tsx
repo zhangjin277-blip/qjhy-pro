@@ -1014,7 +1014,6 @@ function OfficialView(): React.JSX.Element {
       </section>
 
       <OfficialDataPanel teamSummary={teamSummary} />
-
       <div className="grid items-start gap-4 xl:grid-cols-2">
         <OfficialRotationSchedule />
         <OfficialAnchorRoster />

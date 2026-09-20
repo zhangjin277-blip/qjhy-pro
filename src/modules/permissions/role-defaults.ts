@@ -13,6 +13,7 @@ export function translateLegacyPoints(
   const pts: string[] = [];
   switch (module) {
     case "project_zhaohua":
+    case "project_ai_comic":
       if (flags.edit) pts.push("project_edit");
       break;
     case "dashboard":

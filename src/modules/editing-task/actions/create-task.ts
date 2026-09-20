@@ -1,10 +1,12 @@
 "use server";
 import { db } from "@/db/client";
-import { editing_task } from "@/db/schema";
+import { editing_task, live_account } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { requireEditingPoint } from "../authz";
 import { writeEvent } from "../event-writer";
 import { CreateTaskInput } from "../schema";
 import { notifyUrgentTaskCreated } from "../notify";
+import { isSourceRemarkRequired } from "../source-remark-rule";
 
 export interface CreateTaskResult {
   taskId: number;
@@ -15,6 +17,15 @@ export interface CreateTaskResult {
 export async function createTask(input: unknown): Promise<CreateTaskResult> {
   const data = CreateTaskInput.parse(input);
   const { userId } = await requireEditingPoint("task_create");
+
+  const [account] = await db
+    .select({ product: live_account.product })
+    .from(live_account)
+    .where(eq(live_account.id, data.liveAccountId));
+  if (!account) throw new Error("账号不存在");
+  if (isSourceRemarkRequired(account.product) && !data.sourceRemark?.trim()) {
+    throw new Error(`${account.product}的剪辑要求为必填项`);
+  }
 
   const rows = await db
     .insert(editing_task)
