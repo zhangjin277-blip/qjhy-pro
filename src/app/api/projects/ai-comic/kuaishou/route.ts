@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { and, gte, lt, desc } from "drizzle-orm";
+import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { db } from "@/db/client";
 import { kuaishou_ai_comic_video_snapshot } from "@/db/schema";
 import { auth } from "@/lib/auth";
@@ -26,6 +26,7 @@ export async function GET(request: Request) {
   }
 
   const incoming = new URL(request.url);
+  const itemId = incoming.searchParams.get("item_id");
   const from = incoming.searchParams.get("from");
   const to = incoming.searchParams.get("to");
   const toDate =
@@ -44,6 +45,7 @@ export async function GET(request: Request) {
           kuaishou_ai_comic_video_snapshot.publish_time,
           new Date(new Date(`${toDate}T00:00:00+08:00`).getTime() + 86_400_000),
         ),
+        ...(itemId ? [eq(kuaishou_ai_comic_video_snapshot.item_id, itemId)] : []),
       ),
     )
     .orderBy(desc(kuaishou_ai_comic_video_snapshot.snapshot_date));
@@ -90,5 +92,7 @@ export async function GET(request: Request) {
     to: toDate,
     daily: [...daily.values()],
     videos,
+    history: itemId ? rows : [],
+    hourlyHistory: [],
   });
 }

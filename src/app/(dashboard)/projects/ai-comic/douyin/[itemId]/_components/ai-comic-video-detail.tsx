@@ -133,7 +133,13 @@ const percentage = (value: string | null | undefined) => {
   return Number.isFinite(number) ? `${(number * 100).toFixed(2)}%` : "--";
 };
 
-export function AiComicVideoDetail({ itemId }: { itemId: string }): React.JSX.Element {
+export function AiComicVideoDetail({
+  itemId,
+  platform = "douyin",
+}: {
+  itemId: string;
+  platform?: "douyin" | "kuaishou";
+}): React.JSX.Element {
   const [video, setVideo] = useState<Video | null>(null);
   const [history, setHistory] = useState<Video[]>([]);
   const [hourlyHistory, setHourlyHistory] = useState<HourlyPoint[]>([]);
@@ -147,7 +153,7 @@ export function AiComicVideoDetail({ itemId }: { itemId: string }): React.JSX.El
 
   useEffect(() => {
     void fetch(
-      `/api/projects/ai-comic/douyin?item_id=${encodeURIComponent(itemId)}&from=2000-01-01`,
+      `/api/projects/ai-comic/${platform}?item_id=${encodeURIComponent(itemId)}&from=2000-01-01`,
       { cache: "no-store" },
     )
       .then(async (response) => {
@@ -164,7 +170,7 @@ export function AiComicVideoDetail({ itemId }: { itemId: string }): React.JSX.El
         setHourlyHistory(data.hourlyHistory ?? []);
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "读取失败"));
-  }, [itemId]);
+  }, [itemId, platform]);
 
   const chronologicalHistory = useMemo(() => history.slice().reverse(), [history]);
 
