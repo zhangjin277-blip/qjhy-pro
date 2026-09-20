@@ -43,7 +43,7 @@ export async function syncZhaohuaOfficialVideosHandler(): Promise<SyncZhaohuaOff
   try {
     const [works, daily] = await Promise.all([
       fetchOfficialVideoWorks(page, { beginDate }),
-      fetchOfficialDailyMetrics(page, 30),
+      fetchOfficialDailyMetrics(page, WORK_WINDOW_DAYS),
     ]);
     const hourly = works.length > 0 ? await fetchOfficialVideoHourlyMetrics(page, works) : [];
     if (works.length > 0) {

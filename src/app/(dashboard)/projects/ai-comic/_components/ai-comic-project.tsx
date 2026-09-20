@@ -36,7 +36,7 @@ import {
 
 type PlatformKey = "douyin" | "kuaishou" | "xiaohongshu" | "bilibili" | "wechat";
 type ViewKey = PlatformKey | "all";
-type RangeKey = "7" | "30" | "month" | "custom";
+type RangeKey = "7" | "30" | "month" | "all" | "custom";
 type MetricKey = "play" | "like" | "comment" | "share" | "fans";
 type VideoSortKey = "published" | "views" | "likes";
 
@@ -171,6 +171,7 @@ function rangeFor(key: Exclude<RangeKey, "custom">): { from: string; to: string 
   const to = beijingDate();
   if (key === "7") return { from: dateOffset(-6), to };
   if (key === "30") return { from: dateOffset(-29), to };
+  if (key === "all") return { from: "2020-01-01", to };
   const now = new Date();
   return {
     from: beijingDate(new Date(now.getFullYear(), now.getMonth(), 1)),
@@ -228,19 +229,22 @@ const metricValue = (row: Daily, metric: MetricKey): number | null => {
 
 export function AiComicProject(): React.JSX.Element {
   const [platform, setPlatform] = useState<ViewKey>("all");
-  const [rangeKey, setRangeKey] = useState<RangeKey>("30");
-  const [range, setRange] = useState(() => rangeFor("30"));
+  const [rangeKey, setRangeKey] = useState<RangeKey>("all");
+  const [range, setRange] = useState(() => rangeFor("all"));
   const [metric, setMetric] = useState<MetricKey>("play");
   const [videoSort, setVideoSort] = useState<VideoSortKey>("published");
-  const [videoFrom, setVideoFrom] = useState(() => rangeFor("30").from);
-  const [videoTo, setVideoTo] = useState(() => rangeFor("30").to);
+  const [videoFrom, setVideoFrom] = useState(() => rangeFor("all").from);
+  const [videoTo, setVideoTo] = useState(() => rangeFor("all").to);
   const [videoDateOpen, setVideoDateOpen] = useState(false);
-  const [videoDraftFrom, setVideoDraftFrom] = useState(() => rangeFor("30").from);
-  const [videoDraftTo, setVideoDraftTo] = useState(() => rangeFor("30").to);
-  const [calendarMonth, setCalendarMonth] = useState(() => monthStart(rangeFor("30").from));
+  const [videoDraftFrom, setVideoDraftFrom] = useState(() => rangeFor("all").from);
+  const [videoDraftTo, setVideoDraftTo] = useState(() => rangeFor("all").to);
+  const [calendarMonth, setCalendarMonth] = useState(() => monthStart(rangeFor("all").from));
   const [page, setPage] = useState(1);
   const [daily, setDaily] = useState<Daily[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
+  const [platformPlayTotals, setPlatformPlayTotals] = useState<
+    Partial<Record<PlatformKey, number>>
+  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -248,10 +252,7 @@ export function AiComicProject(): React.JSX.Element {
     if (platform !== "douyin" && platform !== "kuaishou" && platform !== "all") return;
     setLoading(true);
     setError(null);
-    const endpoints =
-      platform === "all"
-        ? ["douyin", "kuaishou"]
-        : [platform === "kuaishou" ? "kuaishou" : "douyin"];
+    const endpoints: ("douyin" | "kuaishou")[] = ["douyin", "kuaishou"];
     void Promise.all(
       endpoints.map(async (endpoint) => {
         const response = await fetch(
@@ -264,13 +265,27 @@ export function AiComicProject(): React.JSX.Element {
           error?: string;
         };
         if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
-        return body as { daily: Daily[]; videos: Video[] };
+        return { endpoint, ...(body as { daily: Daily[]; videos: Video[] }) };
       }),
     )
       .then((responses) => {
         const dailyByDate = new Map<string, Daily>();
         const mergedVideos: Video[] = [];
-        for (const response of responses) {
+        setPlatformPlayTotals((current) => {
+          const next = { ...current };
+          for (const response of responses) {
+            next[response.endpoint] = response.videos.reduce(
+              (sum, video) => sum + (video.view_count ?? 0),
+              0,
+            );
+          }
+          return next;
+        });
+        const selectedResponses =
+          platform === "all"
+            ? responses
+            : responses.filter((response) => response.endpoint === platform);
+        for (const response of selectedResponses) {
           for (const row of response.daily) {
             const current = dailyByDate.get(row.metric_date);
             if (!current) {
@@ -304,18 +319,18 @@ export function AiComicProject(): React.JSX.Element {
 
   const totals = useMemo(
     () =>
-      daily.reduce(
-        (sum, row) => ({
-          publish: sum.publish + (row.publish_count ?? 0),
-          play: sum.play + (row.play_count ?? 0),
-          like: sum.like + (row.like_count ?? 0),
-          comment: sum.comment + (row.comment_count ?? 0),
-          share: sum.share + (row.share_count ?? 0),
-          fans: sum.fans + (row.net_fans_count ?? 0),
+      videos.reduce(
+        (sum, video) => ({
+          publish: sum.publish + 1,
+          play: sum.play + (video.view_count ?? 0),
+          like: sum.like + (video.like_count ?? 0),
+          comment: sum.comment + (video.comment_count ?? 0),
+          share: sum.share + (video.share_count ?? 0),
+          fans: sum.fans + (video.subscribe_count ?? 0),
         }),
         { publish: 0, play: 0, like: 0, comment: 0, share: 0, fans: 0 },
       ),
-    [daily],
+    [videos],
   );
   const interactionRate = totals.play
     ? ((totals.like + totals.comment + totals.share) / totals.play) * 100
@@ -424,7 +439,7 @@ export function AiComicProject(): React.JSX.Element {
               </div>
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight text-slate-950">AI漫剧</h1>
-                <p className="mt-1 text-xs text-slate-500">多平台内容经营中心 · 抖音已接入</p>
+                <p className="mt-1 text-xs text-slate-500">多平台内容经营中心 · 抖音、快手已接入</p>
               </div>
             </div>
           </div>
@@ -531,6 +546,12 @@ export function AiComicProject(): React.JSX.Element {
                     {item.note}
                   </span>
                 </span>
+                <span className="ml-auto shrink-0 text-right">
+                  <span className="block text-[10px] text-slate-400">播放量</span>
+                  <span className="mt-0.5 block text-sm font-semibold tabular-nums text-slate-800">
+                    {item.status === "live" ? compact(platformPlayTotals[item.key]) : "--"}
+                  </span>
+                </span>
               </button>
             ))}
           </div>
@@ -565,6 +586,7 @@ export function AiComicProject(): React.JSX.Element {
                     ["7", "近7天"],
                     ["30", "近30天"],
                     ["month", "本月"],
+                    ["all", "全部"],
                     ["custom", "自定义"],
                   ] as const
                 ).map(([key, label]) => (
@@ -613,6 +635,9 @@ export function AiComicProject(): React.JSX.Element {
                     <div className="mt-1 text-sm font-semibold text-slate-900">
                       {isAllPlatform ? "全平台内容经营表现" : "内容经营表现"}
                     </div>
+                    <div className="mt-1 text-[11px] text-slate-400">
+                      所选期间发布作品的当前累计数据
+                    </div>
                   </div>
                   <div className="flex size-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
                     <BarChart3 className="size-4" />
@@ -649,7 +674,7 @@ export function AiComicProject(): React.JSX.Element {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="text-xs font-medium text-slate-500">
-                      {isAllPlatform ? "全平台按日趋势" : "按日趋势"}
+                      {isAllPlatform ? "全平台按日趋势" : `${selectedPlatform.label}按日趋势`}
                     </div>
                     <div className="mt-1 flex items-center gap-2">
                       <h2 className="text-sm font-semibold text-slate-900">
@@ -658,6 +683,9 @@ export function AiComicProject(): React.JSX.Element {
                       <span className="text-xs text-slate-400">
                         {range.from} 至 {range.to}
                       </span>
+                    </div>
+                    <div className="mt-1 text-[11px] text-slate-400">
+                      平台提供的真实按日数据，历史覆盖范围可能短于所选周期
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1 rounded-lg bg-slate-50 p-1">

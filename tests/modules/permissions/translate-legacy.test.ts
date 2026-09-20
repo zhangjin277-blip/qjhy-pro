@@ -15,6 +15,7 @@ describe("translateLegacyPoints（0054 迁移翻译规则）", () => {
     expect(snap).toEqual({
       dashboard: [],
       project_zhaohua: ["project_edit"],
+      project_ai_comic: ["project_edit"],
       anchors: [],
       crawler: ["run_jobs", "cookie_update", "field_alias"],
       permissions: [],
@@ -88,8 +89,8 @@ describe("translateLegacyPoints（0054 迁移翻译规则）", () => {
     }
   });
 
-  it("注册表总点数 = 52", () => {
+  it("注册表总点数 = 53", () => {
     const total = Object.values(MODULE_POINTS).reduce((s, pts) => s + pts.length, 0);
-    expect(total).toBe(52);
+    expect(total).toBe(53);
   });
 });
