@@ -131,7 +131,7 @@ const METRICS: { key: MetricKey; label: string; color: string }[] = [
   { key: "like", label: "点赞", color: "#e11d48" },
   { key: "comment", label: "评论", color: "#2563eb" },
   { key: "share", label: "分享", color: "#d97706" },
-  { key: "fans", label: "净增粉丝", color: "#059669" },
+  { key: "fans", label: "作品涨粉", color: "#059669" },
 ];
 const DEFAULT_METRIC = METRICS[0] ?? { key: "play" as const, label: "播放", color: "#111827" };
 const DEFAULT_PLATFORM = PLATFORMS[0] ?? {
@@ -216,15 +216,15 @@ function displayDateRange(from: string, to: string): string {
   return `${from.replaceAll("-", "/")} 至 ${to.replaceAll("-", "/")}`;
 }
 
-const metricValue = (row: Daily, metric: MetricKey): number | null => {
-  const key: Record<MetricKey, keyof Daily> = {
-    play: "play_count",
+const videoMetricValue = (video: Video, metric: MetricKey): number | null => {
+  const key: Record<MetricKey, keyof Video> = {
+    play: "view_count",
     like: "like_count",
     comment: "comment_count",
     share: "share_count",
-    fans: "net_fans_count",
+    fans: "subscribe_count",
   };
-  return row[key[metric]] as number | null;
+  return video[key[metric]] as number | null;
 };
 
 export function AiComicProject(): React.JSX.Element {
@@ -335,10 +335,19 @@ export function AiComicProject(): React.JSX.Element {
   const interactionRate = totals.play
     ? ((totals.like + totals.comment + totals.share) / totals.play) * 100
     : 0;
-  const chartData = daily.map((row) => ({
-    date: row.metric_date.slice(5),
-    value: metricValue(row, metric) ?? 0,
-  }));
+  const chartData = useMemo(() => {
+    const byPublishDate = new Map<string, number>();
+    for (const video of videos) {
+      const date = beijingDate(new Date(video.publish_time));
+      byPublishDate.set(
+        date,
+        (byPublishDate.get(date) ?? 0) + (videoMetricValue(video, metric) ?? 0),
+      );
+    }
+    return [...byPublishDate]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([date, value]) => ({ date: date.slice(5), value }));
+  }, [metric, videos]);
   const selectedMetric = METRICS.find((item) => item.key === metric) ?? DEFAULT_METRIC;
   const selectedPlatform = PLATFORMS.find((item) => item.key === platform) ?? DEFAULT_PLATFORM;
   const isAllPlatform = platform === "all";
@@ -674,7 +683,7 @@ export function AiComicProject(): React.JSX.Element {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="text-xs font-medium text-slate-500">
-                      {isAllPlatform ? "全平台按日趋势" : `${selectedPlatform.label}按日趋势`}
+                      {isAllPlatform ? "全平台作品表现" : `${selectedPlatform.label}作品表现`}
                     </div>
                     <div className="mt-1 flex items-center gap-2">
                       <h2 className="text-sm font-semibold text-slate-900">
@@ -685,7 +694,7 @@ export function AiComicProject(): React.JSX.Element {
                       </span>
                     </div>
                     <div className="mt-1 text-[11px] text-slate-400">
-                      平台提供的真实按日数据，历史覆盖范围可能短于所选周期
+                      所选期间发布作品的当前累计数据，按发布日期汇总
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1 rounded-lg bg-slate-50 p-1">
