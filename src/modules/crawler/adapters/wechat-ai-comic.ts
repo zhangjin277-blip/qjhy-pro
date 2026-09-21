@@ -41,30 +41,35 @@ export async function fetchWechatAiComic(
       };
       const postTexts: string[] = [];
       let postStatus = 200;
-      for (let currentPage = 1; currentPage <= 100; currentPage++) {
-        const post = await fetch(postList, {
-          method: "POST",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            pageSize: 100,
-            currentPage,
-            sort: 0,
-            order: 0,
-            startTime: 0,
-            endTime: Math.floor(Date.now() / 1000) + 86400,
-            ...common,
-          }),
-        });
-        postStatus = post.status;
-        const text = await post.text();
-        postTexts.push(text);
-        const parsed = JSON.parse(text) as { data?: { list?: unknown[]; totalCount?: number } };
-        if (
-          (parsed.data?.list?.length ?? 0) < 100 ||
-          currentPage * 100 >= (parsed.data?.totalCount ?? 0)
-        )
-          break;
+      const now = Math.floor(Date.now() / 1000);
+      // The statistics endpoint can lag for newly published posts when queried
+      // with the all-time window. Fetch a recent window as well and merge by ID.
+      for (const startTime of [0, now - 30 * 86400]) {
+        for (let currentPage = 1; currentPage <= 100; currentPage++) {
+          const post = await fetch(postList, {
+            method: "POST",
+            credentials: "include",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              pageSize: 100,
+              currentPage,
+              sort: 0,
+              order: 0,
+              startTime,
+              endTime: now + 2 * 86400,
+              ...common,
+            }),
+          });
+          postStatus = post.status;
+          const text = await post.text();
+          postTexts.push(text);
+          const parsed = JSON.parse(text) as { data?: { list?: unknown[]; totalCount?: number } };
+          if (
+            (parsed.data?.list?.length ?? 0) < 100 ||
+            currentPage * 100 >= (parsed.data?.totalCount ?? 0)
+          )
+            break;
+        }
       }
       const today = Math.floor(Date.now() / 1000);
       const startTs = today - 7 * 86400;
@@ -100,8 +105,11 @@ export async function fetchWechatAiComic(
   const failedPost = posts.find((post) => post.errCode !== 0);
   if (failedPost)
     throw new Error(`Wechat post_list failed: ${failedPost.errMsg ?? failedPost.errCode}`);
-  const works = posts
-    .flatMap((post) => post.data?.list ?? [])
+  const works = [
+    ...new Map(
+      posts.flatMap((post) => post.data?.list ?? []).map((row) => [String(row.objectId), row]),
+    ).values(),
+  ]
     .map((row) => ({
       item_id: String(row.objectId),
       publish_time: new Date(Number(row.createTime) * 1000),

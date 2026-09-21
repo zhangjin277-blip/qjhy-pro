@@ -646,7 +646,7 @@ export function AiComicProject(): React.JSX.Element {
                       {isAllPlatform ? "全平台内容经营表现" : "内容经营表现"}
                     </div>
                     <div className="mt-1 text-[11px] text-slate-400">
-                      所选期间发布作品的当前累计数据
+                      所选期间发布作品的当前累计数据，不等同于后台按日新增数据
                     </div>
                   </div>
                   <div className="flex size-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
@@ -654,7 +654,7 @@ export function AiComicProject(): React.JSX.Element {
                   </div>
                 </div>
                 <div className="mt-6 grid grid-cols-2 gap-x-5 gap-y-5">
-                  <Kpi label="累计播放" value={compact(totals.play)} icon={Play} />
+                  <Kpi label="作品累计播放" value={compact(totals.play)} icon={Play} />
                   <Kpi label="发布作品" value={compact(totals.publish)} icon={Film} />
                   <Kpi
                     label="累计互动"
@@ -688,7 +688,7 @@ export function AiComicProject(): React.JSX.Element {
                     </div>
                     <div className="mt-1 flex items-center gap-2">
                       <h2 className="text-sm font-semibold text-slate-900">
-                        {selectedMetric.label}
+                        后台日{selectedMetric.label}
                       </h2>
                       <span className="text-xs text-slate-400">
                         {range.from} 至 {range.to}
