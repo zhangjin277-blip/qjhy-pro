@@ -266,7 +266,7 @@ export function AiComicProject(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const selectedAccount = ACCOUNTS.find((item) => item.key === account) ?? DEFAULT_ACCOUNT;
-  const visiblePlatforms = PLATFORMS.filter((item) => selectedAccount.platforms.includes(item.key));
+  const connectedPlatformCount = selectedAccount.platforms.length;
   const accountHasData = selectedAccount.ready;
 
   useEffect(() => {
@@ -568,22 +568,31 @@ export function AiComicProject(): React.JSX.Element {
                   <span
                     className={`block text-[10px] ${isAllPlatform ? "text-white/60" : "text-slate-400"}`}
                   >
-                    已接入 {visiblePlatforms.length} 个渠道
+                    已接入 {connectedPlatformCount} / 5 个渠道
                   </span>
                 </span>
                 {isAllPlatform ? <Check className="ml-1 size-3.5" /> : null}
               </button>
-              {visiblePlatforms.map((item) => {
+              {PLATFORMS.map((item) => {
                 const active = platform === item.key;
+                const configured = selectedAccount.platforms.includes(item.key);
+                const statusLabel = !configured
+                  ? "未接入"
+                  : selectedAccount.ready
+                    ? "已接入"
+                    : "待授权";
                 return (
                   <button
                     key={item.key}
                     type="button"
-                    onClick={() => setPlatform(item.key)}
+                    onClick={() => configured && setPlatform(item.key)}
+                    disabled={!configured}
                     className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition ${
                       active
                         ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                        : configured
+                          ? "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                          : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
                     }`}
                   >
                     <span
@@ -596,7 +605,7 @@ export function AiComicProject(): React.JSX.Element {
                       <span
                         className={`block text-[10px] ${active ? "text-white/60" : "text-slate-400"}`}
                       >
-                        {item.status === "live" ? "已接入" : "待接入"}
+                        {statusLabel}
                       </span>
                     </span>
                     {active ? <Check className="ml-1 size-3.5" /> : null}
@@ -606,37 +615,54 @@ export function AiComicProject(): React.JSX.Element {
             </div>
           </div>
           <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 border-b border-slate-100 sm:grid-cols-4 sm:divide-y-0">
-            {visiblePlatforms.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setPlatform(item.key)}
-                className={`group flex items-center gap-3 px-4 py-4 text-left transition sm:px-5 ${platform === item.key ? "bg-slate-50" : "bg-white hover:bg-slate-50/70"}`}
-              >
-                <span
-                  className={`flex size-8 items-center justify-center rounded-lg ${item.soft} text-white`}
+            {PLATFORMS.map((item) => {
+              const configured = selectedAccount.platforms.includes(item.key);
+              const statusLabel = !configured
+                ? "未接入"
+                : selectedAccount.ready
+                  ? "已接入"
+                  : "待授权";
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => configured && setPlatform(item.key)}
+                  disabled={!configured}
+                  className={`group flex items-center gap-3 px-4 py-4 text-left transition sm:px-5 ${
+                    platform === item.key
+                      ? "bg-slate-50"
+                      : configured
+                        ? "bg-white hover:bg-slate-50/70"
+                        : "bg-slate-50/50"
+                  } ${!configured ? "cursor-not-allowed" : ""}`}
                 >
-                  <item.Icon className="size-4" />
-                </span>
-                <span className="min-w-0">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-                    {item.label}
-                    <span
-                      className={`size-1.5 rounded-full ${item.status === "live" ? "bg-emerald-500" : "bg-slate-300"}`}
-                    />
+                  <span
+                    className={`flex size-8 items-center justify-center rounded-lg ${item.soft} text-white`}
+                  >
+                    <item.Icon className="size-4" />
                   </span>
-                  <span className="mt-1 block truncate text-[11px] text-slate-400">
-                    {item.note}
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+                      {item.label}
+                      <span
+                        className={`size-1.5 rounded-full ${!configured ? "bg-slate-300" : selectedAccount.ready ? "bg-emerald-500" : "bg-amber-400"}`}
+                      />
+                    </span>
+                    <span className="mt-1 block truncate text-[11px] text-slate-400">
+                      {statusLabel} · {item.note}
+                    </span>
                   </span>
-                </span>
-                <span className="ml-auto shrink-0 text-right">
-                  <span className="block text-[10px] text-slate-400">播放量</span>
-                  <span className="mt-0.5 block text-sm font-semibold tabular-nums text-slate-800">
-                    {item.status === "live" ? compact(platformPlayTotals[item.key]) : "--"}
+                  <span className="ml-auto shrink-0 text-right">
+                    <span className="block text-[10px] text-slate-400">播放量</span>
+                    <span className="mt-0.5 block text-sm font-semibold tabular-nums text-slate-800">
+                      {configured && selectedAccount.ready
+                        ? compact(platformPlayTotals[item.key])
+                        : "--"}
+                    </span>
                   </span>
-                </span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         </section>
 
