@@ -138,7 +138,11 @@ export async function openWechatCreatorPage(cookies: Record<string, string>): Pr
   await page.setUserAgent(
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/147.0.0.0 Safari/537.36",
   );
-  if (cookies.wxuin) await page.setExtraHTTPHeaders({ "X-WECHAT-UIN": cookies.wxuin });
+  const headers: Record<string, string> = {};
+  if (cookies.wxuin) headers["X-WECHAT-UIN"] = cookies.wxuin;
+  if (cookies._finger_print_device_id)
+    headers["finger-print-device-id"] = cookies._finger_print_device_id;
+  if (Object.keys(headers).length > 0) await page.setExtraHTTPHeaders(headers);
   await page.setCookie(
     ...Object.entries(cookies).map(([name, value]) => ({
       name,
