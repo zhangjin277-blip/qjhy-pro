@@ -614,7 +614,7 @@ export function AiComicProject(): React.JSX.Element {
               })}
             </div>
           </div>
-          <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 border-b border-slate-100 sm:grid-cols-4 sm:divide-y-0">
+          <div className="grid grid-cols-5 divide-x divide-slate-100 border-b border-slate-100">
             {PLATFORMS.map((item) => {
               const configured = selectedAccount.platforms.includes(item.key);
               const statusLabel = !configured
@@ -628,7 +628,7 @@ export function AiComicProject(): React.JSX.Element {
                   type="button"
                   onClick={() => configured && setPlatform(item.key)}
                   disabled={!configured}
-                  className={`group flex items-center gap-3 px-4 py-4 text-left transition sm:px-5 ${
+                  className={`group flex min-w-0 items-center gap-2 px-2 py-4 text-left transition sm:px-3 ${
                     platform === item.key
                       ? "bg-slate-50"
                       : configured
@@ -642,17 +642,17 @@ export function AiComicProject(): React.JSX.Element {
                     <item.Icon className="size-4" />
                   </span>
                   <span className="min-w-0">
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+                    <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-800">
                       {item.label}
                       <span
                         className={`size-1.5 rounded-full ${!configured ? "bg-slate-300" : selectedAccount.ready ? "bg-emerald-500" : "bg-amber-400"}`}
                       />
                     </span>
-                    <span className="mt-1 block truncate text-[11px] text-slate-400">
+                    <span className="mt-1 block truncate text-[10px] text-slate-400">
                       {statusLabel} · {item.note}
                     </span>
                   </span>
-                  <span className="ml-auto shrink-0 text-right">
+                  <span className="ml-auto hidden shrink-0 text-right lg:block">
                     <span className="block text-[10px] text-slate-400">播放量</span>
                     <span className="mt-0.5 block text-sm font-semibold tabular-nums text-slate-800">
                       {configured && selectedAccount.ready
