@@ -509,13 +509,8 @@ export function AiComicProject(): React.JSX.Element {
         </header>
 
         <section className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">经营账号</div>
-              <div className="mt-1 text-xs text-slate-500">
-                先选择账号，再查看该账号已接入的平台
-              </div>
-            </div>
+          <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+            <span className="text-xs font-semibold text-slate-700">账号</span>
             <div className="flex flex-wrap gap-1.5">
               {ACCOUNTS.map((item) => {
                 const active = account === item.key;
