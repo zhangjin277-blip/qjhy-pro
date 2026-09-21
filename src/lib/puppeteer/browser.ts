@@ -151,6 +151,18 @@ export async function openWechatCreatorPage(cookies: Record<string, string>): Pr
       path: "/",
     })),
   );
+  const localState = Object.entries(cookies)
+    .filter(([name]) => name.startsWith("ls_"))
+    .map(([name, value]) => [name.slice(3), value] as const);
+  if (localState.length > 0) {
+    await page.goto("https://channels.weixin.qq.com/empty.html", {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    });
+    await page.evaluate((entries) => {
+      for (const [name, value] of entries) window.localStorage.setItem(name, value);
+    }, localState);
+  }
   await page.goto("https://channels.weixin.qq.com/platform/statistic/post", {
     waitUntil: "networkidle2",
     timeout: 60_000,
