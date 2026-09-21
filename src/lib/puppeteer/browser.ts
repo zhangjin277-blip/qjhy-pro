@@ -144,12 +144,14 @@ export async function openWechatCreatorPage(cookies: Record<string, string>): Pr
     headers["finger-print-device-id"] = cookies._finger_print_device_id;
   if (Object.keys(headers).length > 0) await page.setExtraHTTPHeaders(headers);
   await page.setCookie(
-    ...Object.entries(cookies).map(([name, value]) => ({
-      name,
-      value,
-      domain: "channels.weixin.qq.com",
-      path: "/",
-    })),
+    ...Object.entries(cookies)
+      .filter(([name]) => !name.startsWith("ls_") && !name.startsWith("_finger_"))
+      .map(([name, value]) => ({
+        name,
+        value,
+        domain: "channels.weixin.qq.com",
+        path: "/",
+      })),
   );
   const localState = Object.entries(cookies)
     .filter(([name]) => name.startsWith("ls_"))
