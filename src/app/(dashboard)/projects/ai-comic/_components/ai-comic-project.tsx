@@ -217,17 +217,6 @@ function displayDateRange(from: string, to: string): string {
   return `${from.replaceAll("-", "/")} 至 ${to.replaceAll("-", "/")}`;
 }
 
-const videoMetricValue = (video: Video, metric: MetricKey): number | null => {
-  const key: Record<MetricKey, keyof Video> = {
-    play: "view_count",
-    like: "like_count",
-    comment: "comment_count",
-    share: "share_count",
-    fans: "subscribe_count",
-  };
-  return video[key[metric]] as number | null;
-};
-
 export function AiComicProject(): React.JSX.Element {
   const [platform, setPlatform] = useState<ViewKey>("all");
   const [rangeKey, setRangeKey] = useState<RangeKey>("all");
@@ -339,18 +328,25 @@ export function AiComicProject(): React.JSX.Element {
     ? ((totals.like + totals.comment + totals.share) / totals.play) * 100
     : 0;
   const chartData = useMemo(() => {
-    const byPublishDate = new Map<string, number>();
-    for (const video of videos) {
-      const date = beijingDate(new Date(video.publish_time));
-      byPublishDate.set(
-        date,
-        (byPublishDate.get(date) ?? 0) + (videoMetricValue(video, metric) ?? 0),
-      );
-    }
-    return [...byPublishDate]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([date, value]) => ({ date: date.slice(5), value }));
-  }, [metric, videos]);
+    const dailyMetricValue = (row: Daily): number => {
+      switch (metric) {
+        case "like":
+          return row.like_count ?? 0;
+        case "comment":
+          return row.comment_count ?? 0;
+        case "share":
+          return row.share_count ?? 0;
+        case "fans":
+          return row.net_fans_count ?? 0;
+        default:
+          return row.play_count ?? 0;
+      }
+    };
+    return daily
+      .slice()
+      .sort((left, right) => left.metric_date.localeCompare(right.metric_date))
+      .map((row) => ({ date: row.metric_date.slice(5), value: dailyMetricValue(row) }));
+  }, [daily, metric]);
   const selectedMetric = METRICS.find((item) => item.key === metric) ?? DEFAULT_METRIC;
   const selectedPlatform = PLATFORMS.find((item) => item.key === platform) ?? DEFAULT_PLATFORM;
   const isAllPlatform = platform === "all";
@@ -699,7 +695,7 @@ export function AiComicProject(): React.JSX.Element {
                       </span>
                     </div>
                     <div className="mt-1 text-[11px] text-slate-400">
-                      所选期间发布作品的当前累计数据，按发布日期汇总
+                      账号按自然日新增数据，与平台后台数据详情口径一致
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1 rounded-lg bg-slate-50 p-1">
