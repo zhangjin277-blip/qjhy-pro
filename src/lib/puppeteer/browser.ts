@@ -143,7 +143,7 @@ export async function openWechatCreatorPage(cookies: Record<string, string>): Pr
     ...Object.entries(cookies).map(([name, value]) => ({
       name,
       value,
-      domain: ".weixin.qq.com",
+      domain: "channels.weixin.qq.com",
       path: "/",
     })),
   );
