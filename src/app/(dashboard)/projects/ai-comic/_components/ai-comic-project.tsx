@@ -39,6 +39,7 @@ type ViewKey = PlatformKey | "all";
 type RangeKey = "7" | "30" | "month" | "all" | "custom";
 type MetricKey = "play" | "like" | "comment" | "share" | "fans";
 type VideoSortKey = "published" | "views" | "likes";
+type AccountKey = "sun-xiaosheng" | "xiao-wanwan";
 
 interface Daily {
   metric_date: string;
@@ -78,6 +79,32 @@ interface PlatformDefinition {
   accent: string;
   soft: string;
 }
+
+interface AccountDefinition {
+  key: AccountKey;
+  label: string;
+  note: string;
+  platforms: PlatformKey[];
+  ready: boolean;
+}
+
+const ACCOUNTS: AccountDefinition[] = [
+  {
+    key: "sun-xiaosheng",
+    label: "造化仙府-孙小圣",
+    note: "抖音、快手、视频号",
+    platforms: ["douyin", "kuaishou", "wechat"],
+    ready: true,
+  },
+  {
+    key: "xiao-wanwan",
+    label: "造化仙府-小魔丸",
+    note: "仅接入抖音",
+    platforms: ["douyin"],
+    ready: false,
+  },
+];
+const DEFAULT_ACCOUNT = ACCOUNTS[0] as AccountDefinition;
 
 const PLATFORMS: PlatformDefinition[] = [
   {
@@ -218,6 +245,7 @@ function displayDateRange(from: string, to: string): string {
 }
 
 export function AiComicProject(): React.JSX.Element {
+  const [account, setAccount] = useState<AccountKey>("sun-xiaosheng");
   const [platform, setPlatform] = useState<ViewKey>("all");
   const [rangeKey, setRangeKey] = useState<RangeKey>("all");
   const [range, setRange] = useState(() => rangeFor("all"));
@@ -237,8 +265,19 @@ export function AiComicProject(): React.JSX.Element {
   >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const selectedAccount = ACCOUNTS.find((item) => item.key === account) ?? DEFAULT_ACCOUNT;
+  const visiblePlatforms = PLATFORMS.filter((item) => selectedAccount.platforms.includes(item.key));
+  const accountHasData = selectedAccount.ready;
 
   useEffect(() => {
+    if (!accountHasData) {
+      setLoading(false);
+      setError(null);
+      setDaily([]);
+      setVideos([]);
+      setPlatformPlayTotals({});
+      return;
+    }
     if (!["douyin", "kuaishou", "wechat", "all"].includes(platform)) return;
     setLoading(true);
     setError(null);
@@ -307,7 +346,7 @@ export function AiComicProject(): React.JSX.Element {
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "读取失败"))
       .finally(() => setLoading(false));
-  }, [platform, range.from, range.to]);
+  }, [accountHasData, platform, range.from, range.to]);
 
   const totals = useMemo(
     () =>
@@ -472,6 +511,40 @@ export function AiComicProject(): React.JSX.Element {
         <section className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
+              <div className="text-sm font-semibold text-slate-900">经营账号</div>
+              <div className="mt-1 text-xs text-slate-500">
+                先选择账号，再查看该账号已接入的平台
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {ACCOUNTS.map((item) => {
+                const active = account === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      setAccount(item.key);
+                      setPlatform(item.key === "xiao-wanwan" ? "douyin" : "all");
+                    }}
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition ${active ? "border-slate-900 bg-slate-900 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"}`}
+                  >
+                    <span>
+                      <span className="block text-xs font-semibold">{item.label}</span>
+                      <span
+                        className={`block text-[10px] ${active ? "text-white/60" : "text-slate-400"}`}
+                      >
+                        {item.note}
+                      </span>
+                    </span>
+                    {active ? <Check className="size-3.5" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
               <div className="text-sm font-semibold text-slate-900">平台总览</div>
               <div className="mt-1 text-xs text-slate-500">先看平台状态，再进入单平台经营数据</div>
             </div>
@@ -495,12 +568,12 @@ export function AiComicProject(): React.JSX.Element {
                   <span
                     className={`block text-[10px] ${isAllPlatform ? "text-white/60" : "text-slate-400"}`}
                   >
-                    已接入 3 / 5
+                    已接入 {visiblePlatforms.length} 个渠道
                   </span>
                 </span>
                 {isAllPlatform ? <Check className="ml-1 size-3.5" /> : null}
               </button>
-              {PLATFORMS.map((item) => {
+              {visiblePlatforms.map((item) => {
                 const active = platform === item.key;
                 return (
                   <button
@@ -533,7 +606,7 @@ export function AiComicProject(): React.JSX.Element {
             </div>
           </div>
           <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 border-b border-slate-100 sm:grid-cols-4 sm:divide-y-0">
-            {PLATFORMS.map((item) => (
+            {visiblePlatforms.map((item) => (
               <button
                 key={item.key}
                 type="button"
@@ -567,7 +640,18 @@ export function AiComicProject(): React.JSX.Element {
           </div>
         </section>
 
-        {!isAllPlatform && selectedPlatform.status === "planned" ? (
+        {!accountHasData ? (
+          <section className="mt-5 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center shadow-sm">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+              <Clock3 className="size-5" />
+            </div>
+            <h2 className="mt-4 text-base font-semibold text-slate-900">等待抖音账号授权</h2>
+            <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-slate-500">
+              {selectedAccount.label}
+              已建立账号分类，目前只接入抖音。完成抖音创作者中心授权后，系统才会开始拉取该账号数据。
+            </p>
+          </section>
+        ) : !isAllPlatform && selectedPlatform.status === "planned" ? (
           <section className="mt-5 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center shadow-sm">
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
               <Radio className="size-5" />
