@@ -16,6 +16,7 @@ export * from "./invite-codes";
 export * from "./kuaishou-live-session";
 export * from "./kuaishou-live-trend";
 export * from "./kuaishou-ai-comic";
+export * from "./wechat-ai-comic";
 export * from "./kuaishou-member";
 export * from "./live-account";
 export * from "./live-account-delete-request";

@@ -4,6 +4,7 @@ export {
   openDouyinPage,
   openKuaishouPage,
   openKuaishouCreatorPage,
+  openWechatCreatorPage,
   openLingjiPage,
   openDouyinCreatorPage,
 } from "./browser";

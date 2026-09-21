@@ -80,6 +80,7 @@ const COOKIE_NAME: Record<string, string> = {
   nc2: "百应 Cookie (nc2)",
   kuaishou: "快手 Cookie",
   kuaishou_creator: "快手创作者 Cookie（AI漫剧）",
+  wechat_creator: "视频号创作者 Cookie（AI漫剧）",
   lingji: "官号灵机 Cookie",
 };
 

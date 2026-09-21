@@ -18,7 +18,16 @@ import {
  */
 export const crawler_cookie_session = pgTable("crawler_cookie_session", {
   basecamp: text("basecamp", {
-    enum: ["cs", "nc1", "nc2", "kuaishou", "kuaishou_creator", "lingji", "douyin_creator"],
+    enum: [
+      "cs",
+      "nc1",
+      "nc2",
+      "kuaishou",
+      "kuaishou_creator",
+      "lingji",
+      "douyin_creator",
+      "wechat_creator",
+    ],
   }).primaryKey(),
   cookies: jsonb("cookies").notNull().$type<Record<string, string>>(), // {sid_guard, sessionid, msToken, ttwid, passport_csrf_token, ...}
   captured_at: timestamp("captured_at").notNull().defaultNow(),

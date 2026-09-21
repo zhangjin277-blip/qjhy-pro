@@ -131,6 +131,31 @@ export async function openKuaishouCreatorPage(cookies: Record<string, string>): 
   return page;
 }
 
+/** 打开视频号创作者后台，供 AI 漫剧作品统计采集使用。 */
+export async function openWechatCreatorPage(cookies: Record<string, string>): Promise<Page> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setUserAgent(
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/147.0.0.0 Safari/537.36",
+  );
+  await page.setCookie(
+    ...Object.entries(cookies).map(([name, value]) => ({
+      name,
+      value,
+      domain: ".weixin.qq.com",
+      path: "/",
+    })),
+  );
+  await page.goto("https://channels.weixin.qq.com/platform/statistic/post", {
+    waitUntil: "networkidle2",
+    timeout: 60_000,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+  if (!page.url().includes("channels.weixin.qq.com/platform/statistic"))
+    throw new Error(`Wechat creator login unavailable, redirected to ${page.url()}`);
+  return page;
+}
+
 /** 打开抖音灵机主播后台，供官号下播复盘采集使用。 */
 export async function openLingjiPage(cookies: Record<string, string>): Promise<Page> {
   const browser = await getBrowser();

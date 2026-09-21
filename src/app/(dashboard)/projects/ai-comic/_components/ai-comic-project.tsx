@@ -52,6 +52,7 @@ interface Daily {
 }
 
 interface Video {
+  platform?: "douyin" | "kuaishou" | "wechat";
   item_id: string;
   publish_time: string;
   description: string | null;
@@ -118,8 +119,8 @@ const PLATFORMS: PlatformDefinition[] = [
   {
     key: "wechat",
     label: "视频号",
-    note: "接口接入中",
-    status: "planned",
+    note: "已接入",
+    status: "live",
     Icon: MessageCircle,
     accent: "text-emerald-700",
     soft: "bg-emerald-500",
@@ -249,10 +250,10 @@ export function AiComicProject(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (platform !== "douyin" && platform !== "kuaishou" && platform !== "all") return;
+    if (!["douyin", "kuaishou", "wechat", "all"].includes(platform)) return;
     setLoading(true);
     setError(null);
-    const endpoints: ("douyin" | "kuaishou")[] = ["douyin", "kuaishou"];
+    const endpoints: ("douyin" | "kuaishou" | "wechat")[] = ["douyin", "kuaishou", "wechat"];
     void Promise.all(
       endpoints.map(async (endpoint) => {
         const response = await fetch(
@@ -299,7 +300,9 @@ export function AiComicProject(): React.JSX.Element {
             current.share_count = (current.share_count ?? 0) + (row.share_count ?? 0);
             current.net_fans_count = (current.net_fans_count ?? 0) + (row.net_fans_count ?? 0);
           }
-          mergedVideos.push(...response.videos);
+          mergedVideos.push(
+            ...response.videos.map((video) => ({ ...video, platform: response.endpoint })),
+          );
         }
         return {
           daily: [...dailyByDate.values()].sort((a, b) =>
@@ -448,7 +451,9 @@ export function AiComicProject(): React.JSX.Element {
               </div>
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight text-slate-950">AI漫剧</h1>
-                <p className="mt-1 text-xs text-slate-500">多平台内容经营中心 · 抖音、快手已接入</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  多平台内容经营中心 · 抖音、快手、视频号已接入
+                </p>
               </div>
             </div>
           </div>
@@ -494,7 +499,7 @@ export function AiComicProject(): React.JSX.Element {
                   <span
                     className={`block text-[10px] ${isAllPlatform ? "text-white/60" : "text-slate-400"}`}
                   >
-                    已接入 2 / 5
+                    已接入 3 / 5
                   </span>
                 </span>
                 {isAllPlatform ? <Check className="ml-1 size-3.5" /> : null}
@@ -909,7 +914,7 @@ export function AiComicProject(): React.JSX.Element {
                 {pageVideos.map((video, index) => (
                   <Link
                     key={video.item_id}
-                    href={`/projects/ai-comic/${platform === "kuaishou" ? "kuaishou" : "douyin"}/${video.item_id}`}
+                    href={`/projects/ai-comic/${video.platform ?? (platform === "all" ? "douyin" : platform)}/${video.item_id}`}
                     className="group flex gap-4 px-5 py-4 transition hover:bg-slate-50 sm:px-6"
                   >
                     <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100 shadow-sm sm:h-32 sm:w-[92px]">

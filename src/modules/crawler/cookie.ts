@@ -11,7 +11,8 @@ export type Basecamp =
   | "kuaishou"
   | "kuaishou_creator"
   | "lingji"
-  | "douyin_creator";
+  | "douyin_creator"
+  | "wechat_creator";
 
 export interface CookieRecord {
   basecamp: Basecamp;
@@ -55,7 +56,9 @@ export async function markCookieExpired(basecamp: Basecamp): Promise<void> {
           ? "抖音灵机"
           : basecamp === "douyin_creator"
             ? "抖音创作者中心"
-            : "抖音";
+            : basecamp === "wechat_creator"
+              ? "视频号创作者中心"
+              : "抖音";
   await notifyCookieExpired({ platform, basecamp });
 }
 

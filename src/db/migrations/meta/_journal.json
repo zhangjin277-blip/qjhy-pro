@@ -176,6 +176,13 @@
       "when": 1789894805000,
       "tag": "0067_kuaishou_ai_comic_video",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789894806000,
+      "tag": "0068_wechat_ai_comic",
+      "breakpoints": true
     }
   ]
 }

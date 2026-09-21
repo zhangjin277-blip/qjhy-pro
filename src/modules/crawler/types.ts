@@ -15,6 +15,7 @@ export const JOB_NAMES = {
   SYNC_DOUYIN_LIVE_ROOMS: "crawler:sync_douyin_live_rooms", // 抖音公会「正在直播」快照（5min，平面图在播+开播时间）
   SYNC_ZHAOHUA_OFFICIAL_REPLAYS: "crawler:sync_zhaohua_official_replays", // 造化仙府官号灵机下播复盘
   SYNC_ZHAOHUA_OFFICIAL_VIDEOS: "crawler:sync_zhaohua_official_videos", // 造化仙府官号创作者中心视频与日汇总
+  SYNC_WECHAT_AI_COMIC: "crawler:sync_wechat_ai_comic", // 视频号 AI 漫剧作品与日汇总
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];

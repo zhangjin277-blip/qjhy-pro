@@ -138,7 +138,7 @@ export function AiComicVideoDetail({
   platform = "douyin",
 }: {
   itemId: string;
-  platform?: "douyin" | "kuaishou";
+  platform?: "douyin" | "kuaishou" | "wechat";
 }): React.JSX.Element {
   const [video, setVideo] = useState<Video | null>(null);
   const [history, setHistory] = useState<Video[]>([]);
