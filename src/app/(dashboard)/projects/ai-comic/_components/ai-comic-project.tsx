@@ -260,9 +260,6 @@ export function AiComicProject(): React.JSX.Element {
   const [page, setPage] = useState(1);
   const [daily, setDaily] = useState<Daily[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
-  const [platformPlayTotals, setPlatformPlayTotals] = useState<
-    Partial<Record<PlatformKey, number>>
-  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const selectedAccount = ACCOUNTS.find((item) => item.key === account) ?? DEFAULT_ACCOUNT;
@@ -275,7 +272,6 @@ export function AiComicProject(): React.JSX.Element {
       setError(null);
       setDaily([]);
       setVideos([]);
-      setPlatformPlayTotals({});
       return;
     }
     if (!["douyin", "kuaishou", "wechat", "all"].includes(platform)) return;
@@ -300,16 +296,6 @@ export function AiComicProject(): React.JSX.Element {
       .then((responses) => {
         const dailyByDate = new Map<string, Daily>();
         const mergedVideos: Video[] = [];
-        setPlatformPlayTotals((current) => {
-          const next = { ...current };
-          for (const response of responses) {
-            next[response.endpoint] = response.videos.reduce(
-              (sum, video) => sum + (video.view_count ?? 0),
-              0,
-            );
-          }
-          return next;
-        });
         const selectedResponses =
           platform === "all"
             ? responses
@@ -499,17 +485,54 @@ export function AiComicProject(): React.JSX.Element {
               <span className="text-slate-300">·</span>
               <span>最近同步 {latestCollectedLabel}</span>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-500 shadow-sm">
-              <CalendarDays className="size-3.5" />
-              <span>{range.from}</span>
-              <span>至</span>
-              <span>{range.to}</span>
+            <div className="flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+              {(
+                [
+                  ["7", "近7天"],
+                  ["30", "近30天"],
+                  ["month", "本月"],
+                  ["all", "全部"],
+                  ["custom", "自定义"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => selectRange(key)}
+                  className={`rounded-md px-2 py-1.5 text-xs font-medium transition ${rangeKey === key ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+                >
+                  {label}
+                </button>
+              ))}
+              {rangeKey === "custom" ? (
+                <>
+                  <input
+                    aria-label="开始日期"
+                    type="date"
+                    value={range.from}
+                    onChange={(event) =>
+                      setRange((current) => ({ ...current, from: event.target.value }))
+                    }
+                    className="h-7 rounded-md border border-slate-200 px-1 text-[11px] text-slate-600"
+                  />
+                  <span className="text-[11px] text-slate-400">至</span>
+                  <input
+                    aria-label="结束日期"
+                    type="date"
+                    value={range.to}
+                    onChange={(event) =>
+                      setRange((current) => ({ ...current, to: event.target.value }))
+                    }
+                    className="h-7 rounded-md border border-slate-200 px-1 text-[11px] text-slate-600"
+                  />
+                </>
+              ) : null}
             </div>
           </div>
         </header>
 
         <section className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
             <span className="text-xs font-semibold text-slate-700">账号</span>
             <div className="flex flex-wrap gap-1.5">
               {ACCOUNTS.map((item) => {
@@ -537,13 +560,7 @@ export function AiComicProject(): React.JSX.Element {
                 );
               })}
             </div>
-          </div>
-          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">平台总览</div>
-              <div className="mt-1 text-xs text-slate-500">先看平台状态，再进入单平台经营数据</div>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 lg:ml-auto">
               <button
                 type="button"
                 onClick={() => setPlatform("all")}
@@ -609,56 +626,6 @@ export function AiComicProject(): React.JSX.Element {
               })}
             </div>
           </div>
-          <div className="grid grid-cols-5 divide-x divide-slate-100 border-b border-slate-100">
-            {PLATFORMS.map((item) => {
-              const configured = selectedAccount.platforms.includes(item.key);
-              const statusLabel = !configured
-                ? "未接入"
-                : selectedAccount.ready
-                  ? "已接入"
-                  : "待授权";
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => configured && setPlatform(item.key)}
-                  disabled={!configured}
-                  className={`group flex min-w-0 items-center gap-2 px-2 py-4 text-left transition sm:px-3 ${
-                    platform === item.key
-                      ? "bg-slate-50"
-                      : configured
-                        ? "bg-white hover:bg-slate-50/70"
-                        : "bg-slate-50/50"
-                  } ${!configured ? "cursor-not-allowed" : ""}`}
-                >
-                  <span
-                    className={`flex size-8 items-center justify-center rounded-lg ${item.soft} text-white`}
-                  >
-                    <item.Icon className="size-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-800">
-                      {item.label}
-                      <span
-                        className={`size-1.5 rounded-full ${!configured ? "bg-slate-300" : selectedAccount.ready ? "bg-emerald-500" : "bg-amber-400"}`}
-                      />
-                    </span>
-                    <span className="mt-1 block truncate text-[10px] text-slate-400">
-                      {statusLabel} · {item.note}
-                    </span>
-                  </span>
-                  <span className="ml-auto hidden shrink-0 text-right lg:block">
-                    <span className="block text-[10px] text-slate-400">播放量</span>
-                    <span className="mt-0.5 block text-sm font-semibold tabular-nums text-slate-800">
-                      {configured && selectedAccount.ready
-                        ? compact(platformPlayTotals[item.key])
-                        : "--"}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
         </section>
 
         {!accountHasData ? (
@@ -686,60 +653,6 @@ export function AiComicProject(): React.JSX.Element {
           </section>
         ) : (
           <>
-            <section className="mt-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-4">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <CalendarDays className="size-4 text-slate-400" />
-                <span className="font-medium text-slate-700">统计周期</span>
-                <span className="hidden text-slate-300 sm:inline">|</span>
-                <span>
-                  {range.from} 至 {range.to}
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {(
-                  [
-                    ["7", "近7天"],
-                    ["30", "近30天"],
-                    ["month", "本月"],
-                    ["all", "全部"],
-                    ["custom", "自定义"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => selectRange(key)}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${rangeKey === key ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-                {rangeKey === "custom" ? (
-                  <>
-                    <input
-                      aria-label="开始日期"
-                      type="date"
-                      value={range.from}
-                      onChange={(event) =>
-                        setRange((current) => ({ ...current, from: event.target.value }))
-                      }
-                      className="h-7 rounded-md border border-slate-200 px-2 text-xs text-slate-600"
-                    />
-                    <span className="text-xs text-slate-400">至</span>
-                    <input
-                      aria-label="结束日期"
-                      type="date"
-                      value={range.to}
-                      onChange={(event) =>
-                        setRange((current) => ({ ...current, to: event.target.value }))
-                      }
-                      className="h-7 rounded-md border border-slate-200 px-2 text-xs text-slate-600"
-                    />
-                  </>
-                ) : null}
-              </div>
-            </section>
-
             <section className="mt-5 grid gap-4 lg:grid-cols-[minmax(260px,0.8fr)_minmax(0,2fr)]">
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between">
