@@ -12,6 +12,10 @@ const date = (v: string | null, fallback: string) =>
 const today = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date());
 const next = (v: string) => new Date(`${v}T00:00:00+08:00`).getTime() + 86_400_000;
+const nextDate = (v: string) => {
+  const [year = 1970, month = 1, day = 1] = v.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+};
 export async function GET(request: Request) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -32,7 +36,7 @@ export async function GET(request: Request) {
     .where(
       and(
         gte(wechat_ai_comic_daily.metric_date, from),
-        lt(wechat_ai_comic_daily.metric_date, new Date(next(to)).toISOString().slice(0, 10)),
+        lt(wechat_ai_comic_daily.metric_date, nextDate(to)),
       ),
     )
     .orderBy(wechat_ai_comic_daily.metric_date);
@@ -43,10 +47,7 @@ export async function GET(request: Request) {
       and(
         gte(wechat_ai_comic_video_snapshot.publish_time, new Date(`${from}T00:00:00+08:00`)),
         lt(wechat_ai_comic_video_snapshot.publish_time, new Date(next(to))),
-        lt(
-          wechat_ai_comic_video_snapshot.snapshot_date,
-          new Date(next(to)).toISOString().slice(0, 10),
-        ),
+        lt(wechat_ai_comic_video_snapshot.snapshot_date, nextDate(to)),
         ...(itemId ? [eq(wechat_ai_comic_video_snapshot.item_id, itemId)] : []),
       ),
     )
