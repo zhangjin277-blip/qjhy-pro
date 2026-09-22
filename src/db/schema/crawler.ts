@@ -26,6 +26,7 @@ export const crawler_cookie_session = pgTable("crawler_cookie_session", {
       "kuaishou_creator",
       "lingji",
       "douyin_creator",
+      "douyin_creator_xiao_mowan",
       "wechat_creator",
     ],
   }).primaryKey(),

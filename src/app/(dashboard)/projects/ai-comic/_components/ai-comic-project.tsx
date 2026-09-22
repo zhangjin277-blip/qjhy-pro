@@ -39,7 +39,7 @@ type ViewKey = PlatformKey | "all";
 type RangeKey = "7" | "30" | "month" | "all" | "custom";
 type MetricKey = "play" | "like" | "comment" | "share" | "fans";
 type VideoSortKey = "published" | "views" | "likes";
-type AccountKey = "sun-xiaosheng" | "xiao-wanwan";
+type AccountKey = "sun-xiaosheng" | "xiao-mowan";
 
 interface Daily {
   metric_date: string;
@@ -97,11 +97,11 @@ const ACCOUNTS: AccountDefinition[] = [
     ready: true,
   },
   {
-    key: "xiao-wanwan",
+    key: "xiao-mowan",
     label: "造化仙府-小魔丸",
     note: "仅接入抖音",
     platforms: ["douyin"],
-    ready: false,
+    ready: true,
   },
 ];
 const DEFAULT_ACCOUNT = ACCOUNTS[0] as AccountDefinition;
@@ -276,11 +276,14 @@ export function AiComicProject(): React.JSX.Element {
     if (!["douyin", "kuaishou", "wechat", "all"].includes(platform)) return;
     setLoading(true);
     setError(null);
-    const endpoints: ("douyin" | "kuaishou" | "wechat")[] = ["douyin", "kuaishou", "wechat"];
+    const endpoints = selectedAccount.platforms.filter(
+      (item): item is "douyin" | "kuaishou" | "wechat" =>
+        item === "douyin" || item === "kuaishou" || item === "wechat",
+    );
     void Promise.all(
       endpoints.map(async (endpoint) => {
         const response = await fetch(
-          `/api/projects/ai-comic/${endpoint}?from=${range.from}&to=${range.to}`,
+          `/api/projects/ai-comic/${endpoint}?from=${range.from}&to=${range.to}&account=${account}`,
           { cache: "no-store" },
         );
         const body = (await response.json()) as {
@@ -331,7 +334,7 @@ export function AiComicProject(): React.JSX.Element {
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "读取失败"))
       .finally(() => setLoading(false));
-  }, [accountHasData, platform, range.from, range.to]);
+  }, [account, accountHasData, platform, range.from, range.to, selectedAccount.platforms]);
 
   const totals = useMemo(
     () =>
@@ -499,7 +502,7 @@ export function AiComicProject(): React.JSX.Element {
                     type="button"
                     onClick={() => {
                       setAccount(item.key);
-                      setPlatform(item.key === "xiao-wanwan" ? "douyin" : "all");
+                      setPlatform(item.key === "xiao-mowan" ? "douyin" : "all");
                     }}
                     className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition ${active ? "border-slate-900 bg-slate-900 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"}`}
                   >
@@ -884,7 +887,7 @@ export function AiComicProject(): React.JSX.Element {
                 {pageVideos.map((video, index) => (
                   <Link
                     key={video.item_id}
-                    href={`/projects/ai-comic/${video.platform ?? (platform === "all" ? "douyin" : platform)}/${video.item_id}`}
+                    href={`/projects/ai-comic/${video.platform ?? (platform === "all" ? "douyin" : platform)}/${video.item_id}?account=${account}`}
                     className="group flex gap-4 px-5 py-4 transition hover:bg-slate-50 sm:px-6"
                   >
                     <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100 shadow-sm sm:h-32 sm:w-[92px]">

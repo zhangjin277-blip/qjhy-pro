@@ -136,9 +136,11 @@ const percentage = (value: string | null | undefined) => {
 export function AiComicVideoDetail({
   itemId,
   platform = "douyin",
+  accountKey = "sun-xiaosheng",
 }: {
   itemId: string;
   platform?: "douyin" | "kuaishou" | "wechat";
+  accountKey?: "sun-xiaosheng" | "xiao-mowan";
 }): React.JSX.Element {
   const [video, setVideo] = useState<Video | null>(null);
   const [history, setHistory] = useState<Video[]>([]);
@@ -153,7 +155,7 @@ export function AiComicVideoDetail({
 
   useEffect(() => {
     void fetch(
-      `/api/projects/ai-comic/${platform}?item_id=${encodeURIComponent(itemId)}&from=2000-01-01`,
+      `/api/projects/ai-comic/${platform}?item_id=${encodeURIComponent(itemId)}&from=2000-01-01&account=${accountKey}`,
       { cache: "no-store" },
     )
       .then(async (response) => {
@@ -170,7 +172,7 @@ export function AiComicVideoDetail({
         setHourlyHistory(data.hourlyHistory ?? []);
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "读取失败"));
-  }, [itemId, platform]);
+  }, [accountKey, itemId, platform]);
 
   const chronologicalHistory = useMemo(() => history.slice().reverse(), [history]);
 

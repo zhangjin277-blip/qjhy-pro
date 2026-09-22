@@ -38,6 +38,8 @@ export async function GET(request: Request) {
   }
   const url = new URL(request.url);
   const itemId = url.searchParams.get("item_id");
+  const accountKey =
+    url.searchParams.get("account") === "xiao-mowan" ? "xiao-mowan" : "sun-xiaosheng";
   const to = validDate(url.searchParams.get("to"), beijingDate());
   const fallbackDate = new Date(`${to}T00:00:00+08:00`);
   fallbackDate.setDate(fallbackDate.getDate() - 29);
@@ -50,6 +52,7 @@ export async function GET(request: Request) {
     .from(zhaohua_official_video_daily)
     .where(
       and(
+        eq(zhaohua_official_video_daily.account_key, accountKey),
         gte(zhaohua_official_video_daily.metric_date, from),
         lt(zhaohua_official_video_daily.metric_date, nextDate(to)),
       ),
@@ -62,6 +65,7 @@ export async function GET(request: Request) {
     .from(zhaohua_official_video_snapshot)
     .where(
       and(
+        eq(zhaohua_official_video_snapshot.account_key, accountKey),
         gte(zhaohua_official_video_snapshot.publish_time, new Date(`${from}T00:00:00+08:00`)),
         lt(
           zhaohua_official_video_snapshot.publish_time,
@@ -85,6 +89,7 @@ export async function GET(request: Request) {
         .from(zhaohua_official_video_hourly)
         .where(
           and(
+            eq(zhaohua_official_video_hourly.account_key, accountKey),
             eq(zhaohua_official_video_hourly.item_id, itemId),
             gte(zhaohua_official_video_hourly.point_at, new Date(`${from}T00:00:00+08:00`)),
             lt(zhaohua_official_video_hourly.point_at, new Date(`${nextDate(to)}T00:00:00+08:00`)),
@@ -95,6 +100,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     platform: "douyin",
+    account: accountKey,
     from,
     to,
     daily,

@@ -127,6 +127,10 @@ export async function registerCrawlerHandlers(): Promise<void> {
     if (jobs.at(0) === undefined) return undefined;
     return await wrap(() => syncZhaohuaOfficialVideosHandler());
   });
+  await boss.work(JOB_NAMES.SYNC_XIAOMOWAN_OFFICIAL_VIDEOS, { batchSize: 1 }, async (jobs) => {
+    if (jobs.at(0) === undefined) return undefined;
+    return await wrap(() => syncZhaohuaOfficialVideosHandler("xiao-mowan"));
+  });
   await boss.work(JOB_NAMES.SYNC_WECHAT_AI_COMIC, { batchSize: 1 }, async (jobs) => {
     if (jobs.at(0) === undefined) return undefined;
     return await wrap(() => syncWechatAiComicHandler());

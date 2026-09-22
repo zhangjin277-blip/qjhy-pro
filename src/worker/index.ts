@@ -138,6 +138,14 @@ registerJob({
 });
 
 registerJob({
+  name: "sync-xiaomowan-official-videos",
+  schedule: "25 * * * *",
+  task: async () => {
+    await enqueue(JOB_NAMES.SYNC_XIAOMOWAN_OFFICIAL_VIDEOS, {});
+  },
+});
+
+registerJob({
   name: "sync-wechat-ai-comic",
   schedule: "30 * * * *",
   task: async () => {

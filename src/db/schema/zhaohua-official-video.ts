@@ -14,6 +14,7 @@ import {
 export const zhaohua_official_video_snapshot = pgTable(
   "zhaohua_official_video_snapshot",
   {
+    account_key: text("account_key").notNull().default("sun-xiaosheng"),
     item_id: text("item_id").notNull(),
     snapshot_date: date("snapshot_date").notNull(),
     publish_time: timestamp("publish_time", { withTimezone: true }).notNull(),
@@ -39,26 +40,36 @@ export const zhaohua_official_video_snapshot = pgTable(
     created_at: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.item_id, t.snapshot_date] }),
-    idx_publish: index("idx_zhaohua_official_video_publish").on(t.publish_time),
-    idx_snapshot: index("idx_zhaohua_official_video_snapshot_date").on(t.snapshot_date),
+    pk: primaryKey({ columns: [t.account_key, t.item_id, t.snapshot_date] }),
+    idx_publish: index("idx_zhaohua_official_video_publish").on(t.account_key, t.publish_time),
+    idx_snapshot: index("idx_zhaohua_official_video_snapshot_date").on(
+      t.account_key,
+      t.snapshot_date,
+    ),
   }),
 );
 
 /** 创作者中心数据中心按日汇总趋势。 */
-export const zhaohua_official_video_daily = pgTable("zhaohua_official_video_daily", {
-  metric_date: date("metric_date").primaryKey(),
-  publish_count: integer("publish_count"),
-  play_count: integer("play_count"),
-  like_count: integer("like_count"),
-  share_count: integer("share_count"),
-  comment_count: integer("comment_count"),
-  net_fans_count: integer("net_fans_count"),
-  cancel_fans_count: integer("cancel_fans_count"),
-  homepage_view_count: integer("homepage_view_count"),
-  completion_rate_5s: numeric("completion_rate_5s", { precision: 10, scale: 6 }),
-  bounce_rate_2s: numeric("bounce_rate_2s", { precision: 10, scale: 6 }),
-  cover_click_rate: numeric("cover_click_rate", { precision: 10, scale: 6 }),
-  raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
-  collected_at: timestamp("collected_at").notNull().defaultNow(),
-});
+export const zhaohua_official_video_daily = pgTable(
+  "zhaohua_official_video_daily",
+  {
+    account_key: text("account_key").notNull().default("sun-xiaosheng"),
+    metric_date: date("metric_date").notNull(),
+    publish_count: integer("publish_count"),
+    play_count: integer("play_count"),
+    like_count: integer("like_count"),
+    share_count: integer("share_count"),
+    comment_count: integer("comment_count"),
+    net_fans_count: integer("net_fans_count"),
+    cancel_fans_count: integer("cancel_fans_count"),
+    homepage_view_count: integer("homepage_view_count"),
+    completion_rate_5s: numeric("completion_rate_5s", { precision: 10, scale: 6 }),
+    bounce_rate_2s: numeric("bounce_rate_2s", { precision: 10, scale: 6 }),
+    cover_click_rate: numeric("cover_click_rate", { precision: 10, scale: 6 }),
+    raw: jsonb("raw").notNull().$type<Record<string, unknown>>(),
+    collected_at: timestamp("collected_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.account_key, t.metric_date] }),
+  }),
+);

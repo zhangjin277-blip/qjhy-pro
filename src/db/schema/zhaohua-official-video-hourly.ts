@@ -13,6 +13,7 @@ import {
 export const zhaohua_official_video_hourly = pgTable(
   "zhaohua_official_video_hourly",
   {
+    account_key: text("account_key").notNull().default("sun-xiaosheng"),
     item_id: text("item_id").notNull(),
     metric_type: integer("metric_type").notNull(),
     point_at: timestamp("point_at", { withTimezone: true }).notNull(),
@@ -21,8 +22,9 @@ export const zhaohua_official_video_hourly = pgTable(
     collected_at: timestamp("collected_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.item_id, t.metric_type, t.point_at] }),
+    pk: primaryKey({ columns: [t.account_key, t.item_id, t.metric_type, t.point_at] }),
     idx_item_metric: index("idx_zhaohua_official_video_hourly_metric").on(
+      t.account_key,
       t.item_id,
       t.metric_type,
       t.point_at,

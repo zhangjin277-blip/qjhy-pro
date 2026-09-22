@@ -13,7 +13,8 @@ export const JOB_LABEL: Record<string, string> = {
   "crawler:sync_kuaishou_today_live": "快手·今日实时",
   "crawler:sync_kuaishou_live_snapshot": "快手·直播趋势快照",
   "crawler:sync_zhaohua_official_replays": "抖音灵机·官号复盘",
-  "crawler:sync_zhaohua_official_videos": "抖音创作者中心·官号视频",
+  "crawler:sync_zhaohua_official_videos": "抖音创作者中心·孙小圣",
+  "crawler:sync_xiaomowan_official_videos": "抖音创作者中心·小魔丸",
 };
 
 export const STATE_LABEL: Record<string, string> = {

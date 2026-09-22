@@ -154,6 +154,8 @@ const SaveCookieInput = z.object({
     "kuaishou",
     "kuaishou_creator",
     "lingji",
+    "douyin_creator",
+    "douyin_creator_xiao_mowan",
     "wechat_creator",
   ]),
   cookies: z.record(z.string(), z.string()).refine((cookies) => Object.keys(cookies).length > 0, {

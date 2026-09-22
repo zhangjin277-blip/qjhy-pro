@@ -6,15 +6,35 @@ import {
 } from "@/db/schema";
 import { sql } from "drizzle-orm";
 import { CookieExpiredError, openDouyinCreatorPage } from "@/lib/puppeteer";
-import { getActiveCookies, markCookieExpired, notifyCrawlerError } from "@/modules/crawler/server";
+import {
+  getActiveCookies,
+  markCookieExpired,
+  notifyCrawlerError,
+  type Basecamp,
+} from "@/modules/crawler/server";
 import {
   fetchOfficialDailyMetrics,
   fetchOfficialVideoHourlyMetrics,
   fetchOfficialVideoWorks,
 } from "@/modules/crawler/adapters/zhaohua-official-video";
 
-const ACCOUNT_NAME = "造化仙府丨孙小圣";
 const WORK_WINDOW_DAYS = 90;
+export type DouyinAiComicAccountKey = "sun-xiaosheng" | "xiao-mowan";
+
+const ACCOUNT_CONFIG: Record<
+  DouyinAiComicAccountKey,
+  { name: string; cookieBasecamp: Basecamp; fallbackCookieBasecamp?: Basecamp }
+> = {
+  "sun-xiaosheng": {
+    name: "造化仙府-孙小圣",
+    cookieBasecamp: "douyin_creator",
+    fallbackCookieBasecamp: "lingji",
+  },
+  "xiao-mowan": {
+    name: "造化仙府-小魔丸",
+    cookieBasecamp: "douyin_creator_xiao_mowan",
+  },
+};
 
 export interface SyncZhaohuaOfficialVideosResult {
   account: string;
@@ -24,20 +44,24 @@ export interface SyncZhaohuaOfficialVideosResult {
   snapshotDate: string;
 }
 
-/** 每天更新官号作品明细和数据中心按日汇总，重复执行幂等。 */
-export async function syncZhaohuaOfficialVideosHandler(): Promise<SyncZhaohuaOfficialVideosResult> {
+/** 更新指定官号作品明细和数据中心按日汇总，重复执行幂等。 */
+export async function syncZhaohuaOfficialVideosHandler(
+  accountKey: DouyinAiComicAccountKey = "sun-xiaosheng",
+): Promise<SyncZhaohuaOfficialVideosResult> {
+  const account = ACCOUNT_CONFIG[accountKey];
   const now = new Date();
-  const snapshotDate = now.toISOString().slice(0, 10);
+  const snapshotDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(now);
   const beginDate = new Date(now.getTime() - (WORK_WINDOW_DAYS - 1) * 86_400_000)
     .toISOString()
     .slice(0, 10);
-  let cookieBasecamp: "douyin_creator" | "lingji" = "douyin_creator";
+  let cookieBasecamp = account.cookieBasecamp;
   let cookies: Record<string, string>;
   try {
-    cookies = await getActiveCookies("douyin_creator");
-  } catch {
-    cookieBasecamp = "lingji";
-    cookies = await getActiveCookies("lingji");
+    cookies = await getActiveCookies(cookieBasecamp);
+  } catch (error) {
+    if (!account.fallbackCookieBasecamp) throw error;
+    cookieBasecamp = account.fallbackCookieBasecamp;
+    cookies = await getActiveCookies(cookieBasecamp);
   }
   const page = await openDouyinCreatorPage(cookies);
   try {
@@ -51,6 +75,7 @@ export async function syncZhaohuaOfficialVideosHandler(): Promise<SyncZhaohuaOff
         .insert(zhaohua_official_video_snapshot)
         .values(
           works.map((row) => ({
+            account_key: accountKey,
             item_id: row.item_id,
             snapshot_date: snapshotDate,
             publish_time: row.publish_time,
@@ -77,6 +102,7 @@ export async function syncZhaohuaOfficialVideosHandler(): Promise<SyncZhaohuaOff
         )
         .onConflictDoUpdate({
           target: [
+            zhaohua_official_video_snapshot.account_key,
             zhaohua_official_video_snapshot.item_id,
             zhaohua_official_video_snapshot.snapshot_date,
           ],
@@ -109,6 +135,7 @@ export async function syncZhaohuaOfficialVideosHandler(): Promise<SyncZhaohuaOff
         .insert(zhaohua_official_video_daily)
         .values(
           daily.map((row) => ({
+            account_key: accountKey,
             metric_date: row.metric_date,
             publish_count: integerMetric(row.values.publish_cnt),
             play_count: integerMetric(row.values.play_cnt),
@@ -125,7 +152,10 @@ export async function syncZhaohuaOfficialVideosHandler(): Promise<SyncZhaohuaOff
           })),
         )
         .onConflictDoUpdate({
-          target: zhaohua_official_video_daily.metric_date,
+          target: [
+            zhaohua_official_video_daily.account_key,
+            zhaohua_official_video_daily.metric_date,
+          ],
           set: {
             publish_count: sql`excluded.publish_count`,
             play_count: sql`excluded.play_count`,
@@ -150,6 +180,7 @@ export async function syncZhaohuaOfficialVideosHandler(): Promise<SyncZhaohuaOff
           .insert(zhaohua_official_video_hourly)
           .values(
             batch.map((point) => ({
+              account_key: accountKey,
               item_id: point.item_id,
               metric_type: point.metric_type,
               point_at: point.point_at,
@@ -159,6 +190,7 @@ export async function syncZhaohuaOfficialVideosHandler(): Promise<SyncZhaohuaOff
           )
           .onConflictDoUpdate({
             target: [
+              zhaohua_official_video_hourly.account_key,
               zhaohua_official_video_hourly.item_id,
               zhaohua_official_video_hourly.metric_type,
               zhaohua_official_video_hourly.point_at,
@@ -168,10 +200,10 @@ export async function syncZhaohuaOfficialVideosHandler(): Promise<SyncZhaohuaOff
       }
     }
     console.log(
-      `[zhaohua-official-videos] account=${ACCOUNT_NAME} works=${works.length} daily=${daily.length} hourly=${hourly.length}`,
+      `[zhaohua-official-videos] account=${account.name} works=${works.length} daily=${daily.length} hourly=${hourly.length}`,
     );
     return {
-      account: ACCOUNT_NAME,
+      account: account.name,
       works: works.length,
       daily: daily.length,
       hourly: hourly.length,
@@ -182,12 +214,12 @@ export async function syncZhaohuaOfficialVideosHandler(): Promise<SyncZhaohuaOff
       await markCookieExpired(cookieBasecamp);
       await notifyCrawlerError({
         type: "cookie_expired",
-        detail: `zhaohua official creator: ${error.message}`,
+        detail: `${account.name} creator: ${error.message}`,
       });
     } else
       await notifyCrawlerError({
         type: "job_failed",
-        detail: `zhaohua official videos: ${(error as Error).message}`,
+        detail: `${account.name} videos: ${(error as Error).message}`,
       });
     throw error;
   } finally {

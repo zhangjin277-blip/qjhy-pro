@@ -183,6 +183,13 @@
       "when": 1789894806000,
       "tag": "0068_wechat_ai_comic",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790059200000,
+      "tag": "0069_ai_comic_douyin_accounts",
+      "breakpoints": true
     }
   ]
 }
