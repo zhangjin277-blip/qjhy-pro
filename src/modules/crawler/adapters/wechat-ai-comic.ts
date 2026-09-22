@@ -134,9 +134,13 @@ export async function fetchWechatAiComic(
     }))
     .filter((row) => !Number.isNaN(row.publish_time.getTime()));
   if (!result.dailyText) return { works, daily: [] };
-  const trend = JSON.parse(result.dailyText) as DailyResponse;
-  if (trend.errCode !== 0)
-    throw new Error(`Wechat daily statistics failed: ${trend.errMsg ?? trend.errCode}`);
+  let trend: DailyResponse;
+  try {
+    trend = JSON.parse(result.dailyText) as DailyResponse;
+  } catch {
+    return { works, daily: [] };
+  }
+  if (trend.errCode !== 0) return { works, daily: [] };
   const all = trend.data?.dataByFanstype?.[0]?.dataByTabtype?.find((x) => x.tabType === 999)?.data;
   const dates = all?.browse ?? [];
   const dailyRows = dates

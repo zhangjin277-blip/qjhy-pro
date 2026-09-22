@@ -145,6 +145,14 @@ registerJob({
   },
 });
 
+registerJob({
+  name: "sync-kuaishou-ai-comic",
+  schedule: "45 * * * *",
+  task: async () => {
+    await enqueue(JOB_NAMES.SYNC_KUAISHOU_AI_COMIC, {});
+  },
+});
+
 // 剪辑任务软删文件清理（每天 03:00，物理删除 30 天前软删的任务及关联文件）
 registerJob({
   name: "editing-cleanup",

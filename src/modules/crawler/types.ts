@@ -16,6 +16,7 @@ export const JOB_NAMES = {
   SYNC_ZHAOHUA_OFFICIAL_REPLAYS: "crawler:sync_zhaohua_official_replays", // 造化仙府官号灵机下播复盘
   SYNC_ZHAOHUA_OFFICIAL_VIDEOS: "crawler:sync_zhaohua_official_videos", // 造化仙府官号创作者中心视频与日汇总
   SYNC_WECHAT_AI_COMIC: "crawler:sync_wechat_ai_comic", // 视频号 AI 漫剧作品与日汇总
+  SYNC_KUAISHOU_AI_COMIC: "crawler:sync_kuaishou_ai_comic", // 快手 AI 漫剧作品快照
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];

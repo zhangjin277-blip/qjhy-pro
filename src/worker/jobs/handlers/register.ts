@@ -16,6 +16,7 @@ import { syncDouyinLiveRoomsHandler } from "./sync-douyin-live-rooms";
 import { syncZhaohuaOfficialReplaysHandler } from "./sync-zhaohua-official-replays";
 import { syncZhaohuaOfficialVideosHandler } from "./sync-zhaohua-official-videos";
 import { syncWechatAiComicHandler } from "./sync-wechat-ai-comic";
+import { syncKuaishouAiComicHandler } from "./sync-kuaishou-ai-comic";
 import type PgBoss from "pg-boss";
 
 // batchSize=1: one job at a time, avoids rate-limit / Cookie contention.
@@ -129,6 +130,10 @@ export async function registerCrawlerHandlers(): Promise<void> {
   await boss.work(JOB_NAMES.SYNC_WECHAT_AI_COMIC, { batchSize: 1 }, async (jobs) => {
     if (jobs.at(0) === undefined) return undefined;
     return await wrap(() => syncWechatAiComicHandler());
+  });
+  await boss.work(JOB_NAMES.SYNC_KUAISHOU_AI_COMIC, { batchSize: 1 }, async (jobs) => {
+    if (jobs.at(0) === undefined) return undefined;
+    return await wrap(() => syncKuaishouAiComicHandler());
   });
   console.log("[crawler] all handlers registered");
 }
