@@ -28,8 +28,9 @@ export interface WechatAiComicDaily {
 export async function fetchWechatAiComic(
   page: Page,
 ): Promise<{ works: WechatAiComicVideo[]; daily: WechatAiComicDaily[] }> {
+  const dailyRange = getWechatDailyRange();
   const result = await page.evaluate(
-    async ({ postList, daily }) => {
+    async ({ postList, daily, dailyStartTs, dailyEndTs }) => {
       const common = {
         timestamp: String(Date.now()),
         _log_finder_uin: "",
@@ -71,8 +72,6 @@ export async function fetchWechatAiComic(
             break;
         }
       }
-      const today = Math.floor(Date.now() / 1000);
-      const startTs = today - 7 * 86400;
       let dailyStatus = 0;
       let dailyText = "";
       try {
@@ -81,8 +80,8 @@ export async function fetchWechatAiComic(
           credentials: "include",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            startTs: String(startTs),
-            endTs: String(today + 86400),
+            startTs: String(dailyStartTs),
+            endTs: String(dailyEndTs),
             interval: 3,
             ...common,
           }),
@@ -97,10 +96,15 @@ export async function fetchWechatAiComic(
         postTexts,
         dailyStatus,
         dailyText,
-        dailyStartTs: startTs,
+        dailyStartTs,
       };
     },
-    { postList: POST_LIST, daily: DAILY },
+    {
+      postList: POST_LIST,
+      daily: DAILY,
+      dailyStartTs: dailyRange.startTs,
+      dailyEndTs: dailyRange.endTs,
+    },
   );
   if (
     result.postStatus === 401 ||
@@ -163,6 +167,19 @@ export async function fetchWechatAiComic(
     .filter((x) => x.values.play !== null || x.values.like !== null);
   return { works, daily: dailyRows };
 }
+
+/** Return the latest seven completed Shanghai calendar days, both ends inclusive. */
+export function getWechatDailyRange(nowMs = Date.now()): { startTs: number; endTs: number } {
+  const shanghaiOffsetSeconds = 8 * 60 * 60;
+  const secondsPerDay = 24 * 60 * 60;
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const todayStartTs =
+    Math.floor((nowSeconds + shanghaiOffsetSeconds) / secondsPerDay) * secondsPerDay -
+    shanghaiOffsetSeconds;
+  const endTs = todayStartTs - secondsPerDay;
+  return { startTs: endTs - 6 * secondsPerDay, endTs };
+}
+
 function num(value: unknown): number | null {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
