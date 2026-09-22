@@ -247,7 +247,6 @@ function displayDateRange(from: string, to: string): string {
 export function AiComicProject(): React.JSX.Element {
   const [account, setAccount] = useState<AccountKey>("sun-xiaosheng");
   const [platform, setPlatform] = useState<ViewKey>("all");
-  const [rangeKey, setRangeKey] = useState<RangeKey>("all");
   const [range, setRange] = useState(() => rangeFor("all"));
   const [metric, setMetric] = useState<MetricKey>("play");
   const [videoSort, setVideoSort] = useState<VideoSortKey>("published");
@@ -405,19 +404,6 @@ export function AiComicProject(): React.JSX.Element {
     setPage(1);
   }, [videoFrom, videoSort, videoTo]);
 
-  const selectRange = (key: RangeKey) => {
-    setRangeKey(key);
-    if (key !== "custom") {
-      const nextRange = rangeFor(key);
-      setRange(nextRange);
-      setVideoFrom(nextRange.from);
-      setVideoTo(nextRange.to);
-      setVideoDraftFrom(nextRange.from);
-      setVideoDraftTo(nextRange.to);
-      setCalendarMonth(monthStart(nextRange.from));
-    }
-  };
-
   const chooseVideoShortcut = (key: "today" | "week" | "month" | "twoMonths" | "all") => {
     const next =
       key === "today"
@@ -428,7 +414,8 @@ export function AiComicProject(): React.JSX.Element {
             ? rangeFor("month")
             : key === "twoMonths"
               ? { from: dateOffset(-59), to: beijingDate() }
-              : { from: range.from, to: range.to };
+              : rangeFor("all");
+    setRange(next);
     setVideoFrom(next.from);
     setVideoTo(next.to);
     setVideoDraftFrom(next.from);
@@ -451,6 +438,7 @@ export function AiComicProject(): React.JSX.Element {
     }
     const nextFrom = value < videoDraftFrom ? value : videoDraftFrom;
     const nextTo = value < videoDraftFrom ? videoDraftFrom : value;
+    setRange({ from: nextFrom, to: nextTo });
     setVideoFrom(nextFrom);
     setVideoTo(nextTo);
     setVideoDateOpen(false);
@@ -485,49 +473,17 @@ export function AiComicProject(): React.JSX.Element {
               <span className="text-slate-300">·</span>
               <span>最近同步 {latestCollectedLabel}</span>
             </div>
-            <div className="flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
-              {(
-                [
-                  ["7", "近7天"],
-                  ["30", "近30天"],
-                  ["month", "本月"],
-                  ["all", "全部"],
-                  ["custom", "自定义"],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => selectRange(key)}
-                  className={`rounded-md px-2 py-1.5 text-xs font-medium transition ${rangeKey === key ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}
-                >
-                  {label}
-                </button>
-              ))}
-              {rangeKey === "custom" ? (
-                <>
-                  <input
-                    aria-label="开始日期"
-                    type="date"
-                    value={range.from}
-                    onChange={(event) =>
-                      setRange((current) => ({ ...current, from: event.target.value }))
-                    }
-                    className="h-7 rounded-md border border-slate-200 px-1 text-[11px] text-slate-600"
-                  />
-                  <span className="text-[11px] text-slate-400">至</span>
-                  <input
-                    aria-label="结束日期"
-                    type="date"
-                    value={range.to}
-                    onChange={(event) =>
-                      setRange((current) => ({ ...current, to: event.target.value }))
-                    }
-                    className="h-7 rounded-md border border-slate-200 px-1 text-[11px] text-slate-600"
-                  />
-                </>
-              ) : null}
-            </div>
+            <button
+              type="button"
+              onClick={() => setVideoDateOpen((open) => !open)}
+              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm hover:border-slate-300"
+            >
+              <CalendarDays className="size-3.5 text-slate-400" />
+              <span>发布日期</span>
+              <ChevronRight
+                className={`size-3.5 rotate-90 text-slate-400 transition ${videoDateOpen ? "-rotate-90" : ""}`}
+              />
+            </button>
           </div>
         </header>
 
@@ -810,11 +766,11 @@ export function AiComicProject(): React.JSX.Element {
                   <p className="mt-1 text-xs text-slate-500">每页展示 5 个作品，点击进入作品详情</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative">
+                  <div className="contents">
                     <button
                       type="button"
                       onClick={() => setVideoDateOpen((open) => !open)}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition ${videoDateOpen ? "border-blue-500 bg-blue-50 text-slate-800" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+                      className="hidden"
                     >
                       <CalendarDays className="size-3.5 text-slate-400" />
                       <span className="whitespace-nowrap">发布日期</span>
@@ -826,7 +782,7 @@ export function AiComicProject(): React.JSX.Element {
                       />
                     </button>
                     {videoDateOpen ? (
-                      <div className="absolute right-0 z-30 mt-2 flex w-[760px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                      <div className="fixed right-4 top-24 z-50 flex w-[760px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
                         <div className="w-[190px] shrink-0 border-r border-slate-200 p-4">
                           <div className="mb-3 text-sm font-semibold text-slate-800">快捷选择</div>
                           <div className="grid grid-cols-2 gap-2">
