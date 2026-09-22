@@ -73,22 +73,30 @@ export async function fetchWechatAiComic(
       }
       const today = Math.floor(Date.now() / 1000);
       const startTs = today - 7 * 86400;
-      const trend = await fetch(daily, {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          startTs: String(startTs),
-          endTs: String(today + 86400),
-          interval: 3,
-          ...common,
-        }),
-      });
+      let dailyStatus = 0;
+      let dailyText = "";
+      try {
+        const trend = await fetch(daily, {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            startTs: String(startTs),
+            endTs: String(today + 86400),
+            interval: 3,
+            ...common,
+          }),
+        });
+        dailyStatus = trend.status;
+        dailyText = await trend.text();
+      } catch {
+        // A transient trend request failure must not discard a valid post list.
+      }
       return {
         postStatus,
         postTexts,
-        dailyStatus: trend.status,
-        dailyText: await trend.text(),
+        dailyStatus,
+        dailyText,
         dailyStartTs: startTs,
       };
     },
@@ -125,6 +133,7 @@ export async function fetchWechatAiComic(
       raw: row as unknown as Record<string, unknown>,
     }))
     .filter((row) => !Number.isNaN(row.publish_time.getTime()));
+  if (!result.dailyText) return { works, daily: [] };
   const trend = JSON.parse(result.dailyText) as DailyResponse;
   if (trend.errCode !== 0)
     throw new Error(`Wechat daily statistics failed: ${trend.errMsg ?? trend.errCode}`);
