@@ -139,7 +139,7 @@ export function AiComicVideoDetail({
   accountKey = "sun-xiaosheng",
 }: {
   itemId: string;
-  platform?: "douyin" | "kuaishou" | "wechat";
+  platform?: "douyin" | "kuaishou" | "wechat" | "bilibili" | "xiaohongshu";
   accountKey?: "sun-xiaosheng" | "xiao-mowan";
 }): React.JSX.Element {
   const [video, setVideo] = useState<Video | null>(null);
@@ -291,7 +291,12 @@ export function AiComicVideoDetail({
             <div className="relative h-48 w-32 shrink-0 overflow-hidden rounded-lg bg-slate-100 shadow-sm sm:h-56 sm:w-[150px]">
               {video.cover_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={video.cover_url} alt="" className="size-full object-cover" />
+                <img
+                  src={video.cover_url}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  className="size-full object-cover"
+                />
               ) : (
                 <Film className="m-14 size-8 text-slate-300" />
               )}

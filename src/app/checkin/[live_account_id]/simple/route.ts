@@ -29,6 +29,13 @@ export async function GET(
     );
   }
 
+  if (state.account.deprecated) {
+    return new Response(
+      `<!doctype html><meta charset="utf-8"><title>账号已废弃</title><body style="font-family:sans-serif;text-align:center;padding:40px;color:#888">该账号已废弃，不能开播<br><small>${esc(state.account.placement_label || state.account.account_name)}</small></body>`,
+      { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
+    );
+  }
+
   return new Response(render(state, live_account_id), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
@@ -286,6 +293,7 @@ button:disabled{opacity:.5}
           if (msg === "NOT_AN_ANCHOR") msg = "你不在主播部门，无权打卡";
           else if (msg === "ALREADY_LIVE") msg = "你已经在播这个账号";
           else if (msg === "EMERGENCY_NOT_ALLOWED") msg = "应急账号不能打卡";
+          else if (msg === "ACCOUNT_DEPRECATED") msg = "该账号已废弃，不能开播";
           showErr(card, msg);
           return;
         }

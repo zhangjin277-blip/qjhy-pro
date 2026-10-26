@@ -12,6 +12,7 @@ import {
   ClipboardCheck,
   Users,
   Video,
+  Fish,
   type LucideIcon,
 } from "lucide-react";
 import type { ModuleKey } from "@/modules/permissions";
@@ -53,20 +54,40 @@ export const NAV: NavItem[] = [
   },
   {
     key: "projects",
-    label: "项目中心",
+    label: "造化仙府",
     icon: FolderKanban,
     children: [
       {
         key: "project-zhaohua",
-        label: "造化仙府",
+        label: "造化直播",
         href: "/projects/zhaohua",
         module: "project_zhaohua",
       },
       {
         key: "project-ai-comic",
-        label: "AI漫剧",
+        label: "造化视频",
         href: "/projects/ai-comic",
         module: "project_ai_comic",
+      },
+    ],
+  },
+  {
+    key: "buyu",
+    label: "捕鱼中心",
+    icon: Fish,
+    children: [
+      {
+        key: "buyu-live",
+        label: "捕鱼直播",
+        href: "/projects/buyu",
+        module: "project_buyu",
+      },
+      { key: "buyu-placement", label: "投放数据", href: "/placements", module: "placement" },
+      {
+        key: "buyu-checkin",
+        label: "开播记录",
+        href: "/live-accounts/checkin-history",
+        module: "checkin_history",
       },
     ],
   },
@@ -93,7 +114,6 @@ export const NAV: NavItem[] = [
     icon: BarChart3,
     children: [
       { key: "data-board", label: "业务看板", href: "/dashboard", module: "dashboard" },
-      { key: "data-placement", label: "投放数据", href: "/placements", module: "placement" },
       { key: "data-realtime", label: "实时数据", href: "/live/realtime", disabled: true },
       { key: "data-daily", label: "主播日报", href: "/live/daily", disabled: true },
       { key: "data-rank", label: "排行榜", href: "/live/rank", disabled: true },
@@ -110,12 +130,6 @@ export const NAV: NavItem[] = [
         key: "live-schedule",
         label: "默认排班",
         href: "/live-accounts/schedule-overview",
-        module: "live_account",
-      },
-      {
-        key: "live-checkin",
-        label: "开播记录",
-        href: "/live-accounts/checkin-history",
         module: "live_account",
       },
       {
@@ -152,7 +166,7 @@ export const NAV: NavItem[] = [
     children: [
       {
         key: "people-performance-list",
-        label: "人员绩效",
+        label: "人员管理",
         href: "/people-performance",
         module: "people_performance",
       },
@@ -162,15 +176,22 @@ export const NAV: NavItem[] = [
         href: "/people-performance/statistics",
         module: "people_performance",
       },
+      {
+        key: "goals",
+        label: "目标管理",
+        href: "/goals",
+        module: "goals",
+      },
     ],
   },
   {
-    key: "operations-performance",
-    label: "运营目标",
+    key: "hr-ops",
+    label: "行政运营",
     icon: ClipboardCheck,
-    single: true,
-    href: "/operations-performance",
-    module: "dashboard",
+    children: [
+      { key: "procurement", label: "道具采购", href: "/procurement", module: "procurement" },
+      { key: "attendance", label: "考勤打卡", href: "/attendance", module: "attendance" },
+    ],
   },
   {
     key: "courses",

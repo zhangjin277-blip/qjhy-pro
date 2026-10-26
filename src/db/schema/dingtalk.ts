@@ -47,6 +47,10 @@ export const dingtalk_user = pgTable(
     // auth_user_id 反查 better-auth user（钉钉用户该字段为 null）。
     is_external: boolean("is_external").notNull().default(false),
     auth_user_id: text("auth_user_id"),
+    // 仅通讯录同步写入；旧人员保留 null，不能用每天刷新的 synced_at 推断首次导入。
+    first_synced_at: timestamp("first_synced_at", { withTimezone: true }),
+    // 仅 active=true → false 时更新；重新入职保留该时间，供当月离职人数去重。
+    last_inactive_at: timestamp("last_inactive_at", { withTimezone: true }),
   },
   (t) => ({
     idx_unionid: index("idx_dingtalk_user_unionid").on(t.unionid),

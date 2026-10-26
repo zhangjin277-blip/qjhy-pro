@@ -60,4 +60,31 @@ describe("people performance current cycle selection", () => {
       )?.id,
     ).toBe("august");
   });
+
+  it("moves to September after August is completed", () => {
+    expect(
+      selectCurrentCycle(
+        [
+          cycle("september", "monthly", "goal_setting", "2026-09-01"),
+          cycle("august", "monthly", "completed", "2026-08-01"),
+          cycle("july", "monthly", "manager_review", "2026-07-01"),
+        ],
+        "regular",
+        "2026-09-29",
+      )?.id,
+    ).toBe("september");
+  });
+
+  it("ignores a cancelled previous month", () => {
+    expect(
+      selectCurrentCycle(
+        [
+          cycle("september", "monthly", "goal_setting", "2026-09-01"),
+          cycle("august", "monthly", "cancelled", "2026-08-01"),
+        ],
+        "regular",
+        "2026-09-29",
+      )?.id,
+    ).toBe("september");
+  });
 });

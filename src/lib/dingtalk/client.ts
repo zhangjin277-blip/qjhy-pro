@@ -312,6 +312,16 @@ export async function fetchUserDetail(userId: string): Promise<DingtalkUserDetai
   return response.result;
 }
 
+/** 读取指定员工某天的考勤明细，字段原样保留给考勤模块解析。 */
+export async function fetchUserAttendance(userId: string, workDate: string): Promise<Record<string, unknown>> {
+  const response = await callTopApi(
+    "/topapi/attendance/getupdatedata",
+    { userid: userId, work_date: workDate },
+    z.object({ errcode: z.number(), errmsg: z.string().optional(), result: z.record(z.string(), z.unknown()).optional() }),
+  );
+  return response.result ?? {};
+}
+
 /**
  * 通过钉钉 unionId 反查 userid（钉钉企业内通讯录的 userid）。
  *

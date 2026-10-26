@@ -1,4 +1,5 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type { EditorOption } from "@/modules/editing-editor";
@@ -307,56 +308,17 @@ export function FilterBar({ products, editors, anchors, onNewTask }: FilterBarPr
         )}
       </div>
 
-      {/* 日期：自定义区间 + 快捷档位平铺 */}
-      <div className="flex items-center gap-1.5">
-        <span className="text-muted-foreground pl-1 text-sm">日期</span>
-        <input
-          type="date"
-          value={displayFrom}
-          onChange={(e) => {
-            const from = e.target.value;
-            if (!from) return;
-            // 另一端为空（如「全部」档）兜底成今天，并 clamp 保证 from ≤ to
-            let to = displayTo || todayStr;
-            if (to < from) to = from;
-            setCustomRange(from, to);
-          }}
-          className="rounded-md border border-border bg-white px-2 py-1.5 text-xs text-slate-700"
-        />
-        <span className="text-muted-foreground text-xs">~</span>
-        <input
-          type="date"
-          value={displayTo}
-          onChange={(e) => {
-            const to = e.target.value;
-            if (!to) return;
-            let from = displayFrom || todayStr;
-            if (from > to) from = to;
-            setCustomRange(from, to);
-          }}
-          className="rounded-md border border-border bg-white px-2 py-1.5 text-xs text-slate-700"
-        />
-        <div className="ml-1 inline-flex overflow-hidden rounded-md border border-border bg-white">
-          {[
-            { key: "all" as const, label: "全部" },
-            { key: "today" as const, label: "今天" },
-            { key: "7d" as const, label: "近 7 天" },
-            { key: "30d" as const, label: "近 30 天" },
-          ].map((opt, i) => (
-            <button
-              key={opt.key}
-              onClick={() => setRange(opt.key)}
-              className={`px-3 py-1.5 text-sm transition ${i > 0 ? "border-l border-border" : ""} ${
-                range === opt.key
-                  ? "bg-blue-500 font-medium text-white"
-                  : "text-slate-600 hover:bg-blue-50 hover:text-blue-600"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <DateRangePicker
+        label="任务日期"
+        value={{ from: displayFrom, to: displayTo }}
+        onChange={(next) => setCustomRange(next.from, next.to)}
+        onAll={() => setRange("all")}
+        presets={[
+          { label: "今天", value: { from: todayStr, to: todayStr } },
+          { label: "近 7 天", value: { from: daysAgo(7), to: todayStr } },
+          { label: "近 30 天", value: { from: daysAgo(30), to: todayStr } },
+        ]}
+      />
 
       <div className="flex-1" />
 

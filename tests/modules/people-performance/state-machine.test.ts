@@ -17,6 +17,7 @@ describe("people performance state machine", () => {
   it("allows probation checkpoints to finish or enter HR after direct review", () => {
     expect(canTransition("manager_review", "completed")).toBe(true);
     expect(canTransition("manager_review", "hr_calibration")).toBe(true);
+    expect(canTransition("hr_calibration", "completed")).toBe(true);
   });
 
   it("allows HR calibration to return to the applicable manager review", () => {

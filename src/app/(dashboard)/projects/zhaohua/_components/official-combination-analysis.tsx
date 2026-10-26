@@ -1,4 +1,5 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 
 import { useMemo, useState } from "react";
 
@@ -482,24 +483,16 @@ export function OfficialCombinationAnalysis(): React.JSX.Element {
             ))}
           </select>
         </label>
-        <label className="text-xs text-slate-500">
-          开始日期
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="mt-1 h-9 w-full rounded-md border px-2 text-sm text-slate-800"
+        <div className="sm:col-span-2">
+          <DateRangePicker
+            label="统计日期"
+            value={{ from, to }}
+            onChange={(next) => {
+              setFrom(next.from);
+              setTo(next.to);
+            }}
           />
-        </label>
-        <label className="text-xs text-slate-500">
-          结束日期
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="mt-1 h-9 w-full rounded-md border px-2 text-sm text-slate-800"
-          />
-        </label>
+        </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[

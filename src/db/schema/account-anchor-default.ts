@@ -17,7 +17,7 @@ export const account_anchor_default = pgTable(
     id: text("id").primaryKey(),
     account_id: text("account_id")
       .notNull()
-      .references(() => live_account.id, { onDelete: "cascade" }),
+      .references(() => live_account.id, { onDelete: "restrict" }),
     dingtalk_user_id: text("dingtalk_user_id")
       .notNull()
       .references(() => live_anchor.dingtalk_user_id),

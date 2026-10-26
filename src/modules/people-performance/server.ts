@@ -21,12 +21,19 @@ import { AppError } from "@/lib/errors";
 import { resolvePerformanceAccess } from "./authz";
 import { isPerformanceActionAssignedToUser } from "./action-assignment";
 import { selectCurrentCycle } from "./cycle-selection";
-import { addDays, buildProbationPeriods, buildQuarterMonths, getQuarterPeriod } from "./date-utils";
+import {
+  addDays,
+  buildProbationPeriods,
+  buildQuarterMonths,
+  getQuarterPeriod,
+  summarizeQuarter,
+} from "./date-utils";
 import {
   belongsToPerformanceDepartment,
   resolvePerformanceDepartmentIds,
 } from "./department-filter";
 import { notifyCycleStage } from "./notify";
+import { visiblePerformanceRating } from "./rating";
 import type {
   PeopleListRow,
   PerformanceManagerOption,
@@ -66,6 +73,72 @@ async function seedCycleGoals(cycleId: string, goals: PerformanceGoalTemplate[])
       sort_order: index,
     })),
   );
+}
+
+export async function inheritMonthlyGoals(
+  cycleId: string,
+  userId: string,
+  periodStart: string,
+  fallback: PerformanceGoalTemplate[],
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    // Lock the cycle so concurrent sweeps cannot seed the same blank month twice.
+    const [cycle] = await tx
+      .select()
+      .from(performance_cycle)
+      .where(eq(performance_cycle.id, cycleId))
+      .for("update");
+    if (!cycle || !["scheduled", "goal_setting"].includes(cycle.stage)) return;
+    const existing = await tx
+      .select({ id: performance_goal.id })
+      .from(performance_goal)
+      .where(eq(performance_goal.cycle_id, cycleId))
+      .limit(1);
+    if (existing.length > 0) return;
+    const previous = await tx
+      .select({ id: performance_cycle.id })
+      .from(performance_cycle)
+      .where(
+        and(
+          eq(performance_cycle.user_id, userId),
+          eq(performance_cycle.kind, "monthly"),
+          lt(performance_cycle.period_start, periodStart),
+          ne(performance_cycle.stage, "cancelled"),
+        ),
+      )
+      .orderBy(desc(performance_cycle.period_start))
+      .limit(1);
+    const previousGoals = previous[0]
+      ? await tx
+          .select()
+          .from(performance_goal)
+          .where(eq(performance_goal.cycle_id, previous[0].id))
+          .orderBy(asc(performance_goal.sort_order))
+      : [];
+    const goals =
+      previousGoals.length > 0
+        ? previousGoals.map((goal) => ({
+            title: goal.title,
+            description: goal.description,
+            metric: goal.metric,
+            targetValue: goal.target_value,
+            weight: Number(goal.weight),
+          }))
+        : fallback;
+    if (goals.length === 0) return;
+    await tx.insert(performance_goal).values(
+      goals.map((goal, index) => ({
+        id: crypto.randomUUID(),
+        cycle_id: cycleId,
+        title: goal.title,
+        description: goal.description,
+        metric: goal.metric,
+        target_value: goal.targetValue,
+        weight: String(goal.weight),
+        sort_order: index,
+      })),
+    );
+  });
 }
 
 function canSeePerson(
@@ -255,7 +328,7 @@ export async function getPeoplePerformanceDetail(userId: string): Promise<People
           .where(inArray(performance_goal.cycle_id, cycleIds))
           .orderBy(asc(performance_goal.sort_order))
       : Promise.resolve([]),
-    cycleIds.length
+    cycleIds.length && access.manageAll
       ? db
           .select({
             id: performance_event.id,
@@ -274,7 +347,13 @@ export async function getPeoplePerformanceDetail(userId: string): Promise<People
       : Promise.resolve([]),
   ]);
 
-  const cycles: PerformanceCycleView[] = cycleRows.map((cycle) => ({
+  const isEmployeeViewer = access.userId === userId;
+  const cycles: PerformanceCycleView[] = cycleRows.map((cycle) => {
+    // 试用期评级必须经 HR 校准后才能向员工本人展示。
+    const canSeeCalibratedResult =
+      cycle.kind !== "probation" || !isEmployeeViewer ||
+      (cycle.hr_user_id !== null && ["employee_confirm", "completed"].includes(cycle.stage));
+    return {
     id: cycle.id,
     parentCycleId: cycle.parent_cycle_id,
     kind: cycle.kind,
@@ -290,8 +369,8 @@ export async function getPeoplePerformanceDetail(userId: string): Promise<People
     skipManagerSummary: cycle.skip_manager_summary,
     hrComment: cycle.hr_comment,
     finalScore: numberOrNull(cycle.final_score),
-    finalGrade: cycle.final_grade,
-    probationResult: cycle.probation_result,
+    finalGrade: visiblePerformanceRating(cycle, isEmployeeViewer),
+    probationResult: canSeeCalibratedResult ? cycle.probation_result : null,
     confirmationDeadline:
       cycle.stage === "employee_confirm"
         ? new Date(cycle.updated_at.getTime() + 72 * 60 * 60 * 1000).toISOString()
@@ -312,7 +391,8 @@ export async function getPeoplePerformanceDetail(userId: string): Promise<People
         skipManagerScore: numberOrNull(goal.skip_manager_score),
         skipManagerComment: goal.skip_manager_comment,
       })),
-  }));
+    };
+  });
 
   const events: PerformanceEventView[] = eventRows.map((event) => ({
     ...event,
@@ -396,7 +476,7 @@ export async function ensureProbationCycles(args: {
   }
 }
 
-async function ensureRegularQuarter(today: string): Promise<void> {
+export async function ensureRegularQuarter(today: string): Promise<void> {
   const profiles = await db
     .select()
     .from(people_performance_profile)
@@ -457,9 +537,25 @@ async function ensureRegularQuarter(today: string): Promise<void> {
           ],
         })
         .returning({ id: performance_cycle.id });
-      if (inserted) {
-        await seedCycleGoals(inserted.id, profile.performance_goal_template);
-      }
+      const [existing] = inserted
+        ? [inserted]
+        : await db
+            .select({ id: performance_cycle.id })
+            .from(performance_cycle)
+            .where(
+              and(
+                eq(performance_cycle.user_id, profile.user_id),
+                eq(performance_cycle.kind, "monthly"),
+                eq(performance_cycle.period_start, month.start),
+              ),
+            );
+      if (existing)
+        await inheritMonthlyGoals(
+          existing.id,
+          profile.user_id,
+          month.start,
+          profile.performance_goal_template,
+        );
     }
   }
 }
@@ -471,7 +567,6 @@ export async function runPerformanceSweep(): Promise<{
   autoConfirmed: number;
 }> {
   const today = todayInShanghai();
-  await ensureRegularQuarter(today);
   const scheduled = await db
     .select()
     .from(performance_cycle)
@@ -501,7 +596,12 @@ export async function runPerformanceSweep(): Promise<{
     .select()
     .from(performance_cycle)
     .where(
-      and(eq(performance_cycle.stage, "in_progress"), lte(performance_cycle.period_end, today)),
+      and(
+        eq(performance_cycle.stage, "in_progress"),
+        lte(performance_cycle.period_end, today),
+        // 季度父周期不走自评，由月度子周期全部确认后汇总（summarizeQuarterIfComplete）
+        ne(performance_cycle.kind, "quarterly"),
+      ),
     );
   let selfReviewsOpened = 0;
   for (const cycle of due) {
@@ -562,7 +662,92 @@ export async function runPerformanceSweep(): Promise<{
     }
   }
   const autoConfirmed = await autoConfirmExpiredPerformanceResults();
+  await summarizePendingQuarters(today);
   return { opened, selfReviewsOpened, reminders, autoConfirmed };
+}
+
+type PerformanceCycleRow = typeof performance_cycle.$inferSelect;
+
+/**
+ * 季度父周期汇总：月度子周期全部 completed 且季度已结束 → 父周期 completed + 平均分定级。
+ * 幂等（只处理未 completed 的父周期）。
+ */
+async function summarizeQuarterIfComplete(parentCycleId: string, today: string): Promise<boolean> {
+  const [parent] = await db
+    .select({ stage: performance_cycle.stage, periodEnd: performance_cycle.period_end })
+    .from(performance_cycle)
+    .where(eq(performance_cycle.id, parentCycleId));
+  if (!parent || parent.stage === "completed") return false;
+  const children = await db
+    .select({ stage: performance_cycle.stage, finalScore: performance_cycle.final_score })
+    .from(performance_cycle)
+    .where(eq(performance_cycle.parent_cycle_id, parentCycleId));
+  const summary = summarizeQuarter(children, parent.periodEnd, today);
+  if (!summary) return false;
+  const now = new Date();
+  const [updated] = await db
+    .update(performance_cycle)
+    .set({
+      stage: "completed",
+      final_score: String(summary.score),
+      final_grade: summary.grade,
+      completed_at: now,
+      updated_at: now,
+    })
+    .where(and(eq(performance_cycle.id, parentCycleId), ne(performance_cycle.stage, "completed")))
+    .returning({ id: performance_cycle.id });
+  return Boolean(updated);
+}
+
+/** 补算历史遗漏：已结束但未汇总的季度父周期（例如此前自动确认未触发汇总的） */
+export async function summarizePendingQuarters(today: string): Promise<number> {
+  const pending = await db
+    .select({ id: performance_cycle.id })
+    .from(performance_cycle)
+    .where(
+      and(
+        eq(performance_cycle.kind, "quarterly"),
+        ne(performance_cycle.stage, "completed"),
+        lte(performance_cycle.period_end, today),
+      ),
+    );
+  let summarized = 0;
+  for (const parent of pending) {
+    if (await summarizeQuarterIfComplete(parent.id, today)) summarized++;
+  }
+  return summarized;
+}
+
+/**
+ * 结果确认（员工手动确认 / 72h 自动确认）后的连带效果，两条路径必须共用：
+ * - 试用期最后一期 passed → 转正
+ * - 月度周期 → 尝试汇总季度父周期
+ */
+export async function applyConfirmedCycleEffects(
+  cycle: PerformanceCycleRow,
+): Promise<{ regularized: boolean }> {
+  const today = todayInShanghai();
+  let regularized = false;
+  if (cycle.kind === "probation" && cycle.probation_result === "passed") {
+    const probationCycles = await db
+      .select({ sequence: performance_cycle.sequence })
+      .from(performance_cycle)
+      .where(
+        and(eq(performance_cycle.user_id, cycle.user_id), eq(performance_cycle.kind, "probation")),
+      );
+    const finalSequence = Math.max(...probationCycles.map((item) => item.sequence));
+    if (cycle.sequence === finalSequence) {
+      await db
+        .update(people_performance_profile)
+        .set({ employment_status: "regular", regularized_at: today, updated_at: new Date() })
+        .where(eq(people_performance_profile.user_id, cycle.user_id));
+      regularized = true;
+    }
+  }
+  if (cycle.kind === "monthly" && cycle.parent_cycle_id) {
+    await summarizeQuarterIfComplete(cycle.parent_cycle_id, today);
+  }
+  return { regularized };
 }
 
 export async function autoConfirmExpiredPerformanceResults(): Promise<number> {
@@ -589,7 +774,7 @@ export async function autoConfirmExpiredPerformanceResults(): Promise<number> {
       .where(
         and(eq(performance_cycle.id, cycle.id), eq(performance_cycle.stage, "employee_confirm")),
       )
-      .returning({ id: performance_cycle.id });
+      .returning();
     if (!updated) continue;
     autoConfirmed++;
     await db.insert(performance_event).values({
@@ -600,6 +785,8 @@ export async function autoConfirmExpiredPerformanceResults(): Promise<number> {
       to_stage: "completed",
       payload: { reason: "超过72小时未确认" },
     });
+    // 转正后的周期由管理员手动创建，这里不递归调用 sweep
+    await applyConfirmedCycleEffects(updated);
   }
   return autoConfirmed;
 }

@@ -8,7 +8,6 @@ import {
   pgTable,
   text,
   timestamp,
-  unique,
 } from "drizzle-orm/pg-core";
 import { anchor_profile } from "./anchors";
 import { dingtalk_user } from "./dingtalk";
@@ -126,59 +125,5 @@ export const editing_task_event = pgTable(
   (t) => ({
     idx_task_created: index("idx_editing_event_task_created").on(t.task_id, t.created_at),
     idx_type_created: index("idx_editing_event_type_created").on(t.event_type, t.created_at),
-  }),
-);
-
-// ─── 主播扣分 ─────────────────────────────────────────────────────────────────
-
-/**
- * 主播月度积分汇总。
- * period_start = 每月 1 号 00:00:00（local，无 tz）。
- * score 从 0 开始，扣分为负增量（score - 1）。
- * 月度自动隔离（新月份新行），不需要"清零"操作。
- */
-export const anchor_score = pgTable(
-  "anchor_score",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    anchor_id: text("anchor_id")
-      .notNull()
-      .references(() => anchor_profile.anchor_id),
-    period_start: timestamp("period_start", { mode: "date", withTimezone: false }).notNull(), // 月份 1 号
-    score: integer("score").notNull().default(0),
-    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    uq_anchor_period: unique("uq_anchor_score_anchor_period").on(t.anchor_id, t.period_start),
-    idx_period: index("idx_anchor_score_period").on(t.period_start),
-  }),
-);
-
-/**
- * 主播积分变动明细日志。
- * change: -1（扣分）/ +1（加分，预留）
- * reason: 扣分原因，如 "捕鱼系未上传素材"
- * stat_date: 被统计的业务日期（即"昨天"），用于幂等去重。
- * unique(anchor_id, stat_date, reason) 防止同一天同原因重复扣分。
- */
-export const anchor_score_log = pgTable(
-  "anchor_score_log",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    anchor_id: text("anchor_id")
-      .notNull()
-      .references(() => anchor_profile.anchor_id),
-    change: integer("change").notNull(), // -1 / +1
-    reason: text("reason").notNull(),
-    stat_date: timestamp("stat_date", { mode: "date", withTimezone: false }).notNull(), // 被统计的日期
-    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    uq_anchor_date_reason: unique("uq_anchor_score_log_anchor_date_reason").on(
-      t.anchor_id,
-      t.stat_date,
-      t.reason,
-    ),
-    idx_anchor: index("idx_anchor_score_log_anchor").on(t.anchor_id),
   }),
 );

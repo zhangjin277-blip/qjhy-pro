@@ -1,6 +1,7 @@
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import type { Browser, Page } from "puppeteer-core";
+import { CookieExpiredError } from "./page-fetch";
 
 puppeteer.use(StealthPlugin());
 
@@ -125,7 +126,11 @@ export async function openKuaishouCreatorPage(cookies: Record<string, string>): 
   });
   await new Promise((resolve) => setTimeout(resolve, 5000));
   if (!page.url().includes("cp.kuaishou.com")) {
-    throw new Error(`Kuaishou creator login unavailable, redirected to ${page.url()}`);
+    const redirectedUrl = page.url();
+    await page.close().catch(() => undefined);
+    throw new CookieExpiredError(
+      `Kuaishou creator login unavailable, redirected to ${redirectedUrl}`,
+    );
   }
   console.log("[puppeteer/kuaishou-creator] page ready, url=", page.url());
   return page;
@@ -170,8 +175,77 @@ export async function openWechatCreatorPage(cookies: Record<string, string>): Pr
     timeout: 60_000,
   });
   await new Promise((resolve) => setTimeout(resolve, 5000));
-  if (!page.url().includes("channels.weixin.qq.com/platform/statistic"))
-    throw new Error(`Wechat creator login unavailable, redirected to ${page.url()}`);
+  if (!page.url().includes("channels.weixin.qq.com/platform/statistic")) {
+    const redirectedUrl = page.url();
+    await page.close().catch(() => undefined);
+    throw new CookieExpiredError(
+      `Wechat creator login unavailable, redirected to ${redirectedUrl}`,
+    );
+  }
+  return page;
+}
+
+/** 打开 B站创作中心，供 AI 漫剧稿件与作品数据采集使用。 */
+export async function openBilibiliCreatorPage(cookies: Record<string, string>): Promise<Page> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setUserAgent(
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/147.0.0.0 Safari/537.36",
+  );
+  await page.setCookie(
+    ...Object.entries(cookies).map(([name, value]) => ({
+      name,
+      value,
+      domain: ".bilibili.com",
+      path: "/",
+    })),
+  );
+  await page.goto("https://member.bilibili.com/platform/upload-manager/article", {
+    waitUntil: "networkidle2",
+    timeout: 60_000,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  if (!page.url().includes("member.bilibili.com/platform/")) {
+    const redirectedUrl = page.url();
+    await page.close().catch(() => undefined);
+    throw new CookieExpiredError(
+      `Bilibili creator login unavailable, redirected to ${redirectedUrl}`,
+    );
+  }
+  return page;
+}
+
+/** 打开小红书创作服务平台，加载页面签名函数供作品接口采集使用。 */
+export async function openXiaohongshuCreatorPage(cookies: Record<string, string>): Promise<Page> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setUserAgent(
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/147.0.0.0 Safari/537.36",
+  );
+  await page.setCookie(
+    ...Object.entries(cookies).map(([name, value]) => ({
+      name,
+      value,
+      domain: ".xiaohongshu.com",
+      path: "/",
+    })),
+  );
+  await page.goto("https://creator.xiaohongshu.com/statistics/note", {
+    waitUntil: "networkidle2",
+    timeout: 60_000,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  if (!page.url().includes("creator.xiaohongshu.com/statistics/")) {
+    const redirectedUrl = page.url();
+    await page.close().catch(() => undefined);
+    throw new CookieExpiredError(
+      `Xiaohongshu creator login unavailable, redirected to ${redirectedUrl}`,
+    );
+  }
+  const signatureReady = await page.evaluate(
+    () => typeof (window as unknown as { _webmsxyw?: unknown })._webmsxyw === "function",
+  );
+  if (!signatureReady) throw new Error("Xiaohongshu request signer is unavailable");
   return page;
 }
 
@@ -200,7 +274,9 @@ export async function openLingjiPage(cookies: Record<string, string>): Promise<P
   });
   await new Promise((resolve) => setTimeout(resolve, 6000));
   if (!page.url().includes("/anchor/review")) {
-    throw new Error(`Lingji login unavailable, redirected to ${page.url()}`);
+    const redirectedUrl = page.url();
+    await page.close().catch(() => undefined);
+    throw new CookieExpiredError(`Lingji login unavailable, redirected to ${redirectedUrl}`);
   }
   return page;
 }
@@ -226,7 +302,11 @@ export async function openDouyinCreatorPage(cookies: Record<string, string>): Pr
   });
   await new Promise((resolve) => setTimeout(resolve, 5000));
   if (!page.url().includes("creator.douyin.com/creator-micro")) {
-    throw new Error(`Douyin creator login unavailable, redirected to ${page.url()}`);
+    const redirectedUrl = page.url();
+    await page.close().catch(() => undefined);
+    throw new CookieExpiredError(
+      `Douyin creator login unavailable, redirected to ${redirectedUrl}`,
+    );
   }
   return page;
 }

@@ -20,6 +20,10 @@ import {
   calculateReviewScore,
   calculateWeightedScore,
   dingtalkHireDate,
+  addDays,
+  addMonths,
+  buildQuarterMonths,
+  getQuarterPeriod,
   gradeForScore,
 } from "./date-utils";
 import { notifyCycleStage } from "./notify";
@@ -28,6 +32,7 @@ import {
   BulkConfigureProfilesInput,
   BulkOpenSelfReviewInput,
   CycleIdInput,
+  CreateManualCycleInput,
   ManagerReviewInput,
   PersonIdInput,
   ReviewGoalsInput,
@@ -37,7 +42,13 @@ import {
   SubmitGoalsInput,
 } from "./schema";
 import { canTransition } from "./state-machine";
-import { ensureProbationCycles, getPeoplePerformanceDetail, runPerformanceSweep } from "./server";
+import {
+  applyConfirmedCycleEffects,
+  ensureProbationCycles,
+  getPeoplePerformanceDetail,
+  inheritMonthlyGoals,
+  runPerformanceSweep,
+} from "./server";
 import type { PeoplePerformanceDetail } from "./types";
 import type { PerformanceGoalTemplate } from "@/db/schema";
 
@@ -89,6 +100,95 @@ export async function deletePerformanceCycle(input: unknown): Promise<{ ok: true
     }
   });
   return { ok: true };
+}
+
+export async function createManualPerformanceCycle(
+  input: unknown,
+): Promise<{ ok: true; cycleId: string }> {
+  const data = CreateManualCycleInput.parse(input);
+  const access = await resolvePerformanceAccess();
+  if (!access.manageProfiles) throw new AppError("AUTH_FORBIDDEN", "无新增考核周期权限", 403);
+  const [profile] = await db
+    .select()
+    .from(people_performance_profile)
+    .where(eq(people_performance_profile.user_id, data.userId));
+  if (!profile?.manager_user_id) {
+    throw new AppError("PERFORMANCE_PROFILE_INCOMPLETE", "请先配置直属上级", 400);
+  }
+  const start =
+    data.kind === "quarterly"
+      ? getQuarterPeriod(data.periodStart).start
+      : `${data.periodStart.slice(0, 7)}-01`;
+  const period =
+    data.kind === "quarterly"
+      ? getQuarterPeriod(start)
+      : {
+          label: `${start.slice(0, 4)}年${Number(start.slice(5, 7))}月绩效`,
+          start,
+          end: addDays(addMonths(start, 1), -1),
+          sequence: 1,
+        };
+  const [parent] = await db
+    .insert(performance_cycle)
+    .values({
+      id: crypto.randomUUID(),
+      user_id: data.userId,
+      kind: data.kind,
+      label: period.label,
+      period_start: period.start,
+      period_end: period.end,
+      sequence: period.sequence,
+      stage: "goal_setting",
+      manager_user_id: profile.manager_user_id,
+      skip_manager_user_id: profile.skip_manager_user_id,
+    })
+    .onConflictDoNothing({
+      target: [performance_cycle.user_id, performance_cycle.kind, performance_cycle.period_start],
+    })
+    .returning({ id: performance_cycle.id });
+  if (!parent) throw new AppError("PERFORMANCE_CYCLE_EXISTS", "该考核周期已存在", 409);
+  if (data.kind === "monthly") {
+    await inheritMonthlyGoals(
+      parent.id,
+      data.userId,
+      period.start,
+      profile.performance_goal_template,
+    );
+  } else {
+    for (const month of buildQuarterMonths(period.start)) {
+      const [child] = await db
+        .insert(performance_cycle)
+        .values({
+          id: crypto.randomUUID(),
+          user_id: data.userId,
+          parent_cycle_id: parent.id,
+          kind: "monthly",
+          label: month.label,
+          period_start: month.start,
+          period_end: month.end,
+          sequence: month.sequence,
+          stage: "goal_setting",
+          manager_user_id: profile.manager_user_id,
+          skip_manager_user_id: profile.skip_manager_user_id,
+        })
+        .onConflictDoNothing({
+          target: [
+            performance_cycle.user_id,
+            performance_cycle.kind,
+            performance_cycle.period_start,
+          ],
+        })
+        .returning({ id: performance_cycle.id });
+      if (child)
+        await inheritMonthlyGoals(
+          child.id,
+          data.userId,
+          month.start,
+          profile.performance_goal_template,
+        );
+    }
+  }
+  return { ok: true, cycleId: parent.id };
 }
 
 async function requireCycle(cycleId: string) {
@@ -853,9 +953,7 @@ export async function submitPerformanceManagerReview(input: unknown): Promise<{ 
   await validateGoalScores(cycle.id, data.goals);
   const next: PerformanceStage =
     cycle.kind === "probation"
-      ? cycle.requires_final_review
-        ? "hr_calibration"
-        : "completed"
+      ? "hr_calibration"
       : cycle.skip_manager_user_id
         ? "skip_manager_review"
         : "hr_calibration";
@@ -885,9 +983,10 @@ export async function submitPerformanceManagerReview(input: unknown): Promise<{ 
       .set({
         manager_summary: data.summary,
         stage: next,
-        final_score: next === "completed" ? String(directTotal) : null,
-        final_grade: next === "completed" ? gradeForScore(directTotal) : null,
-        completed_at: next === "completed" ? now : null,
+        final_score: null,
+        // 试用期评级不能由分数推导；正式绩效沿用现有规则。
+        final_grade: null,
+        completed_at: null,
         updated_at: now,
       })
       .where(and(eq(performance_cycle.id, cycle.id), eq(performance_cycle.stage, "manager_review")))
@@ -902,7 +1001,7 @@ export async function submitPerformanceManagerReview(input: unknown): Promise<{ 
       payload: { directTotal },
     });
   });
-  if (next !== "completed") await notifyCycleStage(cycle.id, next, `stage:${next}`);
+  await notifyCycleStage(cycle.id, next, `stage:${next}`);
   return { ok: true };
 }
 
@@ -955,6 +1054,7 @@ export async function submitPerformanceSkipManagerReview(input: unknown): Promis
         skip_manager_summary: data.summary,
         stage: next,
         final_score: next === "completed" ? String(finalScore) : null,
+        // 隔级评估只适用于正式绩效，沿用现有等级规则。
         final_grade: next === "completed" ? gradeForScore(finalScore) : null,
         completed_at: next === "completed" ? now : null,
         updated_at: now,
@@ -986,7 +1086,10 @@ export async function calibratePerformance(input: unknown): Promise<{ ok: true }
     requireCycle(data.cycleId),
   ]);
   if (!access.calibrate) throw new AppError("AUTH_FORBIDDEN", "无HR校准权限", 403);
-  if (cycle.kind === "probation" && !data.probationResult) {
+  if (cycle.kind === "probation" && !data.rating) {
+    throw new AppError("PERFORMANCE_RATING_REQUIRED", "请选择试用期评级", 400);
+  }
+  if (cycle.kind === "probation" && cycle.requires_final_review && !data.probationResult) {
     throw new AppError("PERFORMANCE_RESULT_REQUIRED", "试用期考核必须选择转正结论", 400);
   }
   const goals = await db
@@ -1013,8 +1116,15 @@ export async function calibratePerformance(input: unknown): Promise<{ ok: true }
   if (finalScore === null) {
     throw new AppError("PERFORMANCE_SCORE_INCOMPLETE", "请先完成上级评分", 400);
   }
-  const finalGrade = gradeForScore(finalScore);
-  assertStage(cycle.stage, "employee_confirm");
+  const finalGrade = cycle.kind === "probation" ? (data.rating ?? null) : gradeForScore(finalScore);
+  const next: PerformanceStage = cycle.kind === "probation" && !cycle.requires_final_review
+    ? "completed"
+    : "employee_confirm";
+  const probationResult = cycle.kind === "probation" && cycle.requires_final_review
+    ? (data.probationResult ?? null)
+    : null;
+  const now = new Date();
+  assertStage(cycle.stage, next);
   const [updated] = await db
     .update(performance_cycle)
     .set({
@@ -1022,9 +1132,10 @@ export async function calibratePerformance(input: unknown): Promise<{ ok: true }
       hr_comment: data.comment,
       final_score: String(finalScore),
       final_grade: finalGrade,
-      probation_result: cycle.kind === "probation" ? (data.probationResult ?? null) : null,
-      stage: "employee_confirm",
-      updated_at: new Date(),
+      probation_result: probationResult,
+      stage: next,
+      completed_at: next === "completed" ? now : null,
+      updated_at: now,
     })
     .where(and(eq(performance_cycle.id, cycle.id), eq(performance_cycle.stage, "hr_calibration")))
     .returning();
@@ -1034,14 +1145,16 @@ export async function calibratePerformance(input: unknown): Promise<{ ok: true }
     actor_user_id: access.userId,
     event_type: "result_calibrated",
     from_stage: "hr_calibration",
-    to_stage: "employee_confirm",
+    to_stage: next,
     payload: {
       finalScore,
-      finalGrade,
-      probationResult: data.probationResult ?? null,
+      finalRating: finalGrade,
+      probationResult,
     },
   });
-  await notifyCycleStage(cycle.id, "employee_confirm", "stage:employee_confirm");
+  if (next === "employee_confirm") {
+    await notifyCycleStage(cycle.id, next, "stage:employee_confirm");
+  }
   return { ok: true };
 }
 
@@ -1139,57 +1252,7 @@ export async function confirmPerformanceResult(input: unknown): Promise<{ ok: tr
     to_stage: "completed",
   });
 
-  let regularized = false;
-  if (cycle.kind === "probation" && cycle.probation_result === "passed") {
-    const probationCycles = await db
-      .select({ sequence: performance_cycle.sequence })
-      .from(performance_cycle)
-      .where(
-        and(eq(performance_cycle.user_id, cycle.user_id), eq(performance_cycle.kind, "probation")),
-      );
-    const finalSequence = Math.max(...probationCycles.map((item) => item.sequence));
-    if (cycle.sequence === finalSequence) {
-      const today = todayInShanghai();
-      await db
-        .update(people_performance_profile)
-        .set({ employment_status: "regular", regularized_at: today, updated_at: now })
-        .where(eq(people_performance_profile.user_id, cycle.user_id));
-      regularized = true;
-    }
-  }
-
-  if (cycle.kind === "monthly" && cycle.parent_cycle_id) {
-    const siblings = await db
-      .select()
-      .from(performance_cycle)
-      .where(eq(performance_cycle.parent_cycle_id, cycle.parent_cycle_id));
-    const completed = siblings.map((item) =>
-      item.id === cycle.id ? { ...item, stage: "completed" as const } : item,
-    );
-    const [parent] = await db
-      .select({ periodEnd: performance_cycle.period_end })
-      .from(performance_cycle)
-      .where(eq(performance_cycle.id, cycle.parent_cycle_id));
-    if (
-      completed.length > 0 &&
-      completed.every((item) => item.stage === "completed") &&
-      parent &&
-      parent.periodEnd <= todayInShanghai()
-    ) {
-      const scores = completed.map((item) => Number(item.final_score ?? 0));
-      const score = Math.round((scores.reduce((sum, value) => sum + value, 0) / 3) * 100) / 100;
-      await db
-        .update(performance_cycle)
-        .set({
-          stage: "completed",
-          final_score: String(score),
-          final_grade: gradeForScore(score),
-          completed_at: now,
-          updated_at: now,
-        })
-        .where(eq(performance_cycle.id, cycle.parent_cycle_id));
-    }
-  }
+  const { regularized } = await applyConfirmedCycleEffects(updated);
   if (regularized) await runPerformanceSweep();
   return { ok: true };
 }

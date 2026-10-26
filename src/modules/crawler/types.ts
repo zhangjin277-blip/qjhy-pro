@@ -18,6 +18,8 @@ export const JOB_NAMES = {
   SYNC_XIAOMOWAN_OFFICIAL_VIDEOS: "crawler:sync_xiaomowan_official_videos", // 小魔丸抖音创作者中心视频与日汇总
   SYNC_WECHAT_AI_COMIC: "crawler:sync_wechat_ai_comic", // 视频号 AI 漫剧作品与日汇总
   SYNC_KUAISHOU_AI_COMIC: "crawler:sync_kuaishou_ai_comic", // 快手 AI 漫剧作品快照
+  SYNC_BILIBILI_AI_COMIC: "crawler:sync_bilibili_ai_comic", // B站 AI 漫剧作品快照
+  SYNC_XIAOHONGSHU_AI_COMIC: "crawler:sync_xiaohongshu_ai_comic", // 小红书 AI 漫剧作品快照
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];

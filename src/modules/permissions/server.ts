@@ -9,9 +9,11 @@
  */
 export {
   resolvePermission,
+  isSuperAdmin,
   resolveVisibleModules,
   mergePermissions,
   scopeAtLeast,
   MAX_SCOPE,
 } from "./resolve";
+export { hasPoint } from "./types";
 export { buildScopeWhereClause, getManagedDeptIds, type ScopeWhereClause } from "./scope";

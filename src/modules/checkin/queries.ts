@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/db/client";
 import { and, asc, eq, gte, ilike, lt, or, sql } from "drizzle-orm";
 import { live_session_log, live_account, dingtalk_user } from "@/db/schema";
+import type { PlacementScope } from "@/modules/placement/server";
 
 export interface CheckinDaySession {
   session_id: string;
@@ -42,6 +43,7 @@ export interface CheckinDayResult {
 export interface CheckinRangeOptions {
   product?: string;
   accountQuery?: string;
+  scope?: PlacementScope;
 }
 
 /**
@@ -53,8 +55,12 @@ export interface CheckinRangeOptions {
  * @param date YYYY-MM-DD，本地时区
  * @param product 可选，按 live_account.product 过滤
  */
-export async function getCheckinDay(date: string, product?: string): Promise<CheckinDayResult> {
-  return getCheckinRange(date, date, { product }, true);
+export async function getCheckinDay(
+  date: string,
+  product?: string,
+  scope?: PlacementScope,
+): Promise<CheckinDayResult> {
+  return getCheckinRange(date, date, { product, scope }, true);
 }
 
 /**
@@ -82,6 +88,18 @@ export async function getCheckinRange(
   if (!rangeWindow) throw new Error("getCheckinRange: failed to build range predicate");
 
   const conditions = [rangeWindow];
+  if (options.scope?.kind === "reject") {
+    conditions.push(sql`FALSE`);
+  } else if (options.scope?.kind === "user_ids") {
+    conditions.push(
+      options.scope.ids.length === 0
+        ? sql`FALSE`
+        : sql`${live_session_log.anchor_dingtalk_user_id} = ANY(ARRAY[${sql.join(
+            options.scope.ids.map((id) => sql`${id}`),
+            sql`, `,
+          )}]::text[])`,
+    );
+  }
   if (options.product) conditions.push(eq(live_account.product, options.product));
   const accountQuery = options.accountQuery?.trim();
   if (accountQuery) {

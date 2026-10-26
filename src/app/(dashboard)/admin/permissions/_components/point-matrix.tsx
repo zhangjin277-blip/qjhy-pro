@@ -41,6 +41,7 @@ interface Props {
   showEnableToggle?: boolean;
   /** enabled=false 时整块置灰的提示文案 */
   disabledHint?: string;
+  expandedLayout?: boolean;
 }
 
 /**
@@ -48,7 +49,7 @@ interface Props {
  * 板块折叠分组 + 数据范围下拉 + 功能区行 × 权限点勾选 + 敏感红标 +
  * 关键词搜索 + 「开通 x/n」计数。
  */
-export function PointMatrix({ value, onChange, showEnableToggle = true, disabledHint }: Props) {
+export function PointMatrix({ value, onChange, showEnableToggle = true, disabledHint, expandedLayout = false }: Props) {
   const [keyword, setKeyword] = useState("");
   const [collapsed, setCollapsed] = useState<Set<ModuleKey>>(new Set());
 
@@ -94,7 +95,7 @@ export function PointMatrix({ value, onChange, showEnableToggle = true, disabled
         />
       </div>
 
-      <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+      <div className={expandedLayout ? "space-y-4" : "max-h-[52vh] space-y-2 overflow-y-auto pr-1"}>
         {MODULE_KEYS.map((m) => {
           const cfg = value[m];
           const defs = MODULE_POINTS[m];
@@ -118,7 +119,7 @@ export function PointMatrix({ value, onChange, showEnableToggle = true, disabled
           }
 
           return (
-            <div key={m} className="rounded-lg border">
+            <div key={m} id={expandedLayout ? `role-permission-${m}` : undefined} className="scroll-mt-4 rounded-lg border">
               <div className="flex items-center gap-2 bg-muted/30 px-3 py-2">
                 <button
                   type="button"

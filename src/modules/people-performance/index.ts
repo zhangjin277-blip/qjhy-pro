@@ -9,6 +9,7 @@ export {
   PersonIdInput,
   BulkConfigureProfilesInput,
   BulkOpenSelfReviewInput,
+  CreateManualCycleInput,
 } from "./schema";
 export { STAGE_LABEL } from "./state-machine";
 export {
@@ -16,8 +17,10 @@ export {
   calculateReviewScore,
   calculateWeightedScore,
   gradeForScore,
+  PERFORMANCE_RATINGS,
   dingtalkHireDate,
 } from "./date-utils";
+export { visiblePerformanceRating } from "./rating";
 export type {
   PeopleListRow,
   PerformanceManagerOption,
@@ -32,6 +35,7 @@ export {
   createPeoplePerformanceTemplate,
   importPeoplePerformanceWorkbook,
   deletePerformanceCycle,
+  createManualPerformanceCycle,
   syncPersonFromDingtalkRoster,
   savePeopleProfile,
   bulkConfigurePeopleProfiles,

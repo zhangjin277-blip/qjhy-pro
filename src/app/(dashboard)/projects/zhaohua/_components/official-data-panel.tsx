@@ -1,4 +1,5 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -289,20 +290,13 @@ export function OfficialDataPanel({ teamSummary }: { teamSummary: string }): Rea
             {period === "custom" ? (
               <div className="flex min-w-0 items-center gap-1.5">
                 <CalendarRange className="size-3.5 shrink-0 text-slate-400" />
-                <input
-                  type="date"
-                  value={dateFrom}
-                  max={dateTo}
-                  onChange={(event) => setDateFrom(event.target.value)}
-                  className="h-8 min-w-0 rounded-md border border-slate-200 bg-white px-2 text-[11px]"
-                />
-                <span className="text-slate-300">至</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  min={dateFrom}
-                  onChange={(event) => setDateTo(event.target.value)}
-                  className="h-8 min-w-0 rounded-md border border-slate-200 bg-white px-2 text-[11px]"
+                <DateRangePicker
+                  label="直播日期"
+                  value={{ from: dateFrom, to: dateTo }}
+                  onChange={(next) => {
+                    setDateFrom(next.from);
+                    setDateTo(next.to);
+                  }}
                 />
               </div>
             ) : null}

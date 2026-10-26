@@ -2,13 +2,14 @@ import "@/lib/env";
 
 import { registerJob, startScheduler } from "./scheduler";
 import { syncDingtalk } from "./jobs/sync-dingtalk";
+import { syncAttendance } from "./jobs/sync-attendance";
+import { syncAttendanceRoster } from "./jobs/sync-attendance-roster";
 import { crawlOrchestrator } from "./jobs/crawl-orchestrator";
 import { registerCrawlerHandlers } from "./jobs/handlers/register";
 import { enqueue, JOB_NAMES, stopBoss } from "@/modules/crawler/server";
 import { closeBrowser } from "@/lib/puppeteer";
 import { runCronAttributionSweep } from "@/modules/placement-attribution/server";
 import { runEditingCleanup } from "./jobs/editing-cleanup";
-import { runAnchorPenaltyJob } from "./jobs/anchor-penalty";
 import { sweepRetention } from "@/modules/live-recording/server";
 import {
   autoConfirmExpiredPerformanceResults,
@@ -17,6 +18,8 @@ import {
 // Worker 需要直接调用同步实现；避免导入业务模块 barrel 时把 Server Actions 带入 worker。
 // eslint-disable-next-line import/no-restricted-paths
 import { syncRecruitmentDatesFromAnchorProfiles } from "@/modules/business-recruitment/auto-match";
+import { runDingtalkPlacementImport } from "./jobs/dingtalk-placement-import";
+import { runDingtalkPlacementHourlyImport } from "./jobs/dingtalk-placement-hourly-import";
 
 // Phase 1: 钉钉同步
 // ⚠️ 必须错开整点（02:00:00）：钉钉 /topapi/v2/department/listsub 在整点被全网应用挤爆
@@ -25,6 +28,21 @@ registerJob({
   name: "sync-dingtalk",
   schedule: "17 2 * * *",
   task: syncDingtalk,
+});
+
+// 考勤：每天北京时间 09:00 同步前一天。
+registerJob({
+  name: "sync-attendance",
+  schedule: "0 9 * * *",
+  timezone: "Asia/Shanghai",
+  task: syncAttendance,
+});
+
+registerJob({
+  name: "sync-attendance-roster",
+  schedule: "1 9 * * *",
+  timezone: "Asia/Shanghai",
+  task: syncAttendanceRoster,
 });
 
 // Phase 2: 抖音爬虫每日 10:00 入口
@@ -161,6 +179,22 @@ registerJob({
   },
 });
 
+registerJob({
+  name: "sync-bilibili-ai-comic",
+  schedule: "0 10 * * *",
+  task: async () => {
+    await enqueue(JOB_NAMES.SYNC_BILIBILI_AI_COMIC, {});
+  },
+});
+
+registerJob({
+  name: "sync-xiaohongshu-ai-comic",
+  schedule: "0 10 * * *",
+  task: async () => {
+    await enqueue(JOB_NAMES.SYNC_XIAOHONGSHU_AI_COMIC, {});
+  },
+});
+
 // 剪辑任务软删文件清理（每天 03:00，物理删除 30 天前软删的任务及关联文件）
 registerJob({
   name: "editing-cleanup",
@@ -169,13 +203,6 @@ registerJob({
     const r = await runEditingCleanup();
     console.log(`[editing-cleanup] tasks=${r.tasksRemoved} files=${r.filesRemoved}`);
   },
-});
-
-// 捕鱼系主播扣分（每天 02:00，处理昨天开播但未上传素材的主播）
-registerJob({
-  name: "anchor-penalty",
-  schedule: "0 2 * * *",
-  task: runAnchorPenaltyJob,
 });
 
 // 直播录像保存时长自动清理（每小时 15 分，删除超过各主播保存天数的录像；永久=跳过）
@@ -221,6 +248,20 @@ registerJob({
   task: async () => {
     console.log(`[heartbeat] ${new Date().toISOString()}`);
   },
+});
+
+// 每天 11:10 读取“捕鱼直播间日报推送”的 3 份完整日报，覆盖导入 A:T 数据。
+registerJob({
+  name: "dingtalk-placement-import",
+  schedule: "10 11 * * *",
+  task: runDingtalkPlacementImport,
+});
+
+// 每小时第 5 分钟读取 3 个投放播报群。与上面的日报导入分开，日报不会覆盖小时数据。
+registerJob({
+  name: "dingtalk-placement-hourly-import",
+  schedule: "5 * * * *",
+  task: runDingtalkPlacementHourlyImport,
 });
 
 (async () => {

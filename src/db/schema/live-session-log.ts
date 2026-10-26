@@ -22,7 +22,7 @@ export const live_session_log = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     live_account_id: text("live_account_id")
       .notNull()
-      .references(() => live_account.id, { onDelete: "cascade" }),
+      .references(() => live_account.id, { onDelete: "restrict" }),
     anchor_dingtalk_user_id: text("anchor_dingtalk_user_id")
       .notNull()
       .references(() => dingtalk_user.user_id),

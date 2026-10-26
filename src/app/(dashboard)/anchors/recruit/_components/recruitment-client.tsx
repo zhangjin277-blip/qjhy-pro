@@ -1,4 +1,5 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
@@ -301,21 +302,17 @@ export function RecruitmentClient({
               </SelectContent>
             </Select>
             <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-              <span>入会日期</span>
-              <Input
-                type="date"
-                value={joinDateFrom}
-                max={joinDateTo}
-                onChange={(event) => setJoinDateFrom(event.target.value)}
-                className="h-9 w-[130px]"
-              />
-              <span>至</span>
-              <Input
-                type="date"
-                value={joinDateTo}
-                min={joinDateFrom}
-                onChange={(event) => setJoinDateTo(event.target.value)}
-                className="h-9 w-[130px]"
+              <DateRangePicker
+                label="入会日期"
+                value={{ from: joinDateFrom, to: joinDateTo }}
+                onChange={(next) => {
+                  setJoinDateFrom(next.from);
+                  setJoinDateTo(next.to);
+                }}
+                onAll={() => {
+                  setJoinDateFrom("");
+                  setJoinDateTo("");
+                }}
               />
               <Button
                 type="button"

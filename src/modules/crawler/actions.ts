@@ -157,6 +157,8 @@ const SaveCookieInput = z.object({
     "douyin_creator",
     "douyin_creator_xiao_mowan",
     "wechat_creator",
+    "bilibili_creator",
+    "xiaohongshu_creator",
   ]),
   cookies: z.record(z.string(), z.string()).refine((cookies) => Object.keys(cookies).length > 0, {
     message: "Cookie 不能为空",

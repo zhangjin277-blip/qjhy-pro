@@ -52,6 +52,7 @@ export async function listBindings(input: unknown) {
       account_id: account_anchor_default.account_id,
       account_name: live_account.account_name,
       platform: live_account.platform,
+      account_deprecated_at: live_account.deprecated_at,
       dingtalk_user_id: account_anchor_default.dingtalk_user_id,
       anchor_name: dingtalk_user.name,
       time_slots: account_anchor_default.time_slots,

@@ -28,6 +28,8 @@ export const crawler_cookie_session = pgTable("crawler_cookie_session", {
       "douyin_creator",
       "douyin_creator_xiao_mowan",
       "wechat_creator",
+      "bilibili_creator",
+      "xiaohongshu_creator",
     ],
   }).primaryKey(),
   cookies: jsonb("cookies").notNull().$type<Record<string, string>>(), // {sid_guard, sessionid, msToken, ttwid, passport_csrf_token, ...}

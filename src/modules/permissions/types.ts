@@ -21,6 +21,7 @@ export function hasPoint(perm: Pick<Permission, "points">, key: string): boolean
 }
 
 export type PermissionSource =
+  | { kind: "super_admin" }
   | { kind: "default"; position: string }
   | { kind: "dept_leader"; deptIds: string[] }
   | { kind: "override"; reason: string; expires_at: Date | null }

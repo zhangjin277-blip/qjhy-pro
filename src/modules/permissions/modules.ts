@@ -7,8 +7,11 @@
 
 export const MODULE_KEYS = [
   "dashboard",
+  "goals",
   "project_zhaohua",
   "project_ai_comic",
+  "project_buyu",
+  "checkin_history",
   "anchors",
   "crawler",
   "permissions",
@@ -22,14 +25,19 @@ export const MODULE_KEYS = [
   "people_performance",
   "business_recruitment",
   "courses",
+  "procurement",
+  "attendance",
 ] as const;
 
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
 export const MODULE_LABEL: Record<ModuleKey, string> = {
   dashboard: "工作台",
-  project_zhaohua: "造化仙府",
-  project_ai_comic: "AI漫剧",
+  goals: "目标管理",
+  project_zhaohua: "造化直播",
+  project_ai_comic: "造化视频",
+  project_buyu: "捕鱼直播",
+  checkin_history: "开播记录",
   anchors: "主播明细",
   crawler: "爬虫监控",
   permissions: "权限管理",
@@ -43,12 +51,17 @@ export const MODULE_LABEL: Record<ModuleKey, string> = {
   people_performance: "人员绩效",
   business_recruitment: "商务招募",
   courses: "课程中心",
+  procurement: "道具采购",
+  attendance: "考勤打卡",
 };
 
 export const MODULE_DESC: Record<ModuleKey, string> = {
   dashboard: "业务看板 / 数据总览",
-  project_zhaohua: "项目中心 / 造化仙府项目协作与执行数据",
-  project_ai_comic: "项目中心 / AI漫剧多平台内容数据",
+  goals: "月度与季度目标、进度填报、发布与调整记录；首页目标板块独立授权",
+  project_zhaohua: "造化仙府 / 造化直播项目协作与执行数据",
+  project_ai_comic: "造化仙府 / 造化视频多平台内容数据",
+  project_buyu: "捕鱼中心 / 捕鱼直播项目汇总与账号运营数据",
+  checkin_history: "捕鱼中心 / 主播开播与下播记录",
   anchors: "主播列表 / 编辑 / 导出",
   crawler: "抖音 / 快手数据爬取（仅 admin）",
   permissions: "用户角色与权限分配（仅 admin）",
@@ -62,6 +75,8 @@ export const MODULE_DESC: Record<ModuleKey, string> = {
   people_performance: "非主播员工试用期与正式绩效考核",
   business_recruitment: "主播候选人登记、初评、复评与签约跟进",
   courses: "课程学习、课程资源和考试管理",
+  procurement: "道具采购申请、审批、购买、物流与入库",
+  attendance: "钉钉考勤同步、记录、审批与核实",
 };
 
 export function isModuleKey(value: string): value is ModuleKey {
@@ -71,7 +86,7 @@ export function isModuleKey(value: string): value is ModuleKey {
 /* ────────────────────────────────────────────────────────────────
  * 权限点注册表（spec: 2026-07-06-permission-points-redesign）
  *
- * 「查询」不设点：由板块 scope ≠ none 表达。
+ * 一般查询由板块 scope ≠ none 表达；工作台敏感卡片另设显示权限点。
  * key 板块内唯一；判权时用 requirePoint(module, key)。
  * section 是权限配置 UI 的功能区分组行。
  * ──────────────────────────────────────────────────────────────── */
@@ -85,9 +100,21 @@ export interface PermissionPointDef {
 }
 
 export const MODULE_POINTS: Record<ModuleKey, PermissionPointDef[]> = {
-  dashboard: [{ key: "export", label: "导出", section: "数据" }],
+  goals: [
+    { key: "view", label: "查看目标（含工作台）", section: "目标" },
+    { key: "fill", label: "创建草稿 / 填报进度", section: "目标" },
+    { key: "publish", label: "发布 / 调整 / 归档", section: "目标", sensitive: true },
+  ],
+  dashboard: [
+    { key: "export", label: "导出", section: "数据" },
+    { key: "view_personnel", label: "查看部门人员概览", section: "工作台板块", sensitive: true },
+  ],
   project_zhaohua: [{ key: "project_edit", label: "项目数据编辑", section: "项目协作" }],
   project_ai_comic: [{ key: "project_edit", label: "项目数据编辑", section: "项目协作" }],
+  project_buyu: [],
+  checkin_history: [
+    { key: "session_correct", label: "开播记录纠错", section: "开播记录", sensitive: true },
+  ],
   anchors: [{ key: "export", label: "导出 CSV", section: "数据" }],
   crawler: [
     { key: "run_jobs", label: "重跑 / 补数", section: "采集" },
@@ -102,13 +129,12 @@ export const MODULE_POINTS: Record<ModuleKey, PermissionPointDef[]> = {
   ],
   live_account: [
     { key: "account_edit", label: "账号新增 / 改资料", section: "账号" },
-    { key: "delete_request", label: "提交删除申请", section: "账号" },
-    { key: "delete_review", label: "删除审批（直删）", section: "账号", sensitive: true },
+    // 账号不提供删除（2026-10-08）；key 沿用 delete_request 以兼容已存权限数据
+    { key: "delete_request", label: "废弃 / 恢复账号", section: "账号" },
     { key: "schedule_edit", label: "排班编辑", section: "排班 / 直播间" },
     { key: "room_edit", label: "直播间编辑", section: "排班 / 直播间" },
     { key: "room_delete", label: "直播间删除", section: "排班 / 直播间", sensitive: true },
     { key: "floorplan_edit", label: "平面图编辑", section: "排班 / 直播间" },
-    { key: "session_correct", label: "开播记录纠错", section: "开播记录", sensitive: true },
   ],
   live_anchor: [
     { key: "anchor_edit", label: "档案新增 / 编辑", section: "档案" },
@@ -158,6 +184,18 @@ export const MODULE_POINTS: Record<ModuleKey, PermissionPointDef[]> = {
     { key: "exam_manage", label: "考试配置", section: "考试" },
     { key: "learning_stats", label: "学习数据统计", section: "学习" },
     { key: "training_manage", label: "主播培训管理", section: "培训" },
+  ],
+  procurement: [
+    { key: "create", label: "提交采购申请", section: "采购" },
+    { key: "approve", label: "审批采购申请", section: "采购", sensitive: true },
+    { key: "manage", label: "购买 / 发货 / 入库 / 退货", section: "采购" },
+    { key: "export", label: "导出采购记录", section: "数据" },
+  ],
+  attendance: [
+    { key: "sync", label: "同步钉钉考勤", section: "同步", sensitive: true },
+    { key: "remark", label: "备注与核实", section: "记录" },
+    { key: "approval", label: "查看审批", section: "审批" },
+    { key: "export", label: "导出考勤", section: "数据" },
   ],
 };
 

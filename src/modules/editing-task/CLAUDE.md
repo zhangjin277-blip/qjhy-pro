@@ -34,4 +34,6 @@ pending(待上传) → uploaded(待剪辑) → editing(剪辑中) → review(审
 
 ## 通知
 
-紧急任务创建/交片 → 钉钉加急（EDITING_DINGTALK_WEBHOOK）。主播扣分 cron 基于开播记录。
+紧急任务创建/交片 → 钉钉加急（EDITING_DINGTALK_WEBHOOK）。
+
+> 捕鱼系「未上传素材扣分」cron 已于 2026-10-08 废弃删除（anchor_score / anchor_score_log 表由 0074 drop；上线以来因 id 空间错配从未实际扣过分）。

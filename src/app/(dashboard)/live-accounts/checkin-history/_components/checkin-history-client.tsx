@@ -1,4 +1,5 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Download, LoaderCircle, X } from "lucide-react";
@@ -196,15 +197,12 @@ export function CheckinHistoryClient({
     <div className="space-y-4">
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <label className="flex items-center gap-2 text-[12.5px] text-slate-600">
-          日期
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => onDateChange(e.target.value)}
-            className="rounded border border-slate-300 px-2 py-1 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </label>
+        <DateRangePicker
+          label="签到日期"
+          value={{ from: date, to: date }}
+          singleDay
+          onChange={(next) => onDateChange(next.from)}
+        />
         <label className="flex items-center gap-2 text-[12.5px] text-slate-600">
           产品
           <select
@@ -344,40 +342,19 @@ export function CheckinHistoryClient({
               ))}
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="text-[12px] text-slate-600">
-                <span className="mb-1 block">开始日期</span>
-                <input
-                  type="date"
-                  value={exportDialog.dateFrom}
-                  disabled={isExporting}
-                  onChange={(event) =>
-                    setExportDialog({
-                      ...exportDialog,
-                      dateFrom: event.target.value,
-                      error: null,
-                    })
-                  }
-                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </label>
-              <label className="text-[12px] text-slate-600">
-                <span className="mb-1 block">结束日期</span>
-                <input
-                  type="date"
-                  value={exportDialog.dateTo}
-                  disabled={isExporting}
-                  onChange={(event) =>
-                    setExportDialog({
-                      ...exportDialog,
-                      dateTo: event.target.value,
-                      error: null,
-                    })
-                  }
-                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </label>
-            </div>
+            <DateRangePicker
+              label="导出日期"
+              value={{ from: exportDialog.dateFrom, to: exportDialog.dateTo }}
+              disabled={isExporting}
+              onChange={(next) =>
+                setExportDialog({
+                  ...exportDialog,
+                  dateFrom: next.from,
+                  dateTo: next.to,
+                  error: null,
+                })
+              }
+            />
 
             <div className="mt-3 rounded bg-slate-50 px-3 py-2 text-[11.5px] text-slate-500">
               产品：{PRODUCTS.find((item) => item.value === product)?.label ?? "全部"}

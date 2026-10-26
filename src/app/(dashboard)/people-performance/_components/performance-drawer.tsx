@@ -32,8 +32,9 @@ import {
   calibratePerformance,
   calculateReviewScore,
   calculateWeightedScore,
-  confirmPerformanceResult,
   gradeForScore,
+  createManualPerformanceCycle,
+  confirmPerformanceResult,
   getPeoplePerformanceDetailAction,
   openPerformanceSelfReview,
   returnPerformanceForReview,
@@ -45,6 +46,7 @@ import {
   submitPerformanceSkipManagerReview,
   submitPerformanceSelfReview,
   withdrawPerformanceSelfReview,
+  PERFORMANCE_RATINGS,
   type PeoplePerformanceDetail,
   type PerformanceCycleView,
 } from "@/modules/people-performance";
@@ -389,6 +391,9 @@ function CyclePanel({
   const [confirmSelfReview, setConfirmSelfReview] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReturnToHr, setConfirmReturnToHr] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualKind, setManualKind] = useState<"monthly" | "quarterly">("monthly");
+  const [manualStart, setManualStart] = useState(new Date().toISOString().slice(0, 10));
   const [advancing, startAdvancing] = useTransition();
   const defaultTab = canHandleCurrentStage(detail, cycle)
     ? "form"
@@ -405,6 +410,16 @@ function CyclePanel({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {detail.capabilities.manageProfiles && (
+            <Button type="button" size="sm" variant="outline" onClick={() => setManualOpen((value) => !value)}>
+              新增考核周期
+            </Button>
+          )}
+          {(detail.capabilities.manageProfiles || detail.capabilities.manageAll) && <Button type="button" size="sm" variant="outline" onClick={() => {
+            window.location.href = `/api/people-performance/export?cycleId=${encodeURIComponent(cycle.id)}`;
+          }}>
+            导出考核表
+          </Button>}
           {detail.capabilities.manageProfiles && (
             <Button
               type="button"
@@ -454,7 +469,7 @@ function CyclePanel({
                 撤回并修改自评
               </Button>
             )}
-          {cycle.finalGrade && <Grade grade={cycle.finalGrade} score={cycle.finalScore} />}
+          {cycle.finalGrade && <Rating rating={cycle.finalGrade} score={cycle.finalScore} />}
           {cycle.stage === "employee_confirm" &&
             (detail.capabilities.calibrate || detail.capabilities.manageAll) && (
               <Button
@@ -471,12 +486,31 @@ function CyclePanel({
             )}
         </div>
       </div>
+      {manualOpen && detail.capabilities.manageProfiles && (
+        <div className="mb-4 flex flex-wrap items-end gap-2 rounded-md border bg-slate-50 p-3">
+          <Field label="周期类型">
+            <Select value={manualKind} onValueChange={(value) => value && setManualKind(value as typeof manualKind)}>
+              <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="monthly">月度</SelectItem><SelectItem value="quarterly">季度</SelectItem></SelectContent>
+            </Select>
+          </Field>
+          <Field label="开始日期">
+            <Input type="date" value={manualStart} onChange={(event) => setManualStart(event.target.value)} />
+          </Field>
+          <Button type="button" onClick={() => startAdvancing(async () => {
+            try {
+              await createManualPerformanceCycle({ userId: detail.person.userId, kind: manualKind, periodStart: manualStart });
+              toast.success("考核周期已创建"); setManualOpen(false); onChanged(); onListChanged();
+            } catch (error) { toast.error(error instanceof Error ? error.message : "创建失败"); }
+          })} disabled={advancing || !manualStart}>创建</Button>
+        </div>
+      )}
       <Tabs defaultValue={defaultTab}>
         <TabsList variant="line" className="border-b">
           <TabsTrigger value="flow">考核流程</TabsTrigger>
           <TabsTrigger value="form">考核表</TabsTrigger>
           <TabsTrigger value="result">考核结果</TabsTrigger>
-          <TabsTrigger value="events">变更记录</TabsTrigger>
+          {detail.capabilities.manageAll && <TabsTrigger value="events">变更记录</TabsTrigger>}
         </TabsList>
         <TabsContent value="flow" className="pt-4">
           <FlowView cycle={cycle} />
@@ -493,9 +527,7 @@ function CyclePanel({
         <TabsContent value="result" className="pt-4">
           <ResultView cycle={cycle} />
         </TabsContent>
-        <TabsContent value="events" className="pt-4">
-          <EventsView detail={detail} cycle={cycle} />
-        </TabsContent>
+        {detail.capabilities.manageAll && <TabsContent value="events" className="pt-4"><EventsView detail={detail} cycle={cycle} /></TabsContent>}
       </Tabs>
       <ConfirmDialog
         open={confirmDelete}
@@ -539,7 +571,7 @@ function CyclePanel({
         open={confirmReturnToHr}
         onOpenChange={setConfirmReturnToHr}
         title="确认撤回到HR校准？"
-        description="撤回后将清除当前最终得分和等级，HR需要重新校准。该操作会记录在变更记录中。"
+        description="撤回后将清除当前最终得分和评级，HR需要重新校准。该操作会记录在变更记录中。"
         confirmText="确认撤回"
         variant="danger"
         onConfirm={() =>
@@ -587,7 +619,7 @@ function FlowView({ cycle }: { cycle: PerformanceCycleView }) {
     }
     if (
       !cycle.requiresFinalReview &&
-      (stage === "hr_calibration" || stage === "employee_confirm")
+      (stage === "employee_confirm" || (stage === "hr_calibration" && cycle.kind !== "probation"))
     ) {
       return false;
     }
@@ -733,7 +765,9 @@ function AssessmentForm({
   );
   const calibrationScore = cycle.finalScore ?? suggestedScore;
   const [score] = useState(calibrationScore);
-  const [grade] = useState(calibrationScore === null ? "-" : gradeForScore(calibrationScore));
+  const [rating, setRating] = useState<string>(
+    PERFORMANCE_RATINGS.find((item) => item.value === cycle.finalGrade)?.value ?? "",
+  );
   const directManagerTotal = calculateWeightedScore(
     goals.map((goal) => ({ weight: goal.weight, managerScore: goal.managerScore ?? null })),
   );
@@ -1141,10 +1175,29 @@ function AssessmentForm({
             <Field label="自动总分">
               <Input value={score === null ? "待完成上级评分" : score} readOnly />
             </Field>
-            <Field label="最终等级">
-              <Input value={grade} readOnly />
-            </Field>
-            {cycle.kind === "probation" && (
+            {cycle.kind === "probation" && <Field label="最终评级">
+              <Select value={rating} onValueChange={(value) => value && setRating(value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="请选择评级" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PERFORMANCE_RATINGS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {PERFORMANCE_RATINGS.find((item) => item.value === rating)?.description ?? "评级独立选择，不按分数自动换算。"}
+              </p>
+            </Field>}
+            {cycle.kind !== "probation" && (
+              <Field label="最终等级">
+                <Input value={score === null ? "待完成上级评分" : gradeForScore(score)} readOnly />
+              </Field>
+            )}
+            {cycle.kind === "probation" && cycle.requiresFinalReview && (
               <Field label="试用期结论">
                 <Select
                   value={probationResult}
@@ -1192,14 +1245,15 @@ function AssessmentForm({
               退回评估
             </Button>
             <Button
-              disabled={pending}
+              disabled={pending || (cycle.kind === "probation" && !rating)}
               onClick={() =>
                 run(
                   () =>
                     calibratePerformance({
                       cycleId: cycle.id,
                       comment,
-                      probationResult: cycle.kind === "probation" ? probationResult : null,
+                      rating: cycle.kind === "probation" ? rating as (typeof PERFORMANCE_RATINGS)[number]["value"] : undefined,
+                      probationResult: cycle.kind === "probation" && cycle.requiresFinalReview ? probationResult : null,
                     }),
                   "校准结果已提交",
                 )
@@ -1232,7 +1286,7 @@ function AssessmentForm({
             结果确认截止时间：{formatConfirmationDeadline(cycle.confirmationDeadline)}
           </div>
           <ActionBar>
-            <span>请在截止时间前确认最终得分与等级；逾期系统将自动确认。</span>
+            <span>请在截止时间前确认最终得分与评级；评级由 HR 校准后显示，逾期系统将自动确认。</span>
             <div>
               <Button
                 disabled={pending}
@@ -1280,9 +1334,9 @@ function ResultView({ cycle }: { cycle: PerformanceCycleView }) {
   return (
     <div className="rounded-md border bg-white p-6">
       <h3 className="text-base font-semibold">考核结果</h3>
-      {cycle.finalGrade ? (
+      {cycle.finalGrade || cycle.finalScore !== null ? (
         <div className="mt-6 space-y-5">
-          <Grade grade={cycle.finalGrade} score={cycle.finalScore} />
+          <Rating rating={cycle.finalGrade ?? "待HR评级"} score={cycle.finalScore} />
           <div
             className={`grid gap-3 ${cycle.kind !== "probation" && cycle.skipManagerUserId ? "sm:grid-cols-2" : "sm:grid-cols-1"}`}
           >
@@ -1299,7 +1353,7 @@ function ResultView({ cycle }: { cycle: PerformanceCycleView }) {
               </div>
             )}
           </div>
-          {cycle.requiresFinalReview && (
+          {(cycle.requiresFinalReview || cycle.kind === "probation") && (
             <div>
               <div className="text-xs text-muted-foreground">HR校准意见</div>
               <div className="mt-1 whitespace-pre-wrap text-sm">{cycle.hrComment ?? "-"}</div>
@@ -1371,7 +1425,7 @@ function QuarterSummary({
           <div className="font-medium">{month.label}</div>
           <div className="mt-3 text-2xl font-semibold">{month.finalScore ?? "-"}</div>
           <div className="mt-1 text-xs text-muted-foreground">
-            等级 {month.finalGrade ?? "-"} · {STAGE_LABEL[month.stage]}
+            评级 {month.finalGrade ?? "-"} · {STAGE_LABEL[month.stage]}
           </div>
         </div>
       ))}
@@ -1394,11 +1448,11 @@ function StatusPill({
           : "未配置";
   return <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{text}</span>;
 }
-function Grade({ grade, score }: { grade: string; score: number | null }) {
+function Rating({ rating, score }: { rating: string; score: number | null }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="grid size-10 place-items-center rounded-md bg-blue-50 text-xl font-semibold text-blue-700">
-        {grade}
+      <span className="grid min-h-10 min-w-10 shrink-0 place-items-center rounded-md bg-blue-50 px-2 py-1 text-xl font-semibold text-blue-700">
+        <span className="text-sm leading-5">{rating}</span>
       </span>
       <div>
         <div className="text-xs text-muted-foreground">最终得分</div>

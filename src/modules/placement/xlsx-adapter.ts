@@ -16,6 +16,100 @@ const COLUMN_ALIAS = {
   time_text: ["时间"],
 } as const;
 
+const REPORT_METRIC_HEADERS = ["日期", "消耗", "新增", "实时净ROI"];
+
+function normalizedHeader(value: unknown): string {
+  return String(value ?? "")
+    .replace(/[\s\r\n\t]/g, "")
+    .trim();
+}
+
+function isDailyReportSheet(sheet: XLSX.WorkSheet): number | null {
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null });
+  for (let index = 0; index < Math.min(rows.length, 8); index++) {
+    const headers = (rows[index] ?? []).map(normalizedHeader);
+    if (REPORT_METRIC_HEADERS.every((header) => headers.includes(header))) return index;
+  }
+  return null;
+}
+
+function parseDailyReportWorkbook(wb: XLSX.WorkBook, filename: string): ParseResult {
+  const rows: ParsedRow[] = [];
+  const errors: { row?: unknown; reason: string }[] = [];
+  const dates = new Set<string>();
+
+  for (const sheetName of wb.SheetNames) {
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) continue;
+    const headerRow = isDailyReportSheet(sheet);
+    if (headerRow == null) continue;
+    const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+      range: headerRow,
+      defval: null,
+    });
+    const yearSummary = rawRows.find((row) =>
+      /^\d{4}年总计$/.test(String(findValueByNormalizedHeader(row, "日期") ?? "").trim()),
+    );
+    const monthSummaries: Record<string, Record<string, unknown>> = {};
+    for (const row of rawRows) {
+      const summaryDate = String(findValueByNormalizedHeader(row, "日期") ?? "").trim();
+      const match = summaryDate.match(/^(\d{4})年(\d{1,2})月$/);
+      if (match) {
+        monthSummaries[`${match[1]}-${String(Number(match[2])).padStart(2, "0")}`] = row;
+      }
+    }
+    const accountName = sheetName
+      .replace(/^(3D|UE4|URP)[-_]/i, "")
+      .replace(/[-_]安卓端$/i, "")
+      .trim();
+    for (const row of rawRows) {
+      const dateRaw = findValueByNormalizedHeader(row, "日期");
+      const date = parseDateText(String(dateRaw ?? "").trim());
+      // 汇总行（2026年总计、2026年9月）不属于日数据，不导入。
+      if (!date) continue;
+      rows.push({
+        account_name: accountName,
+        subaccount_name: accountName,
+        date,
+        // 日报是按天累计快照，不属于 23 点小时数据；使用 24 作为占位，
+        // 避免与同一天真实的小时 23 点快照共用 cumulative_raw 唯一键。
+        hour: 24,
+        cost_yuan: parseUnitNumber(findValueByNormalizedHeader(row, "消耗")),
+        activations: Math.round(parseUnitNumber(findValueByNormalizedHeader(row, "新增"))),
+        payment_yuan: parseUnitNumber(findValueByNormalizedHeader(row, "最新累计付费")),
+        start_download: 0,
+        finish_download: 0,
+        raw: {
+          ...row,
+          _source_filename: filename,
+          _source_sheet: sheetName,
+          _summary_year: yearSummary ?? null,
+          // 每份日报包含多个月的累计行；按月份保存，避免8月/9月沿用最新月的汇总。
+          _summary_months: monthSummaries,
+        },
+      });
+      dates.add(date);
+    }
+  }
+
+  if (rows.length === 0) {
+    return {
+      rows: [],
+      errors: [{ reason: "未识别到包含日期、消耗、新增、实时净ROI表头的日报 sheet" }],
+      date_range_from: null,
+      date_range_to: null,
+    };
+  }
+  const sortedDates = [...dates].sort();
+  return {
+    rows,
+    errors,
+    date_range_from: sortedDates[0] ?? null,
+    date_range_to: sortedDates.at(-1) ?? null,
+    granularity: "daily",
+  };
+}
+
 export interface ParsedRow {
   account_name: string; // 主播标签（= placement_label）
   subaccount_name: string; // 广告子账户名（同主播下多包做差分时区分）
@@ -34,6 +128,7 @@ export interface ParseResult {
   errors: { row?: unknown; reason: string }[];
   date_range_from: string | null;
   date_range_to: string | null;
+  granularity?: "hourly" | "daily";
 }
 
 /**
@@ -57,6 +152,19 @@ function findValue(row: Record<string, unknown>, aliases: readonly string[]): un
   return undefined;
 }
 
+function findValueByNormalizedHeader(row: Record<string, unknown>, header: string): unknown {
+  const wanted = normalizedHeader(header);
+  const entry = Object.entries(row).find(([key, value]) => {
+    return (
+      normalizedHeader(key) === wanted &&
+      value !== null &&
+      value !== undefined &&
+      String(value).trim() !== ""
+    );
+  });
+  return entry?.[1];
+}
+
 /**
  * 解析百应导出的 Excel（3 种格式：9列/19列/6列），返回标准化行列表。
  *
@@ -65,6 +173,9 @@ function findValue(row: Record<string, unknown>, aliases: readonly string[]): un
  */
 export function parseXlsx(buffer: Buffer | ArrayBuffer, filename: string): ParseResult {
   const wb = XLSX.read(buffer, { type: "buffer" });
+  if (wb.SheetNames.some((name) => wb.Sheets[name] && isDailyReportSheet(wb.Sheets[name]))) {
+    return parseDailyReportWorkbook(wb, filename);
+  }
   const sheetName = wb.SheetNames[0];
   if (!sheetName) {
     return {
@@ -72,6 +183,7 @@ export function parseXlsx(buffer: Buffer | ArrayBuffer, filename: string): Parse
       errors: [{ reason: "Excel 文件无 sheet" }],
       date_range_from: null,
       date_range_to: null,
+      granularity: "hourly",
     };
   }
   const sheet = wb.Sheets[sheetName];
@@ -81,6 +193,7 @@ export function parseXlsx(buffer: Buffer | ArrayBuffer, filename: string): Parse
       errors: [{ reason: "Excel 文件 sheet 读取失败" }],
       date_range_from: null,
       date_range_to: null,
+      granularity: "hourly",
     };
   }
   const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
@@ -175,5 +288,6 @@ export function parseXlsx(buffer: Buffer | ArrayBuffer, filename: string): Parse
     errors,
     date_range_from: sortedDates[0] ?? null,
     date_range_to: sortedDates[sortedDates.length - 1] ?? null,
+    granularity: "hourly",
   };
 }

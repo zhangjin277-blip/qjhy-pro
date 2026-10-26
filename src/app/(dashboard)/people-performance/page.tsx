@@ -39,7 +39,7 @@ export default async function PeoplePerformancePage({
   return (
     <div className="min-w-0 max-w-full space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
       <div className="flex items-center justify-between border-b border-slate-200 pb-1">
-        <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">人员绩效</span>
+        <span className="mr-2 px-3 py-1.5 text-sm font-semibold text-slate-700">人员管理</span>
         <Link
           href="/people-performance/statistics"
           className="mr-2 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-slate-700 hover:border-blue-300 hover:bg-blue-50"

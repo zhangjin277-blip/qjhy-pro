@@ -3,12 +3,13 @@ import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   auth_permission_override,
+  auth_super_admin,
   dept_leader,
   dingtalk_user,
   role_default_permission,
   user_position_override,
 } from "@/db/schema";
-import { MODULE_KEYS, type ModuleKey } from "./modules";
+import { MODULE_KEYS, MODULE_POINTS, type ModuleKey } from "./modules";
 import type { Permission, PermissionSource, ResolvedPermission, Scope } from "./types";
 
 const SCOPE_RANK: Record<Scope, number> = {
@@ -37,23 +38,20 @@ const NULL_PERMISSION: Permission = {
 };
 
 /**
- * 三层叠加合并：role default + dept_leader + override = final
+ * 岗位与管理部门提供通用权限，个人设置逐字段优先。
  *
- * 规则（spec 2026-07-06-permission-points-redesign）：
- * - scope: MAX(role, dept_leader ? team : none, override.scope ?? none)
- *   —— override 不能"降低" scope（防止误删 dept_leader 也降权限）
+ * - scope: 个人非 null 设置直接生效（可扩大或收窄，含 none）；
+ *   未设置时取 MAX(role, dept_leader ? team : none)
  * - points: override.points 非 null → 整体替换；null → 用岗位默认
  * - dept_leader 只影响 scope，不加权限点
  */
 export function mergePermissions(
   roleDefault: { scope: Scope; points: string[] },
   isDeptLeader: boolean,
-  override: { scope?: Scope; points?: string[] | null } | null,
+  override: { scope?: Scope | null; points?: string[] | null } | null,
 ): Permission {
   const deptLeaderScope: Scope = isDeptLeader ? "team" : "none";
-  const overrideScope: Scope = override?.scope ?? "none";
-
-  const scope = MAX_SCOPE(MAX_SCOPE(roleDefault.scope, deptLeaderScope), overrideScope);
+  const scope = override?.scope ?? MAX_SCOPE(roleDefault.scope, deptLeaderScope);
   const points = new Set(
     override?.points !== null && override?.points !== undefined
       ? override.points
@@ -63,15 +61,22 @@ export function mergePermissions(
   return { scope, points };
 }
 
+export async function isSuperAdmin(userId: string): Promise<boolean> {
+  const [grant] = await db.select({ userId: auth_super_admin.user_id })
+    .from(auth_super_admin).innerJoin(dingtalk_user, eq(dingtalk_user.user_id, auth_super_admin.user_id))
+    .where(and(eq(auth_super_admin.user_id, userId), eq(dingtalk_user.active, true), eq(dingtalk_user.is_external, false)));
+  return !!grant;
+}
+
 /**
  * 查询给定用户在某个 module 的最终权限（含来源说明）。
  *
  * 步骤：
  * 1. 从 dingtalk_user 拿 title（钉钉岗位）；user_position_override 优先
  * 2. 从 role_default_permission 按 (position, module) 拿默认（找不到 fallback ("其他", module)）
- * 3. 从 dept_leader 看是否管部门（只升 scope）
+ * 3. 从 dept_leader 看是否管部门（提供默认 team 范围）
  * 4. 从 auth_permission_override 按 (user_id, module) 拿覆盖（且未过期）
- * 5. mergePermissions 合并
+ * 5. mergePermissions 合并：个人有设置的字段优先，未设置字段沿用通用配置
  */
 export async function resolvePermission(
   userId: string,
@@ -81,6 +86,10 @@ export async function resolvePermission(
 
   if (!user) {
     return { ...NULL_PERMISSION, sources: [] };
+  }
+
+  if (await isSuperAdmin(userId)) {
+    return { scope: "all", points: new Set(MODULE_POINTS[module].map((p) => p.key)), delegatedUserIds: null, sources: [{ kind: "super_admin" }] };
   }
 
   // 1. 解析项目岗位：override > 钉钉 title > "其他"
@@ -117,6 +126,9 @@ export async function resolvePermission(
     }
   }
 
+  // 全员默认可读取自己的考勤，不依赖岗位权限是否已初始化。
+  if (module === "attendance") role = { scope: "self", points: ["approval"] };
+
   // 2. dept_leader
   const leaderRows = await db.select().from(dept_leader).where(eq(dept_leader.user_id, userId));
   const isDeptLeader = leaderRows.length > 0;
@@ -144,11 +156,16 @@ export async function resolvePermission(
     : null;
 
   const merged = mergePermissions(role, isDeptLeader, override);
+  if (module === "attendance") {
+    // 考勤固定遵循本人 / 负责部门；超级管理员在身份层直接绕过。
+    merged.scope = isDeptLeader ? "team" : "self";
+    merged.points = new Set([...merged.points, "approval"]);
+  }
 
-  // 委托视图：override.delegated_user_ids 非空数组才生效；直接挂到结果上，不参与 scope MAX
+  // 委托视图：override.delegated_user_ids 非空数组才生效；保留独立的委托范围规则
   const delegatedRaw = overrideRow?.delegated_user_ids as string[] | null | undefined;
   const delegatedUserIds =
-    Array.isArray(delegatedRaw) && delegatedRaw.length > 0 ? delegatedRaw : null;
+    module !== "attendance" && Array.isArray(delegatedRaw) && delegatedRaw.length > 0 ? delegatedRaw : null;
 
   // 4. 构造来源说明
   const sources: PermissionSource[] = [{ kind: "default", position }];
@@ -179,7 +196,9 @@ export async function resolveVisibleModules(userId: string): Promise<Set<ModuleK
   MODULE_KEYS.forEach((m, i) => {
     const p = perms[i];
     if (!p) return;
-    if (p.scope !== "none" || p.points.size > 0) visible.add(m);
+    if (m === "goals") {
+      if (p.scope !== "none" && p.points.has("view")) visible.add(m);
+    } else if (p.scope !== "none" || p.points.size > 0) visible.add(m);
   });
   return visible;
 }

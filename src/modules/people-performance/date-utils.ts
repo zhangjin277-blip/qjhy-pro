@@ -46,11 +46,12 @@ export function addDays(value: string, days: number): string {
 }
 
 export function buildProbationPeriods(hireDate: string, months: 2 | 6): CyclePeriod[] {
-  const offsets = months === 2 ? [0] : [0, 2, 4];
+  const offsets = months === 2 ? [0] : [0, 1, 3];
   return offsets.map((offset, index) => {
     const start = addMonths(hireDate, offset);
-    const end = addDays(addMonths(start, 2), -1);
-    const nodeMonth = offset + 1;
+    const windowMonths = months === 2 ? 2 : index === 0 ? 1 : 2;
+    const end = addDays(addMonths(start, windowMonths), -1);
+    const nodeMonth = months === 2 ? 1 : [1, 3, 5][index];
     return {
       label: months === 2 ? "2个月试用期考核" : `6个月试用期·第${nodeMonth}月节点`,
       start,
@@ -95,6 +96,46 @@ export function gradeForScore(score: number): "S" | "A" | "B" | "C" | "D" {
   if (score >= 70) return "B";
   if (score >= 60) return "C";
   return "D";
+}
+
+/** HR 手工选择的评级；评级与总分完全独立。 */
+export const PERFORMANCE_RATINGS = [
+  {
+    value: "超越预期",
+    description: "持续表现卓越，有标杆性的业绩或组织能力等产出。",
+  },
+  {
+    value: "符合预期",
+    description: "符合本岗位/职级要求，能够及时、准确地完成试用期目标。",
+  },
+  {
+    value: "待改进",
+    description: "不完全符合本岗位/职级要求，部分试用期目标未达成。",
+  },
+  {
+    value: "不符合预期",
+    description: "无法达到本岗位/职级要求，不能完成试用期目标，或价值观不符。",
+  },
+] as const;
+
+export type PerformanceRating = (typeof PERFORMANCE_RATINGS)[number]["value"];
+
+/**
+ * 季度父周期汇总：所有月度子周期 completed 且季度已结束时，取子周期 final_score 的平均分。
+ * 按实际子周期数平均（季度中途转正/建档时只生成剩余月份，不能固定除以 3）。
+ * 条件不满足返回 null。
+ */
+export function summarizeQuarter(
+  children: { stage: string; finalScore: string | number | null }[],
+  parentPeriodEnd: string,
+  today: string,
+): { score: number; grade: "S" | "A" | "B" | "C" | "D" } | null {
+  if (children.length === 0) return null;
+  if (!children.every((item) => item.stage === "completed")) return null;
+  if (parentPeriodEnd > today) return null;
+  const total = children.reduce((sum, item) => sum + Number(item.finalScore ?? 0), 0);
+  const score = Math.round((total / children.length) * 100) / 100;
+  return { score, grade: gradeForScore(score) };
 }
 
 export function calculateWeightedScore(

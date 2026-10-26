@@ -19,10 +19,11 @@ export async function createTask(input: unknown): Promise<CreateTaskResult> {
   const { userId } = await requireEditingPoint("task_create");
 
   const [account] = await db
-    .select({ product: live_account.product })
+    .select({ product: live_account.product, deprecated_at: live_account.deprecated_at })
     .from(live_account)
     .where(eq(live_account.id, data.liveAccountId));
   if (!account) throw new Error("账号不存在");
+  if (account.deprecated_at) throw new Error("该账号已废弃，不能新建剪辑任务");
   if (isSourceRemarkRequired(account.product) && !data.sourceRemark?.trim()) {
     throw new Error(`${account.product}的剪辑要求为必填项`);
   }

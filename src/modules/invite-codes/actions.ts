@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAdmin } from "@/lib/admin-guard";
+import { requirePoint } from "@/lib/admin-guard";
 import { writeAuditLog } from "@/lib/audit";
 import { AppError } from "@/lib/errors";
 import {
@@ -20,7 +20,9 @@ export async function generateInviteCodeAction(input: unknown): Promise<{
   displayCode: string;
 }> {
   const data = GenerateInviteCodeInput.parse(input);
-  const { userId: opUser } = await requireAdmin();
+  const { userId: opUser } = await requirePoint("permissions", "invite_codes");
+  // 邀请码会将权限配置复制给新账号，必须具有授予个人权限的权限。
+  await requirePoint("permissions", "manage_overrides");
 
   if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) {
     throw new AppError("INVITE_EXPIRES_IN_PAST", "过期时间必须晚于现在", 400);
@@ -59,7 +61,7 @@ export async function generateInviteCodeAction(input: unknown): Promise<{
 
 export async function revokeInviteCodeAction(input: unknown): Promise<{ ok: true }> {
   const data = RevokeInviteCodeInput.parse(input);
-  const { userId: opUser } = await requireAdmin();
+  const { userId: opUser } = await requirePoint("permissions", "invite_codes");
   const normalized = normalizeCode(data.code);
 
   await revokeInviteCode(normalized);
@@ -75,11 +77,11 @@ export async function revokeInviteCodeAction(input: unknown): Promise<{ ok: true
 }
 
 export async function listInviteCodesAction(): Promise<InviteCodeRow[]> {
-  await requireAdmin();
+  await requirePoint("permissions", "invite_codes");
   return listInviteCodes();
 }
 
 export async function listInviteCodeUsesAction(code: string): Promise<InviteCodeUseRow[]> {
-  await requireAdmin();
+  await requirePoint("permissions", "invite_codes");
   return listInviteCodeUses(code);
 }

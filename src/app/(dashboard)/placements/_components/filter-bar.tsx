@@ -1,4 +1,5 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
@@ -76,27 +77,12 @@ export function FilterBar({ anchorLabels = [] }: FilterBarProps) {
     pushWith({ preset: p, from: null, to: null });
   }
 
-  function applyDateChange(field: "from" | "to", value: string) {
-    if (!value) return;
-    const next =
-      field === "from" ? { from: value, to: effective.to } : { from: effective.from, to: value };
-    pushWith({ from: next.from, to: next.to, preset: null });
-  }
-
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <Input
-        type="date"
-        value={effective.from}
-        onChange={(e) => applyDateChange("from", e.target.value)}
-        className="w-[140px] shrink-0"
-      />
-      <span className="text-muted-foreground shrink-0">~</span>
-      <Input
-        type="date"
-        value={effective.to}
-        onChange={(e) => applyDateChange("to", e.target.value)}
-        className="w-[140px] shrink-0"
+      <DateRangePicker
+        label="投放日期"
+        value={{ from: effective.from, to: effective.to }}
+        onChange={(next) => pushWith({ from: next.from, to: next.to, preset: null })}
       />
 
       <div className="flex shrink-0 gap-1">

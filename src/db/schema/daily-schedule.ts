@@ -19,7 +19,7 @@ export const daily_schedule_segment = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     account_id: text("account_id")
       .notNull()
-      .references(() => live_account.id, { onDelete: "cascade" }),
+      .references(() => live_account.id, { onDelete: "restrict" }),
     date: date("date").notNull(),
     dingtalk_user_id: text("dingtalk_user_id")
       .notNull()
@@ -45,7 +45,7 @@ export const daily_schedule_day = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     account_id: text("account_id")
       .notNull()
-      .references(() => live_account.id, { onDelete: "cascade" }),
+      .references(() => live_account.id, { onDelete: "restrict" }),
     date: date("date").notNull(),
     created_by: text("created_by").references(() => auth_user.id),
     created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

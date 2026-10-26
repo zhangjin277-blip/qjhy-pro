@@ -96,6 +96,7 @@ export function parseOmniXlsx(buffer: Buffer | ArrayBuffer, filename: string): P
       errors: [{ reason: "Excel 文件无 sheet" }],
       date_range_from: null,
       date_range_to: null,
+      granularity: "hourly",
     };
   }
   const sheet = wb.Sheets[sheetName];
@@ -105,6 +106,7 @@ export function parseOmniXlsx(buffer: Buffer | ArrayBuffer, filename: string): P
       errors: [{ reason: "Excel 文件 sheet 读取失败" }],
       date_range_from: null,
       date_range_to: null,
+      granularity: "hourly",
     };
   }
 
@@ -116,6 +118,7 @@ export function parseOmniXlsx(buffer: Buffer | ArrayBuffer, filename: string): P
       errors: [{ reason: `Omni 格式但 A1 不是字符串：${String(a1)}` }],
       date_range_from: null,
       date_range_to: null,
+      granularity: "hourly",
     };
   }
   const pushedAt = parsePushTime(a1);
@@ -176,5 +179,6 @@ export function parseOmniXlsx(buffer: Buffer | ArrayBuffer, filename: string): P
     errors,
     date_range_from: pushedAt.date,
     date_range_to: pushedAt.date,
+    granularity: "hourly",
   };
 }

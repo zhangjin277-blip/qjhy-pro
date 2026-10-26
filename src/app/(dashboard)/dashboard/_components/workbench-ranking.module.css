@@ -1,0 +1,236 @@
+.panel {
+  min-height: 239px;
+}
+.header {
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+}
+.dateControls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--wb-muted);
+  font-size: 10px;
+}
+.dateControls select,
+.dateControls input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--foreground);
+  padding: 5px 7px;
+  font-size: 11px;
+}
+.dateInputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dateInputs input {
+  min-width: 0;
+  width: 117px;
+}
+.products {
+  display: flex;
+  gap: 5px;
+  padding: 0 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.products button {
+  border-radius: 6px;
+  padding: 5px 14px;
+  color: var(--wb-muted);
+  font-size: 12px;
+  transition: background 0.15s;
+}
+.products button[aria-pressed="true"] {
+  background: #eef1ff;
+  color: #515bbb;
+  font-weight: 600;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 15px 20px 0;
+}
+.metrics {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.metrics button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--wb-muted);
+  font-size: 12px;
+}
+.metrics button[aria-pressed="true"] {
+  color: #555dc2;
+  font-weight: 650;
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11px;
+  color: var(--wb-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pagination button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+}
+.pagination button:hover:not(:disabled) {
+  background: var(--muted);
+}
+.pagination button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.body {
+  margin: 0 20px;
+  min-height: 123px;
+}
+.anchors {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 20px 0 18px;
+}
+.anchors li {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  padding: 0 2px;
+}
+.avatarWrap {
+  position: relative;
+  margin-bottom: 10px;
+}
+.portrait {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, #eff2ff, #e4eaf4);
+  color: #7c8ab1;
+  font-size: 17px;
+  overflow: hidden;
+}
+.portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.rank {
+  position: absolute;
+  bottom: -4px;
+  right: -3px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #edf0f7;
+  color: #59677e;
+  border: 2px solid var(--card);
+  font-size: 9px;
+  font-weight: 650;
+}
+.rank[data-top="true"] {
+  background: #eabb6a;
+  color: white;
+}
+.name {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 11px;
+  color: var(--foreground);
+}
+.value {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+  color: #475569;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.empty {
+  min-height: 123px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--wb-muted);
+  font-size: 12px;
+  text-align: center;
+}
+.empty p {
+  margin: 0;
+}
+.empty span {
+  font-size: 10px;
+}
+.empty button {
+  color: #515bbb;
+  font-size: 11px;
+}
+.footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--wb-muted);
+  padding: 10px 20px;
+  font-size: 10px;
+}
+.products button:focus-visible,
+.metrics button:focus-visible,
+.pagination button:focus-visible,
+.empty button:focus-visible {
+  outline: 2px solid #7479ed;
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .header {
+    gap: 12px;
+  }
+  .dateControls {
+    width: 100%;
+  }
+  .dateInputs {
+    flex: 1;
+  }
+  .dateInputs input {
+    width: 100px;
+    flex: 1;
+  }
+  .metrics {
+    gap: 12px;
+  }
+  .toolbar {
+    gap: 10px;
+  }
+  .products button {
+    flex: 1;
+  }
+}

@@ -1,4 +1,5 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -83,6 +84,8 @@ const COOKIE_NAME: Record<string, string> = {
   douyin_creator: "抖音创作者 Cookie（孙小圣）",
   douyin_creator_xiao_mowan: "抖音创作者 Cookie（小魔丸）",
   wechat_creator: "视频号创作者 Cookie（AI漫剧）",
+  bilibili_creator: "B站创作中心 Cookie（AI漫剧）",
+  xiaohongshu_creator: "小红书创作平台 Cookie（AI漫剧）",
   lingji: "官号灵机 Cookie",
 };
 
@@ -668,18 +671,13 @@ function BackfillForm({ onDone }: { onDone: () => Promise<void> }): React.JSX.El
         <option value="ks_gift">快手·补礼物数据（流水分时）</option>
         <option value="lingji_history">抖音灵机·官号复盘</option>
       </select>
-      <input
-        type="date"
-        value={from}
-        onChange={(e) => setFrom(e.target.value)}
-        className="bg-card h-8 rounded border border-input px-2 text-xs"
-      />
-      <span className="text-muted-foreground text-xs">~</span>
-      <input
-        type="date"
-        value={to}
-        onChange={(e) => setTo(e.target.value)}
-        className="bg-card h-8 rounded border border-input px-2 text-xs"
+      <DateRangePicker
+        label="补采日期"
+        value={{ from: from, to: to }}
+        onChange={(next) => {
+          setFrom(next.from);
+          setTo(next.to);
+        }}
       />
       <button
         disabled={busy}

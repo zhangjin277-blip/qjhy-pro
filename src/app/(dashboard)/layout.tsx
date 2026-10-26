@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { DashboardShell } from "./_components/shell";
-import { resolveVisibleModules } from "@/modules/permissions/server";
+import { resolveVisibleModules, isSuperAdmin } from "@/modules/permissions/server";
 import type { ModuleKey } from "@/modules/permissions";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -75,7 +75,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </main>
         );
       }
-      userTitle = identity.title;
+      userTitle = await isSuperAdmin(identity.dingtalkUserId) ? "超级管理员" : identity.title;
       visibleModuleIds = [...(await resolveVisibleModules(identity.dingtalkUserId))];
     }
   }

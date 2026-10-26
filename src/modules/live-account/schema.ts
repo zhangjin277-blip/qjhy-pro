@@ -60,30 +60,16 @@ export const UpsertAccountInput = z
   });
 export type UpsertAccountInput = z.infer<typeof UpsertAccountInput>;
 
-export const DeleteAccountInput = z.object({
-  id: z.string().min(1),
-  /** 强制删除：连同关联的 placement_row 一起删；admin 显式确认才传 */
-  force: z.boolean().optional(),
-});
-
 export const ListAccountsInput = z.object({
   platform: Platform.optional(),
   product: Product.optional(),
 });
 
-// ─── 删除审核流 ──────────────────────────────────────────────────────────────
+// ─── 废弃归档（账号不物理删除）────────────────────────────────────────────────
 
-export const DeleteContextInput = z.object({ id: z.string().min(1) });
-
-export const DeleteRequestCreateInput = z.object({
-  id: z.string().min(1), // account id
+export const DeprecateAccountInput = z.object({
+  id: z.string().min(1),
   reason: z.string().max(500).optional().nullable(),
 });
 
-export const DeleteRequestReviewInput = z.object({
-  requestId: z.string().min(1),
-  approve: z.boolean(),
-  note: z.string().max(500).optional().nullable(),
-});
-
-export const DeleteRequestCancelInput = z.object({ requestId: z.string().min(1) });
+export const RestoreAccountInput = z.object({ id: z.string().min(1) });

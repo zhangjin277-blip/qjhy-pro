@@ -40,8 +40,8 @@ export async function requirePoint(
 }
 
 /**
- * 校验当前调用者是 admin（可进权限管理/审计面板）。
- * 判定：permissions 板块开通任意 manage 点。应急后门通过。
+ * 校验当前调用者可进入管理面板；不能用于敏感操作的授权。
+ * 判定：permissions 板块开通任意权限点。写操作须使用 requirePoint。应急后门通过。
  */
 export async function requireAdmin(): Promise<{ userId: string }> {
   const caller = await resolveCaller();

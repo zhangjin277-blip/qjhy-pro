@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { getCheckinRange, type CheckinDayResult } from "@/modules/checkin/queries";
+import { resolvePlacementScope } from "@/modules/placement/server";
 
 export const runtime = "nodejs";
 
@@ -102,6 +103,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (currentUser.kind === "user_not_synced") {
     return new NextResponse("当前账号未同步，无法导出", { status: 403 });
   }
+  const scope = await resolvePlacementScope(
+    currentUser.dingtalkUserId,
+    currentUser.isEmergency,
+    "checkin_history",
+  );
+  if (scope.kind === "reject") {
+    return new NextResponse("无开播记录查看权限", { status: 403 });
+  }
 
   const dateFromValue = req.nextUrl.searchParams.get("date_from");
   const dateToValue = req.nextUrl.searchParams.get("date_to");
@@ -121,7 +130,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const accountQuery = req.nextUrl.searchParams.get("account_query")?.trim() || undefined;
   let data: CheckinDayResult;
   try {
-    data = await getCheckinRange(dateFromValue, dateToValue, { product, accountQuery });
+    data = await getCheckinRange(dateFromValue, dateToValue, {
+      product,
+      accountQuery,
+      scope,
+    });
   } catch (error) {
     console.error("[checkin-history-export]", error);
     return new NextResponse("导出失败，请稍后重试", { status: 500 });

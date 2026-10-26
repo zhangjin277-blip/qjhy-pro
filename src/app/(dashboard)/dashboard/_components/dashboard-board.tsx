@@ -6,6 +6,8 @@ import { CoreKpiSection, type TimePreset } from "./core-kpi-section";
 import { BreakdownSection, type BreakdownClick } from "./breakdown-section";
 import { DashboardDrawer, type DrawerOpenPayload } from "./dashboard-drawer";
 import { BuyuSection } from "./buyu-section";
+import { BusinessTrend } from "./business-trend";
+import styles from "./business-board.module.css";
 
 /**
  * 把 TimePreset 翻译成 [date_from, date_to] 区间。
@@ -125,15 +127,23 @@ export function DashboardBoard(): React.JSX.Element {
   };
 
   return (
-    <div className="space-y-5">
+    <div className={styles.board}>
       <CoreKpiSection
         core={core}
         loading={loading}
-        preset={preset}
-        onPresetChange={setPreset}
-        customFrom={customRange.from}
-        customTo={customRange.to}
-        onCustomChange={setCustomRange}
+        datePresets={(
+          [
+            ["yesterday", "昨天"],
+            ["last7", "近 7 日"],
+            ["last30", "近 30 日"],
+            ["this_month", "本月"],
+            ["last_month", "上月"],
+          ] as const
+        ).map(([key, label]) => ({ label, value: presetToRange(key, customRange) }))}
+        onCustomChange={(next) => {
+          setCustomRange(next);
+          setPreset("custom");
+        }}
         onCardClick={handleCardClick}
         rangeFrom={range.from}
         rangeTo={range.to}
@@ -144,7 +154,10 @@ export function DashboardBoard(): React.JSX.Element {
         singleDay={range.from === range.to}
         onCellClick={handleCellClick}
       />
-      <BuyuSection dateFrom={range.from} dateTo={range.to} />
+      <div className={styles.bottomGrid}>
+        <BusinessTrend core={core} loading={loading} />
+        <BuyuSection dateFrom={range.from} dateTo={range.to} />
+      </div>
       {error ? (
         <div className="rounded-md bg-[#fff2f2] border border-[#ffd6d6] text-[#f53f3f] px-4 py-3 text-[13px]">
           数据加载失败：{error}

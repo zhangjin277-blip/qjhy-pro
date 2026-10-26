@@ -7,6 +7,7 @@ const envSchema = z.object({
   DINGTALK_CORP_ID: z.string().default(""),
   DINGTALK_AGENT_ID: z.string().default(""),
   DINGTALK_CLI_PATH: z.string().default("dws"),
+  DINGTALK_CLI_PROFILE: z.string().default(""),
   DINGTALK_RECRUITMENT_SHEET_URL: z
     .string()
     .url()
@@ -15,6 +16,8 @@ const envSchema = z.object({
     ),
   DINGTALK_RECRUITMENT_SHEET_ID: z.string().default("st-da2f6966-43922"),
   DINGTALK_BOT_WEBHOOK: z.string().url().or(z.literal("")).default(""),
+  PROCUREMENT_DINGTALK_WEBHOOK: z.string().url().or(z.literal("")).default(""),
+  PLACEMENT_ALERT_DINGTALK_WEBHOOK: z.string().url().or(z.literal("")).default(""),
   EDITING_DINGTALK_WEBHOOK: z.string().url().or(z.literal("")).default(""),
   // Cookie 失效提醒专用机器人（关键字「更新」）—— 抖音/快手 cookie 需续期时通知
   COOKIE_ALERT_DINGTALK_WEBHOOK: z.string().url().or(z.literal("")).default(""),

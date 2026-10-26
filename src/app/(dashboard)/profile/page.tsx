@@ -110,6 +110,7 @@ export default async function ProfilePage() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div>姓名：{dingUser.name}</div>
+            {sourceSet.has("super_admin") && <div>身份：<strong className="text-primary">超级管理员（全部板块、全部权限）</strong></div>}
             <div>
               钉钉岗位：
               {dingUser.title ?? <span className="text-muted-foreground">未填岗位</span>}

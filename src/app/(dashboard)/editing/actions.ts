@@ -2,7 +2,7 @@
 import { getTask, listEvents, buildEditingScopeWhere } from "@/modules/editing-task/server";
 import { db } from "@/db/client";
 import { editing_task, live_account, live_session_log, dingtalk_user } from "@/db/schema";
-import { and, asc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/page-auth";
 import { resolvePermission } from "@/modules/permissions/server";
 
@@ -39,7 +39,12 @@ export async function searchLiveAccounts(query: string): Promise<AccountSearchRe
       product: live_account.product,
     })
     .from(live_account)
-    .where(sql`${live_account.account_name} ILIKE ${`%${query}%`}`)
+    .where(
+      and(
+        sql`${live_account.account_name} ILIKE ${`%${query}%`}`,
+        isNull(live_account.deprecated_at), // 已废弃账号不再出现在建任务候选里
+      ),
+    )
     .orderBy(asc(live_account.account_name))
     .limit(20);
 

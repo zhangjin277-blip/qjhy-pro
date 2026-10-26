@@ -25,7 +25,7 @@ describe("MAX_SCOPE", () => {
   });
 });
 
-describe("mergePermissions (三层叠加 · 权限点模型)", () => {
+describe("mergePermissions (通用默认 · 个人优先)", () => {
   const role = { scope: "self" as Scope, points: ["account_edit", "schedule_edit"] };
 
   it("only role default — no dept_leader, no override", () => {
@@ -51,9 +51,31 @@ describe("mergePermissions (三层叠加 · 权限点模型)", () => {
     expect(p.scope).toBe("all");
   });
 
-  it("override scope cannot downgrade (MAX semantics)", () => {
+  it("个人范围可以收窄岗位默认范围", () => {
     const p = mergePermissions({ scope: "team", points: [] }, false, { scope: "self" });
+    expect(p.scope).toBe("self");
+  });
+
+  const scopes: Scope[] = ["none", "self", "team", "all"];
+  it.each(scopes.flatMap((positionScope) => scopes.flatMap((personalScope) =>
+    [false, true].map((leader) => ({ positionScope, personalScope, leader })),
+  )))("岗位 $positionScope，个人 $personalScope，负责人 $leader：个人范围生效", ({ positionScope, personalScope, leader }) => {
+    const p = mergePermissions({ scope: positionScope, points: ["account_edit"] }, leader, { scope: personalScope });
+    expect(p.scope).toBe(personalScope);
+    expect([...p.points]).toEqual(["account_edit"]);
+  });
+
+  it.each([undefined, null])("个人范围为 %s 时继承通用范围，个人操作权限独立生效", (scope) => {
+    const p = mergePermissions(role, true, { scope, points: [] });
     expect(p.scope).toBe("team");
+    expect(p.points.size).toBe(0);
+  });
+
+  it("岗位调整不覆盖个人定制，移除个人设置后恢复通用范围", () => {
+    const personal = { scope: "self" as Scope };
+    expect(mergePermissions({ scope: "team", points: [] }, true, personal).scope).toBe("self");
+    expect(mergePermissions({ scope: "all", points: [] }, true, personal).scope).toBe("self");
+    expect(mergePermissions({ scope: "all", points: [] }, true, null).scope).toBe("all");
   });
 
   it("override.points = undefined → 沿用岗位默认点集", () => {

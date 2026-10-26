@@ -14,8 +14,13 @@ describe("translateLegacyPoints（0054 迁移翻译规则）", () => {
     }
     expect(snap).toEqual({
       dashboard: [],
+      goals: [],
+      attendance: [],
+      procurement: [],
       project_zhaohua: ["project_edit"],
       project_ai_comic: ["project_edit"],
+      project_buyu: [],
+      checkin_history: [],
       anchors: [],
       crawler: ["run_jobs", "cookie_update", "field_alias"],
       permissions: [],
@@ -55,7 +60,10 @@ describe("translateLegacyPoints（0054 迁移翻译规则）", () => {
   it("admin=true 追加的点", () => {
     expect(
       translateLegacyPoints("live_account", { edit: false, export: false, admin: true }),
-    ).toEqual(["delete_review", "session_correct"]);
+    ).toEqual([]);
+    expect(
+      translateLegacyPoints("checkin_history", { edit: false, export: false, admin: true }),
+    ).toEqual(["session_correct"]);
     expect(
       translateLegacyPoints("editing_workflow", { edit: false, export: false, admin: true }),
     ).toEqual(["task_delete"]);
@@ -89,8 +97,8 @@ describe("translateLegacyPoints（0054 迁移翻译规则）", () => {
     }
   });
 
-  it("注册表总点数 = 53", () => {
+  it("注册表总点数 = 64（含新增模块与工作台独立权限）", () => {
     const total = Object.values(MODULE_POINTS).reduce((s, pts) => s + pts.length, 0);
-    expect(total).toBe(53);
+    expect(total).toBe(64);
   });
 });

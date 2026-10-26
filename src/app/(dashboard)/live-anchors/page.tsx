@@ -47,6 +47,7 @@ export default async function LiveAnchorsPage() {
   // 分组 bindings by anchor (dingtalk_user_id)
   const bindingsByAnchor: Record<string, typeof allBindings> = {};
   for (const b of allBindings) {
+    if (b.account_deprecated_at) continue; // 已废弃账号的绑定不再展示
     if (!bindingsByAnchor[b.dingtalk_user_id]) bindingsByAnchor[b.dingtalk_user_id] = [];
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     bindingsByAnchor[b.dingtalk_user_id]!.push(b);

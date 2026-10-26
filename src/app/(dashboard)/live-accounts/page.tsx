@@ -3,15 +3,13 @@ import { db } from "@/db/client";
 import { dingtalk_user, anchor_profile, live_account } from "@/db/schema";
 import { schedule_override } from "@/db/schema/schedule-override";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { listAccounts, listPendingDeleteRequests } from "@/modules/live-account/server";
-import { listAnchors } from "@/modules/live-anchor/server";
+import { listAccounts } from "@/modules/live-account/server";
+import { listScheduleAnchorOptions } from "@/modules/live-anchor/server";
 import { listBindings } from "@/modules/live-anchor";
 import { listRooms } from "@/modules/live-room/server";
 import { Product } from "@/modules/live-account";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
-import { resolvePermission } from "@/modules/permissions/server";
 import { AccountListClient } from "./_components/account-list-client";
-import { DeleteRequestBanner, type DeleteRequestItem } from "./_components/delete-request-banner";
 import type { OverrideRowView } from "./_components/schedule-override-tab";
 
 const PRODUCTS = Product.options;
@@ -36,35 +34,19 @@ export default async function LiveAccountsPage({
   }
   const { dingtalkUserId, isEmergency } = ctx;
 
-  // 删除审核：live_account 管理员可见待审申请横幅
-  const canAdmin = isEmergency
-    ? true
-    : (await resolvePermission(dingtalkUserId, "live_account")).points.has("delete_review");
-  const pendingDeleteRequests: DeleteRequestItem[] = canAdmin
-    ? (await listPendingDeleteRequests()).map((r) => ({
-        id: r.id,
-        account_name: r.account_name,
-        product: r.product,
-        reason: r.reason,
-        impact: r.impact,
-        requested_by_name: r.requested_by_name ?? "(未知)",
-        requested_at: r.requested_at.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }),
-      }))
-    : [];
-
   const sp = await searchParams;
   const selectedProduct = PRODUCTS.includes(sp.product as (typeof PRODUCTS)[number])
     ? (sp.product as string)
     : DEFAULT_PRODUCT;
 
   // Parallel fetch
-  const [accounts, allBindings, rooms, allAnchors, activeUsers, douyinAvatars, placementLabelRows] =
+  const [accounts, allBindings, rooms, anchors, activeUsers, douyinAvatars, placementLabelRows] =
     await Promise.all([
       listAccounts({ product: selectedProduct }, dingtalkUserId, isEmergency),
       listBindings({}),
       listRooms(dingtalkUserId, isEmergency),
-      // 排班下拉只取 (id, name)，不分 scope（运营要给账号挑主播，必须看全表）
-      listAnchors({}),
+      // 排班候选统一读取主播档案和合作主播部门树。
+      listScheduleAnchorOptions(),
       // 直播一部 + 所有子部门下、在职的钉钉用户（运营 select 候选）
       // 递归 CTE 展开 dept_id 树，再用 dept_ids ?| 命中
       db.execute<{ user_id: string; name: string; title: string | null; active: boolean }>(sql`
@@ -177,29 +159,9 @@ export default async function LiveAccountsPage({
   const productCounts: Record<string, number> = {};
   for (const p of PRODUCTS) {
     const list = await listAccounts({ product: p }, dingtalkUserId, isEmergency);
-    productCounts[p] = list.length;
+    productCounts[p] = list.filter((a) => !a.deprecated_at).length; // 已废弃的折叠归档，不计入
   }
 
-  // Anchor list for binding form：合并两个来源 + 按 user_id 去重
-  // 1. live_anchor 表（已建档的主播）
-  // 2. 钉钉主播部门成员（合作主播 + 运营 三套子部门，新主播没建档也能选）
-  const anchorDeptIds = ["728935814", "928732653", "929188023", "932021044"];
-  const dingtalkAnchors = await db.execute<{ user_id: string; name: string }>(sql`
-    SELECT user_id, name FROM dingtalk_user
-    WHERE active = true
-      AND dept_ids ?| ARRAY[${sql.raw(anchorDeptIds.map((d) => `'${d}'`).join(","))}]::text[]
-    ORDER BY name
-  `);
-  const anchorMap = new Map<string, { dingtalk_user_id: string; name: string }>();
-  for (const a of allAnchors) {
-    anchorMap.set(a.dingtalk_user_id, { dingtalk_user_id: a.dingtalk_user_id, name: a.name });
-  }
-  for (const u of dingtalkAnchors) {
-    if (!anchorMap.has(u.user_id)) {
-      anchorMap.set(u.user_id, { dingtalk_user_id: u.user_id, name: u.name });
-    }
-  }
-  const anchors = [...anchorMap.values()].sort((a, b) => a.name.localeCompare(b.name, "zh"));
 
   return (
     <div className="min-w-0 max-w-full space-y-3 px-1 py-1 md:px-1.5 md:py-1.5">
@@ -209,7 +171,6 @@ export default async function LiveAccountsPage({
           共 {productCounts[selectedProduct] ?? 0} 个账号 · {selectedProduct}
         </div>
       </div>
-      {pendingDeleteRequests.length > 0 && <DeleteRequestBanner requests={pendingDeleteRequests} />}
       <AccountListClient
         initialAccounts={accounts}
         bindingsByAccount={bindingsByAccount}

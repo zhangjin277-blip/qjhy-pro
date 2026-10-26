@@ -107,6 +107,7 @@ type WorkingScope = Scope | "default";
 
 const WORKING_OPTIONS: { value: WorkingScope; label: string }[] = [
   { value: "default", label: "使用默认" },
+  { value: "none", label: "无数据" },
   { value: "self", label: "仅自己" },
   { value: "team", label: "仅团队" },
   { value: "all", label: "所有人" },
@@ -311,8 +312,8 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
     const nextPoints: Record<ModuleKey, string[] | null> = { ...workingPoints };
     for (const m of MODULE_KEYS) {
       const s = target.module_scopes[m];
-      // 若目标用户该 module = none 视为 default（即清掉 override）
-      next[m] = s === "none" ? "default" : s;
+      // 复制实际范围，none 也要保留，避免恢复岗位默认后意外扩大数据范围。
+      next[m] = s;
       // 权限点：整体替换为目标用户的生效点集
       nextPoints[m] = [...(target.module_points?.[m] ?? [])];
     }
@@ -720,9 +721,14 @@ export function UserDetailPanel({ userId, onClose }: { userId: string; onClose?:
             )}
           </section>
 
-          {/* 4 个板块卡 */}
+          <p className="text-xs text-muted-foreground">
+            个人设置优先于岗位默认，可扩大或收窄数据范围；选择“使用默认”则沿用岗位及管理部门的通用范围。操作权限可单独自定义。
+            考勤范围及超级管理员身份仍按各自规则执行。
+          </p>
+
+          {/* 板块权限卡 */}
           {MODULE_KEYS.map((m) => {
-            const eff = detail.permissions[m]; // 当前生效权限（叠加后）
+            const eff = detail.permissions[m]; // 当前已保存的生效权限
             const cur = working[m] ?? "default";
             const ov = detail.overrides.find((x) => x.module === m);
             const isOverridden = cur !== "default";
@@ -886,10 +892,16 @@ function moduleEmoji(m: ModuleKey): string {
   switch (m) {
     case "dashboard":
       return "📊";
+    case "goals":
+      return "🎯";
     case "project_zhaohua":
       return "🧭";
     case "project_ai_comic":
       return "✨";
+    case "project_buyu":
+      return "🐟";
+    case "checkin_history":
+      return "🕐";
     case "anchors":
       return "👥";
     case "crawler":
@@ -916,5 +928,9 @@ function moduleEmoji(m: ModuleKey): string {
       return "📝";
     case "courses":
       return "📚";
+    case "procurement":
+      return "🛒";
+    case "attendance":
+      return "⏱️";
   }
 }

@@ -24,7 +24,8 @@
     "db:seed:emergency": "tsx --env-file=.env.local src/db/seed/emergency-user.ts",
     "db:seed:product-config": "tsx --env-file=.env.local src/db/seed/product-config.ts",
     "courses:import": "tsx --env-file=.env.local scripts/import-miracle-courses.ts",
-    "prepare": "husky"
+    "prepare": "husky",
+    "attendance:styles": "node scripts/build-pro3-attendance-styles.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -34,6 +35,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
+    "exceljs": "^4.4.0",
     "lucide-react": "^1.14.0",
     "mpegts.js": "^1.8.0",
     "next": "16.2.4",
@@ -81,6 +83,7 @@
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.3",
     "tailwindcss": "^4",
+    "tailwindcss-pro3": "npm:tailwindcss@3.4.19",
     "tsx": "^4.21.0",
     "typescript": "^5",
     "typescript-eslint": "^8.59.1",
@@ -95,12 +98,10 @@
       "prettier --write"
     ]
   },
+  "packageManager": "pnpm@9.12.0",
   "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "sharp",
-      "unrs-resolver",
-      "msw"
-    ]
+    "overrides": {
+      "webworkify-webpack": "https://codeload.github.com/xqq/webworkify-webpack/tar.gz/24d1e719b4a6cac37a518b2bb10fe124527ef4ef"
+    }
   }
 }

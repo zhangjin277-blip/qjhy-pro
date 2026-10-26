@@ -79,11 +79,13 @@ function parseTableResponse(raw: string): { columns: unknown[]; data: unknown[][
 async function fetchDingtalkPipelineRows(): Promise<ReturnType<typeof parsePipelineTable>> {
   let stdout: string;
   try {
+    const profileArgs = env.DINGTALK_CLI_PROFILE ? ["--profile", env.DINGTALK_CLI_PROFILE] : [];
     const result = await execFileAsync(
       env.DINGTALK_CLI_PATH,
       [
         "sheet",
         "table-get",
+        ...profileArgs,
         "--node",
         env.DINGTALK_RECRUITMENT_SHEET_URL,
         "--sheet-id",

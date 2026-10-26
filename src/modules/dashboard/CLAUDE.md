@@ -5,7 +5,7 @@
 ## 项目 × 分组 二维口径（anchorGroupCte，全看板共用）
 
 每个主播(anchor_profile) 映射到 (project, group)：
-- **project**：`recruit_broker_name='造化仙府'` → zhaohua（优先）；否则 `is_threekingdoms` → three(三国) / ddz(斗地主)
+- **project**：`recruit_broker_name='造化仙府'` → zhaohua（优先）；明确 `is_threekingdoms` 或招募关系为三国项目／三冰时代 → three；其余按推广游戏与小游戏最近可识别产品记录归属。无依据或同日多产品冲突 → NULL待确认，不默认归入ddz。昵称不作为归属证据。目标管理共用本CTE并显示待确认账号数。
 - **group**（线上/线下/其他）：`broker_name → 同名 dingtalk_user → 首部门 dept_ids->>0 → entity_alias.alias`
   - 别名「线上运营」→ online；「线下运营」→ offline；broker_name='线上主播' 兜底 online；其余 other
 
@@ -24,3 +24,7 @@
 ## UI 结构
 
 Section1 核心 KPI（含 14 天 sparkline，fetchCoreTrend）→ Section2 业务细分：3 个项目矩阵，每项目按总计/线上/线下/其他展示。默认 metric=flow、日期=昨天。点数值开抽屉（主播列表+CSV）。
+
+## 抽屉查询性能
+
+`resolveAnchorGroup(scope)` 在请求内仅解析一次历史产品归属；当期、上期、主播列表和计数均复用该作用域结果，不跨请求或用户缓存。不要在每项指标查询中重新运行 `anchorGroupCte`。抽屉按打开参数挂载，初始指标直接取点击项，避免 effect 重置指标额外发起一次请求。

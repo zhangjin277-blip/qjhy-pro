@@ -29,6 +29,7 @@ const ALLOWED: Partial<Record<PerformanceStage, PerformanceStage[]>> = {
   ],
   skip_manager_review: ["manager_review", "hr_calibration", "completed", "cancelled"],
   hr_calibration: [
+    "completed",
     "self_review",
     "manager_review",
     "skip_manager_review",

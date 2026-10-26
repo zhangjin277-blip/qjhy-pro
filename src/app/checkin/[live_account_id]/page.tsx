@@ -43,5 +43,17 @@ export default async function CheckinPage({
       </div>
     );
   }
+  if (state.account.deprecated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+        <div className="text-center text-slate-500">
+          <div className="text-[20px] font-semibold text-slate-700">该账号已废弃</div>
+          <div className="mt-2 text-[14px]">
+            {state.account.placement_label || state.account.account_name} 已停止使用，不能开播
+          </div>
+        </div>
+      </div>
+    );
+  }
   return <CheckinClient initialState={state} liveAccountId={live_account_id} />;
 }

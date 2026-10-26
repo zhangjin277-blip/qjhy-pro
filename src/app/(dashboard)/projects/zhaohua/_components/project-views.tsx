@@ -1,4 +1,5 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -314,20 +315,13 @@ function EcosystemView({
               ))}
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
-              <input
-                type="date"
-                value={summaryFrom}
-                onChange={(event) => setSummaryFrom(event.target.value)}
-                className="h-8 w-[126px] rounded-md border border-slate-200 bg-white px-2 text-slate-700"
-                aria-label="线下主播统计开始日期"
-              />
-              <span>至</span>
-              <input
-                type="date"
-                value={summaryTo}
-                onChange={(event) => setSummaryTo(event.target.value)}
-                className="h-8 w-[126px] rounded-md border border-slate-200 bg-white px-2 text-slate-700"
-                aria-label="线下主播统计结束日期"
+              <DateRangePicker
+                label="统计日期"
+                value={{ from: summaryFrom, to: summaryTo }}
+                onChange={(next) => {
+                  setSummaryFrom(next.from);
+                  setSummaryTo(next.to);
+                }}
               />
             </div>
             {rosterError ? <span className="text-xs text-red-600">{rosterError}</span> : null}

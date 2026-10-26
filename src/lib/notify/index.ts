@@ -1,1 +1,1 @@
-export { notifyDingtalk, notifyError, notifyCookieExpired } from "./dingtalk-bot";
+export { notifyDingtalk, notifyError, notifyCookieExpired, notifyPlacementAlert } from "./dingtalk-bot";

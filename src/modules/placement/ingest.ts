@@ -30,6 +30,7 @@ export interface IngestRow {
 export interface IngestInput {
   source: "excel-upload";
   dataset_id: string;
+  granularity?: "hourly" | "daily";
   file_name: string | null;
   file_size_bytes?: number | null;
   uploaded_by: string | null;
@@ -46,10 +47,22 @@ export async function ingestRows(input: IngestInput) {
 
   // 2. 查 placement_label → live_account_id 映射（仅有 label 的账号）
   const accounts = await db
-    .select({ id: live_account.id, label: live_account.placement_label })
+    .select({
+      id: live_account.id,
+      label: live_account.placement_label,
+      accountName: live_account.account_name,
+      product: live_account.product,
+    })
     .from(live_account)
-    .where(isNotNull(live_account.placement_label));
-  const labelToId = new Map<string, string>(accounts.map((a) => [a.label as string, a.id]));
+    .where(isNotNull(live_account.account_name));
+  const labelToId = new Map<string, string>();
+  const accountNameToId = new Map<string, string>();
+  for (const account of accounts) {
+    if (account.label) labelToId.set(account.label, account.id);
+    if (account.accountName) accountNameToId.set(account.accountName, account.id);
+  }
+  const normalizeAccount = (value: string): string =>
+    value.toLowerCase().replace(/[\s\-_—－()（）]/g, "");
 
   // 3. 创建 batch（status='parsing'）
   const batchRows = await db
@@ -59,6 +72,7 @@ export async function ingestRows(input: IngestInput) {
       file_name: input.file_name,
       file_size_bytes: input.file_size_bytes ?? null,
       dataset_id: input.dataset_id,
+      granularity: input.granularity ?? "hourly",
       date_range_from: dateFrom,
       date_range_to: dateTo,
       row_count: input.rows.length,
@@ -87,16 +101,57 @@ export async function ingestRows(input: IngestInput) {
     product_urp: "电玩捕鱼",
   };
   for (const r of input.rows) {
+    const isWorkbookReport = Boolean(r.raw._source_sheet);
     // 兼容大小写差异：Excel "蓝v" 与 DB "蓝V" 视为同一主播
-    let accId = labelToId.get(r.account_name);
-    if (!accId) {
+    // 完整账号名优先精确匹配；只有没有同名账号时，才把短名称当作日报简称。
+    let accId = accountNameToId.get(r.account_name);
+    if (!accId && !(isWorkbookReport && r.account_name.length <= 4)) {
+      accId = labelToId.get(r.account_name);
+    }
+    if (!accId && !(isWorkbookReport && r.account_name.length <= 4)) {
       const lower = r.account_name.toLowerCase();
-      for (const [label, id] of labelToId.entries()) {
+      for (const [label, id] of accountNameToId.entries()) {
         if (label.toLowerCase() === lower) {
           accId = id;
           break;
         }
       }
+    }
+    if (!accId) {
+      // 日报 Sheet 常用简称（如“二师兄”），而直播账号名称带产品后缀。
+      // 在同产品账号中做包含匹配，避免为同一个账号创建重复 stub。
+      const product = productByDataset[input.dataset_id] ?? "捕鱼大作战";
+      const source = normalizeAccount(r.account_name);
+      const candidates = accounts
+        .filter((account) => account.product === product)
+        .map((account) => ({
+          id: account.id,
+          names: [account.label, account.accountName]
+            .filter(Boolean)
+            .map((name) => normalizeAccount(String(name))),
+        }))
+        .filter((candidate) =>
+          candidate.names.some((name) =>
+            // 日报 sheet 名可能是账号简称，但不能把更长的新账号
+            // 反向归并到已有短账号（例如“电玩捕鱼美少女”不能归到“美少女”）。
+            isWorkbookReport
+              ? name.includes(source)
+              : name.includes(source) || source.includes(name),
+          ),
+        )
+        .sort((left, right) => {
+          const leftLength = Math.max(...left.names.map((name) => name.length));
+          const rightLength = Math.max(...right.names.map((name) => name.length));
+          return isWorkbookReport && r.account_name.length <= 4
+            ? rightLength - leftLength
+            : leftLength - rightLength;
+        });
+      accId = candidates.at(0)?.id;
+    }
+    if (!accId && isWorkbookReport) {
+      // 跨产品历史账号也可能已有同名 placement_label；优先复用，
+      // 避免唯一约束冲突和重复 stub。
+      accId = accountNameToId.get(r.account_name) ?? labelToId.get(r.account_name);
     }
     if (!accId) {
       // 自动建 stub —— Excel 上传遇到未匹配账号时兜底，避免数据全跳
@@ -141,6 +196,29 @@ export async function ingestRows(input: IngestInput) {
   let inserted = 0;
   await db
     .transaction(async (tx) => {
+      // 日报文件是“截至当前日期的完整累计快照”，不是小时增量。
+      // 在同一事务内替换该产品旧日报，避免新文件覆盖旧行后再删除批次时
+      // 把历史日期一并删掉；小时累计原始行和批次完全不受影响。
+      if (input.granularity === "daily") {
+        await tx
+          .delete(placement_cumulative_raw)
+          .where(
+            and(
+              eq(placement_cumulative_raw.dataset_id, input.dataset_id),
+              sql`${placement_cumulative_raw.raw} ? '_source_sheet'`,
+            ),
+          );
+        await tx
+          .delete(placement_import_batch)
+          .where(
+            and(
+              eq(placement_import_batch.dataset_id, input.dataset_id),
+              eq(placement_import_batch.granularity, "daily"),
+              sql`${placement_import_batch.id} <> ${batch.id}`,
+            ),
+          );
+      }
+
       // (a) UPSERT cumulative_raw（保留每次上传的累计原始值，按 subaccount 维度）
       for (const r of matched) {
         await tx
@@ -184,9 +262,17 @@ export async function ingestRows(input: IngestInput) {
           });
       }
 
+      // 日报不生成 placement_row 小时明细；其成功数按累计日报原始行统计。
+      if (input.granularity === "daily") inserted += matched.length;
+
+      // 日报 workbook 是按天的累计快照，解析时使用 23 作为占位小时，
+      // 只能保留在 cumulative_raw 供日报/项目总览使用，不能生成小时明细。
+      // 小时明细只从真正的小时/20 分钟推送行重算。
+      const hourlyMatched = matched.filter((r) => !r.raw._source_sheet);
+
       // (b) 收集涉及的 (dataset_id, account_key, date) 三元组
       const triples = new Set<string>();
-      for (const r of matched) {
+      for (const r of hourlyMatched) {
         triples.add(`${r.dataset_id}|${r.account_key}|${r.date}`);
       }
 
@@ -206,19 +292,22 @@ export async function ingestRows(input: IngestInput) {
             ),
           );
 
-        const cumRows: RawCumulativeRow[] = cumRowsRaw.map((c) => ({
-          date: c.date,
-          hour: c.hour,
-          dataset_id: c.dataset_id,
-          account_key: c.live_account_id,
-          subaccount_key: c.subaccount_name,
-          cost_yuan: Number(c.cost_yuan),
-          activations: c.activations,
-          payment_yuan: Number(c.payment_yuan),
-          start_download: c.start_download,
-          finish_download: c.finish_download,
-          raw: c.raw,
-        }));
+        const cumRows: RawCumulativeRow[] = cumRowsRaw
+          // 日报累计快照不能参与小时差分，否则会被伪装成 23:00 小时数据。
+          .filter((c) => !c.raw?._source_sheet)
+          .map((c) => ({
+            date: c.date,
+            hour: c.hour,
+            dataset_id: c.dataset_id,
+            account_key: c.live_account_id,
+            subaccount_key: c.subaccount_name,
+            cost_yuan: Number(c.cost_yuan),
+            activations: c.activations,
+            payment_yuan: Number(c.payment_yuan),
+            start_download: c.start_download,
+            finish_download: c.finish_download,
+            raw: c.raw,
+          }));
 
         // 按 subaccount 分组做差分
         const incRows = computeIncrements(cumRows);

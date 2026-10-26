@@ -33,9 +33,7 @@ function chooseByPriority<T extends SelectableCycle>(cycles: readonly T[]): T | 
 /**
  * Select the cycle shown in the people list.
  *
- * Regular staff review the previous month's monthly cycle from the current month
- * overview. This prevents a newly opened current-month goal-setting cycle from
- * hiding an older cycle that has already reached a later workflow stage.
+ * Keep unfinished previous-month reviews visible, then move to the current month.
  */
 export function selectCurrentCycle<T extends SelectableCycle>(
   cycles: readonly T[],
@@ -56,9 +54,19 @@ export function selectCurrentCycle<T extends SelectableCycle>(
   if (expectedKind === "monthly" && referenceDate) {
     const previousStart = previousMonthStart(referenceDate);
     const previousMonth = previousStart
-      ? matching.filter((cycle) => cycle.periodStart === previousStart)
+      ? matching.filter(
+          (cycle) =>
+            cycle.periodStart === previousStart &&
+            cycle.stage !== "completed" &&
+            cycle.stage !== "cancelled",
+        )
       : [];
     if (previousMonth.length > 0) return chooseByPriority(previousMonth);
+    const currentStart = `${referenceDate.slice(0, 7)}-01`;
+    const currentMonth = matching.filter(
+      (cycle) => cycle.periodStart === currentStart && cycle.stage !== "cancelled",
+    );
+    if (currentMonth.length > 0) return chooseByPriority(currentMonth);
   }
 
   return chooseByPriority(matching);

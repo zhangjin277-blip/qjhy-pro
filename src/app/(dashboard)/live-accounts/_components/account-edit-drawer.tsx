@@ -2,13 +2,7 @@
 
 import { useState, useEffect, useTransition, useRef } from "react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import {
-  upsertAccount,
-  deleteAccount,
-  getAccountDeleteContext,
-  requestAccountDeletion,
-  cancelAccountDeleteRequest,
-} from "@/modules/live-account";
+import { upsertAccount, deprecateAccount, restoreAccount } from "@/modules/live-account";
 import type { AccountWithRelations } from "@/modules/live-account";
 import { AnchorBindingForm } from "./anchor-binding-form";
 import { ScheduleOverrideTab } from "./schedule-override-tab";
@@ -417,68 +411,33 @@ export function AccountEditDrawer({
     }
   };
 
-  const handleDelete = () => {
+  // 账号不提供删除：只能标记废弃（列表折叠归档、可恢复，剪辑任务 / 开播记录 / 投放等历史全保留）
+  const handleToggleDeprecated = () => {
     if (!account) return;
     setError(null);
+    const deprecated = !!account.deprecated_at;
+    let reason: string | null = null;
+    if (deprecated) {
+      if (!confirm(`恢复账号「${account.account_name}」？恢复后重新出现在账号列表中。`)) return;
+    } else {
+      const input = prompt(
+        `将账号「${account.account_name}」标记为已废弃？\n\n废弃后折叠到列表底部「已废弃」分组，历史数据全部保留，可随时恢复。\n\n废弃原因（选填）：`,
+      );
+      if (input === null) return; // 用户取消
+      reason = input.trim() || null;
+    }
     startTransition(async () => {
       try {
-        const ctx = await getAccountDeleteContext({ id: account.id });
-        if (!ctx.ok) {
-          setError(ctx.error);
+        const r = deprecated
+          ? await restoreAccount({ id: account.id })
+          : await deprecateAccount({ id: account.id, reason });
+        if (!r.ok) {
+          setError(r.error);
           return;
         }
-        const impactStr =
-          `剪辑任务 ${ctx.impact.editing_tasks} 条 · 开播记录 ${ctx.impact.live_sessions} 条 · ` +
-          `投放 ${ctx.impact.placement_rows} 条 · 排班 ${ctx.impact.schedule_items} 条 · ` +
-          `主播绑定 ${ctx.impact.anchor_bindings} 条`;
-
-        // 已有待审申请：本人/管理员可撤销，其他人只读提示
-        if (ctx.pending) {
-          if (
-            ctx.pending.canCancel &&
-            confirm(
-              `该账号已有待审核的删除申请\n（${ctx.pending.requestedByName} · ${ctx.pending.requestedAt}）\n\n要撤销这条申请吗？`,
-            )
-          ) {
-            const r = await cancelAccountDeleteRequest({ requestId: ctx.pending.id });
-            if (!r.ok) setError(r.error);
-            return;
-          }
-          setError(`已有待审核的删除申请（${ctx.pending.requestedByName}），请等待管理员审核`);
-          return;
-        }
-
-        if (ctx.mode === "direct") {
-          // 管理员直删：一次确认，明示连带数据
-          if (
-            !confirm(
-              `确认删除账号「${account.account_name}」？\n\n将连带删除：${impactStr}\n\n此操作不可恢复。`,
-            )
-          )
-            return;
-          const r = await deleteAccount({ id: account.id, force: true });
-          if (!r.ok) {
-            setError(r.error);
-            return;
-          }
-          onOpenChange(false);
-        } else {
-          // 编辑权限：提交删除申请，管理员审核后才执行
-          const reason = prompt(
-            `删除账号需管理员审核。\n\n「${account.account_name}」将连带删除：\n${impactStr}\n\n申请理由（选填）：`,
-          );
-          if (reason === null) return; // 用户取消
-          const r = await requestAccountDeletion({ id: account.id, reason: reason || null });
-          if (!r.ok) {
-            setError(r.error);
-            return;
-          }
-          alert("删除申请已提交，管理员审核通过后账号才会删除。");
-          onOpenChange(false);
-        }
+        onOpenChange(false);
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "删除失败，请重试";
-        setError(msg);
+        setError(e instanceof Error ? e.message : "操作失败，请重试");
       }
     });
   };
@@ -795,13 +754,22 @@ export function AccountEditDrawer({
           {tab === "basic" && (
             <div className="border-t border-slate-200 px-6 py-4 flex items-center justify-between gap-3">
               <div>
-                {isEdit && (
+                {isEdit && account?.deprecated_at && (
                   <button
-                    className="rounded-[5px] border border-red-200 px-4 py-2 text-[13px] text-red-600 hover:bg-red-50 disabled:opacity-60"
-                    onClick={() => handleDelete()}
+                    className="rounded-[5px] border border-blue-200 px-4 py-2 text-[13px] text-blue-600 hover:bg-blue-50 disabled:opacity-60"
+                    onClick={handleToggleDeprecated}
                     disabled={isPending}
                   >
-                    删除账号
+                    恢复账号
+                  </button>
+                )}
+                {isEdit && !account?.deprecated_at && (
+                  <button
+                    className="rounded-[5px] border border-amber-200 px-4 py-2 text-[13px] text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+                    onClick={handleToggleDeprecated}
+                    disabled={isPending}
+                  >
+                    标记废弃
                   </button>
                 )}
               </div>

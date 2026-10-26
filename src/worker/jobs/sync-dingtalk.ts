@@ -26,6 +26,7 @@ import { syncBrokerMappings } from "@/modules/brokers/server";
 
 export async function syncDingtalk(): Promise<void> {
   const startTime = Date.now();
+  const observedAt = new Date(startTime);
   let deptCount = 0;
   let userCount = 0;
 
@@ -41,7 +42,7 @@ export async function syncDingtalk(): Promise<void> {
     // 2. 同步人员（fetchAllUsers 内部已按 userid 去重）
     const users = await fetchAllUsers();
     for (const user of users) {
-      await upsertUser(user);
+      await upsertUser(user, observedAt);
       userCount++;
     }
     console.log(`[sync-dingtalk] synced ${userCount} users`);
@@ -75,7 +76,7 @@ export async function syncDingtalk(): Promise<void> {
         );
       } else {
         await db.execute(
-          sql`UPDATE dingtalk_user SET active = false, synced_at = NOW() WHERE user_id NOT IN (${sql.join(
+          sql`UPDATE dingtalk_user SET active = false, synced_at = NOW(), last_inactive_at = ${observedAt.toISOString()}::timestamptz WHERE user_id NOT IN (${sql.join(
             seenIds.map((i) => sql`${i}`),
             sql`, `,
           )}) AND active = true AND is_external = false`,
@@ -133,7 +134,7 @@ async function upsertDept(dept: DingtalkDept): Promise<void> {
     });
 }
 
-async function upsertUser(user: DingtalkUser): Promise<void> {
+async function upsertUser(user: DingtalkUser, observedAt: Date): Promise<void> {
   // listsimple 可能不返回 unionid，用 userid 兜底（unionid 是 NOT NULL UNIQUE）
   // dept_id_list 由 fetchAllUsers 在去重时合并，类型是 number[]，存库时转 string[]
   const unionid = user.unionid ?? user.userid;
@@ -149,6 +150,7 @@ async function upsertUser(user: DingtalkUser): Promise<void> {
       title: null, // 同上
       dept_ids: deptIds,
       active: true, // listsimple 返回的都是在职
+      first_synced_at: observedAt,
       raw: user,
     })
     .onConflictDoUpdate({

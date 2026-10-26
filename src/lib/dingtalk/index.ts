@@ -8,6 +8,7 @@ export {
   fetchUsersInDepartment,
   fetchAllUsers,
   fetchUserDetail,
+  fetchUserAttendance,
   fetchUseridByUnionid,
   sendWorkNotification,
 } from "./client";

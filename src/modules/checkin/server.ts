@@ -41,6 +41,8 @@ export interface CheckinAccount {
   platform_account_id: string | null;
   avatar: string | null;
   placement_label: string | null;
+  /** 已废弃账号不能再开播（扫码页直接提示） */
+  deprecated: boolean;
 }
 
 export interface CheckinCurrent {
@@ -90,6 +92,7 @@ export async function getCheckinState(liveAccountId: string): Promise<CheckinSta
       platform_account_id: live_account.platform_account_id,
       avatar: live_account.avatar,
       placement_label: live_account.placement_label,
+      deprecated_at: live_account.deprecated_at,
     })
     .from(live_account)
     .where(eq(live_account.id, liveAccountId));
@@ -145,8 +148,9 @@ export async function getCheckinState(liveAccountId: string): Promise<CheckinSta
     .orderBy(desc(live_session_log.start_at))
     .limit(5);
 
+  const { deprecated_at, ...accountFields } = account;
   return {
-    account,
+    account: { ...accountFields, deprecated: deprecated_at !== null },
     current,
     recent: recentRows.map((r) => ({
       session_id: r.session_id,
@@ -188,6 +192,13 @@ export async function startSession(
   anchorDingtalkUserId: string,
 ): Promise<StartSessionResult> {
   return await db.transaction(async (tx) => {
+    // 0. 已废弃账号不能开播
+    const [target] = await tx
+      .select({ deprecated_at: live_account.deprecated_at })
+      .from(live_account)
+      .where(eq(live_account.id, liveAccountId));
+    if (target?.deprecated_at) throw new Error("ACCOUNT_DEPRECATED");
+
     // 1. 该主播在其他账号的 in_progress → 自动关
     const myOtherInProgress = await tx
       .select({
@@ -395,7 +406,7 @@ export class ForceEndPermissionDenied extends Error {
 
 /**
  * 该 user 在任意 session 上是否有强制下播/改主播权限。
- * 通过：emergency / 代码白名单 / live_account.session_correct 权限点 / 任意 dept_leader。
+ * 通过：emergency / 代码白名单 / checkin_history.session_correct 权限点 / 任意 dept_leader。
  */
 export async function canForceEndAnySession(
   operatorDingtalkUserId: string,
@@ -403,7 +414,7 @@ export async function canForceEndAnySession(
 ): Promise<boolean> {
   if (isEmergency) return true;
   if (ANCHOR_USER_IDS_ALLOW.includes(operatorDingtalkUserId)) return true;
-  const perm = await resolvePermission(operatorDingtalkUserId, "live_account");
+  const perm = await resolvePermission(operatorDingtalkUserId, "checkin_history");
   if (perm.points.has("session_correct")) return true;
   const { dept_leader } = await import("@/db/schema");
   const [row] = await db
@@ -417,8 +428,8 @@ export async function canForceEndAnySession(
 /**
  * 具体某个 session 上是否有强制下播权限：
  * - emergency / 代码白名单 → 通过
- * - session_correct && scope=all → 通过
- * - session_correct && scope=team → 主播所在部门 ∈ 自己 dept_leader 范围
+ * - checkin_history.session_correct && scope=all → 通过
+ * - checkin_history.session_correct && scope=team → 主播所在部门 ∈ 自己 dept_leader 范围
  * - dept_leader 管辖主播所在部门 → 通过
  */
 async function canForceEndSession(
@@ -438,7 +449,7 @@ async function canForceEndSession(
   if (!row) return false;
   const anchorDepts = (row.dept_ids ?? []) as string[];
 
-  const perm = await resolvePermission(operatorDingtalkUserId, "live_account");
+  const perm = await resolvePermission(operatorDingtalkUserId, "checkin_history");
   if (perm.points.has("session_correct")) {
     if (perm.scope === "all") return true;
     if (perm.scope === "team") {
@@ -591,6 +602,72 @@ export async function updateSessionAnchor(args: {
   return { session_id: sessionId };
 }
 
+/** 同账号场次重叠判定容差：admin 录入精确到分钟，已有记录带秒，交接班边界也有秒级误差 */
+const SESSION_OVERLAP_TOLERANCE_SECONDS = 60;
+
+export class SessionOverlapError extends Error {
+  constructor(
+    public readonly conflict: {
+      sessionId: string;
+      anchorName: string | null;
+      startAt: Date;
+      endAt: Date | null;
+    },
+  ) {
+    super("SESSION_TIME_OVERLAP");
+    this.name = "SessionOverlapError";
+  }
+}
+
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * 校验同账号没有与 [startAt, endAt) 时段重叠的其它场次（endAt=null 视为进行中，到无穷）。
+ * 重叠会让投放分摊 / 时长统计重复计算（2026-10 审计：生产曾有 726 对重叠）。
+ * 先按账号加事务级 advisory lock，调用方须在同一事务内完成写入，防止并发录入同时通过校验。
+ */
+async function assertNoSessionOverlap(
+  tx: DbTx,
+  args: { liveAccountId: string; startAt: Date; endAt: Date | null; excludeSessionId?: string },
+): Promise<void> {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${`live_session_log:${args.liveAccountId}`}))`,
+  );
+  // 进行中用远未来的有限时间代替 infinity（PG16 不支持无穷 interval 相减）
+  const farFuture = "9999-12-31T00:00:00Z";
+  const startAt = args.startAt.toISOString();
+  const endAt = args.endAt ? args.endAt.toISOString() : farFuture;
+  const excludeId = args.excludeSessionId ?? null;
+  const rows = (await tx.execute(sql`
+    SELECT sl.id, sl.start_at, sl.end_at, du.name AS anchor_name
+    FROM live_session_log sl
+    LEFT JOIN dingtalk_user du ON du.user_id = sl.anchor_dingtalk_user_id
+    WHERE sl.live_account_id = ${args.liveAccountId}
+      AND (${excludeId}::uuid IS NULL OR sl.id <> ${excludeId}::uuid)
+      AND sl.start_at < ${endAt}::timestamptz
+      AND COALESCE(sl.end_at, ${farFuture}::timestamptz) > ${startAt}::timestamptz
+      AND LEAST(COALESCE(sl.end_at, ${farFuture}::timestamptz), ${endAt}::timestamptz)
+        - GREATEST(sl.start_at, ${startAt}::timestamptz)
+        > make_interval(secs => ${SESSION_OVERLAP_TOLERANCE_SECONDS})
+    ORDER BY sl.start_at
+    LIMIT 1
+  `)) as unknown as {
+    id: string;
+    start_at: Date | string;
+    end_at: Date | string | null;
+    anchor_name: string | null;
+  }[];
+  const conflict = rows[0];
+  if (conflict) {
+    throw new SessionOverlapError({
+      sessionId: conflict.id,
+      anchorName: conflict.anchor_name,
+      startAt: new Date(conflict.start_at),
+      endAt: conflict.end_at ? new Date(conflict.end_at) : null,
+    });
+  }
+}
+
 /**
  * 修改 session 的开始 / 结束时间（管理员纠正主播忘点 / 接班错时段）。
  * 权限：同 updateSessionAnchor (canForceEndAnySession)。
@@ -656,27 +733,36 @@ export async function updateSessionTime(args: {
         : existing.status;
 
   const prevRaw = (existing.raw ?? {}) as Record<string, unknown>;
-  await db
-    .update(live_session_log)
-    .set({
-      start_at: newStartAt,
-      end_at: newEndAt,
-      duration_seconds: newDuration,
-      status: newStatus,
-      updated_at: now,
-      raw: {
-        ...prevRaw,
-        time_edited_by: operatorDingtalkUserId,
-        time_edited_at: now.toISOString(),
-        time_edited_reason: reason ?? null,
-        time_previous: {
-          start_at: existing.start_at.toISOString(),
-          end_at: existing.end_at?.toISOString() ?? null,
-          status: existing.status,
+  await db.transaction(async (tx) => {
+    // 同账号时段不得与其它场次重叠（改成进行中时 newEndAt=null 视为到无穷）
+    await assertNoSessionOverlap(tx, {
+      liveAccountId: existing.live_account_id,
+      startAt: newStartAt,
+      endAt: newEndAt,
+      excludeSessionId: sessionId,
+    });
+    await tx
+      .update(live_session_log)
+      .set({
+        start_at: newStartAt,
+        end_at: newEndAt,
+        duration_seconds: newDuration,
+        status: newStatus,
+        updated_at: now,
+        raw: {
+          ...prevRaw,
+          time_edited_by: operatorDingtalkUserId,
+          time_edited_at: now.toISOString(),
+          time_edited_reason: reason ?? null,
+          time_previous: {
+            start_at: existing.start_at.toISOString(),
+            end_at: existing.end_at?.toISOString() ?? null,
+            status: existing.status,
+          },
         },
-      },
-    })
-    .where(eq(live_session_log.id, sessionId));
+      })
+      .where(eq(live_session_log.id, sessionId));
+  });
 
   const { writeAuditLog } = await import("@/lib/audit/log");
   await writeAuditLog({
@@ -707,7 +793,7 @@ export async function updateSessionTime(args: {
  * 权限：同强制下播。
  * 仅插 status='ended' / closed_by='admin_insert'；不允许补 in_progress。
  * 校验：account 存在；anchor 存在；newEndAt > newStartAt；
- *      同账号同时段无 in_progress 冲突。
+ *      同账号时段不与任何已有场次重叠（assertNoSessionOverlap）。
  */
 export async function insertManualSession(args: {
   liveAccountId: string;
@@ -749,46 +835,33 @@ export async function insertManualSession(args: {
     .limit(1);
   if (!anchor) throw new Error("ANCHOR_NOT_FOUND");
 
-  // 3. 同账号有 in_progress 时禁止插入跨越其 start_at 的 session（防止压住）
-  const [inProgress] = await db
-    .select({
-      id: live_session_log.id,
-      start_at: live_session_log.start_at,
-    })
-    .from(live_session_log)
-    .where(
-      and(
-        eq(live_session_log.live_account_id, liveAccountId),
-        eq(live_session_log.status, "in_progress"),
-      ),
-    )
-    .limit(1);
-  if (inProgress && endAt.getTime() > inProgress.start_at.getTime()) {
-    throw new Error("ACCOUNT_HAS_OTHER_IN_PROGRESS");
-  }
-
   const now = new Date();
   const duration = Math.floor((endAt.getTime() - startAt.getTime()) / 1000);
 
-  const [inserted] = await db
-    .insert(live_session_log)
-    .values({
-      live_account_id: liveAccountId,
-      anchor_dingtalk_user_id: anchorDingtalkUserId,
-      start_at: startAt,
-      end_at: endAt,
-      duration_seconds: duration,
-      status: "ended",
-      closed_by: "admin_insert",
-      created_at: now,
-      updated_at: now,
-      raw: {
-        manual_inserted_by: operatorDingtalkUserId,
-        manual_inserted_at: now.toISOString(),
-        manual_inserted_reason: reason ?? null,
-      },
-    })
-    .returning({ id: live_session_log.id });
+  const inserted = await db.transaction(async (tx) => {
+    // 3. 同账号时段不得与任何已有场次（含进行中）重叠
+    await assertNoSessionOverlap(tx, { liveAccountId, startAt, endAt });
+    const [row] = await tx
+      .insert(live_session_log)
+      .values({
+        live_account_id: liveAccountId,
+        anchor_dingtalk_user_id: anchorDingtalkUserId,
+        start_at: startAt,
+        end_at: endAt,
+        duration_seconds: duration,
+        status: "ended",
+        closed_by: "admin_insert",
+        created_at: now,
+        updated_at: now,
+        raw: {
+          manual_inserted_by: operatorDingtalkUserId,
+          manual_inserted_at: now.toISOString(),
+          manual_inserted_reason: reason ?? null,
+        },
+      })
+      .returning({ id: live_session_log.id });
+    return row;
+  });
 
   if (!inserted) throw new Error("INSERT_FAILED");
 

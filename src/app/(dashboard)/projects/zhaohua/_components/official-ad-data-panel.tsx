@@ -1,4 +1,5 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 
 import { useEffect, useMemo, useState } from "react";
 import { OfficialCombinationAnalysis } from "./official-combination-analysis";
@@ -194,18 +195,13 @@ export function OfficialAdDataPanel(): React.JSX.Element {
                 </button>
               ))}
             </div>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="h-8 rounded-md border px-2"
-            />
-            <span>至</span>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="h-8 rounded-md border px-2"
+            <DateRangePicker
+              label="投放日期"
+              value={{ from: from, to: to }}
+              onChange={(next) => {
+                setFrom(next.from);
+                setTo(next.to);
+              }}
             />
           </div>
         </div>

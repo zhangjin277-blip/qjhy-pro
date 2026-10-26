@@ -12,6 +12,7 @@ export async function listBatches(opts?: { limit?: number; offset?: number }) {
       source: placement_import_batch.source,
       file_name: placement_import_batch.file_name,
       dataset_id: placement_import_batch.dataset_id,
+      granularity: placement_import_batch.granularity,
       date_range_from: placement_import_batch.date_range_from,
       date_range_to: placement_import_batch.date_range_to,
       row_count: placement_import_batch.row_count,

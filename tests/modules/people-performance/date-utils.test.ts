@@ -8,6 +8,7 @@ import {
   calculateWeightedScore,
   getQuarterPeriod,
   gradeForScore,
+  summarizeQuarter,
 } from "@/modules/people-performance/date-utils";
 
 describe("people performance period rules", () => {
@@ -27,19 +28,19 @@ describe("people performance period rules", () => {
       {
         label: "6个月试用期·第1月节点",
         start: "2026-05-26",
-        end: "2026-07-25",
+        end: "2026-06-25",
         sequence: 1,
       },
       {
         label: "6个月试用期·第3月节点",
-        start: "2026-07-26",
-        end: "2026-09-25",
+        start: "2026-06-26",
+        end: "2026-08-25",
         sequence: 2,
       },
       {
         label: "6个月试用期·第5月节点",
-        start: "2026-09-26",
-        end: "2026-11-25",
+        start: "2026-08-26",
+        end: "2026-10-25",
         sequence: 3,
       },
     ]);
@@ -96,5 +97,37 @@ describe("people performance scoring", () => {
   it("uses 40/60 for monthly reviews and direct score when skip-level is absent", () => {
     expect(calculateReviewScore("monthly", 80, 90)).toBe(86);
     expect(calculateReviewScore("monthly", 80, null)).toBe(80);
+  });
+});
+
+describe("summarizeQuarter", () => {
+  const done = (score: string | null) => ({ stage: "completed", finalScore: score });
+
+  it("averages over the actual number of monthly cycles (mid-quarter regularization)", () => {
+    expect(summarizeQuarter([done("90"), done("90")], "2026-06-30", "2026-07-05")).toEqual({
+      score: 90,
+      grade: "S",
+    });
+  });
+
+  it("averages three months and rounds to 2 decimals", () => {
+    expect(
+      summarizeQuarter([done("80"), done("85"), done("86")], "2026-06-30", "2026-07-05"),
+    ).toEqual({ score: 83.67, grade: "A" });
+  });
+
+  it("returns null until every monthly cycle is completed", () => {
+    expect(
+      summarizeQuarter(
+        [done("90"), { stage: "employee_confirm", finalScore: "90" }],
+        "2026-06-30",
+        "2026-07-05",
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null before the quarter ends or without children", () => {
+    expect(summarizeQuarter([done("90")], "2026-09-30", "2026-09-29")).toBeNull();
+    expect(summarizeQuarter([], "2026-06-30", "2026-07-05")).toBeNull();
   });
 });

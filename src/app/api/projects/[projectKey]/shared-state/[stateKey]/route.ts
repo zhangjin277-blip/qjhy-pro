@@ -34,6 +34,17 @@ interface RouteContext {
   params: Promise<{ projectKey: string; stateKey: string }>;
 }
 
+async function canAccessProject(projectKey: string): Promise<boolean> {
+  // Workbench notices and private read receipts use dedicated authorization.
+  if (projectKey === "workbench") return false;
+  if (projectKey !== "buyu") return true;
+  const identity = await getCurrentDingtalkUser();
+  if (identity.kind !== "ok") return false;
+  if (identity.isEmergency) return true;
+  const permission = await resolvePermission(identity.dingtalkUserId, "project_buyu");
+  return permission.scope !== "none";
+}
+
 export async function GET(_request: NextRequest, context: RouteContext): Promise<NextResponse> {
   try {
     await requireUser();
@@ -44,6 +55,9 @@ export async function GET(_request: NextRequest, context: RouteContext): Promise
   }
   const parsed = projectSharedStateParamsSchema.safeParse(await context.params);
   if (!parsed.success) return NextResponse.json({ error: "无效的项目状态标识" }, { status: 400 });
+  if (!(await canAccessProject(parsed.data.projectKey))) {
+    return NextResponse.json({ error: "暂无此共享状态的访问权限" }, { status: 403 });
+  }
   const row = await getProjectSharedState(parsed.data.projectKey, parsed.data.stateKey);
   if (!row) return NextResponse.json({ error: "共享状态尚未创建" }, { status: 404 });
   return NextResponse.json(jsonRow(row));
@@ -60,6 +74,9 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
   }
   const params = projectSharedStateParamsSchema.safeParse(await context.params);
   if (!params.success) return NextResponse.json({ error: "无效的项目状态标识" }, { status: 400 });
+  if (!(await canAccessProject(params.data.projectKey))) {
+    return NextResponse.json({ error: "暂无此共享状态的访问权限" }, { status: 403 });
+  }
   // 项目共享状态的写入统一受项目编辑权限保护；读取仍由项目访问范围控制。
   // 其他项目暂不改变原有行为，便于后续按项目逐一注册权限点。
   if (params.data.projectKey === "zhaohua") {

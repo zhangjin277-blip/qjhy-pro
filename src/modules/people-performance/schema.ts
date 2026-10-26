@@ -108,10 +108,16 @@ export const ManagerReviewInput = z.object({
 export const CalibrateInput = z.object({
   cycleId: z.string().min(1),
   comment: z.string().trim().min(1).max(3000),
+  rating: z.enum(["超越预期", "符合预期", "待改进", "不符合预期"]).optional(),
   probationResult: z.enum(["passed", "extended", "failed"]).nullable().optional(),
 });
 
 export const CycleIdInput = z.object({ cycleId: z.string().min(1) });
+export const CreateManualCycleInput = z.object({
+  userId: z.string().min(1),
+  kind: z.enum(["monthly", "quarterly"]),
+  periodStart: z.iso.date(),
+});
 export const ReturnPerformanceInput = z.object({
   cycleId: z.string().min(1),
   targetStage: z.enum(["self_review", "manager_review", "skip_manager_review", "hr_calibration"]),

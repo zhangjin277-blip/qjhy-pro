@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { getCheckinDay } from "@/modules/checkin/queries";
 import { canForceEndAnySession } from "@/modules/checkin/server";
+import { resolvePlacementScope } from "@/modules/placement/server";
 import { CheckinHistoryClient } from "./_components/checkin-history-client";
 
 export const dynamic = "force-dynamic";
@@ -31,9 +32,11 @@ export default async function CheckinHistoryPage({
   const sp = await searchParams;
   const date = sp.date ?? toLocalIsoDate(new Date());
   const product = sp.product ?? undefined;
+  const scope = await resolvePlacementScope(ctx.dingtalkUserId, ctx.isEmergency, "checkin_history");
+  if (scope.kind === "reject") redirect("/dashboard");
 
   const [data, canForceEnd] = await Promise.all([
-    getCheckinDay(date, product),
+    getCheckinDay(date, product, scope),
     canForceEndAnySession(ctx.dingtalkUserId, ctx.isEmergency),
   ]);
 

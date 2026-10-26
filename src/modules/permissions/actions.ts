@@ -8,7 +8,7 @@ import {
   user_position_override,
 } from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requirePoint } from "@/lib/admin-guard";
 import { eq, and } from "drizzle-orm";
 import {
   AssignUserPositionInput,
@@ -21,7 +21,7 @@ import {
 
 export async function setDeptLeader(input: unknown): Promise<{ ok: true }> {
   const data = SetDeptLeaderInput.parse(input);
-  const { userId: opUser } = await requireAdmin();
+  const { userId: opUser } = await requirePoint("permissions", "manage_dept_leaders");
 
   await db
     .insert(dept_leader)
@@ -40,7 +40,7 @@ export async function setDeptLeader(input: unknown): Promise<{ ok: true }> {
 
 export async function removeDeptLeader(input: unknown): Promise<{ ok: true }> {
   const data = RemoveDeptLeaderInput.parse(input);
-  const { userId: opUser } = await requireAdmin();
+  const { userId: opUser } = await requirePoint("permissions", "manage_dept_leaders");
 
   await db
     .delete(dept_leader)
@@ -58,7 +58,7 @@ export async function removeDeptLeader(input: unknown): Promise<{ ok: true }> {
 
 export async function upsertOverride(input: unknown): Promise<{ ok: true }> {
   const data = UpsertOverrideInput.parse(input);
-  const { userId: opUser } = await requireAdmin();
+  const { userId: opUser } = await requirePoint("permissions", "manage_overrides");
 
   const [before] = await db
     .select()
@@ -113,7 +113,7 @@ export async function upsertOverride(input: unknown): Promise<{ ok: true }> {
  */
 export async function upsertOverrideBatch(input: unknown): Promise<{ ok: true; count: number }> {
   const data = UpsertOverrideBatchInput.parse(input);
-  const { userId: opUser } = await requireAdmin();
+  const { userId: opUser } = await requirePoint("permissions", "manage_overrides");
 
   const before = await db
     .select()
@@ -191,7 +191,7 @@ export async function upsertOverrideBatch(input: unknown): Promise<{ ok: true; c
  */
 export async function assignUserPosition(input: unknown): Promise<{ ok: true }> {
   const data = AssignUserPositionInput.parse(input);
-  const { userId: opUser } = await requireAdmin();
+  const { userId: opUser } = await requirePoint("permissions", "manage_roles");
 
   const [before] = await db
     .select()
@@ -233,7 +233,7 @@ export async function assignUserPosition(input: unknown): Promise<{ ok: true }> 
 
 export async function upsertRoleDefault(input: unknown): Promise<{ ok: true }> {
   const data = UpsertRoleDefaultInput.parse(input);
-  const { userId: opUser } = await requireAdmin();
+  const { userId: opUser } = await requirePoint("permissions", "manage_roles");
 
   const [before] = await db
     .select()

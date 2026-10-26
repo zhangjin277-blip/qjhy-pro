@@ -30,6 +30,8 @@ export async function POST(
     const msg = e instanceof Error ? e.message : "UNKNOWN";
     if (msg === "ALREADY_LIVE")
       return NextResponse.json({ error: "ALREADY_LIVE" }, { status: 400 });
+    if (msg === "ACCOUNT_DEPRECATED")
+      return NextResponse.json({ error: "ACCOUNT_DEPRECATED" }, { status: 400 });
     console.error("[checkin/start]", e);
     return NextResponse.json({ error: "INTERNAL", detail: msg }, { status: 500 });
   }

@@ -33,11 +33,16 @@ export const live_account = pgTable(
     placement_label: text("placement_label").unique(), // 投放标签 1:1
     live_status: text("live_status").notNull().default("unknown"), // 'living' | 'offline' | 'banned' | 'unknown'
 
+    /** 废弃归档时间（null = 在用）。账号不物理删除，废弃后列表折叠归档、可恢复，历史数据全保留 */
+    deprecated_at: timestamp("deprecated_at", { withTimezone: true }),
+    deprecated_by_user_id: text("deprecated_by_user_id"),
+
     raw: jsonb("raw").notNull().default({}),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => ({
+    idx_deprecated_at: index("idx_live_account_deprecated_at").on(t.deprecated_at),
     unique_platform_uid: unique("uq_live_account_platform_uid").on(t.platform, t.platform_uid),
     idx_platform: index("idx_live_account_platform").on(t.platform),
     idx_product: index("idx_live_account_product").on(t.product),

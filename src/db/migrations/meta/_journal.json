@@ -190,6 +190,69 @@
       "when": 1790059200000,
       "tag": "0069_ai_comic_douyin_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790066059256,
+      "tag": "0070_bilibili_ai_comic",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790070000000,
+      "tag": "0072_placement_batch_granularity",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791890281522,
+      "tag": "0076_procurement_attendance",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792049607233,
+      "tag": "0081_dingtalk_personnel_sync_dates",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792058988188,
+      "tag": "0082_business_goals",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792117489250,
+      "tag": "0083_goal_metric_binding",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792134448089,
+      "tag": "0084_goal_soft_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792141712260,
+      "tag": "0085_goal_metric_weights",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792207200000,
+      "tag": "0086_goal_team_allocation",
+      "breakpoints": true
     }
   ]
 }

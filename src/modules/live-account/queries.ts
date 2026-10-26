@@ -77,6 +77,8 @@ export async function listAccounts(
       agent_dingtalk_user_id: live_account.agent_dingtalk_user_id,
       placement_label: live_account.placement_label,
       live_status: live_account.live_status,
+      deprecated_at: live_account.deprecated_at,
+      deprecated_by_user_id: live_account.deprecated_by_user_id,
       raw: live_account.raw,
       created_at: live_account.created_at,
       updated_at: live_account.updated_at,

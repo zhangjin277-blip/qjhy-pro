@@ -1,4 +1,5 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -369,14 +370,14 @@ export function ProjectHub(): React.JSX.Element {
     <div className="min-w-0 space-y-4 px-1 py-1 md:px-1.5 md:py-1.5">
       <header className="border-b border-slate-200 pb-3">
         <div className="mb-2 flex items-center gap-1.5 text-xs text-slate-500">
-          <span>项目中心</span>
+          <span>造化仙府</span>
           <span aria-hidden="true">/</span>
-          <span className="text-slate-700">造化仙府</span>
+          <span className="text-slate-700">造化直播</span>
         </div>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold text-slate-900">造化仙府</h1>
+              <h1 className="text-xl font-semibold text-slate-900">造化直播</h1>
               <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
                 运营中
               </span>
@@ -537,20 +538,10 @@ function ProjectOverview({
               ))}
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
-              <input
-                type="date"
-                value={range.from}
-                onChange={(event) => onRangeChange({ from: event.target.value, to: range.to })}
-                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-slate-700"
-                aria-label="开始日期"
-              />
-              <span>至</span>
-              <input
-                type="date"
-                value={range.to}
-                onChange={(event) => onRangeChange({ from: range.from, to: event.target.value })}
-                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-slate-700"
-                aria-label="结束日期"
+              <DateRangePicker
+                label="统计日期"
+                value={{ from: range.from, to: range.to }}
+                onChange={(next) => onRangeChange(next)}
               />
             </div>
           </div>

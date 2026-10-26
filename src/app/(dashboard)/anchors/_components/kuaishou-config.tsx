@@ -1,4 +1,5 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -175,21 +176,11 @@ function KuaishouFilters({
 }): React.JSX.Element {
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <input
-        type="date"
-        value={filters.date_from}
-        max={filters.date_to}
-        onChange={(e) => onChange({ ...filters, date_from: e.target.value })}
-        className={`${transparentInput} w-[140px] shrink-0`}
-      />
-      <span className="text-muted-foreground shrink-0">~</span>
-      <input
-        type="date"
-        value={filters.date_to}
-        min={filters.date_from}
-        max={todayCST()}
-        onChange={(e) => onChange({ ...filters, date_to: e.target.value })}
-        className={`${transparentInput} w-[140px] shrink-0`}
+      <DateRangePicker
+        label="直播日期"
+        value={{ from: filters.date_from, to: filters.date_to }}
+        onChange={(next) => onChange({ ...filters, date_from: next.from, date_to: next.to })}
+        maxDate={todayCST()}
       />
       <div className="flex shrink-0 gap-1">
         {DAYS_PRESETS.map((p) => {

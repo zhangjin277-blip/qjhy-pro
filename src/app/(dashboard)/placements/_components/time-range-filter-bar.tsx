@@ -1,8 +1,8 @@
 "use client";
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -56,20 +56,10 @@ export function TimeRangeFilterBar({
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <Input
-        aria-label="开始日期"
-        type="date"
-        value={dateFrom}
-        onChange={(event) => pushWith({ from: event.target.value, to: dateTo, preset: null })}
-        className="w-[140px] shrink-0"
-      />
-      <span className="shrink-0 text-muted-foreground">~</span>
-      <Input
-        aria-label="结束日期"
-        type="date"
-        value={dateTo}
-        onChange={(event) => pushWith({ from: dateFrom, to: event.target.value, preset: null })}
-        className="w-[140px] shrink-0"
+      <DateRangePicker
+        label="直播日期"
+        value={{ from: dateFrom, to: dateTo }}
+        onChange={(next) => pushWith({ from: next.from, to: next.to, preset: null })}
       />
 
       <Select value={String(startHour)} onValueChange={(value) => pushWith({ startHour: value })}>

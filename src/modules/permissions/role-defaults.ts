@@ -16,6 +16,11 @@ export function translateLegacyPoints(
     case "project_ai_comic":
       if (flags.edit) pts.push("project_edit");
       break;
+    case "project_buyu":
+      break;
+    case "checkin_history":
+      if (flags.admin) pts.push("session_correct");
+      break;
     case "dashboard":
     case "anchors":
       if (flags.export) pts.push("export");
@@ -37,7 +42,6 @@ export function translateLegacyPoints(
           "room_delete",
           "floorplan_edit",
         );
-      if (flags.admin) pts.push("delete_review", "session_correct");
       break;
     case "live_anchor":
       if (flags.edit) pts.push("anchor_edit", "anchor_delete", "binding_edit");
@@ -186,6 +190,7 @@ export const ROLE_DEFAULTS_SEED: {
   description: string;
 }[] = POSITION_BASE.flatMap((row) =>
   MODULE_KEYS.map((module) => {
+    if (module === "goals") return { position: row.position, module, scope: "none" as const, points: [], description: "目标管理默认关闭，请单独授权" };
     const isBoss = row.position === "总监" || row.position === "老板";
     if (module === "business_recruitment") {
       const isBusiness = row.position === "商务" || row.position === "线上商务";
@@ -213,6 +218,9 @@ export const ROLE_DEFAULTS_SEED: {
               ? "复评并跟进分配给本人的候选人"
               : "默认无权限",
       };
+    }
+    if (module === "attendance") {
+      return { position: row.position, module, scope: "self" as const, points: ["approval"], description: "全员查看本人考勤，部门负责人查看负责部门，超级管理员完整管理" };
     }
     if (module === "courses") {
       return {

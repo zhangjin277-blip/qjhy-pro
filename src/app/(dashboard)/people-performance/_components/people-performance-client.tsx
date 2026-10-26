@@ -142,6 +142,12 @@ export function PeoplePerformanceClient({
         ...rows.filter((row) => !row.employmentStatus),
       ];
   const selectedRows = initialRows.filter((row) => selectedUserIds.has(row.userId));
+  const downloadResults = () => {
+    const target = selectedRows.length ? selectedRows : visibleRows;
+    const params = new URLSearchParams({ userIds: target.map((row) => row.userId).join(",") });
+    if (cyclePeriod !== "all") params.set("cycleLabel", cyclePeriod);
+    window.location.href = `/api/people-performance/export?${params}`;
+  };
   const selectedSelfReviewRows = selectedRows.filter(
     (row) => row.currentStage === "in_progress" && row.currentCycleId,
   );
@@ -348,6 +354,7 @@ export function PeoplePerformanceClient({
             </Button>
             {canManageProfiles && (
               <>
+                <Button size="sm" variant="outline" disabled={visibleRows.length === 0} onClick={downloadResults}><FileSpreadsheet />导出结果</Button>
                 <Button size="sm" variant="outline" onClick={() => setSpreadsheetOpen(true)}>
                   <FileSpreadsheet />
                   表格导入

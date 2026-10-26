@@ -1,29 +1,12 @@
 "use server";
 import { db } from "@/db/client";
-import { dingtalk_user, live_account, placement_row } from "@/db/schema";
+import { dingtalk_user, live_account, live_session_log } from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { getManagedDeptIds, resolvePermission } from "@/modules/permissions/server";
 import { AppError } from "@/lib/errors";
-import { count, eq, sql } from "drizzle-orm";
-import type { DeleteImpact } from "@/db/schema";
-import {
-  UpsertAccountInput,
-  DeleteAccountInput,
-  DeleteContextInput,
-  DeleteRequestCreateInput,
-  DeleteRequestReviewInput,
-  DeleteRequestCancelInput,
-} from "./schema";
-import {
-  cancelDeleteRequest,
-  countDeleteImpact,
-  createDeleteRequest,
-  deleteAccountCascade,
-  findPendingRequest,
-  reviewDeleteRequest,
-} from "./delete-request";
-import { notifyDeleteRequested, notifyDeleteReviewed } from "./notify";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { UpsertAccountInput, DeprecateAccountInput, RestoreAccountInput } from "./schema";
 
 /**
  * 检查当前用户对某账号是否可写：
@@ -141,264 +124,96 @@ export async function upsertAccount(input: unknown) {
   return result;
 }
 
-/**
- * 删除直播账号。
- *
- * 业务错误用 `return { ok: false, error }` 而非 throw —
- * Next.js production 会把 server-side throw 包装成 generic "Server Components
- * render" 错误并吞掉具体 message，导致前端无法显示业务原因。
- *
- * 有 placement_row 关联时默认拒绝；force=true 时连同 placement_row 一起删
- * （admin 显式二次确认后）。
- */
-export type DeleteAccountResult =
-  | { ok: true; deletedPlacementCount: number }
-  | {
-      ok: false;
-      error: string;
-      placementCount?: number;
-      canForce?: boolean;
-      /** true = 调用者只有编辑权限，应走删除申请流程 */
-      needRequest?: boolean;
-    };
-
-export async function deleteAccount(input: unknown): Promise<DeleteAccountResult> {
-  const { id, force } = DeleteAccountInput.parse(input);
-  const ctx = await getCurrentDingtalkUser();
-  if (ctx.kind !== "ok") return { ok: false, error: "未登录或未同步钉钉身份" };
-  const userId = ctx.dingtalkUserId;
-
-  // 2026-07-14 事故后：直删仅限 live_account 管理员；编辑权限走申请-审核流
-  let isAdmin = ctx.isEmergency;
-  if (!isAdmin) {
-    const perm = await resolvePermission(userId, "live_account");
-    if (!perm.points.has("delete_request")) return { ok: false, error: "无删除申请权限" };
-    isAdmin = perm.points.has("delete_review");
-  }
-  if (!isAdmin) {
-    return {
-      ok: false,
-      error: "删除直播账号需管理员审核，请提交删除申请",
-      needRequest: true,
-    };
-  }
-
-  const [before] = await db.select().from(live_account).where(eq(live_account.id, id));
-  if (!before) return { ok: false, error: "直播账号不存在" };
-
-  const [placementCount] = await db
-    .select({ n: count() })
-    .from(placement_row)
-    .where(eq(placement_row.live_account_id, id));
-  const pCount = placementCount?.n ?? 0;
-
-  if (pCount > 0 && !force) {
-    return {
-      ok: false,
-      error: `该账号有 ${pCount} 条投放历史数据。点「强制删除」可一并删除（不可恢复）。`,
-      placementCount: pCount,
-      canForce: true,
-    };
-  }
-
-  await db.transaction(async (tx) => deleteAccountCascade(tx, id));
-
-  await writeAuditLog({
-    user_id: userId,
-    action: force ? "LIVE_ACCOUNT_FORCE_DELETED" : "LIVE_ACCOUNT_DELETED",
-    target_type: "live_account",
-    target_id: id,
-    before,
-    after: { placement_rows_deleted: pCount, force: !!force },
-  });
-
-  return { ok: true, deletedPlacementCount: pCount };
-}
-
-// ─── 删除审核流 ──────────────────────────────────────────────────────────────
-
-export type DeleteContextResult =
-  | {
-      ok: true;
-      mode: "direct" | "request";
-      impact: DeleteImpact;
-      pending: {
-        id: string;
-        requestedByName: string;
-        requestedAt: string;
-        canCancel: boolean;
-      } | null;
-    }
-  | { ok: false; error: string };
-
-/** 点「删除」时先取上下文：当前用户走直删还是申请、连带数据量、是否已有待审申请。 */
-export async function getAccountDeleteContext(input: unknown): Promise<DeleteContextResult> {
-  const { id } = DeleteContextInput.parse(input);
-  const ctx = await getCurrentDingtalkUser();
-  if (ctx.kind !== "ok") return { ok: false, error: "未登录或未同步钉钉身份" };
-  const userId = ctx.dingtalkUserId;
-
-  let isAdmin = ctx.isEmergency;
-  if (!isAdmin) {
-    const perm = await resolvePermission(userId, "live_account");
-    if (!perm.points.has("delete_request")) return { ok: false, error: "无删除申请权限" };
-    isAdmin = perm.points.has("delete_review");
-  }
-
-  const [account] = await db.select().from(live_account).where(eq(live_account.id, id));
-  if (!account) return { ok: false, error: "直播账号不存在" };
-
-  const [impact, pending] = await Promise.all([countDeleteImpact(id), findPendingRequest(id)]);
-
-  let pendingView: Extract<DeleteContextResult, { ok: true }>["pending"] = null;
-  if (pending) {
-    const [requester] = await db
-      .select({ name: dingtalk_user.name })
-      .from(dingtalk_user)
-      .where(eq(dingtalk_user.user_id, pending.requested_by_user_id));
-    pendingView = {
-      id: pending.id,
-      requestedByName: requester?.name ?? pending.requested_by_user_id,
-      requestedAt: pending.requested_at.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }),
-      canCancel: isAdmin || pending.requested_by_user_id === userId,
-    };
-  }
-
-  return { ok: true, mode: isAdmin ? "direct" : "request", impact, pending: pendingView };
-}
-
 export type SimpleResult = { ok: true } | { ok: false; error: string };
 
-/** 提交删除申请（编辑权限 + 账号在 scope 内）。 */
-export async function requestAccountDeletion(input: unknown): Promise<SimpleResult> {
-  const { id, reason } = DeleteRequestCreateInput.parse(input);
+/**
+ * 直播账号不提供删除（2026-10-08 下线）：删除曾连带物理删除剪辑任务 / 开播记录 / 排班，
+ * 现在只能「标记废弃」——列表折叠归档、可恢复，所有历史数据保留。
+ * 权限：live_account.delete_request（废弃 / 恢复账号）+ 账号在 scope 内。
+ *
+ * 业务错误用 `return { ok: false, error }` 而非 throw —— Next.js production 会吞掉 throw 的 message。
+ */
+async function resolveDeprecateCaller(
+  accountId: string,
+): Promise<
+  | { ok: true; userId: string; account: typeof live_account.$inferSelect }
+  | { ok: false; error: string }
+> {
   const ctx = await getCurrentDingtalkUser();
   if (ctx.kind !== "ok") return { ok: false, error: "未登录或未同步钉钉身份" };
-  if (ctx.isEmergency) return { ok: false, error: "管理员可直接删除，无需提交申请" };
   const userId = ctx.dingtalkUserId;
-
-  const [account] = await db.select().from(live_account).where(eq(live_account.id, id));
+  if (!ctx.isEmergency) {
+    const perm = await resolvePermission(userId, "live_account");
+    if (!perm.points.has("delete_request")) return { ok: false, error: "无废弃账号权限" };
+  }
+  const [account] = await db.select().from(live_account).where(eq(live_account.id, accountId));
   if (!account) return { ok: false, error: "直播账号不存在" };
-  const canWrite = await canWriteAccount(userId, false, account.agent_dingtalk_user_id ?? null);
+  const canWrite = await canWriteAccount(
+    userId,
+    ctx.isEmergency,
+    account.agent_dingtalk_user_id ?? null,
+  );
   if (!canWrite) return { ok: false, error: "无权操作该直播账号" };
-
-  try {
-    const row = await createDeleteRequest({
-      accountId: id,
-      reason: reason ?? null,
-      requestedBy: userId,
-    });
-
-    await writeAuditLog({
-      user_id: userId,
-      action: "LIVE_ACCOUNT_DELETE_REQUESTED",
-      target_type: "live_account_delete_request",
-      target_id: row.id,
-      before: null,
-      after: row,
-    });
-
-    const [requester] = await db
-      .select({ name: dingtalk_user.name })
-      .from(dingtalk_user)
-      .where(eq(dingtalk_user.user_id, userId));
-    void notifyDeleteRequested({
-      accountName: row.account_name,
-      product: row.product,
-      requesterName: requester?.name ?? userId,
-      reason: row.reason,
-      impact: row.impact,
-    });
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof AppError ? e.message : "提交删除申请失败" };
-  }
+  return { ok: true, userId, account };
 }
 
-/** 审批删除申请（live_account 管理员）。批准即执行删除。 */
-export async function reviewAccountDeletion(input: unknown): Promise<SimpleResult> {
-  const { requestId, approve, note } = DeleteRequestReviewInput.parse(input);
-  const ctx = await getCurrentDingtalkUser();
-  if (ctx.kind !== "ok") return { ok: false, error: "未登录或未同步钉钉身份" };
-  const userId = ctx.dingtalkUserId;
+/** 标记账号为已废弃（可恢复，历史数据不动）。 */
+export async function deprecateAccount(input: unknown): Promise<SimpleResult> {
+  const { id, reason } = DeprecateAccountInput.parse(input);
+  const caller = await resolveDeprecateCaller(id);
+  if (!caller.ok) return caller;
+  if (caller.account.deprecated_at) return { ok: false, error: "该账号已是废弃状态" };
 
-  let isAdmin = ctx.isEmergency;
-  if (!isAdmin) {
-    const perm = await resolvePermission(userId, "live_account");
-    isAdmin = perm.points.has("delete_review");
-  }
-  if (!isAdmin) return { ok: false, error: "需要删除审批权限" };
+  // 正在开播的账号不能废弃（废弃后扫码页不再提供操作，进行中场次会收不了尾）
+  const [live] = await db
+    .select({ id: live_session_log.id })
+    .from(live_session_log)
+    .where(
+      and(eq(live_session_log.live_account_id, id), eq(live_session_log.status, "in_progress")),
+    )
+    .limit(1);
+  if (live) return { ok: false, error: "该账号正在开播，请先下播再废弃" };
 
-  try {
-    const res = await reviewDeleteRequest({
-      requestId,
-      approve,
-      note: note ?? null,
-      reviewedBy: ctx.isEmergency ? null : userId,
-    });
+  const now = new Date();
+  const [updated] = await db
+    .update(live_account)
+    .set({ deprecated_at: now, deprecated_by_user_id: caller.userId, updated_at: now })
+    .where(and(eq(live_account.id, id), isNull(live_account.deprecated_at)))
+    .returning();
+  if (!updated) return { ok: false, error: "该账号已是废弃状态" };
 
-    await writeAuditLog({
-      user_id: userId,
-      action: approve ? "LIVE_ACCOUNT_DELETE_APPROVED" : "LIVE_ACCOUNT_DELETE_REJECTED",
-      target_type: "live_account_delete_request",
-      target_id: requestId,
-      before: res.request.account_snapshot as Record<string, unknown>,
-      after: { executed: res.executed, accountMissing: res.accountMissing, note: note ?? null },
-    });
-
-    if (!res.accountMissing) {
-      const reviewerName = ctx.isEmergency
-        ? "应急管理员"
-        : ((
-            await db
-              .select({ name: dingtalk_user.name })
-              .from(dingtalk_user)
-              .where(eq(dingtalk_user.user_id, userId))
-          )[0]?.name ?? userId);
-      void notifyDeleteReviewed({
-        accountName: res.request.account_name,
-        approved: approve,
-        reviewerName,
-        note: note ?? null,
-        requestedByUserId: res.request.requested_by_user_id,
-      });
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof AppError ? e.message : "审批失败" };
-  }
+  await writeAuditLog({
+    user_id: caller.userId,
+    action: "LIVE_ACCOUNT_DEPRECATED",
+    target_type: "live_account",
+    target_id: id,
+    before: { deprecated_at: null },
+    after: { deprecated_at: now.toISOString(), reason: reason?.trim() || null },
+  });
+  return { ok: true };
 }
 
-/** 撤销待审申请（申请人本人或管理员）。 */
-export async function cancelAccountDeleteRequest(input: unknown): Promise<SimpleResult> {
-  const { requestId } = DeleteRequestCancelInput.parse(input);
-  const ctx = await getCurrentDingtalkUser();
-  if (ctx.kind !== "ok") return { ok: false, error: "未登录或未同步钉钉身份" };
-  const userId = ctx.dingtalkUserId;
+/** 恢复已废弃的账号。 */
+export async function restoreAccount(input: unknown): Promise<SimpleResult> {
+  const { id } = RestoreAccountInput.parse(input);
+  const caller = await resolveDeprecateCaller(id);
+  if (!caller.ok) return caller;
+  if (!caller.account.deprecated_at) return { ok: false, error: "该账号未废弃" };
 
-  let isAdmin = ctx.isEmergency;
-  if (!isAdmin) {
-    const perm = await resolvePermission(userId, "live_account");
-    if (!perm.points.has("delete_request")) return { ok: false, error: "无删除申请权限" };
-    isAdmin = perm.points.has("delete_review");
-  }
+  const [updated] = await db
+    .update(live_account)
+    .set({ deprecated_at: null, deprecated_by_user_id: null, updated_at: new Date() })
+    .where(and(eq(live_account.id, id), isNotNull(live_account.deprecated_at)))
+    .returning();
+  if (!updated) return { ok: false, error: "该账号未废弃" };
 
-  try {
-    const row = await cancelDeleteRequest({
-      requestId,
-      userId: ctx.isEmergency ? null : userId,
-      isAdmin,
-    });
-    await writeAuditLog({
-      user_id: userId,
-      action: "LIVE_ACCOUNT_DELETE_CANCELLED",
-      target_type: "live_account_delete_request",
-      target_id: requestId,
-      before: null,
-      after: { account_id: row.account_id, account_name: row.account_name },
-    });
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof AppError ? e.message : "撤销失败" };
-  }
+  await writeAuditLog({
+    user_id: caller.userId,
+    action: "LIVE_ACCOUNT_RESTORED",
+    target_type: "live_account",
+    target_id: id,
+    before: { deprecated_at: caller.account.deprecated_at.toISOString() },
+    after: { deprecated_at: null },
+  });
+  return { ok: true };
 }

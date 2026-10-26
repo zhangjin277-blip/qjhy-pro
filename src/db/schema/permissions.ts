@@ -99,3 +99,11 @@ export const auth_permission_override = pgTable(
     idx_module: index("idx_override_module").on(t.module),
   }),
 );
+
+/** 独立超级管理员身份，不随钉钉岗位同步变化。 */
+export const auth_super_admin = pgTable("auth_super_admin", {
+  user_id: text("user_id").primaryKey().references(() => dingtalk_user.user_id, { onDelete: "cascade" }),
+  reason: text("reason").notNull(),
+  granted_by: text("granted_by").notNull(),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+});

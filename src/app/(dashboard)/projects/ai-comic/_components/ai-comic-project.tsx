@@ -1,11 +1,10 @@
 "use client";
-
+import { DateRangePicker } from "@/components/patterns/date-range-picker";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   BarChart3,
   BookOpen,
-  CalendarDays,
   Check,
   Clapperboard,
   ChevronLeft,
@@ -40,6 +39,7 @@ type RangeKey = "7" | "30" | "month" | "all" | "custom";
 type MetricKey = "play" | "like" | "comment" | "share" | "fans";
 type VideoSortKey = "published" | "views" | "likes";
 type AccountKey = "sun-xiaosheng" | "xiao-mowan";
+type PlatformConnectionStatus = "active" | "expired" | "missing" | "unknown";
 
 interface Daily {
   metric_date: string;
@@ -53,7 +53,7 @@ interface Daily {
 }
 
 interface Video {
-  platform?: "douyin" | "kuaishou" | "wechat";
+  platform?: "douyin" | "kuaishou" | "wechat" | "bilibili" | "xiaohongshu";
   item_id: string;
   publish_time: string;
   description: string | null;
@@ -92,8 +92,8 @@ const ACCOUNTS: AccountDefinition[] = [
   {
     key: "sun-xiaosheng",
     label: "造化仙府-孙小圣",
-    note: "抖音、快手、视频号",
-    platforms: ["douyin", "kuaishou", "wechat"],
+    note: "抖音、快手、小红书、B站、视频号",
+    platforms: ["douyin", "kuaishou", "xiaohongshu", "bilibili", "wechat"],
     ready: true,
   },
   {
@@ -128,8 +128,8 @@ const PLATFORMS: PlatformDefinition[] = [
   {
     key: "xiaohongshu",
     label: "小红书",
-    note: "接口接入中",
-    status: "planned",
+    note: "创作服务平台",
+    status: "live",
     Icon: BookOpen,
     accent: "text-rose-700",
     soft: "bg-rose-500",
@@ -137,8 +137,8 @@ const PLATFORMS: PlatformDefinition[] = [
   {
     key: "bilibili",
     label: "B站",
-    note: "接口接入中",
-    status: "planned",
+    note: "创作中心",
+    status: "live",
     Icon: Tv2,
     accent: "text-cyan-700",
     soft: "bg-cyan-500",
@@ -153,6 +153,37 @@ const PLATFORMS: PlatformDefinition[] = [
     soft: "bg-emerald-500",
   },
 ];
+
+const VIDEO_PLATFORM_BADGES: Record<
+  NonNullable<Video["platform"]>,
+  { label: string; Icon: typeof Music2; className: string }
+> = {
+  douyin: {
+    label: "抖音",
+    Icon: Music2,
+    className: "bg-slate-800 text-white",
+  },
+  kuaishou: {
+    label: "快手",
+    Icon: Clapperboard,
+    className: "bg-orange-50 text-orange-700",
+  },
+  wechat: {
+    label: "视频号",
+    Icon: MessageCircle,
+    className: "bg-emerald-50 text-emerald-700",
+  },
+  bilibili: {
+    label: "B站",
+    Icon: Tv2,
+    className: "bg-cyan-50 text-cyan-700",
+  },
+  xiaohongshu: {
+    label: "小红书",
+    Icon: BookOpen,
+    className: "bg-rose-50 text-rose-700",
+  },
+};
 
 const METRICS: { key: MetricKey; label: string; color: string }[] = [
   { key: "play", label: "播放", color: "#111827" },
@@ -207,43 +238,6 @@ function rangeFor(key: Exclude<RangeKey, "custom">): { from: string; to: string 
   };
 }
 
-function dateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function monthStart(value: string): Date {
-  const [year, month] = value.split("-").map(Number);
-  return new Date(Date.UTC(year || new Date().getFullYear(), (month || 1) - 1, 1));
-}
-
-function shiftMonth(value: Date, amount: number): Date {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + amount, 1));
-}
-
-function calendarCells(month: Date): (Date | null)[] {
-  const firstWeekday = new Date(
-    Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), 1),
-  ).getUTCDay();
-  const daysInMonth = new Date(
-    Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  return [
-    ...Array.from({ length: firstWeekday }, () => null),
-    ...Array.from(
-      { length: daysInMonth },
-      (_, index) => new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), index + 1)),
-    ),
-  ];
-}
-
-function monthLabel(value: Date): string {
-  return `${value.getUTCFullYear()}年 ${value.getUTCMonth() + 1}月`;
-}
-
-function displayDateRange(from: string, to: string): string {
-  return `${from.replaceAll("-", "/")} 至 ${to.replaceAll("-", "/")}`;
-}
-
 export function AiComicProject(): React.JSX.Element {
   const [account, setAccount] = useState<AccountKey>("sun-xiaosheng");
   const [platform, setPlatform] = useState<ViewKey>("all");
@@ -252,18 +246,52 @@ export function AiComicProject(): React.JSX.Element {
   const [videoSort, setVideoSort] = useState<VideoSortKey>("published");
   const [videoFrom, setVideoFrom] = useState(() => rangeFor("all").from);
   const [videoTo, setVideoTo] = useState(() => rangeFor("all").to);
-  const [videoDateOpen, setVideoDateOpen] = useState(false);
-  const [videoDraftFrom, setVideoDraftFrom] = useState(() => rangeFor("all").from);
-  const [videoDraftTo, setVideoDraftTo] = useState(() => rangeFor("all").to);
-  const [calendarMonth, setCalendarMonth] = useState(() => monthStart(rangeFor("all").from));
   const [page, setPage] = useState(1);
   const [daily, setDaily] = useState<Daily[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [platformStatuses, setPlatformStatuses] = useState<
+    Partial<Record<PlatformKey, PlatformConnectionStatus>>
+  >({});
   const selectedAccount = ACCOUNTS.find((item) => item.key === account) ?? DEFAULT_ACCOUNT;
-  const connectedPlatformCount = selectedAccount.platforms.length;
+  const connectedPlatformCount = selectedAccount.platforms.filter(
+    (item) => platformStatuses[item] === "active",
+  ).length;
+  const platformStatusesReady = selectedAccount.platforms.every(
+    (item) => platformStatuses[item] !== undefined,
+  );
   const accountHasData = selectedAccount.ready;
+
+  useEffect(() => {
+    let active = true;
+    const loadStatuses = async () => {
+      try {
+        const response = await fetch(`/api/projects/ai-comic/status?account=${account}`, {
+          cache: "no-store",
+        });
+        const body = (await response.json()) as {
+          statuses?: Partial<Record<PlatformKey, PlatformConnectionStatus>>;
+        };
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (active) setPlatformStatuses(body.statuses ?? {});
+      } catch {
+        if (active) {
+          setPlatformStatuses(
+            Object.fromEntries(selectedAccount.platforms.map((item) => [item, "unknown"])),
+          );
+        }
+      }
+    };
+
+    setPlatformStatuses({});
+    void loadStatuses();
+    const timer = window.setInterval(() => void loadStatuses(), 86_400_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [account, selectedAccount.platforms]);
 
   useEffect(() => {
     if (!accountHasData) {
@@ -273,12 +301,17 @@ export function AiComicProject(): React.JSX.Element {
       setVideos([]);
       return;
     }
-    if (!["douyin", "kuaishou", "wechat", "all"].includes(platform)) return;
+    if (!["douyin", "kuaishou", "wechat", "bilibili", "xiaohongshu", "all"].includes(platform))
+      return;
     setLoading(true);
     setError(null);
     const endpoints = selectedAccount.platforms.filter(
-      (item): item is "douyin" | "kuaishou" | "wechat" =>
-        item === "douyin" || item === "kuaishou" || item === "wechat",
+      (item): item is "douyin" | "kuaishou" | "wechat" | "bilibili" | "xiaohongshu" =>
+        item === "douyin" ||
+        item === "kuaishou" ||
+        item === "wechat" ||
+        item === "bilibili" ||
+        item === "xiaohongshu",
     );
     void Promise.all(
       endpoints.map(async (endpoint) => {
@@ -354,6 +387,17 @@ export function AiComicProject(): React.JSX.Element {
   const interactionRate = totals.play
     ? ((totals.like + totals.comment + totals.share) / totals.play) * 100
     : 0;
+  const platformPlayTotals = useMemo(
+    () =>
+      PLATFORMS.map((definition) => ({
+        ...definition,
+        play: videos.reduce(
+          (sum, video) => (video.platform === definition.key ? sum + (video.view_count ?? 0) : sum),
+          0,
+        ),
+      })),
+    [videos],
+  );
   const chartData = useMemo(() => {
     const dailyMetricValue = (row: Daily): number => {
       switch (metric) {
@@ -377,6 +421,12 @@ export function AiComicProject(): React.JSX.Element {
   const selectedMetric = METRICS.find((item) => item.key === metric) ?? DEFAULT_METRIC;
   const selectedPlatform = PLATFORMS.find((item) => item.key === platform) ?? DEFAULT_PLATFORM;
   const isAllPlatform = platform === "all";
+  const syncFrequencyLabel =
+    platform === "bilibili" || platform === "xiaohongshu"
+      ? "每天10:00更新"
+      : platform === "all"
+        ? "定时更新"
+        : "每小时更新";
   const latestCollectedAt = daily.reduce<string | null>(
     (latest, row) =>
       !latest || (row.collected_at ?? "") > latest ? (row.collected_at ?? latest) : latest,
@@ -407,64 +457,24 @@ export function AiComicProject(): React.JSX.Element {
     setPage(1);
   }, [videoFrom, videoSort, videoTo]);
 
-  const chooseVideoShortcut = (key: "today" | "week" | "month" | "twoMonths" | "all") => {
-    const next =
-      key === "today"
-        ? { from: beijingDate(), to: beijingDate() }
-        : key === "week"
-          ? rangeFor("7")
-          : key === "month"
-            ? rangeFor("month")
-            : key === "twoMonths"
-              ? { from: dateOffset(-59), to: beijingDate() }
-              : rangeFor("all");
-    setRange(next);
-    setVideoFrom(next.from);
-    setVideoTo(next.to);
-    setVideoDraftFrom(next.from);
-    setVideoDraftTo(next.to);
-    setCalendarMonth(monthStart(next.from));
-    setVideoDateOpen(false);
-  };
-
-  const chooseVideoDate = (value: string) => {
-    if (!videoDraftFrom || videoDraftTo !== videoDraftFrom) {
-      setVideoDraftFrom(value);
-      setVideoDraftTo(value);
-      return;
-    }
-    if (value < videoDraftFrom) {
-      setVideoDraftFrom(value);
-      setVideoDraftTo(videoDraftFrom);
-    } else {
-      setVideoDraftTo(value);
-    }
-    const nextFrom = value < videoDraftFrom ? value : videoDraftFrom;
-    const nextTo = value < videoDraftFrom ? videoDraftFrom : value;
-    setRange({ from: nextFrom, to: nextTo });
-    setVideoFrom(nextFrom);
-    setVideoTo(nextTo);
-    setVideoDateOpen(false);
-  };
-
   return (
     <main className="min-h-full bg-[#f5f7fa] text-slate-900">
       <div className="w-full px-4 py-5 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-5 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-3 flex items-center gap-2 text-xs font-medium text-slate-500">
-              <span>项目中心</span>
+              <span>造化仙府</span>
               <span className="text-slate-300">/</span>
-              <span className="text-slate-700">AI漫剧</span>
+              <span className="text-slate-700">造化视频</span>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex size-11 items-center justify-center rounded-xl bg-[#15171b] text-white shadow-sm">
                 <Sparkles className="size-5" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-slate-950">AI漫剧</h1>
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-950">造化视频</h1>
                 <p className="mt-1 text-xs text-slate-500">
-                  多平台内容经营中心 · 抖音、快手、视频号已接入
+                  多平台内容经营中心 · 抖音、快手、小红书、B站、视频号已接入
                 </p>
               </div>
             </div>
@@ -472,21 +482,31 @@ export function AiComicProject(): React.JSX.Element {
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600 shadow-sm">
               <Clock3 className="size-3.5 text-emerald-600" />
-              <span>每小时更新</span>
+              <span>{syncFrequencyLabel}</span>
               <span className="text-slate-300">·</span>
               <span>最近同步 {latestCollectedLabel}</span>
             </div>
-            <button
-              type="button"
-              onClick={() => setVideoDateOpen((open) => !open)}
-              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm hover:border-slate-300"
-            >
-              <CalendarDays className="size-3.5 text-slate-400" />
-              <span>发布日期</span>
-              <ChevronRight
-                className={`size-3.5 rotate-90 text-slate-400 transition ${videoDateOpen ? "-rotate-90" : ""}`}
-              />
-            </button>
+            <DateRangePicker
+              label="发布日期"
+              value={{ from: videoFrom, to: videoTo }}
+              onChange={(next) => {
+                setRange(next);
+                setVideoFrom(next.from);
+                setVideoTo(next.to);
+              }}
+              onAll={() => {
+                const next = rangeFor("all");
+                setRange(next);
+                setVideoFrom(next.from);
+                setVideoTo(next.to);
+              }}
+              presets={[
+                { label: "当天", value: { from: beijingDate(), to: beijingDate() } },
+                { label: "前1周", value: rangeFor("7") },
+                { label: "前1个月", value: rangeFor("month") },
+                { label: "前2个月", value: { from: dateOffset(-59), to: beijingDate() } },
+              ]}
+            />
           </div>
         </header>
 
@@ -539,7 +559,11 @@ export function AiComicProject(): React.JSX.Element {
                   <span
                     className={`block text-[10px] ${isAllPlatform ? "text-white/60" : "text-slate-400"}`}
                   >
-                    已接入 {connectedPlatformCount} / 5 个渠道
+                    {!platformStatusesReady
+                      ? "检测渠道状态"
+                      : connectedPlatformCount === selectedAccount.platforms.length
+                        ? `已接入 ${connectedPlatformCount} / 5 个渠道`
+                        : `有效 ${connectedPlatformCount} / ${selectedAccount.platforms.length} 个渠道`}
                   </span>
                 </span>
                 {isAllPlatform ? <Check className="ml-1 size-3.5" /> : null}
@@ -547,11 +571,26 @@ export function AiComicProject(): React.JSX.Element {
               {PLATFORMS.map((item) => {
                 const active = platform === item.key;
                 const configured = selectedAccount.platforms.includes(item.key);
+                const connectionStatus = platformStatuses[item.key];
                 const statusLabel = !configured
                   ? "未接入"
-                  : selectedAccount.ready
+                  : connectionStatus === "active"
                     ? "已接入"
-                    : "待授权";
+                    : connectionStatus === "expired"
+                      ? "已失效"
+                      : connectionStatus === "missing"
+                        ? "待授权"
+                        : connectionStatus === "unknown"
+                          ? "状态未知"
+                          : "检测中";
+                const statusClass =
+                  connectionStatus === "expired"
+                    ? active
+                      ? "text-red-300"
+                      : "text-red-600"
+                    : active
+                      ? "text-white/60"
+                      : "text-slate-400";
                 return (
                   <button
                     key={item.key}
@@ -573,11 +612,7 @@ export function AiComicProject(): React.JSX.Element {
                     </span>
                     <span>
                       <span className="block text-xs font-semibold">{item.label}</span>
-                      <span
-                        className={`block text-[10px] ${active ? "text-white/60" : "text-slate-400"}`}
-                      >
-                        {statusLabel}
-                      </span>
+                      <span className={`block text-[10px] ${statusClass}`}>{statusLabel}</span>
                     </span>
                     {active ? <Check className="ml-1 size-3.5" /> : null}
                   </button>
@@ -640,6 +675,31 @@ export function AiComicProject(): React.JSX.Element {
                   />
                   <Kpi label="作品涨粉" value={compact(totals.fans)} icon={Users} />
                 </div>
+                {isAllPlatform ? (
+                  <div className="mt-6 border-t border-slate-100 pt-4">
+                    <div className="mb-3 text-[11px] font-medium text-slate-500">各平台播放量</div>
+                    <div className="grid grid-cols-2 gap-x-5 gap-y-3">
+                      {platformPlayTotals.map((item) => (
+                        <div
+                          key={item.key}
+                          className="flex min-w-0 items-center justify-between gap-2"
+                        >
+                          <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-slate-500">
+                            <span
+                              className={`flex size-5 shrink-0 items-center justify-center rounded ${item.soft} text-white`}
+                            >
+                              <item.Icon className="size-3" />
+                            </span>
+                            <span className="truncate">{item.label}</span>
+                          </span>
+                          <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-800">
+                            {compact(item.play)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="mt-6 border-t border-slate-100 pt-4">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500">互动率</span>
@@ -769,103 +829,6 @@ export function AiComicProject(): React.JSX.Element {
                   <p className="mt-1 text-xs text-slate-500">每页展示 5 个作品，点击进入作品详情</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="contents">
-                    <button
-                      type="button"
-                      onClick={() => setVideoDateOpen((open) => !open)}
-                      className="hidden"
-                    >
-                      <CalendarDays className="size-3.5 text-slate-400" />
-                      <span className="whitespace-nowrap">发布日期</span>
-                      <span className="hidden text-slate-400 xl:inline">
-                        {displayDateRange(videoFrom, videoTo)}
-                      </span>
-                      <ChevronRight
-                        className={`size-3.5 rotate-90 text-slate-400 transition ${videoDateOpen ? "-rotate-90" : ""}`}
-                      />
-                    </button>
-                    {videoDateOpen ? (
-                      <div className="fixed right-4 top-24 z-50 flex w-[760px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-                        <div className="w-[190px] shrink-0 border-r border-slate-200 p-4">
-                          <div className="mb-3 text-sm font-semibold text-slate-800">快捷选择</div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {(
-                              [
-                                ["today", "当天"],
-                                ["week", "前1周"],
-                                ["month", "前1个月"],
-                                ["twoMonths", "前2个月"],
-                                ["all", "全部"],
-                              ] as const
-                            ).map(([key, label]) => (
-                              <button
-                                key={key}
-                                type="button"
-                                onClick={() => chooseVideoShortcut(key)}
-                                className="rounded-lg bg-slate-100 px-2 py-2 text-xs font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
-                              >
-                                {label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="min-w-0 flex-1 p-4">
-                          <div className="mb-3 flex items-center justify-between">
-                            <button
-                              type="button"
-                              aria-label="上个月"
-                              onClick={() => setCalendarMonth((month) => shiftMonth(month, -1))}
-                              className="flex size-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
-                            >
-                              <ChevronLeft className="size-4" />
-                            </button>
-                            <div className="grid flex-1 grid-cols-2 text-center text-sm font-semibold text-slate-800">
-                              <span>{monthLabel(calendarMonth)}</span>
-                              <span>{monthLabel(shiftMonth(calendarMonth, 1))}</span>
-                            </div>
-                            <button
-                              type="button"
-                              aria-label="下个月"
-                              onClick={() => setCalendarMonth((month) => shiftMonth(month, 1))}
-                              className="flex size-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
-                            >
-                              <ChevronRight className="size-4" />
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-5">
-                            {[calendarMonth, shiftMonth(calendarMonth, 1)].map((month) => (
-                              <div key={month.toISOString()}>
-                                <div className="mb-2 grid grid-cols-7 text-center text-[11px] text-slate-400">
-                                  {"日一二三四五六".split("").map((day) => (
-                                    <span key={day}>{day}</span>
-                                  ))}
-                                </div>
-                                <div className="grid grid-cols-7 gap-y-1 text-center">
-                                  {calendarCells(month).map((day, index) => {
-                                    if (!day)
-                                      return <span key={`empty-${index}`} className="h-7" />;
-                                    const value = dateKey(day);
-                                    const active = value >= videoDraftFrom && value <= videoDraftTo;
-                                    const edge = value === videoDraftFrom || value === videoDraftTo;
-                                    return (
-                                      <button
-                                        key={value}
-                                        type="button"
-                                        onClick={() => chooseVideoDate(value)}
-                                        className={`mx-auto flex size-7 items-center justify-center rounded-md text-xs transition ${edge ? "bg-blue-600 font-semibold text-white" : active ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-100"}`}
-                                      >
-                                        {day.getUTCDate()}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
                   <label className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-500">
                     <ListFilter className="size-3.5 text-slate-400" />
                     <span className="sr-only">作品排序</span>
@@ -884,64 +847,87 @@ export function AiComicProject(): React.JSX.Element {
                 </div>
               </div>
               <div className="divide-y divide-slate-100">
-                {pageVideos.map((video, index) => (
-                  <Link
-                    key={video.item_id}
-                    href={`/projects/ai-comic/${video.platform ?? (platform === "all" ? "douyin" : platform)}/${video.item_id}?account=${account}`}
-                    className="group flex gap-4 px-5 py-4 transition hover:bg-slate-50 sm:px-6"
-                  >
-                    <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100 shadow-sm sm:h-32 sm:w-[92px]">
-                      {video.cover_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={video.cover_url} alt="" className="size-full object-cover" />
-                      ) : (
-                        <Film className="m-7 size-6 text-slate-300" />
-                      )}
-                      <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">
-                        #{(page - 1) * 5 + index + 1}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-slate-900 group-hover:text-slate-600">
-                          {video.description || "未命名作品"}
-                        </h3>
-                        <ChevronRight className="mt-0.5 size-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-700" />
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                        <span>
-                          {new Date(video.publish_time).toLocaleString("zh-CN", {
-                            year: "numeric",
-                            month: "2-digit",
-                            day: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: false,
-                          })}
-                        </span>
-                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-600">
-                          已发布
-                        </span>
-                        <span>
-                          {video.avg_view_second
-                            ? `${Number(video.avg_view_second).toFixed(0)}秒均看`
-                            : "暂无均看"}
+                {pageVideos.map((video, index) => {
+                  const platformBadge = video.platform
+                    ? VIDEO_PLATFORM_BADGES[video.platform]
+                    : null;
+                  const PlatformIcon = platformBadge?.Icon;
+
+                  return (
+                    <Link
+                      key={video.item_id}
+                      href={`/projects/ai-comic/${video.platform ?? (platform === "all" ? "douyin" : platform)}/${video.item_id}?account=${account}`}
+                      className="group flex gap-4 px-5 py-4 transition hover:bg-slate-50 sm:px-6"
+                    >
+                      <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100 shadow-sm sm:h-32 sm:w-[92px]">
+                        {video.cover_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={video.cover_url}
+                            alt=""
+                            referrerPolicy="no-referrer"
+                            className="size-full object-cover"
+                          />
+                        ) : (
+                          <Film className="m-7 size-6 text-slate-300" />
+                        )}
+                        <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">
+                          #{(page - 1) * 5 + index + 1}
                         </span>
                       </div>
-                      <div className="mt-5 grid grid-cols-3 gap-x-5 gap-y-3 text-xs sm:grid-cols-6 lg:grid-cols-9">
-                        <VideoMetric label="播放" value={compact(video.view_count)} strong />
-                        <VideoMetric label="点赞" value={compact(video.like_count)} />
-                        <VideoMetric label="评论" value={compact(video.comment_count)} />
-                        <VideoMetric label="分享" value={compact(video.share_count)} />
-                        <VideoMetric label="收藏" value={compact(video.favorite_count)} />
-                        <VideoMetric label="弹幕" value={compact(video.danmaku_count)} />
-                        <VideoMetric label="完播率" value={percentage(video.completion_rate)} />
-                        <VideoMetric label="5秒留存" value={percentage(video.completion_rate_5s)} />
-                        <VideoMetric label="吸粉量" value={compact(video.subscribe_count)} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-slate-900 group-hover:text-slate-600">
+                            {video.description || "未命名作品"}
+                          </h3>
+                          <ChevronRight className="mt-0.5 size-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-700" />
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                          <span>
+                            {new Date(video.publish_time).toLocaleString("zh-CN", {
+                              year: "numeric",
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            })}
+                          </span>
+                          {isAllPlatform && platformBadge && PlatformIcon ? (
+                            <span
+                              className={`inline-flex h-5 items-center gap-1 rounded-md px-1.5 font-medium ${platformBadge.className}`}
+                            >
+                              <PlatformIcon className="size-3" />
+                              {platformBadge.label}
+                            </span>
+                          ) : null}
+                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-600">
+                            已发布
+                          </span>
+                          <span>
+                            {video.avg_view_second
+                              ? `${Number(video.avg_view_second).toFixed(0)}秒均看`
+                              : "暂无均看"}
+                          </span>
+                        </div>
+                        <div className="mt-5 grid grid-cols-3 gap-x-5 gap-y-3 text-xs sm:grid-cols-6 lg:grid-cols-9">
+                          <VideoMetric label="播放" value={compact(video.view_count)} strong />
+                          <VideoMetric label="点赞" value={compact(video.like_count)} />
+                          <VideoMetric label="评论" value={compact(video.comment_count)} />
+                          <VideoMetric label="分享" value={compact(video.share_count)} />
+                          <VideoMetric label="收藏" value={compact(video.favorite_count)} />
+                          <VideoMetric label="弹幕" value={compact(video.danmaku_count)} />
+                          <VideoMetric label="完播率" value={percentage(video.completion_rate)} />
+                          <VideoMetric
+                            label="5秒留存"
+                            value={percentage(video.completion_rate_5s)}
+                          />
+                          <VideoMetric label="吸粉量" value={compact(video.subscribe_count)} />
+                        </div>
                       </div>
-                    </div>
-                  </Link>
-                ))}
+                    </Link>
+                  );
+                })}
               </div>
               {!loading && !error && sortedVideos.length === 0 ? (
                 <div className="px-5 py-12 text-center text-xs text-slate-400">
@@ -981,7 +967,7 @@ export function AiComicProject(): React.JSX.Element {
                 数据来源：{isAllPlatform ? "已接入平台" : selectedPlatform.label}
               </span>
               <span className="inline-flex items-center gap-1.5">
-                支持后续接入视频号、小红书、B站 <ExternalLink className="size-3" />
+                5 个平台数据统一展示 <ExternalLink className="size-3" />
               </span>
             </footer>
           </>

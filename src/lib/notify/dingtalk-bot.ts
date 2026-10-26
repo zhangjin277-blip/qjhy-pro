@@ -83,6 +83,32 @@ export async function notifyDingtalk(payload: {
   }
 }
 
+/** 投放整点导入预警，使用独立机器人，关键词必须包含「预警」。 */
+export async function notifyPlacementAlert(payload: {
+  title: string;
+  detail: string;
+}): Promise<void> {
+  const webhook = env.PLACEMENT_ALERT_DINGTALK_WEBHOOK;
+  if (!webhook) {
+    console.warn("[notify] PLACEMENT_ALERT_DINGTALK_WEBHOOK not configured, skip");
+    return;
+  }
+  const content = [`【预警】${payload.title}`, payload.detail, "请运营手动补数据。"].join("\n");
+  try {
+    const res = await fetch(webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ msgtype: "text", text: { content } }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      console.error("[notify] placement alert webhook returned", res.status, await res.text());
+    }
+  } catch (err) {
+    console.error("[notify] placement alert webhook failed:", err);
+  }
+}
+
 /**
  * Cookie 失效提醒，走专用机器人 COOKIE_ALERT_DINGTALK_WEBHOOK。
  *

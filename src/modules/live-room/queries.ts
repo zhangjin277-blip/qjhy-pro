@@ -107,7 +107,8 @@ export async function getFloorPlanData(
           platform_uid: live_account.platform_uid,
         })
         .from(live_account)
-        .where(isNotNull(live_account.room_id)),
+        // 已废弃账号不再占直播间展示
+        .where(and(isNotNull(live_account.room_id), isNull(live_account.deprecated_at))),
       db
         .select({
           live_account_id: live_session_log.live_account_id,

@@ -13,6 +13,7 @@ export default async function BatchesPage() {
             <tr className="bg-secondary border-b border-slate-200">
               {[
                 "来源",
+                "粒度",
                 "文件",
                 "产品",
                 "日期范围",
@@ -35,6 +36,13 @@ export default async function BatchesPage() {
             {batches.map((b) => (
               <tr key={b.id} className="border-b border-slate-100 hover:bg-slate-50">
                 <td className="px-3 py-2">{b.source === "excel-upload" ? "Excel" : "PRO3 迁移"}</td>
+                <td className="px-3 py-2">
+                  <span
+                    className={b.granularity === "daily" ? "text-indigo-600" : "text-slate-600"}
+                  >
+                    {b.granularity === "daily" ? "日报汇总" : "小时数据"}
+                  </span>
+                </td>
                 <td className="px-3 py-2">
                   <Link
                     href={`/placements/batches/${b.id}`}
@@ -71,7 +79,11 @@ export default async function BatchesPage() {
                   {new Date(b.uploaded_at).toLocaleString("zh-CN")}
                 </td>
                 <td className="px-3 py-2">
-                  <DeleteBatchButton batchId={b.id} fileName={b.file_name} source={b.source} />
+                  {b.granularity === "daily" ? (
+                    <span className="text-xs text-slate-400">自动替换</span>
+                  ) : (
+                    <DeleteBatchButton batchId={b.id} fileName={b.file_name} source={b.source} />
+                  )}
                 </td>
               </tr>
             ))}

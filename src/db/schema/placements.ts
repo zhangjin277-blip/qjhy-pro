@@ -22,6 +22,8 @@ export const placement_import_batch = pgTable("placement_import_batch", {
   file_name: text("file_name"),
   file_size_bytes: integer("file_size_bytes"),
   dataset_id: text("dataset_id").notNull(),
+  /** 数据粒度：hourly 为投放数据/20 分钟数据，daily 为捕鱼直播日报汇总。 */
+  granularity: text("granularity").$type<"hourly" | "daily">().notNull().default("hourly"),
   date_range_from: date("date_range_from"),
   date_range_to: date("date_range_to"),
   row_count: integer("row_count").notNull().default(0),

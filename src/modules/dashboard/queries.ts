@@ -1,4 +1,5 @@
 import "server-only";
+import { anchorGroupCte } from "./attribution";
 import { db } from "@/db/client";
 import { sql, type SQL } from "drizzle-orm";
 import type { DashboardScope } from "./scope";
@@ -17,6 +18,74 @@ import type {
   Section2Metric,
 } from "./types";
 import { PROJECT_LABELS, ZHAOHUA_RECRUIT_BROKER_NAME } from "./types";
+import type { WorkbenchRankingData, WorkbenchRankingFilters } from "./workbench-ranking-types";
+
+/** Workbench ranking shares dashboard project assignment and broker access boundaries. */
+export async function queryWorkbenchRanking(
+  filters: WorkbenchRankingFilters,
+  scope: DashboardScope,
+): Promise<WorkbenchRankingData> {
+  if (scope.kind === "reject") return { ...filters, rows: [], total: 0, latestDate: null };
+  let source: SQL;
+  let value: SQL;
+  let extra = sql`TRUE`;
+  const aggregation = filters.metric === "acu" ? sql`MAX(d.value)` : sql`SUM(d.value)`;
+  if (filters.metric === "flow") {
+    if (filters.project === "ddz") {
+      source = sql`anchor_game_promo_daily`;
+      value = sql`(COALESCE(d.promote_anchor_active_pay_amount_1d, 0) + COALESCE(d.promote_faction_active_pay_amount_1d, 0)) / 0.4 + COALESCE(d.promote_download_pay_amount_1d, 0)`;
+      extra = sql`d.promote_scene = 'live' AND d.biz_mode = 'cps_all'`;
+    } else {
+      source = sql`anchor_minigame_daily`;
+      value = sql`d.before_divided_income`;
+      extra = sql`d.scene = 'live'`;
+    }
+  } else if (filters.metric === "uv") {
+    source = sql`anchor_portrait_daily`;
+    value = sql`d.watch_uv`;
+  } else {
+    source = sql`anchor_daily`;
+    value = filters.metric === "acu" ? sql`d.feed_acu` : sql`d.live_duration_1d`;
+  }
+  // Deduplicate identities before joining facts: an operator can match multiple department aliases.
+  const visible = sql`${anchorGroupCte(scope)}, visible AS (
+    SELECT DISTINCT anchor_id FROM anchor_group WHERE project = ${filters.project}
+  )`;
+  const [ranked, latest] = await Promise.all([
+    db.execute(sql`
+      WITH ${visible}, daily_values AS (
+        SELECT d.anchor_id, ${value} AS value
+        FROM ${source} d JOIN visible v ON v.anchor_id = d.anchor_id
+        WHERE d.date >= ${filters.date_from} AND d.date <= ${filters.date_to} AND ${extra}
+      ), per_anchor AS (
+        SELECT d.anchor_id, ${aggregation}::numeric AS value
+        FROM daily_values d GROUP BY d.anchor_id HAVING ${aggregation} > 0
+      )
+      SELECT ap.anchor_id, ap.nick_name, ap.avatar, pa.value, COUNT(*) OVER()::int AS total
+      FROM per_anchor pa JOIN anchor_profile ap ON ap.anchor_id = pa.anchor_id
+      ORDER BY pa.value DESC, ap.anchor_id ASC LIMIT 100
+    `),
+    db.execute(sql`
+      WITH ${visible}
+      SELECT MAX(d.date) AS date FROM ${source} d
+      JOIN visible v ON v.anchor_id = d.anchor_id
+      WHERE d.date <= ${filters.date_to} AND ${extra}
+    `),
+  ]);
+  const rows = ranked as unknown as Record<string, unknown>[];
+  const last = (latest as unknown as { date: string | null }[])[0]?.date ?? null;
+  return {
+    ...filters,
+    rows: rows.map((row) => ({
+      id: String(row.anchor_id),
+      name: String(row.nick_name || "未命名主播"),
+      avatar: row.avatar ? String(row.avatar) : null,
+      value: Number(row.value),
+    })),
+    total: Number(rows[0]?.total ?? 0),
+    latestDate: last,
+  };
+}
 
 /** 空响应（scope=reject 时用，所有数值 0、列表空） */
 function emptyOverview(dateFrom: string, dateTo: string): DashboardOverviewResponse {
@@ -68,52 +137,6 @@ function emptyOverview(dateFrom: string, dateTo: string): DashboardOverviewRespo
       zhaohua: zeroProject("zhaohua"),
     })),
   };
-}
-
-/**
- * Dashboard 核心 SQL：每个 anchor 映射到 (project, group)
- *
- * 项目：招募经纪人=造化仙府 → zhaohua；否则 is_threekingdoms → three / ddz
- * 分组（broker_name → dingtalk_user → dept → entity_alias.alias）：
- *   - "线上运营" → online
- *   - "线下运营" → offline
- *   - "捕鱼运营" → other（不在斗地主/三国看板单独展示）
- *   - broker_name = "线上主播" → online（兜底）
- *   - 其他匹配不上 → other
- */
-function anchorGroupCte(scope: DashboardScope): SQL {
-  // scope filter 直接落到 anchor_profile.broker_id，避免子查询
-  let scopeFrag: SQL;
-  if (scope.kind === "all") scopeFrag = sql`TRUE`;
-  else if (scope.kind === "reject") scopeFrag = sql`FALSE`;
-  else {
-    const literal = scope.ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
-    scopeFrag = sql`ap.broker_id = ANY(ARRAY[${sql.raw(literal)}]::text[])`;
-  }
-  return sql`
-    anchor_group AS (
-      SELECT
-        ap.anchor_id,
-        ap.is_threekingdoms,
-        CASE
-          WHEN ap.recruit_broker_name = ${ZHAOHUA_RECRUIT_BROKER_NAME} THEN 'zhaohua'
-          WHEN ap.is_threekingdoms THEN 'three'
-          ELSE 'ddz'
-        END AS project,
-        CASE
-          WHEN ea.alias = '线上运营' THEN 'online'
-          WHEN ea.alias = '线下运营' THEN 'offline'
-          WHEN ap.broker_name = '线上主播' THEN 'online'
-          ELSE 'other'
-        END AS "group"
-      FROM anchor_profile ap
-      LEFT JOIN dingtalk_user du ON du.name = ap.broker_name
-      LEFT JOIN entity_alias ea
-        ON ea.entity_type = 'dept' AND ea.entity_id = du.dept_ids->>0
-      WHERE ap.is_archived = FALSE
-        AND ${scopeFrag}
-    )
-  `;
 }
 
 /** 用本地时区格式化 YYYY-MM-DD（避开 toISOString 的 UTC 偏移坑：UTC+8 会整体退一天）*/
@@ -368,6 +391,7 @@ async function fetchGroupBreakdown(
   dateFrom: string,
   dateTo: string,
   scope: DashboardScope,
+  groups: SQL = anchorGroupCte(scope),
 ): Promise<
   {
     project: ProjectKey;
@@ -383,7 +407,7 @@ async function fetchGroupBreakdown(
         ? sql`COALESCE(SUM(ad.total_fan_ticket), 0)::numeric`
         : sql`COUNT(DISTINCT ad.anchor_id) FILTER (WHERE ad.live_duration_1d > 0)::numeric`;
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT ag.project, ag."group",
         ${valueExpr} AS value,
         COUNT(DISTINCT ag.anchor_id)::int AS anchor_count
@@ -406,7 +430,7 @@ async function fetchGroupBreakdown(
     const fromUnix = Math.floor(new Date(dateFrom + "T00:00:00").getTime() / 1000);
     const toUnix = Math.floor(new Date(dateTo + "T23:59:59").getTime() / 1000);
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT ag.project, ag."group",
         COUNT(*)::numeric AS value,
         COUNT(DISTINCT ap.anchor_id)::int AS anchor_count
@@ -430,7 +454,7 @@ async function fetchGroupBreakdown(
     const fromUnix = Math.floor(new Date(dateFrom + "T00:00:00").getTime() / 1000);
     const toUnix = Math.floor(new Date(dateTo + "T23:59:59").getTime() / 1000);
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT ag.project, ag."group",
         COUNT(*)::numeric AS value,
         COUNT(DISTINCT ap.anchor_id)::int AS anchor_count
@@ -454,7 +478,7 @@ async function fetchGroupBreakdown(
   // ─── flow（斗地主 CPS；造化/三国小游戏） ────────────────────────────────
   if (metric === "flow") {
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)},
+      WITH ${groups},
       ddz_part AS (
         SELECT ag.project, ag."group",
           SUM(
@@ -494,7 +518,7 @@ async function fetchGroupBreakdown(
   if (metric === "show_uv" || metric === "watch_uv") {
     const col = metric === "show_uv" ? sql`pd.show_uv` : sql`pd.watch_uv`;
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT ag.project, ag."group",
         COALESCE(SUM(${col}), 0)::numeric AS value,
         COUNT(DISTINCT ag.anchor_id)::int AS anchor_count
@@ -553,7 +577,7 @@ async function fetchGroupBreakdown(
       SELECT * FROM ddz_part
     `;
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)},
+      WITH ${groups},
       ${ddzPart}${threePart}
     `);
     const rows = result as unknown as Record<string, unknown>[];
@@ -568,7 +592,7 @@ async function fetchGroupBreakdown(
   // ─── install_or_activate：斗地主 = cps install_finish；造化/三国 = minigame gm_active_ucnt ─
   if (metric === "install_or_activate") {
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)},
+      WITH ${groups},
       ddz_part AS (
         SELECT ag.project, ag."group",
           COALESCE(SUM(agp.promote_install_finish_ucnt_1d), 0)::numeric AS value,
@@ -612,6 +636,7 @@ async function fetchSparkline(
   dateFrom: string,
   dateTo: string,
   scope: DashboardScope,
+  groups: SQL = anchorGroupCte(scope),
 ): Promise<number[]> {
   // 三国 + video_flow → 不适用
   if (project === "three" && metric === "video_flow") return [];
@@ -623,7 +648,7 @@ async function fetchSparkline(
         ? sql`COALESCE(SUM(ad.total_fan_ticket), 0)::numeric`
         : sql`COUNT(DISTINCT ad.anchor_id) FILTER (WHERE ad.live_duration_1d > 0)::numeric`;
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT ad.date AS d, ${valueExpr} AS v
       FROM anchor_daily ad
       JOIN anchor_group ag ON ag.anchor_id = ad.anchor_id
@@ -639,7 +664,7 @@ async function fetchSparkline(
     const fromUnix = Math.floor(new Date(dateFrom + "T00:00:00").getTime() / 1000);
     const toUnix = Math.floor(new Date(dateTo + "T23:59:59").getTime() / 1000);
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT TO_CHAR(TO_TIMESTAMP(ap.join_time), 'YYYY-MM-DD') AS d,
         COUNT(*)::numeric AS v
       FROM anchor_profile ap
@@ -657,7 +682,7 @@ async function fetchSparkline(
     const fromUnix = Math.floor(new Date(dateFrom + "T00:00:00").getTime() / 1000);
     const toUnix = Math.floor(new Date(dateTo + "T23:59:59").getTime() / 1000);
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT TO_CHAR(TO_TIMESTAMP(ap.first_live_time_in_faction), 'YYYY-MM-DD') AS d,
         COUNT(*)::numeric AS v
       FROM anchor_profile ap
@@ -676,7 +701,7 @@ async function fetchSparkline(
   if (metric === "flow") {
     if (project === "ddz") {
       const result = await db.execute(sql`
-        WITH ${anchorGroupCte(scope)}
+        WITH ${groups}
         SELECT agp.date AS d,
           COALESCE(SUM(
             (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
@@ -692,7 +717,7 @@ async function fetchSparkline(
       return (result as unknown as Record<string, unknown>[]).map((r) => Number(r.v ?? 0));
     }
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT mg.date AS d, COALESCE(SUM(mg.before_divided_income), 0)::numeric AS v
       FROM anchor_minigame_daily mg
       JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
@@ -706,7 +731,7 @@ async function fetchSparkline(
   if (metric === "show_uv" || metric === "watch_uv") {
     const col = metric === "show_uv" ? sql`pd.show_uv` : sql`pd.watch_uv`;
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT pd.date AS d, COALESCE(SUM(${col}), 0)::numeric AS v
       FROM anchor_portrait_daily pd
       JOIN anchor_group ag ON ag.anchor_id = pd.anchor_id
@@ -721,7 +746,7 @@ async function fetchSparkline(
     if (project === "ddz") {
       const scene = metric === "live_flow" ? "live" : "video";
       const result = await db.execute(sql`
-        WITH ${anchorGroupCte(scope)}
+        WITH ${groups}
         SELECT agp.date AS d,
           COALESCE(SUM(
             (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
@@ -738,7 +763,7 @@ async function fetchSparkline(
     }
     // three + live_flow
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT mg.date AS d, COALESCE(SUM(mg.before_divided_income), 0)::numeric AS v
       FROM anchor_minigame_daily mg
       JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
@@ -752,7 +777,7 @@ async function fetchSparkline(
   if (metric === "install_or_activate") {
     if (project === "ddz") {
       const result = await db.execute(sql`
-        WITH ${anchorGroupCte(scope)}
+        WITH ${groups}
         SELECT agp.date AS d,
           COALESCE(SUM(agp.promote_install_finish_ucnt_1d), 0)::numeric AS v
         FROM anchor_game_promo_daily agp
@@ -765,7 +790,7 @@ async function fetchSparkline(
       return (result as unknown as Record<string, unknown>[]).map((r) => Number(r.v ?? 0));
     }
     const result = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT mg.date AS d, COALESCE(SUM(mg.gm_active_ucnt), 0)::numeric AS v
       FROM anchor_minigame_daily mg
       JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
@@ -779,20 +804,76 @@ async function fetchSparkline(
   return [];
 }
 
+interface BreakdownContext {
+  anchorGroup: SQL;
+  rodMap: Map<string, number>;
+}
+
+async function fetchRodCounts(dateFrom: string, dateTo: string, groups: SQL) {
+  const rodResult = await db.execute(sql`
+    WITH ${groups}, minigame_live AS (
+      SELECT anchor_id, date
+      FROM anchor_minigame_daily
+      WHERE date >= ${dateFrom} AND date <= ${dateTo}
+        AND COALESCE(live_duration, 0) > 0
+      GROUP BY anchor_id, date
+    )
+    SELECT ag.project, ag."group", COUNT(DISTINCT ad.anchor_id)::numeric AS rod_anchor_count
+    FROM anchor_daily ad
+    JOIN anchor_group ag ON ag.anchor_id = ad.anchor_id
+    JOIN minigame_live mg ON mg.anchor_id = ad.anchor_id AND mg.date = ad.date
+    WHERE ad.date >= ${dateFrom} AND ad.date <= ${dateTo}
+      AND COALESCE(ad.live_duration_1d, 0) > 0
+    GROUP BY ag.project, ag."group"
+  `);
+  const rodMap = new Map<string, number>();
+  (rodResult as unknown as Record<string, unknown>[]).forEach((row) => {
+    rodMap.set(`${row.project}:${row.group}`, Number(row.rod_anchor_count ?? 0));
+  });
+
+  return rodMap;
+}
+
+async function resolveAnchorGroup(scope: DashboardScope): Promise<SQL> {
+  // Product attribution scans historical game evidence. Resolve it once for this request,
+  // then reuse the same scoped rows for every metric and sparkline. Never cache across users.
+  const rows = await db.execute(sql`
+    WITH ${anchorGroupCte(scope)}
+    SELECT anchor_id, is_threekingdoms, operator_id, dept_id, project, "group" FROM anchor_group
+  `);
+  return sql`anchor_group AS (
+    SELECT * FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS attributed(
+      anchor_id text, is_threekingdoms boolean, operator_id text,
+      dept_id text, project text, "group" text
+    )
+  )`;
+}
+
+async function breakdownContext(
+  dateFrom: string,
+  dateTo: string,
+  scope: DashboardScope,
+): Promise<BreakdownContext> {
+  const anchorGroup = await resolveAnchorGroup(scope);
+  return { anchorGroup, rodMap: await fetchRodCounts(dateFrom, dateTo, anchorGroup) };
+}
+
 export async function getSection2Breakdown(
   metric: Section2Metric,
   dateFrom: string,
   dateTo: string,
   scope: DashboardScope,
+  context?: BreakdownContext,
 ): Promise<Record<ProjectKey, ProjectBreakdown>> {
+  const groups = context?.anchorGroup ?? anchorGroupCte(scope);
   const days =
     Math.round((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400_000) + 1;
   const prevFrom = shiftDate(dateFrom, -days);
   const prevTo = shiftDate(dateTo, -days);
 
   const [current, prev] = await Promise.all([
-    fetchGroupBreakdown(metric, dateFrom, dateTo, scope),
-    fetchGroupBreakdown(metric, prevFrom, prevTo, scope),
+    fetchGroupBreakdown(metric, dateFrom, dateTo, scope, groups),
+    fetchGroupBreakdown(metric, prevFrom, prevTo, scope, groups),
   ]);
 
   const map = new Map<string, { value: number; anchor_count: number }>();
@@ -815,31 +896,12 @@ export async function getSection2Breakdown(
     ["zhaohua", "other"],
   ];
   const sparklines = await Promise.all(
-    sparklineKeys.map(([p, g]) => fetchSparkline(metric, p, g, dateFrom, dateTo, scope)),
+    sparklineKeys.map(([p, g]) => fetchSparkline(metric, p, g, dateFrom, dateTo, scope, groups)),
   );
   const sparkMap = new Map<string, number[]>();
   sparklineKeys.forEach(([p, g], i) => sparkMap.set(`${p}:${g}`, sparklines[i] ?? []));
 
-  const rodResult = await db.execute(sql`
-    WITH ${anchorGroupCte(scope)}, minigame_live AS (
-      SELECT anchor_id, date
-      FROM anchor_minigame_daily
-      WHERE date >= ${dateFrom} AND date <= ${dateTo}
-        AND COALESCE(live_duration, 0) > 0
-      GROUP BY anchor_id, date
-    )
-    SELECT ag.project, ag."group", COUNT(DISTINCT ad.anchor_id)::numeric AS rod_anchor_count
-    FROM anchor_daily ad
-    JOIN anchor_group ag ON ag.anchor_id = ad.anchor_id
-    JOIN minigame_live mg ON mg.anchor_id = ad.anchor_id AND mg.date = ad.date
-    WHERE ad.date >= ${dateFrom} AND ad.date <= ${dateTo}
-      AND COALESCE(ad.live_duration_1d, 0) > 0
-    GROUP BY ag.project, ag."group"
-  `);
-  const rodMap = new Map<string, number>();
-  (rodResult as unknown as Record<string, unknown>[]).forEach((row) => {
-    rodMap.set(`${row.project}:${row.group}`, Number(row.rod_anchor_count ?? 0));
-  });
+  const rodMap = context?.rodMap ?? (await fetchRodCounts(dateFrom, dateTo, groups));
 
   function isNotApplicable(project: ProjectKey): boolean {
     return project === "three" && metric === "video_flow";
@@ -951,12 +1013,17 @@ export async function getDashboardOverview(
     "show_uv",
     "watch_uv",
   ];
-  const [core, ...breakdownArr] = await Promise.all([
+  const [core, breakdownArr] = await Promise.all([
     getCoreKpis(dateFrom, dateTo, scope),
-    ...metrics.map(async (m) => ({
-      metric: m,
-      ...(await getSection2Breakdown(m, dateFrom, dateTo, scope)),
-    })),
+    (async () => {
+      const context = await breakdownContext(dateFrom, dateTo, scope);
+      return Promise.all(
+        metrics.map(async (metric) => ({
+          metric,
+          ...(await getSection2Breakdown(metric, dateFrom, dateTo, scope, context)),
+        })),
+      );
+    })(),
   ]);
   return {
     date_from: dateFrom,
@@ -1005,7 +1072,7 @@ async function fetchDailyMatrix(
   filters: DrawerDetailFilters,
   dateFrom: string,
   dateTo: string,
-  scope: DashboardScope,
+  groups: SQL,
 ): Promise<Map<DrawerMetric, Map<string, number>>> {
   const fromUnix = Math.floor(new Date(dateFrom + "T00:00:00").getTime() / 1000);
   const toUnix = Math.floor(new Date(dateTo + "T23:59:59").getTime() / 1000);
@@ -1013,7 +1080,7 @@ async function fetchDailyMatrix(
   // ─── Section 1：4 个 metric ────────────────────────────
   // total_fan_ticket、active_anchor_count（基于 anchor_daily）
   const adailyP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT ad.date AS d,
       COALESCE(SUM(ad.total_fan_ticket), 0)::numeric AS total_fan_ticket,
       COUNT(DISTINCT ad.anchor_id) FILTER (WHERE ad.live_duration_1d > 0)::int AS active_anchor_count,
@@ -1027,7 +1094,7 @@ async function fetchDailyMatrix(
 
   // flow（Section 1）：斗地主/造化仙府 cps_all 全 scene + 三国 minigame
   const gamePromoFlowP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT agp.date AS d,
       COALESCE(SUM(
         (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
@@ -1043,7 +1110,7 @@ async function fetchDailyMatrix(
   `);
 
   const threeFlowP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT mg.date AS d,
       COALESCE(SUM(mg.before_divided_income), 0)::numeric AS v
     FROM anchor_minigame_daily mg
@@ -1056,7 +1123,7 @@ async function fetchDailyMatrix(
 
   // new_anchor_count：按 join_time 入驻日聚合
   const newP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT TO_CHAR(TO_TIMESTAMP(ap.join_time), 'YYYY-MM-DD') AS d,
       COUNT(*)::int AS v
     FROM anchor_profile ap
@@ -1069,7 +1136,7 @@ async function fetchDailyMatrix(
 
   // first_live_anchor_count：按 first_live_time_in_faction 首播日聚合
   const firstLiveP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT TO_CHAR(TO_TIMESTAMP(ap.first_live_time_in_faction), 'YYYY-MM-DD') AS d,
       COUNT(*)::int AS v
     FROM anchor_profile ap
@@ -1085,7 +1152,7 @@ async function fetchDailyMatrix(
   // ─── Section 2：5 个 metric ────────────────────────────
   // live/video/install：斗地主与造化仙府走 CPS，三国走 minigame
   const gamePromoLiveFlowP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT agp.date AS d,
       COALESCE(SUM(
         (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
@@ -1101,7 +1168,7 @@ async function fetchDailyMatrix(
   `);
 
   const threeLiveFlowP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT mg.date AS d,
       COALESCE(SUM(mg.before_divided_income), 0)::numeric AS v
     FROM anchor_minigame_daily mg
@@ -1113,7 +1180,7 @@ async function fetchDailyMatrix(
   `);
 
   const gamePromoVideoFlowP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT agp.date AS d,
       COALESCE(SUM(
         (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
@@ -1129,7 +1196,7 @@ async function fetchDailyMatrix(
   `);
 
   const gamePromoInstallP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT agp.date AS d,
       COALESCE(SUM(agp.promote_install_finish_ucnt_1d), 0)::numeric AS v
     FROM anchor_game_promo_daily agp
@@ -1142,7 +1209,7 @@ async function fetchDailyMatrix(
   `);
 
   const threeActiveP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT mg.date AS d,
       COALESCE(SUM(mg.gm_active_ucnt), 0)::numeric AS v
     FROM anchor_minigame_daily mg
@@ -1154,7 +1221,7 @@ async function fetchDailyMatrix(
   `);
 
   const showUvP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT pd.date AS d,
       COALESCE(SUM(pd.show_uv), 0)::numeric AS v
     FROM anchor_portrait_daily pd
@@ -1165,7 +1232,7 @@ async function fetchDailyMatrix(
   `);
 
   const watchUvP = db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT pd.date AS d,
       COALESCE(SUM(pd.watch_uv), 0)::numeric AS v
     FROM anchor_portrait_daily pd
@@ -1357,7 +1424,7 @@ function aggregateMetric(
 async function fetchTopAnchors(
   filters: DrawerDetailFilters,
   metric: DrawerMetric,
-  scope: DashboardScope,
+  groups: SQL,
 ): Promise<{ rows: DrawerTopAnchor[]; total: number }> {
   const { date_from: dateFrom, date_to: dateTo } = filters;
   const fromUnix = Math.floor(new Date(dateFrom + "T00:00:00").getTime() / 1000);
@@ -1387,7 +1454,7 @@ async function fetchTopAnchors(
   // ─── first_live_anchor_count（全量，按首播时间降序）─────────────────────────
   if (metric === "first_live_anchor_count") {
     const rs = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT ${profileFields},
         ap.first_live_time_in_faction::numeric AS metric_value,
         TO_CHAR(TO_TIMESTAMP(ap.first_live_time_in_faction), 'YYYY-MM-DD') AS display_date
@@ -1407,7 +1474,7 @@ async function fetchTopAnchors(
   // ─── new_anchor_count（全量，按入会时间降序）────────────────────────────────
   if (metric === "new_anchor_count") {
     const rs = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT ${profileFields},
         ap.join_time::numeric AS metric_value,
         TO_CHAR(TO_TIMESTAMP(ap.join_time), 'YYYY-MM-DD') AS display_date
@@ -1425,7 +1492,7 @@ async function fetchTopAnchors(
   // ─── active_anchor_count（按开播天数 = COUNT distinct date 降序，Top 20）────
   if (metric === "active_anchor_count") {
     const rs = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT ${profileFields},
         COUNT(DISTINCT ad.date)::numeric AS metric_value
       FROM anchor_daily ad
@@ -1438,13 +1505,13 @@ async function fetchTopAnchors(
       ORDER BY metric_value DESC
       LIMIT 20
     `);
-    return { rows: mapTopAnchorRows(rs), total: await countActiveTotal(filters, scope) };
+    return { rows: mapTopAnchorRows(rs), total: await countActiveTotal(filters, groups) };
   }
 
   // ─── total_fan_ticket（音浪：anchor_daily 通用）────────────────────────────
   if (metric === "total_fan_ticket") {
     const rs = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT ${profileFields},
         COALESCE(SUM(ad.total_fan_ticket), 0)::numeric AS metric_value
       FROM anchor_daily ad
@@ -1457,14 +1524,14 @@ async function fetchTopAnchors(
       ORDER BY metric_value DESC
       LIMIT 20
     `);
-    return { rows: mapTopAnchorRows(rs), total: await countTotalFanTicketTotal(filters, scope) };
+    return { rows: mapTopAnchorRows(rs), total: await countTotalFanTicketTotal(filters, groups) };
   }
 
   // ─── show_uv / watch_uv（anchor_portrait_daily 通用）──────────────────────
   if (metric === "show_uv" || metric === "watch_uv") {
     const col = metric === "show_uv" ? sql`pd.show_uv` : sql`pd.watch_uv`;
     const rs = await db.execute(sql`
-      WITH ${anchorGroupCte(scope)}
+      WITH ${groups}
       SELECT ${profileFields},
         COALESCE(SUM(${col}), 0)::numeric AS metric_value
       FROM anchor_portrait_daily pd
@@ -1477,7 +1544,7 @@ async function fetchTopAnchors(
       ORDER BY metric_value DESC
       LIMIT 20
     `);
-    return { rows: mapTopAnchorRows(rs), total: await countPortraitTotal(filters, metric, scope) };
+    return { rows: mapTopAnchorRows(rs), total: await countPortraitTotal(filters, metric, groups) };
   }
 
   // ─── flow / live_flow / video_flow / install_or_activate ─────────────────
@@ -1488,7 +1555,7 @@ async function fetchTopAnchors(
     metric === "video_flow" ||
     metric === "install_or_activate"
   ) {
-    return await fetchTopAnchorsProjectBranched(filters, metric, scope);
+    return await fetchTopAnchorsProjectBranched(filters, metric, groups);
   }
 
   return { rows: [], total: 0 };
@@ -1509,13 +1576,10 @@ function mapTopAnchorRows(result: unknown): DrawerTopAnchor[] {
 }
 
 /** active_anchor_count 总数：DISTINCT anchor_id WHERE live_duration_1d > 0 */
-async function countActiveTotal(
-  filters: DrawerDetailFilters,
-  scope: DashboardScope,
-): Promise<number> {
+async function countActiveTotal(filters: DrawerDetailFilters, groups: SQL): Promise<number> {
   const { date_from: dateFrom, date_to: dateTo } = filters;
   const r = await db.execute(sql`
-    WITH ${anchorGroupCte(scope)}
+    WITH ${groups}
     SELECT COUNT(DISTINCT ad.anchor_id)::int AS c
     FROM anchor_daily ad
     JOIN anchor_group ag ON ag.anchor_id = ad.anchor_id
@@ -1529,11 +1593,11 @@ async function countActiveTotal(
 /** total_fan_ticket 总数：达成（>0）的主播数 */
 async function countTotalFanTicketTotal(
   filters: DrawerDetailFilters,
-  scope: DashboardScope,
+  groups: SQL,
 ): Promise<number> {
   const { date_from: dateFrom, date_to: dateTo } = filters;
   const r = await db.execute(sql`
-    WITH ${anchorGroupCte(scope)},
+    WITH ${groups},
     per_anchor AS (
       SELECT ad.anchor_id, COALESCE(SUM(ad.total_fan_ticket), 0) AS v
       FROM anchor_daily ad
@@ -1551,12 +1615,12 @@ async function countTotalFanTicketTotal(
 async function countPortraitTotal(
   filters: DrawerDetailFilters,
   metric: "show_uv" | "watch_uv",
-  scope: DashboardScope,
+  groups: SQL,
 ): Promise<number> {
   const { date_from: dateFrom, date_to: dateTo } = filters;
   const col = metric === "show_uv" ? sql`pd.show_uv` : sql`pd.watch_uv`;
   const r = await db.execute(sql`
-    WITH ${anchorGroupCte(scope)},
+    WITH ${groups},
     per_anchor AS (
       SELECT pd.anchor_id, COALESCE(SUM(${col}), 0) AS v
       FROM anchor_portrait_daily pd
@@ -1579,7 +1643,7 @@ async function countPortraitTotal(
 async function fetchTopAnchorsProjectBranched(
   filters: DrawerDetailFilters,
   metric: "flow" | "live_flow" | "video_flow" | "install_or_activate",
-  scope: DashboardScope,
+  groups: SQL,
 ): Promise<{ rows: DrawerTopAnchor[]; total: number }> {
   const { date_from: dateFrom, date_to: dateTo } = filters;
 
@@ -1668,7 +1732,7 @@ async function fetchTopAnchorsProjectBranched(
 
   // 主查询：合并 per-anchor 后排序
   const rs = await db.execute(sql`
-    WITH ${anchorGroupCte(scope)},
+    WITH ${groups},
     per_anchor AS (
       SELECT anchor_id, SUM(v)::numeric AS metric_value
       FROM (${unionSql}) u
@@ -1684,7 +1748,7 @@ async function fetchTopAnchorsProjectBranched(
   `);
 
   const totalR = await db.execute(sql`
-    WITH ${anchorGroupCte(scope)},
+    WITH ${groups},
     per_anchor AS (
       SELECT anchor_id, SUM(v)::numeric AS metric_value
       FROM (${unionSql}) u
@@ -1723,10 +1787,13 @@ export async function getDrawerDetail(
     };
   }
 
+  // Resolve scoped project attribution once. Each matrix/list/count query reuses
+  // these request-local rows instead of rescanning historical game records.
+  const groups = await resolveAnchorGroup(scope);
   const [curMatrix, prevMatrix, topAnchorsResult] = await Promise.all([
-    fetchDailyMatrix(filters, dateFrom, dateTo, scope),
-    fetchDailyMatrix(filters, prevFrom, prevTo, scope),
-    fetchTopAnchors(filters, metric, scope),
+    fetchDailyMatrix(filters, dateFrom, dateTo, groups),
+    fetchDailyMatrix(filters, prevFrom, prevTo, groups),
+    fetchTopAnchors(filters, metric, groups),
   ]);
 
   // 哪些 metric 不适用（依据 filters.project）

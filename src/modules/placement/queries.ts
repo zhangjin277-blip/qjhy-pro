@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { eq, sql, type SQL } from "drizzle-orm";
 import { dingtalk_user } from "@/db/schema";
 import { resolvePermission, getManagedDeptIds } from "@/modules/permissions/server";
+import type { ModuleKey } from "@/modules/permissions";
 import type { TimeRangeSelection } from "./filter-utils";
 
 /**
@@ -57,9 +58,10 @@ function scopeClause(
 export async function resolvePlacementScope(
   userId: string,
   emergencyMode = false,
+  module: ModuleKey = "placement",
 ): Promise<PlacementScope> {
   if (emergencyMode) return { kind: "all" };
-  const perm = await resolvePermission(userId, "placement");
+  const perm = await resolvePermission(userId, module);
   // 委托视图：直接以这些员工的并集做过滤，绕过 scope
   if (perm.delegatedUserIds && perm.delegatedUserIds.length > 0) {
     return { kind: "user_ids", ids: perm.delegatedUserIds };

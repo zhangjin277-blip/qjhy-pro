@@ -16,10 +16,11 @@ export default async function ScheduleOverviewPage({
   if (ctx.kind === "unauth") redirect("/login");
   if (ctx.kind === "user_not_synced") redirect("/login");
 
-  const [accounts, allBindings] = await Promise.all([
+  const [allAccounts, allBindings] = await Promise.all([
     listAccounts(product ? { product } : {}, ctx.dingtalkUserId, ctx.isEmergency),
     listBindings({}),
   ]);
+  const accounts = allAccounts.filter((a) => !a.deprecated_at); // 已废弃账号不进排班矩阵
 
   // 过滤 bindings 仅当前 accounts 的
   const accountIds = new Set(accounts.map((a) => a.id));

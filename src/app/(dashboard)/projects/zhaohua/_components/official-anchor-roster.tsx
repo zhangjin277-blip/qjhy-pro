@@ -295,10 +295,10 @@ function AnchorProfileDrawer({
                   {photos.map((photo) => (
                     <div
                       key={photo.id}
-                      className="group relative aspect-[3/4] overflow-hidden rounded-md border border-slate-200 bg-slate-50"
+                      className="group relative aspect-[3/4] overflow-hidden rounded-md border border-slate-200 bg-slate-100"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.url} alt={photo.name} className="size-full object-cover" />
+                      <img src={photo.url} alt={photo.name} className="size-full object-contain" />
                       <button
                         type="button"
                         onClick={() => void removePhoto(photo.id)}

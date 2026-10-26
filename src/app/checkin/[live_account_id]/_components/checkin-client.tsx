@@ -76,6 +76,7 @@ export function CheckinClient({ initialState, liveAccountId }: Props): React.JSX
         if (msg === "NOT_AN_ANCHOR") setError("你不在主播部门，无权打卡");
         else if (msg === "ALREADY_LIVE") setError("你已经在播这个账号");
         else if (msg === "EMERGENCY_NOT_ALLOWED") setError("应急账号不能打卡");
+        else if (msg === "ACCOUNT_DEPRECATED") setError("该账号已废弃，不能开播");
         else setError(msg);
         return;
       }

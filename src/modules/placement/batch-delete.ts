@@ -18,9 +18,10 @@ export interface DeleteBatchResult {
 /**
  * 删除一个上传 batch，并清理派生数据。
  *
- * - excel-upload：删除该 batch 在 cumulative_raw 的所有行 → 对每个受影响的
+ * - excel-upload 小时批次：删除该 batch 在 cumulative_raw 的所有行 → 对每个受影响的
  *   (dataset, account, date) 重算 placement_row（如果还有其它 batch 的累计数据，
  *   重新差分；如果完全空了，清掉 placement_row 对应行）
+ * - daily 日报批次不允许手动删除；新日报导入时按产品原子替换。
  * - pro3-migration：直接删 placement_row WHERE import_batch_id = batchId
  *
  * 不删 live_account stub（即使 stub 是这次 batch 创建的，也保留——可能被其它 batch 引用）。
@@ -32,6 +33,9 @@ export async function deleteBatchAndRecompute(batchId: string): Promise<DeleteBa
     .where(eq(placement_import_batch.id, batchId));
   const batch = batchRows.at(0);
   if (!batch) throw new Error(`batch ${batchId} not found`);
+  if (batch.granularity === "daily") {
+    throw new Error("日报汇总由新日报自动替换，不能手动删除日报批次；小时数据仍可单独删除。");
+  }
 
   let rowsDeleted = 0;
   let triplesRecomputed = 0;
@@ -84,19 +88,21 @@ export async function deleteBatchAndRecompute(batchId: string): Promise<DeleteBa
         if (cumRowsRaw.length === 0) continue; // 该 triple 已无累计数据，placement_row 也跟着空
 
         // 重新算增量 → 写回 placement_row
-        const cumRows: RawCumulativeRow[] = cumRowsRaw.map((c) => ({
-          date: c.date,
-          hour: c.hour,
-          dataset_id: c.dataset_id,
-          account_key: c.live_account_id,
-          subaccount_key: c.subaccount_name,
-          cost_yuan: Number(c.cost_yuan),
-          activations: c.activations,
-          payment_yuan: Number(c.payment_yuan),
-          start_download: c.start_download,
-          finish_download: c.finish_download,
-          raw: c.raw,
-        }));
+        const cumRows: RawCumulativeRow[] = cumRowsRaw
+          .filter((c) => !c.raw?._source_sheet)
+          .map((c) => ({
+            date: c.date,
+            hour: c.hour,
+            dataset_id: c.dataset_id,
+            account_key: c.live_account_id,
+            subaccount_key: c.subaccount_name,
+            cost_yuan: Number(c.cost_yuan),
+            activations: c.activations,
+            payment_yuan: Number(c.payment_yuan),
+            start_download: c.start_download,
+            finish_download: c.finish_download,
+            raw: c.raw,
+          }));
         const incRows = computeIncrements(cumRows);
         const hourlyMap = new Map<number, RawCumulativeRow>();
         for (const r of incRows) {

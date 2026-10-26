@@ -4,7 +4,7 @@ import { dingtalk_user, live_account } from "@/db/schema";
 import { schedule_override } from "@/db/schema/schedule-override";
 import { eq, inArray, sql } from "drizzle-orm";
 import { listAccounts } from "@/modules/live-account/server";
-import { listAnchors } from "@/modules/live-anchor/server";
+import { listScheduleAnchorOptions } from "@/modules/live-anchor/server";
 import { listBindings } from "@/modules/live-anchor";
 import { listRooms } from "@/modules/live-room/server";
 import type { AccountWithRelations } from "@/modules/live-account";
@@ -12,8 +12,6 @@ import type { OverrideRowView } from "../_components/schedule-override-tab";
 
 // 直播一部部门 ID — 钉钉权威源（与直播账号页一致）
 const LIVE_DEPT_ID = "724640467";
-// 主播候选部门（合作主播 + 运营 三套子部门）
-const ANCHOR_DEPT_IDS = ["728935814", "928732653", "929188023", "932021044"];
 
 export interface AccountEditDrawerData {
   accounts: AccountWithRelations[];
@@ -45,12 +43,12 @@ export async function getAccountEditDrawerData(
   dingtalkUserId?: string,
   isEmergency = false,
 ): Promise<AccountEditDrawerData> {
-  const [accounts, allBindings, rooms, allAnchors, activeUsers, placementLabelRows] =
+  const [accounts, allBindings, rooms, anchors, activeUsers, placementLabelRows] =
     await Promise.all([
       listAccounts({}, dingtalkUserId, isEmergency),
       listBindings({}),
       listRooms(dingtalkUserId, isEmergency),
-      listAnchors({}),
+      listScheduleAnchorOptions(),
       db.execute<{ user_id: string; name: string; title: string | null; active: boolean }>(sql`
         WITH RECURSIVE dept_tree AS (
           SELECT dept_id FROM dingtalk_dept WHERE dept_id = ${LIVE_DEPT_ID}
@@ -113,23 +111,6 @@ export async function getAccountEditDrawerData(
     (overridesByAccount[o.account_id] ??= []).push(o);
   }
 
-  // 主播候选：live_anchor 已建档 ∪ 钉钉主播部门成员（新主播没建档也能选）
-  const dingtalkAnchors = await db.execute<{ user_id: string; name: string }>(sql`
-    SELECT user_id, name FROM dingtalk_user
-    WHERE active = true
-      AND dept_ids ?| ARRAY[${sql.raw(ANCHOR_DEPT_IDS.map((d) => `'${d}'`).join(","))}]::text[]
-    ORDER BY name
-  `);
-  const anchorMap = new Map<string, { dingtalk_user_id: string; name: string }>();
-  for (const a of allAnchors) {
-    anchorMap.set(a.dingtalk_user_id, { dingtalk_user_id: a.dingtalk_user_id, name: a.name });
-  }
-  for (const u of dingtalkAnchors) {
-    if (!anchorMap.has(u.user_id)) {
-      anchorMap.set(u.user_id, { dingtalk_user_id: u.user_id, name: u.name });
-    }
-  }
-  const anchors = [...anchorMap.values()].sort((a, b) => a.name.localeCompare(b.name, "zh"));
 
   return {
     accounts,

@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
   const batch = await ingestRows({
     source: "excel-upload",
     dataset_id: datasetId,
+    granularity: parsed.granularity ?? "hourly",
     file_name: file.name,
     file_size_bytes: file.size,
     uploaded_by: session.user.id,

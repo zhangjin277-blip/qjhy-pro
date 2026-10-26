@@ -3,6 +3,7 @@ import cron from "node-cron";
 export interface Job {
   name: string;
   schedule: string; // cron expression
+  timezone?: string;
   task: () => Promise<void>;
 }
 
@@ -24,7 +25,7 @@ export function startScheduler(): void {
       } catch (err) {
         console.error(`[scheduler] ✗ ${job.name} failed:`, err);
       }
-    });
+    }, { timezone: job.timezone });
   }
   console.log(`[scheduler] started ${jobs.length} jobs`);
 }

@@ -31,9 +31,11 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       EMERGENCY_LOGIN_PASSWORD: ${EMERGENCY_LOGIN_PASSWORD}
       DINGTALK_BOT_WEBHOOK: ${DINGTALK_BOT_WEBHOOK:-}
+      PLACEMENT_ALERT_DINGTALK_WEBHOOK: ${PLACEMENT_ALERT_DINGTALK_WEBHOOK:-}
       DINGTALK_APP_KEY: ${DINGTALK_APP_KEY:-}
       DINGTALK_APP_SECRET: ${DINGTALK_APP_SECRET:-}
       DINGTALK_CORP_ID: ${DINGTALK_CORP_ID:-}
+      DINGTALK_CLI_PROFILE: ${DINGTALK_CLI_PROFILE:-}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NODE_ENV: production
       EDITING_NAS_PATH: /mnt/qjhy-edit
@@ -44,6 +46,8 @@ services:
     volumes:
       - editing_nas:/mnt/qjhy-edit
       - course_nas:/mnt/miracle-courses
+      - ./dws-auth/local-share:/root/.local/share/dws-cli
+      - ./dws-auth/config:/root/.dws
 
   worker:
     build:
@@ -59,6 +63,8 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       EMERGENCY_LOGIN_PASSWORD: ${EMERGENCY_LOGIN_PASSWORD}
       DINGTALK_BOT_WEBHOOK: ${DINGTALK_BOT_WEBHOOK:-}
+      PLACEMENT_ALERT_DINGTALK_WEBHOOK: ${PLACEMENT_ALERT_DINGTALK_WEBHOOK:-}
+      DINGTALK_CLI_PROFILE: ${DINGTALK_CLI_PROFILE:-}
       NODE_ENV: production
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
@@ -66,6 +72,8 @@ services:
       EDITING_NAS_PATH: /mnt/qjhy-edit
     volumes:
       - editing_nas:/mnt/qjhy-edit
+      - ./dws-auth/local-share:/root/.local/share/dws-cli
+      - ./dws-auth/config:/root/.dws
 
 volumes:
   qjhy_postgres_data:

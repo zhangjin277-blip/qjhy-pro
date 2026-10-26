@@ -608,23 +608,23 @@ function SectionBlock({
 
 /* ──────────────────── 主组件 ──────────────────── */
 
-export function DashboardDrawer({ payload, onClose }: DashboardDrawerProps): React.JSX.Element {
+export function DashboardDrawer(props: DashboardDrawerProps): React.JSX.Element | null {
+  // A new context starts with its clicked metric. Resetting it in an effect used
+  // to dispatch a second request after the initial request had already started.
+  return props.payload ? (
+    <OpenDashboardDrawer key={JSON.stringify(props.payload)} {...props} />
+  ) : null;
+}
+
+function OpenDashboardDrawer({ payload, onClose }: DashboardDrawerProps): React.JSX.Element {
   const router = useRouter();
   const [data, setData] = useState<DrawerDetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedKey, setSelectedKey] = useState<DrawerMetric | null>(null);
+  const [selectedKey, setSelectedKey] = useState<DrawerMetric | null>(payload?.metric ?? null);
 
   const open = payload !== null;
   const breadcrumb = useMemo(() => (payload ? buildBreadcrumb(payload) : ""), [payload]);
-
-  // 重置 selectedKey 跟随 payload.metric；payload 切换时清空旧数据
-  useEffect(() => {
-    if (payload) {
-      setSelectedKey(payload.metric);
-      setData(null);
-    }
-  }, [payload]);
 
   // 拉数据：依赖 selectedKey 以便切换 KPI 时重新拉「达成主播列表」
   // 注意：保留之前已加载的 data 不立即清空，避免 KPI/曲线/日明细表闪白屏；

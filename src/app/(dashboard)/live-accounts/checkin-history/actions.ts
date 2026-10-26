@@ -8,10 +8,26 @@ import {
   forceEndSession,
   ForceEndPermissionDenied,
   insertManualSession,
+  SessionOverlapError,
   updateSessionAnchor,
   updateSessionTime,
 } from "@/modules/checkin/server";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
+import { resolvePlacementScope } from "@/modules/placement/server";
+
+function formatOverlapError(err: SessionOverlapError): string {
+  const fmt = (d: Date) =>
+    d.toLocaleString("zh-CN", {
+      timeZone: "Asia/Shanghai",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  const { anchorName, startAt, endAt } = err.conflict;
+  return `与已有场次时段重叠：${anchorName ?? "未知主播"} ${fmt(startAt)} ~ ${endAt ? fmt(endAt) : "进行中"}，请先调整该场次`;
+}
 
 export async function fetchCheckinDay(
   date: string,
@@ -19,7 +35,9 @@ export async function fetchCheckinDay(
 ): Promise<CheckinDayResult | null> {
   const ctx = await getCurrentDingtalkUser();
   if (ctx.kind !== "ok") return null;
-  return await getCheckinDay(date, product || undefined);
+  const scope = await resolvePlacementScope(ctx.dingtalkUserId, ctx.isEmergency, "checkin_history");
+  if (scope.kind === "reject") return null;
+  return await getCheckinDay(date, product || undefined, scope);
 }
 
 export interface ForceEndResult {
@@ -109,6 +127,7 @@ export async function insertManualSessionAction(args: {
     return { ok: true };
   } catch (err) {
     if (err instanceof ForceEndPermissionDenied) return { ok: false, error: "无权限补时长" };
+    if (err instanceof SessionOverlapError) return { ok: false, error: formatOverlapError(err) };
     const msg = err instanceof Error ? err.message : "未知错误";
     if (msg === "ACCOUNT_NOT_FOUND") return { ok: false, error: "账号不存在" };
     if (msg === "ANCHOR_NOT_FOUND") return { ok: false, error: "主播不存在" };
@@ -150,6 +169,7 @@ export async function updateSessionTimeAction(args: {
     return { ok: true };
   } catch (err) {
     if (err instanceof ForceEndPermissionDenied) return { ok: false, error: "无权限改时间" };
+    if (err instanceof SessionOverlapError) return { ok: false, error: formatOverlapError(err) };
     const msg = err instanceof Error ? err.message : "未知错误";
     if (msg === "SESSION_NOT_FOUND") return { ok: false, error: "记录不存在" };
     if (msg === "INVALID_TIME_RANGE") return { ok: false, error: "结束必须晚于开始" };

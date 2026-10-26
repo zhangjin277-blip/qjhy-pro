@@ -1,0 +1,571 @@
+.board {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: var(--foreground);
+  --muted-text: #8795aa;
+  --line: #edf0f6;
+}
+.dateBar {
+  margin-bottom: 16px;
+}
+.dateNote {
+  color: var(--muted-text);
+  font-size: 10px;
+}
+.kpis > div {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+.kpis > div > div {
+  padding: 43px 17px 15px;
+  min-height: 145px;
+  border-radius: 10px;
+  box-shadow: 0 3px 8px #243e6508;
+}
+.kpis > div > div:first-child {
+  background: linear-gradient(118deg, #edf2ff, #fafbff);
+  border-color: #dce5ff;
+}
+.kpis > div > div:first-child :global(.kpi-value) {
+  color: #3455d5;
+}
+.kpis :global(.kpi-value) {
+  font-size: 31px;
+  letter-spacing: -0.6px;
+  line-height: 1.2;
+  margin-bottom: 12px;
+}
+.kpis :global(.kpi-value) small {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 400;
+  margin-left: 5px;
+}
+.kpiHit {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 17px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--muted-text);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.kpiHit:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.kpiHit:disabled {
+  cursor: default;
+}
+.kpiHit svg {
+  opacity: 0.65;
+}
+.compares {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.compares > div {
+  font-size: 10px;
+}
+.panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 2px 6px #2e456505;
+}
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 17px 20px 14px;
+}
+.panelHeader h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 650;
+  margin: 0;
+}
+.panelHeader h2 > i {
+  width: 3px;
+  height: 14px;
+  background: #5276e9;
+  border-radius: 2px;
+  flex: none;
+}
+.panelHeader p {
+  color: var(--muted-text);
+  font-size: 11px;
+  margin: 6px 0 0;
+}
+.tableTools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+.tableTools > span,
+.subtle {
+  color: var(--muted-text);
+  font-size: 10px;
+  font-weight: 400;
+}
+.tableScroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.matrix {
+  width: 100%;
+  min-width: 1100px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-variant-numeric: tabular-nums;
+}
+.projectColumn {
+  width: 150px;
+}
+.matrix th {
+  font-size: 11px;
+  font-weight: 500;
+  text-align: right;
+  padding: 10px 8px;
+  color: var(--muted-text);
+  background: #f9faff;
+}
+.matrix thead .groupHead th {
+  font-size: 10px;
+  text-align: center;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: #95a0b5;
+  letter-spacing: 1px;
+}
+.matrix thead .groupHead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  text-align: left;
+  padding-left: 20px;
+  letter-spacing: 0;
+}
+.matrix td {
+  padding: 0;
+  border-top: 1px solid var(--line);
+  text-align: right;
+  background: var(--card);
+}
+.matrix tbody .projectCell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  padding: 16px 12px 16px 20px;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: 1px 0 0 var(--line);
+}
+.matrix tr > :nth-child(2) {
+  background: #f6f8ff;
+}
+.matrix .groupHead > :nth-child(2) {
+  background: #f9faff;
+}
+.projectName {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+.projectName > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: none;
+}
+.projectSub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 9px;
+  color: var(--muted-text);
+}
+.projectSub button {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9px;
+  color: #758bb3;
+  cursor: pointer;
+}
+.projectSub button[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.metricButton {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  min-height: 76px;
+  padding: 12px 8px;
+  text-align: right;
+  cursor: pointer;
+}
+.metricButton:hover {
+  background: #edf2ff;
+}
+.metricButton:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+.metricButton:disabled {
+  color: var(--muted-text);
+  cursor: default;
+}
+.metricNumber {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+.totalMetric .metricNumber {
+  color: #4865aa;
+}
+.metricButton > span:last-child {
+  font-size: 10px;
+  margin-top: 6px;
+}
+.matrix .detailRow td,
+.matrix .detailRow th {
+  background: #fbfcff;
+}
+.detailRow .metricButton {
+  min-height: 57px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.detailRow .metricNumber {
+  font-size: 11px;
+  font-weight: 500;
+  color: #687b9b;
+}
+.groupName {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-left: 17px;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.groupName i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.missing {
+  display: block;
+  padding: 20px 10px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.tableFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding: 11px 20px;
+  font-size: 10px;
+  color: var(--muted-text);
+}
+.bottomGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.13fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+.bottomGrid > section {
+  display: flex;
+  flex-direction: column;
+}
+.bottomGrid .panelHeader {
+  flex-wrap: wrap;
+}
+.bottomGrid .panelHeader h2 {
+  white-space: nowrap;
+}
+.bottomGrid .panelHeader button {
+  font-size: 10px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.trendBody {
+  padding: 0 20px 14px;
+}
+.chartSummary {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin: 0 0 5px 48px;
+  font-size: 10px;
+  color: var(--muted-text);
+}
+.chartSummary strong {
+  font-size: 23px;
+  font-weight: 600;
+  color: #4865aa;
+}
+.chartSummary > span:last-child {
+  margin-left: auto;
+  font-size: 9px;
+}
+.chartFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-left: 48px;
+  font-size: 9px;
+  color: var(--muted-text);
+}
+.chartFooter > span:first-child {
+  color: #6782c5;
+}
+.buyuBody {
+  padding: 0 20px;
+  flex: 1;
+}
+.buyuHead,
+.buyuRow {
+  display: grid;
+  grid-template-columns: 0.7fr 1.1fr 0.8fr 1.1fr 0.85fr;
+  align-items: center;
+  text-align: right;
+  gap: 8px;
+}
+.buyuHead {
+  font-size: 10px;
+  color: var(--muted-text);
+  padding: 9px 0 10px;
+}
+.buyuHead > :first-child {
+  text-align: left;
+}
+.buyuRow {
+  width: 100%;
+  padding: 9px 0 5px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.buyuRow:hover {
+  background: #fafbff;
+}
+.buyuRow:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.buyuRow strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+.buyuRow small {
+  display: block;
+  margin-top: 5px;
+  font-size: 9px;
+  color: var(--muted-text);
+}
+.buyuRow small:global(.text-change-up) {
+  color: var(--change-up);
+}
+.buyuRow small:global(.text-change-down) {
+  color: var(--change-down);
+}
+.buyuProduct {
+  border-top: 1px solid var(--line);
+}
+.buyuRow .buyuQualified strong {
+  color: #16875d;
+}
+.buyuLink {
+  color: #5276e9;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.buyuAchievement {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 0 9px;
+  font-size: 9px;
+  color: var(--muted-text);
+}
+.buyuAchievement > span {
+  padding: 3px 5px;
+  border-radius: 4px;
+  background: #f6f8fc;
+}
+.buyuAchievement > button {
+  color: #16875d;
+  margin-right: auto;
+  cursor: pointer;
+}
+.buyuAchievement .buyuNinety {
+  background: #eef4ff;
+  color: #5276d4;
+}
+.buyuAchievement .buyuEighty {
+  background: #fff7e8;
+  color: #a4771d;
+}
+.buyuAchievement .buyuBelow {
+  background: #fff0f0;
+  color: #bb6262;
+}
+.productBadge {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 26px;
+  border-radius: 4px;
+  background: #f0f4ff;
+  color: #7188bc;
+  font-size: 10px;
+}
+.buyuFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 20px 14px;
+  margin-top: auto;
+  font-size: 9px;
+  color: var(--muted-text);
+}
+.empty {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+@media (min-width: 1700px) {
+  .matrix {
+    min-width: 1200px;
+  }
+  .metricButton {
+    min-height: 82px;
+  }
+}
+@media (max-width: 1100px) {
+  .kpis > div {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .bottomGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .panelHeader {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 767px) {
+  .board {
+    gap: 14px;
+  }
+  .kpis > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .kpis > div > div:first-child {
+    grid-column: 1 / -1;
+  }
+  .kpis > div > div {
+    min-height: 136px;
+    padding-left: 13px;
+    padding-right: 13px;
+  }
+  .kpiHit {
+    padding-left: 13px;
+    padding-right: 13px;
+  }
+  .kpis :global(.kpi-value) {
+    font-size: 28px;
+  }
+  .dateNote {
+    display: none;
+  }
+  .dateBar {
+    margin-bottom: 12px;
+  }
+  .panelHeader {
+    padding: 15px;
+  }
+  .panelHeader p {
+    font-size: 10px;
+    line-height: 1.8;
+  }
+  .tableTools > span,
+  .tableFooter > span:last-child {
+    display: none;
+  }
+  .tableFooter {
+    padding-left: 15px;
+    font-size: 9px;
+  }
+  .matrix {
+    min-width: 1080px;
+  }
+  .projectColumn {
+    width: 125px;
+  }
+  .matrix tbody .projectCell,
+  .matrix thead .groupHead th:first-child {
+    padding-left: 12px;
+  }
+  .projectName {
+    font-size: 11px;
+  }
+  .projectSub {
+    gap: 4px;
+  }
+  .chartSummary {
+    margin-left: 20px;
+  }
+  .chartFooter {
+    padding-left: 0;
+    font-size: 8px;
+  }
+  .trendBody,
+  .buyuBody {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .buyuFoot {
+    padding-left: 12px;
+    padding-right: 12px;
+    font-size: 8px;
+  }
+}

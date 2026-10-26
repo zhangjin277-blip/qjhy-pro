@@ -7,3 +7,12 @@ docs
 *.md
 .husky
 .vscode
+.local-backups
+_temp
+tmp
+.tmp
+.tmp-*
+.next-*
+.tmp-nas-release
+downloads
+tsconfig.tsbuildinfo

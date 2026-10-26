@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Archive, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import type { AccountWithRelations } from "@/modules/live-account";
 import { AccountTable } from "./account-table";
 import { AccountBentoGrid } from "./account-bento-grid";
@@ -84,17 +84,22 @@ export function AccountListClient({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(25);
+  const [showDeprecated, setShowDeprecated] = useState(false);
+
+  // 已废弃账号折叠归档到列表底部，不参与分页
+  const activeAccounts = initialAccounts.filter((a) => !a.deprecated_at);
+  const deprecatedAccounts = initialAccounts.filter((a) => !!a.deprecated_at);
 
   // 切换 product / pageSize 时回到第 1 页
   useEffect(() => {
     setPage(1);
   }, [selectedProduct, pageSize]);
 
-  const totalPages = Math.max(1, Math.ceil(initialAccounts.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(activeAccounts.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pagedAccounts = initialAccounts.slice((safePage - 1) * pageSize, safePage * pageSize);
-  const rangeStart = initialAccounts.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const rangeEnd = Math.min(safePage * pageSize, initialAccounts.length);
+  const pagedAccounts = activeAccounts.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const rangeStart = activeAccounts.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, activeAccounts.length);
 
   const onProductChange = (p: string) => {
     router.push(`/live-accounts?product=${encodeURIComponent(p)}`);
@@ -179,10 +184,10 @@ export function AccountListClient({
       )}
 
       {/* Pagination */}
-      {initialAccounts.length > 0 && (
+      {activeAccounts.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 text-[12.5px] text-slate-500 tabular-nums">
           <span>
-            共 <strong className="text-slate-800">{initialAccounts.length}</strong> 个 · 当前{" "}
+            共 <strong className="text-slate-800">{activeAccounts.length}</strong> 个 · 当前{" "}
             <strong className="text-slate-800">
               {rangeStart}-{rangeEnd}
             </strong>
@@ -217,6 +222,37 @@ export function AccountListClient({
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
+        </div>
+      )}
+
+      {/* 已废弃账号：折叠归档 */}
+      {deprecatedAccounts.length > 0 && (
+        <div className="mt-6 rounded-lg border border-dashed border-slate-200">
+          <button
+            type="button"
+            onClick={() => setShowDeprecated((v) => !v)}
+            className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] text-slate-500 hover:bg-slate-50"
+            aria-expanded={showDeprecated}
+          >
+            <Archive className="h-4 w-4" />
+            <span>
+              已废弃 <span className="tabular-nums">{deprecatedAccounts.length}</span> 个
+            </span>
+            <span className="text-xs text-slate-400">历史数据保留，点开账号可恢复</span>
+            <ChevronDown
+              className={`ml-auto h-4 w-4 transition-transform ${showDeprecated ? "rotate-180" : ""}`}
+            />
+          </button>
+          {showDeprecated && (
+            <div className="border-t border-dashed border-slate-200 p-2 opacity-70">
+              <AccountTable
+                accounts={deprecatedAccounts}
+                bindingsByAccount={bindingsByAccount}
+                avatarByPlatformId={avatarByPlatformId}
+                onEdit={openEdit}
+              />
+            </div>
+          )}
         </div>
       )}
 
