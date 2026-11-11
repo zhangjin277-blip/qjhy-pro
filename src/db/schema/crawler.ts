@@ -42,6 +42,15 @@ export const crawler_cookie_session = pgTable("crawler_cookie_session", {
   updated_at: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/** 采集相关的奇迹人通知开关。Webhook 本身仍由服务端环境变量管理。 */
+export const crawler_notification_setting = pgTable("crawler_notification_setting", {
+  module_key: text("module_key").primaryKey(),
+  module_name: text("module_name").notNull(),
+  description: text("description"),
+  enabled: boolean("enabled").notNull().default(true),
+  updated_at: timestamp("updated_at").notNull().defaultNow(),
+});
+
 /**
  * 字段中文显示名 + 单位 + 显示控制。
  * 仅"展示层"配置——不影响存储/采集。

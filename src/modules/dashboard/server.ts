@@ -4,6 +4,7 @@ export {
   getCoreKpis,
   getSection2Breakdown,
   getDrawerDetail,
+  getDrawerTopAnchors,
 } from "./queries";
 export { resolveDashboardScope } from "./scope";
 export type { DashboardScope } from "./scope";

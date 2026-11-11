@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import {
   getDrawerDetail,
+  getDrawerTopAnchors,
   resolveDashboardScope,
   type DashboardScope,
 } from "@/modules/dashboard/server";
@@ -45,6 +46,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const projectRaw = sp.get("project");
   const groupRaw = sp.get("group");
   const metricRaw = sp.get("metric");
+  const onlyTop = sp.get("only") === "top";
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
     return NextResponse.json({ error: "INVALID_DATE" }, { status: 400 });
@@ -78,6 +80,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   try {
+    if (onlyTop) {
+      const top = await getDrawerTopAnchors(filters, scope);
+      return NextResponse.json(top);
+    }
     const data = await getDrawerDetail(filters, scope);
     return NextResponse.json(data);
   } catch (e) {

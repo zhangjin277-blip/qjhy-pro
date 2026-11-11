@@ -71,7 +71,9 @@ export async function GET(request: Request) {
     if (query.has("history"))
       return Response.json({ items: await goalHistory(query.get("history") ?? "") }, { headers });
     return Response.json(
-      await listGoals(query.get("period") ?? undefined, query.get("home") === "1"),
+      await listGoals(query.get("period") ?? undefined, query.get("home") === "1", {
+        resolvePeriod: query.get("resolve-period") ?? undefined,
+      }),
       { headers },
     );
   } catch (error) {

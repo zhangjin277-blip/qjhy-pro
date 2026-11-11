@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -71,6 +73,10 @@ export const people_performance_profile = pgTable(
     updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    probationMonthsCheck: check(
+      "people_performance_profile_probation_months_check",
+      sql`${t.probation_months} IN (2, 3, 6)`,
+    ),
     idx_manager: index("idx_people_performance_profile_manager").on(t.manager_user_id),
     idx_skip_manager: index("idx_people_performance_profile_skip_manager").on(
       t.skip_manager_user_id,

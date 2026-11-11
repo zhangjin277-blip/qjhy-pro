@@ -10,6 +10,7 @@ import {
   triggerKuaishouSync,
   triggerZhaohuaOfficialReplay,
 } from "@/modules/crawler";
+import { COOKIE_GROUPS } from "../_lib/cookie-groups";
 import { formatOutputSummary } from "../_lib/job-meta";
 
 // ---- API 返回类型（与 /api/admin/crawler/matrix 对齐）----
@@ -68,7 +69,7 @@ const DATELESS_ROWS: { job: string; label: string; freq: string; trigger?: "memb
     {
       job: "crawler:sync_kuaishou_today_live",
       label: "今日实时直播",
-      freq: "每 10 分钟",
+      freq: "每 30 分钟",
       trigger: "today",
     },
     { job: "crawler:sync_kuaishou_live_snapshot", label: "直播趋势快照", freq: "每 5 分钟" },
@@ -312,31 +313,39 @@ export function MatrixPanel(): React.JSX.Element {
 
   return (
     <div className="space-y-3">
-      {/* 健康条 */}
-      <div className="flex flex-wrap items-center gap-2">
-        {data.cookies.map((c) => {
-          const ok = c.status === "active";
+      <div className="grid gap-3 lg:grid-cols-3">
+        {COOKIE_GROUPS.map((group) => {
+          const cookies = data.cookies.filter((cookie) => group.keys.includes(cookie.basecamp));
+          if (!cookies.length) return null;
           return (
-            <span
-              key={c.basecamp}
-              className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs ${
-                ok ? "border-border bg-card" : "border-red-200 bg-red-50 text-red-700"
-              }`}
-            >
-              <span className={`h-2 w-2 rounded-full ${ok ? "bg-emerald-500" : "bg-red-500"}`} />
-              {COOKIE_NAME[c.basecamp] ?? c.basecamp}
-              <span className="text-muted-foreground">
-                {ok ? (c.expiresAt ? `有效 · ${c.expiresAt.slice(5, 10)} 过期` : "有效") : "已过期"}
-              </span>
-            </span>
+            <section key={group.key} className="rounded-xl border bg-card p-3">
+              <h3 className="mb-2 text-sm font-semibold text-slate-700">{group.label}</h3>
+              <div className="flex flex-wrap gap-2">
+                {cookies.map((cookie) => (
+                  <span
+                    key={cookie.basecamp}
+                    className={`inline-flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs ${cookie.status === "active" ? "border-slate-100 bg-slate-50 text-slate-600" : "border-red-100 bg-red-50 text-red-600"}`}
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${cookie.status === "active" ? "bg-emerald-500" : "bg-red-500"}`}
+                    />
+                    {COOKIE_NAME[cookie.basecamp] ?? cookie.basecamp}
+                    <span>
+                      {cookie.status === "active" ? "有效" : "已过期"}
+                      {cookie.expiresAt ? ` · ${cookie.expiresAt.slice(5, 10)} 到期` : ""}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </section>
           );
         })}
-        {data.fail24h > 0 && (
-          <span className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3.5 py-1.5 text-xs text-red-700">
-            <span className="h-2 w-2 rounded-full bg-red-500" />近 24h 失败 {data.fail24h} 个
-          </span>
-        )}
-        <span className="text-muted-foreground ml-auto text-xs">30 秒自动刷新</span>
+      </div>
+      <div className="flex justify-between text-xs text-slate-400">
+        <span className={data.fail24h > 0 ? "text-red-600" : ""}>
+          近 24 小时失败 {data.fail24h} 个
+        </span>
+        <span>30 秒自动刷新</span>
       </div>
 
       <LingjiCookieForm onDone={reload} />

@@ -65,3 +65,5 @@ export {
   saveRecruitmentDemand,
   syncRecruitmentPipelineFromDingtalkAction,
 } from "./center-actions";
+export { shanghaiMonth, type RecruitmentStatisticsData } from "./statistics";
+export { getRecruitmentStatisticsAction } from "./statistics-actions";

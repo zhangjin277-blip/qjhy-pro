@@ -265,7 +265,7 @@ function cycleProgressRank(stage: PerformanceStage): number {
 async function reconcileProbationCycleDates(
   userId: string,
   hireDate: string,
-  probationMonths: 2 | 6,
+  probationMonths: 2 | 3 | 6,
   managerUserId: string,
 ): Promise<void> {
   const periods = buildProbationPeriods(hireDate, probationMonths);
@@ -699,6 +699,51 @@ export async function bulkConfigurePeopleProfiles(input: unknown): Promise<{
   return { ok: true, configured: configuredUserIds.length, failed };
 }
 
+export async function openProbationGoalSetting(input: unknown): Promise<{ ok: true }> {
+  const data = CycleIdInput.parse(input);
+  const [access, cycle] = await Promise.all([
+    resolvePerformanceAccess(),
+    requireCycle(data.cycleId),
+  ]);
+  if (
+    access.userId !== cycle.user_id &&
+    access.userId !== cycle.manager_user_id &&
+    !access.manageProfiles &&
+    !access.manageAll
+  ) {
+    throw new AppError(
+      "AUTH_FORBIDDEN",
+      "只有员工本人、直接上级或档案管理员可以提前开启目标填写",
+      403,
+    );
+  }
+  if (cycle.kind !== "probation" || cycle.stage !== "scheduled") {
+    throw new AppError(
+      "PERFORMANCE_STAGE_MISMATCH",
+      "只有未开始的试用期周期可以提前开启目标填写",
+      409,
+    );
+  }
+  await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(performance_cycle)
+      .set({ stage: "goal_setting", updated_at: new Date() })
+      .where(and(eq(performance_cycle.id, cycle.id), eq(performance_cycle.stage, "scheduled")))
+      .returning({ id: performance_cycle.id });
+    if (!updated)
+      throw new AppError("PERFORMANCE_CONCURRENT_UPDATE", "环节已被其他人处理，请刷新后重试", 409);
+    await tx.insert(performance_event).values({
+      cycle_id: cycle.id,
+      actor_user_id: access.userId,
+      event_type: "goal_setting_opened_early",
+      from_stage: "scheduled",
+      to_stage: "goal_setting",
+    });
+  });
+  await notifyCycleStage(cycle.id, "goal_setting", "early:goal_setting");
+  return { ok: true };
+}
+
 export async function submitPerformanceGoals(input: unknown): Promise<{ ok: true }> {
   const data = SubmitGoalsInput.parse(input);
   const [access, cycle] = await Promise.all([
@@ -1117,12 +1162,12 @@ export async function calibratePerformance(input: unknown): Promise<{ ok: true }
     throw new AppError("PERFORMANCE_SCORE_INCOMPLETE", "请先完成上级评分", 400);
   }
   const finalGrade = cycle.kind === "probation" ? (data.rating ?? null) : gradeForScore(finalScore);
-  const next: PerformanceStage = cycle.kind === "probation" && !cycle.requires_final_review
-    ? "completed"
-    : "employee_confirm";
-  const probationResult = cycle.kind === "probation" && cycle.requires_final_review
-    ? (data.probationResult ?? null)
-    : null;
+  const next: PerformanceStage =
+    cycle.kind === "probation" && !cycle.requires_final_review ? "completed" : "employee_confirm";
+  const probationResult =
+    cycle.kind === "probation" && cycle.requires_final_review
+      ? (data.probationResult ?? null)
+      : null;
   const now = new Date();
   assertStage(cycle.stage, next);
   const [updated] = await db

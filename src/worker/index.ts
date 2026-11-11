@@ -254,7 +254,9 @@ registerJob({
 registerJob({
   name: "dingtalk-placement-import",
   schedule: "10 11 * * *",
-  task: runDingtalkPlacementImport,
+  task: async () => {
+    await runDingtalkPlacementImport();
+  },
 });
 
 // 每小时第 5 分钟读取 3 个投放播报群。与上面的日报导入分开，日报不会覆盖小时数据。

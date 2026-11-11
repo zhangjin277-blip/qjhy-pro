@@ -12,6 +12,12 @@ import {
 } from "@/modules/people-performance/date-utils";
 
 describe("people performance period rules", () => {
+  it("builds one complete three-month probation cycle", () => {
+    expect(buildProbationPeriods("2026-08-26", 3)).toEqual([
+      { label: "3个月试用期考核", start: "2026-08-26", end: "2026-11-25", sequence: 1 },
+    ]);
+    expect(buildProbationPeriods("2026-01-31", 3)[0]?.end).toBe("2026-04-29");
+  });
   it("builds one two-month probation cycle", () => {
     expect(buildProbationPeriods("2026-01-31", 2)).toEqual([
       {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { JOB_LABEL, STATE_LABEL, HIGH_FREQ_JOBS, formatOutputSummary } from "../_lib/job-meta";
 
@@ -21,6 +21,8 @@ interface JobRow {
 type Filter = "all" | "failed" | "active";
 
 export function LogTable(): React.JSX.Element {
+  const logRef = useRef<HTMLDivElement>(null);
+  const followRef = useRef(true);
   const [jobs, setJobs] = useState<JobRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -47,6 +49,10 @@ export function LogTable(): React.JSX.Element {
       clearInterval(t);
     };
   }, [showHighFreq]);
+
+  useEffect(() => {
+    if (followRef.current && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [jobs, filter, showHighFreq]);
 
   if (error) return <div className="text-change-up text-sm">加载失败: {error}</div>;
   if (!jobs) return <div className="text-muted-foreground text-sm">加载中...</div>;
@@ -75,9 +81,9 @@ export function LogTable(): React.JSX.Element {
   );
 
   return (
-    <div className="bg-card space-y-3 rounded-lg border p-4">
+    <div className="bg-card space-y-4 rounded-2xl border p-5">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">执行流水（最近 24 小时）</h3>
+        <h3 className="text-base font-semibold">采集日志（最近 24 小时）</h3>
         <span className="text-muted-foreground text-xs">10 秒自动刷新</span>
       </div>
 
@@ -95,62 +101,54 @@ export function LogTable(): React.JSX.Element {
         </label>
       </div>
 
-      {visible.length === 0 ? (
-        <div className="text-muted-foreground text-sm">没有符合条件的记录</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm tabular-nums">
-            <thead className="text-muted-foreground text-xs">
-              <tr className="border-b">
-                <th className="px-2 py-1.5 text-left">任务</th>
-                <th className="px-2 py-1.5 text-left">日期</th>
-                <th className="px-2 py-1.5 text-left">状态</th>
-                <th className="px-2 py-1.5 text-left">结果</th>
-                <th className="px-2 py-1.5 text-right">耗时</th>
-                <th className="px-2 py-1.5 text-left">完成时间</th>
-                <th className="px-2 py-1.5 text-left">错误</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((j) => (
-                <tr key={j.id} className="hover:bg-muted/40 border-b last:border-0">
-                  <td className="px-2 py-1.5">{JOB_LABEL[j.name] ?? j.name}</td>
-                  <td className="px-2 py-1.5">{j.date ?? "—"}</td>
-                  <td className="px-2 py-1.5">
-                    <span
-                      className={cn(
-                        "rounded px-1.5 py-0.5 text-xs",
-                        j.state === "active" && "text-primary bg-primary/10",
-                        j.state === "completed" && "bg-emerald-50 text-emerald-700",
-                        (j.state === "failed" || j.state === "expired") && "bg-red-50 text-red-600",
-                        j.state === "created" && "bg-muted text-muted-foreground",
-                        j.state === "retry" && "bg-amber-500/10 text-amber-600",
-                      )}
-                    >
-                      {STATE_LABEL[j.state] ?? j.state}
-                      {j.attempt && j.attempt > 1 ? ` ×${j.attempt}` : ""}
-                    </span>
-                  </td>
-                  <td className="text-foreground px-2 py-1.5 text-xs">
-                    {formatOutputSummary(j.output)}
-                  </td>
-                  <td className="text-muted-foreground px-2 py-1.5 text-right">
-                    {j.dur_s != null ? `${j.dur_s}s` : "—"}
-                  </td>
-                  <td className="text-muted-foreground px-2 py-1.5">
-                    {j.completed_on
-                      ? new Date(j.completed_on).toLocaleTimeString("zh-CN", { hour12: false })
-                      : "—"}
-                  </td>
-                  <td className="max-w-[200px] truncate px-2 py-1.5 text-xs text-red-600">
-                    {j.err ?? ""}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div
+        ref={logRef}
+        tabIndex={0}
+        aria-label="采集任务日志"
+        onScroll={() => {
+          const el = logRef.current;
+          if (el) followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+        }}
+        className="h-[430px] overflow-y-auto rounded-2xl bg-[#1b1b2d] p-5 font-mono text-[13px] leading-7"
+      >
+        {visible.length === 0 ? (
+          <p className="text-slate-400">没有符合条件的采集日志</p>
+        ) : (
+          [...visible]
+            .sort(
+              (a, b) =>
+                new Date(a.completed_on ?? a.started_on ?? a.created_on).getTime() -
+                new Date(b.completed_on ?? b.started_on ?? b.created_on).getTime(),
+            )
+            .map((job) => (
+              <div
+                key={job.id}
+                className={cn(
+                  "whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
+                  job.state === "completed"
+                    ? "text-green-400"
+                    : job.state === "failed" || job.state === "expired"
+                      ? "text-red-400"
+                      : job.state === "retry"
+                        ? "text-amber-300"
+                        : "text-blue-300",
+                )}
+              >
+                [
+                {new Date(job.completed_on ?? job.started_on ?? job.created_on).toLocaleString(
+                  "zh-CN",
+                  { timeZone: "Asia/Shanghai", hour12: false },
+                )}
+                ] [{JOB_LABEL[job.name] ?? job.name}] {STATE_LABEL[job.state] ?? job.state}
+                {job.date ? ` · 数据日期 ${job.date}` : ""}
+                {job.state === "completed" ? ` · ${formatOutputSummary(job.output)}` : ""}
+                {job.dur_s != null ? ` · 耗时 ${job.dur_s}s` : ""}
+                {job.attempt && job.attempt > 1 ? ` · 第 ${job.attempt} 次尝试` : ""}
+                {job.err ? ` · ${job.err}` : ""}
+              </div>
+            ))
+        )}
+      </div>
     </div>
   );
 }

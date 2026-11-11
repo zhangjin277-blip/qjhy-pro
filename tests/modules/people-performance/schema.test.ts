@@ -18,6 +18,16 @@ const profile = {
 };
 
 describe("people performance profile validation", () => {
+  it("accepts three-month probation and rejects unsupported durations", () => {
+    expect(
+      SaveProfileInput.safeParse({ ...profile, skipManagerUserId: null, probationMonths: 3 })
+        .success,
+    ).toBe(true);
+    expect(
+      SaveProfileInput.safeParse({ ...profile, skipManagerUserId: null, probationMonths: 4 })
+        .success,
+    ).toBe(false);
+  });
   it("accepts an empty skip-level manager", () => {
     expect(SaveProfileInput.safeParse({ ...profile, skipManagerUserId: null }).success).toBe(true);
   });
@@ -59,6 +69,11 @@ describe("bulk profile validation", () => {
 
   it("accepts a complete 100-point goal template", () => {
     expect(BulkConfigureProfilesInput.safeParse(bulk).success).toBe(true);
+  });
+  it("accepts three-month probation in bulk configuration", () => {
+    expect(BulkConfigureProfilesInput.safeParse({ ...bulk, probationMonths: 3 }).success).toBe(
+      true,
+    );
   });
 
   it("rejects incomplete weights when a template is applied", () => {

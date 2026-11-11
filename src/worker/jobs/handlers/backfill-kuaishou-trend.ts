@@ -124,6 +124,14 @@ export async function backfillKuaishouTrendHandler(opts: Options = {}): Promise<
     throw e;
   }
 
+  // A normal return is recorded as pg-boss `completed`. Do not hide a run
+  // where every discovered session failed and no trend row was written.
+  if (rows.length > 0 && failed === rows.length && trendPointsUpserted === 0) {
+    throw new Error(
+      `[ks-gift-backfill] all ${rows.length} sessions failed for ${fromDate} ~ ${toDate}`,
+    );
+  }
+
   const result: BackfillResult = {
     fromDate,
     toDate,

@@ -24,6 +24,7 @@ vi.mock("@/modules/goals/sources", async (importOriginal) => ({
 vi.mock("@/db/client", () => ({
   db: {
     select: m.select,
+    execute: m.execute,
     transaction: async (cb: (tx: unknown) => unknown) =>
       cb({
         select: m.txSelect,
@@ -44,6 +45,7 @@ import {
 } from "@/modules/goals/server";
 import type { GoalAccess } from "@/modules/goals/types";
 import { participatingTeamScopeSql } from "@/modules/goals/visibility";
+import * as goalSources from "@/modules/goals/sources";
 const row = {
   id: "00000000-0000-4000-8000-000000000001",
   period: "2026-10",
@@ -98,6 +100,70 @@ beforeEach(() => {
   m.txSelect.mockReturnValue(query([]));
 });
 describe("goals server authorization and mutation", () => {
+  it("keeps related definitions but resolves live sources only in the selected period", async () => {
+    const binding = {
+      source: "buyu",
+      product: "product_buyu_all",
+      field: "消耗",
+      selection: "all",
+      account_ids: [],
+    };
+    m.select
+      .mockReturnValueOnce(
+        query([
+          { ...row, id: "october", binding, actual: 123 },
+          { ...row, id: "november", period: "2026-11", binding, actual: 456 },
+          { ...row, id: "quarter", period: "2026-Q4", binding, target: 900 },
+        ]),
+      )
+      .mockReturnValueOnce(query([]))
+      .mockReturnValueOnce(query([]));
+    const resolve = vi
+      .spyOn(goalSources, "resolveGoalSource")
+      .mockImplementation(async (_actor, goal) => ({ ...goal, actual: 789 }));
+    try {
+      const result = await listGoals(undefined, false, { resolvePeriod: "2026-11" });
+      expect(result.items).toHaveLength(3);
+      expect(resolve).toHaveBeenCalledTimes(1);
+      expect(result.items.find((goal) => goal.id === "november")?.actual).toBe(789);
+      expect(result.items.find((goal) => goal.id === "october")?.actual).toBeNull();
+      expect(result.items.find((goal) => goal.id === "quarter")?.target).toBe(900);
+    } finally {
+      resolve.mockRestore();
+    }
+  });
+  it("redacts participating team accounts even when the first screen skips source resolution", async () => {
+    m.identity.mockResolvedValue({ kind: "ok", dingtalkUserId: "u1", isEmergency: false });
+    m.permission.mockResolvedValue({ scope: "self", points: new Set(["view"]) });
+    m.select
+      .mockReturnValueOnce(query([{ name: "本人" }]))
+      .mockReturnValueOnce(
+        query([
+          {
+            ...row,
+            owner_ids: ["manager"],
+            actual: 123,
+            binding: {
+              source: "douyin",
+              product: "ddz",
+              field: "controller_total_amount",
+              selection: "accounts",
+              account_ids: ["private-account"],
+            },
+          },
+        ]),
+      )
+      .mockReturnValueOnce(query([]))
+      .mockReturnValueOnce(query([]));
+    const result = await listGoals(undefined, false, { resolveSources: false });
+    expect(result.items[0]).toMatchObject({
+      read_only: true,
+      actual: null,
+      binding: { account_ids: [] },
+    });
+    expect(JSON.stringify(result)).not.toContain("private-account");
+    expect(m.permission).toHaveBeenCalledTimes(1);
+  });
   it("returns a participating team as read-only with its owner name but no extra personnel department scope", async () => {
     m.identity.mockResolvedValue({ kind: "ok", dingtalkUserId: "u1", isEmergency: false });
     m.permission.mockResolvedValue({ scope: "self", points: new Set(["view", "fill"]) });
@@ -478,6 +544,80 @@ describe("goals server authorization and mutation", () => {
         reason: "调整口径",
       }),
     ).toMatchObject({ actual: null, as_of: null, evidence: "" });
+  });
+  it("allows adding a team account after personal goals were split", async () => {
+    const binding = {
+      source: "douyin" as const,
+      product: "ddz",
+      field: "controller_total_amount",
+      selection: "accounts" as const,
+      account_ids: ["account-a"],
+      direction: "gte" as const,
+      qualification: null,
+    };
+    const parent = {
+      ...row,
+      project: "斗地主",
+      line: "线下",
+      metric: "小手柄流水",
+      binding,
+    };
+    const child = {
+      ...parent,
+      id: "00000000-0000-4000-8000-000000000002",
+      owner_ids: ["operator"],
+      owner_labels: [],
+      target: 100000,
+      team_parent_id: parent.id,
+      binding: { ...binding, selection: "operators" as const, account_ids: ["account-a"] },
+    };
+    m.sourceOptions.mockResolvedValue({
+      users: [],
+      accounts: [
+        { id: "account-a", name: "账号A", operator_ids: ["operator"] },
+        { id: "account-b", name: "账号B", operator_ids: ["operator-2"] },
+      ],
+    });
+    m.execute.mockResolvedValue([
+      { id: "account-a", name: "账号A", operator_ids: ["operator"] },
+      { id: "account-b", name: "账号B", operator_ids: ["operator-2"] },
+    ]);
+    existingTeamQueries(parent);
+    m.txSelect.mockReset();
+    existingTeamQueries(parent);
+    // Keep the fourth query as the linked personal goal while the first three
+    // queries represent the row lock and team grouping lookup.
+    m.txSelect
+      .mockReset()
+      .mockReturnValueOnce(query([parent]))
+      .mockReturnValueOnce(query([parent]))
+      .mockReturnValueOnce(query([parent]))
+      .mockReturnValueOnce(query([child]))
+      .mockReturnValueOnce(query([]));
+    const {
+      id: _id,
+      actual: _actual,
+      as_of: _asOf,
+      evidence: _evidence,
+      status: _status,
+      version: _version,
+      created_by: _createdBy,
+      updated_at: _updatedAt,
+      ...definition
+    } = parent;
+    const result = await mutateGoal({
+      action: "edit",
+      id: parent.id,
+      version: parent.version,
+      definition: {
+        ...definition,
+        binding: { ...binding, account_ids: ["account-a", "account-b"] },
+      },
+      reason: "补充漏选账号",
+    });
+    expect(result.binding?.account_ids).toEqual(["account-a", "account-b"]);
+    expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ id: parent.id }));
+    expect(m.update).not.toHaveBeenCalledWith(expect.objectContaining({ id: child.id }));
   });
   it("rejects allocations above quarter total without writing", async () => {
     const parent = {

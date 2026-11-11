@@ -1,5 +1,6 @@
 import "server-only";
 import { notifyError } from "@/lib/notify"; // Phase 1 已有
+import { isNotificationEnabled } from "@/lib/notify/settings";
 
 export async function notifyCrawlerError(opts: {
   type: "data_not_ready" | "cookie_expired" | "job_failed" | "db_unreachable";
@@ -7,6 +8,7 @@ export async function notifyCrawlerError(opts: {
   impact?: string;
   action?: string;
 }): Promise<void> {
+  if (!(await isNotificationEnabled("crawler_error"))) return;
   const lines = [
     `[Phase2 报错] ${opts.type}`,
     `时间: ${new Date().toISOString()}`,

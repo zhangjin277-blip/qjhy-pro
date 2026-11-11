@@ -1,6 +1,7 @@
 "use client";
 import { GoalDetailContent } from "./goal-detail-content";
-import { useEffect, useMemo, useState } from "react";
+import { useGoalList } from "./use-goal-list";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { ChevronDown } from "lucide-react";
@@ -103,10 +104,10 @@ function empty(period: string): GoalDefinition {
   };
 }
 export function GoalsClient({ initial }: { initial: GoalList }) {
-  const [data, setData] = useState(initial),
-    [period, setPeriod] = useState(businessDate().slice(0, 7)),
+  const [period, setPeriod] = useState(businessDate().slice(0, 7)),
     [project, setProject] = useState("全部项目"),
     [status, setStatus] = useState("all");
+  const { data, reload, loading: periodLoading, error: listError } = useGoalList(initial, period);
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [mode, setMode] = useState<"edit" | "progress" | "detail" | "history" | "action" | null>(null),
@@ -219,21 +220,6 @@ export function GoalsClient({ initial }: { initial: GoalList }) {
     const assigned = months.reduce((sum, item) => sum + (item.target ?? 0), 0);
     return `已分配 ${fmt(assigned, g.unit)} · 待分配 ${fmt(Math.max(0, g.target - assigned), g.unit)}`;
   }
-  async function reload() {
-    const response = await fetch("/api/goals", { cache: "no-store" });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.error);
-    setData(json);
-  }
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (!document.hidden)
-        void reload().catch(() => {
-          /* Keep current data on background refresh failure. */
-        });
-    }, 60000);
-    return () => clearInterval(timer);
-  }, []);
   async function save(payload: unknown) {
     setBusy(true);
     setError("");
@@ -525,7 +511,7 @@ export function GoalsClient({ initial }: { initial: GoalList }) {
         ].map(([title, value, note]) => (
           <div className={styles.stat} key={title}>
             <span>{title}</span>
-            <strong>{value}</strong>
+            <strong>{title === "待跟进" && periodLoading ? "—" : value}</strong>
             <span>{note}</span>
           </div>
         ))}
@@ -629,18 +615,30 @@ export function GoalsClient({ initial }: { initial: GoalList }) {
             刷新数据
           </button>
         </div>
-        <GoalGroupsTable
-          items={rows}
-          allItems={data.items}
-          access={data.access}
-          departments={data.departments}
-          people={people}
-          allocation={allocation}
-          onOpen={open}
-          onGroupOpen={openGroup}
-          onSplit={setSplitSelection}
-        />
-        {!rows.length && (
+        {listError && (
+          <p role="alert" className={styles.error}>
+            {listError}
+          </p>
+        )}
+        {periodLoading && !listError && (
+          <p role="status" className={styles.empty}>
+            正在加载本期目标进度…
+          </p>
+        )}
+        {!periodLoading && (
+          <GoalGroupsTable
+            items={rows}
+            allItems={data.items}
+            access={data.access}
+            departments={data.departments}
+            people={people}
+            allocation={allocation}
+            onOpen={open}
+            onGroupOpen={openGroup}
+            onSplit={setSplitSelection}
+          />
+        )}
+        {!periodLoading && !rows.length && (
           <div className={styles.empty}>
             当前周期暂无符合条件的目标。可新建目标，或切换周期查看。
           </div>

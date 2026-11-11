@@ -8,6 +8,7 @@ const TREND_ENDPOINT = "/rest/live/mcn/live/monitor/trend";
 // jigou「数据分析 → 单直播分析 → 历史开播直播间 → 详情」的流水分时图接口。
 // 用数字 liveStreamId（= kuaishou_live_session.live_stream_id）拉整场分时，可回补历史。
 const HISTORY_TREND_ENDPOINT = "/rest/analysis/live/room/history/detail/data/trend";
+const HISTORY_ANALYSIS_REFERER = `${JIGOU_BASE}/statistics/new/live/analysis/list/history`;
 
 /** /rest/cp/org/live/list 返回的单条 — 含我们要的所有 ID + 当前累计 income */
 export interface KuaishouLiveListRow {
@@ -86,6 +87,8 @@ async function ksPost<T>(opts: {
   cookies: Record<string, string>;
   /** 666 接口要带这个 */
   extraHeaders?: Record<string, string>;
+  /** 页面端历史分析接口要求同源请求上下文；默认使用站点根页。 */
+  referer?: string;
   /** 是否往 body 加 api_ph（jigou 必带；666 看起来不需要但带也无害） */
   withApiPhBody?: boolean;
 }): Promise<T> {
@@ -103,7 +106,9 @@ async function ksPost<T>(opts: {
       headers: {
         Cookie: buildCookieHeader(cookies),
         "Content-Type": "application/json",
-        Referer: `${baseUrl}/`,
+        Referer: opts.referer ?? `${baseUrl}/`,
+        Origin: baseUrl,
+        Accept: "application/json, text/plain, */*",
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
         ...(extraHeaders ?? {}),
@@ -278,6 +283,7 @@ export async function fetchKuaishouHistoryTrend(
       payload: { liveStreamId },
       cookies,
       withApiPhBody: true,
+      referer: HISTORY_ANALYSIS_REFERER,
     });
   } catch (e) {
     if (e instanceof CookieExpiredError) throw e;

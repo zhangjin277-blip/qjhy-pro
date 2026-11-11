@@ -272,6 +272,7 @@ export const splitGoalSchema = z
                 z
                   .object({
                     goal_id: z.string().uuid(),
+                    edit: goalRefSchema.nullable().optional(),
                     target: z.number().finite().min(0).max(1e12),
                     account_targets: z
                       .record(z.string().min(1).max(150), z.number().finite().min(0).max(1e12))

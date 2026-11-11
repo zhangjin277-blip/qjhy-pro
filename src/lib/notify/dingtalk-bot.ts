@@ -1,5 +1,6 @@
 import { env } from "@/lib/env";
 import { isAppError } from "@/lib/errors";
+import { isNotificationEnabled } from "./settings";
 
 /**
  * 剪辑加急通知专用 webhook。
@@ -18,6 +19,7 @@ export async function sendDingtalkMarkdown(
   content: string,
   opts?: { isAtAll?: boolean; atMobiles?: string[] },
 ): Promise<void> {
+  if (!(await isNotificationEnabled("editing_urgent"))) return;
   const webhook = editingWebhook();
   if (!webhook) {
     console.warn("[dingtalk] EDITING_DINGTALK_WEBHOOK / DINGTALK_BOT_WEBHOOK not configured, skip");
@@ -88,6 +90,7 @@ export async function notifyPlacementAlert(payload: {
   title: string;
   detail: string;
 }): Promise<void> {
+  if (!(await isNotificationEnabled("placement_alert"))) return;
   const webhook = env.PLACEMENT_ALERT_DINGTALK_WEBHOOK;
   if (!webhook) {
     console.warn("[notify] PLACEMENT_ALERT_DINGTALK_WEBHOOK not configured, skip");
@@ -119,6 +122,7 @@ export async function notifyCookieExpired(opts: {
   platform: string; // 抖音 / 快手
   basecamp: string; // cs / nc1 / nc2 / kuaishou
 }): Promise<void> {
+  if (!(await isNotificationEnabled("cookie_expired"))) return;
   const webhook = env.COOKIE_ALERT_DINGTALK_WEBHOOK;
   if (!webhook) {
     console.warn("[notify] COOKIE_ALERT_DINGTALK_WEBHOOK not configured, skip");

@@ -4,7 +4,7 @@ import { GoalsClient } from "./goals-client";
 export const dynamic = "force-dynamic";
 export default async function GoalsPage() {
   try {
-    return <GoalsClient initial={await listGoals()} />;
+    return <GoalsClient initial={await listGoals(undefined, false, { resolveSources: false })} />;
   } catch (error) {
     return (
       <main className="p-8">

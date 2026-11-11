@@ -16,6 +16,7 @@ import {
   fetchOfficialDailyMetrics,
   fetchOfficialVideoHourlyMetrics,
   fetchOfficialVideoWorks,
+  type OfficialVideoHourlyPoint,
 } from "@/modules/crawler/adapters/zhaohua-official-video";
 
 const WORK_WINDOW_DAYS = 90;
@@ -198,6 +199,33 @@ export async function syncZhaohuaOfficialVideosHandler(
             set: { value: sql`excluded.value`, raw: sql`excluded.raw`, collected_at: sql`now()` },
           });
       }
+
+      // 抖音数据中心日汇总接口偶尔只返回粉丝指标，但作品详情接口仍返回
+      // 播放累计值。用相邻小时的差值补齐每日播放，避免趋势图因 play_cnt 缺失而为空。
+      const fallbackPlayByDate = deriveDailyPlayCounts(hourly);
+      if (fallbackPlayByDate.size > 0) {
+        await db
+          .insert(zhaohua_official_video_daily)
+          .values(
+            [...fallbackPlayByDate].map(([metricDate, playCount]) => ({
+              account_key: accountKey,
+              metric_date: metricDate,
+              play_count: playCount,
+              raw: { play_count_source: "hourly_fallback" },
+            })),
+          )
+          .onConflictDoUpdate({
+            target: [
+              zhaohua_official_video_daily.account_key,
+              zhaohua_official_video_daily.metric_date,
+            ],
+            set: {
+              // 官方日汇总有值时保持官方口径，只有空值才使用小时兜底。
+              play_count: sql`coalesce(${zhaohua_official_video_daily.play_count}, excluded.play_count)`,
+              collected_at: sql`now()`,
+            },
+          });
+      }
     }
     console.log(
       `[zhaohua-official-videos] account=${account.name} works=${works.length} daily=${daily.length} hourly=${hourly.length}`,
@@ -233,4 +261,31 @@ function integerMetric(value: unknown): number | null {
 function decimalMetric(value: unknown): string | null {
   const n = Number(value);
   return Number.isFinite(n) ? String(n) : null;
+}
+
+function deriveDailyPlayCounts(hourly: OfficialVideoHourlyPoint[]): Map<string, number> {
+  const byItem = new Map<string, OfficialVideoHourlyPoint[]>();
+  for (const point of hourly) {
+    if (point.metric_type !== 1 || !Number.isFinite(point.value)) continue;
+    const points = byItem.get(point.item_id) ?? [];
+    points.push(point);
+    byItem.set(point.item_id, points);
+  }
+
+  const daily = new Map<string, number>();
+  for (const points of byItem.values()) {
+    points.sort((left, right) => left.point_at.getTime() - right.point_at.getTime());
+    let previous: number | null = null;
+    for (const point of points) {
+      const current = point.value;
+      if (previous !== null && current >= previous) {
+        const metricDate = point.point_at.toLocaleDateString("en-CA", {
+          timeZone: "Asia/Shanghai",
+        });
+        daily.set(metricDate, (daily.get(metricDate) ?? 0) + current - previous);
+      }
+      previous = current;
+    }
+  }
+  return daily;
 }

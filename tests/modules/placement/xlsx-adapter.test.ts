@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { parseXlsx, extractDateFromFilename } from "@/modules/placement/xlsx-adapter";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import * as XLSX from "xlsx";
 
 const fixture = (name: string) =>
   readFileSync(resolve(__dirname, "../../fixtures/placement-excel", name));
@@ -94,5 +95,35 @@ describe("parseXlsx — 错误场景", () => {
     const out = parseXlsx(buf, "no-date-in-name.xlsx");
     expect(out.errors.length).toBeGreaterThan(0);
     expect(out.rows).toHaveLength(0);
+  });
+});
+
+describe("parseXlsx — 钉钉在线日报", () => {
+  it("保留日明细并跳过数值日期形式的月汇总行", () => {
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ["UE4直播间日报"],
+      ["日期", "消耗", "新增", "最新累计付费", "实时净ROI"],
+      ["2026年", 10000, 1000, 2000, "20%"],
+      [46296, 5000, 500, 1000, "20%"],
+      [46324, 200, 20, 40, "20%"],
+      [46323, 180, 18, 36, "20%"],
+      [46296, 100, 10, 20, "20%"],
+    ]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "UE4-测试账号");
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+
+    const out = parseXlsx(buffer, "online-product_ue4-2026-10-29.xlsx");
+
+    expect(out.errors).toHaveLength(0);
+    expect(out.granularity).toBe("daily");
+    expect(out.date_range_from).toBe("2026-10-01");
+    expect(out.date_range_to).toBe("2026-10-29");
+    expect(out.rows.map((row) => row.date)).toEqual(["2026-10-29", "2026-10-28", "2026-10-01"]);
+    expect(out.rows.every((row) => row.hour === 24)).toBe(true);
+    expect(out.rows[0]?.raw._summary_year).toMatchObject({ 日期: "2026年" });
+    expect(out.rows[0]?.raw._summary_months).toMatchObject({
+      "2026-10": { 日期: 46296, 消耗: 5000, 实时净ROI: "20%" },
+    });
   });
 });

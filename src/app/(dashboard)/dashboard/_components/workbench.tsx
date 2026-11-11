@@ -38,7 +38,7 @@ export function Workbench() {
   const reload = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const managementRequest = fetch("/api/workbench/management", { cache: "no-store", signal })
+      void fetch("/api/workbench/management", { cache: "no-store", signal })
         .then(async (response) => {
           if (!response.ok) throw new Error("人员与剪辑概览加载失败");
           return response.json() as Promise<ManagementData>;
@@ -54,12 +54,13 @@ export function Workbench() {
             setManagementError(reason instanceof Error ? reason.message : "概览加载失败");
         });
       const response = await fetch("/api/workbench", { cache: "no-store", signal });
-      await managementRequest;
       if (!response.ok)
         throw new Error(
           response.status === 401 ? "登录已失效，请重新登录" : "工作台加载失败，请重试",
         );
       const next = (await response.json()) as WorkbenchData;
+      // Render the main workbench as soon as its own request is ready. The
+      // management panel keeps its independent loading/error state.
       if (!signal?.aborted) {
         setData(next);
         setError(null);

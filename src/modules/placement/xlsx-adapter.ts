@@ -48,25 +48,40 @@ function parseDailyReportWorkbook(wb: XLSX.WorkBook, filename: string): ParseRes
       defval: null,
     });
     const yearSummary = rawRows.find((row) =>
-      /^\d{4}年总计$/.test(String(findValueByNormalizedHeader(row, "日期") ?? "").trim()),
+      /^\d{4}年(?:总计)?$/.test(String(findValueByNormalizedHeader(row, "日期") ?? "").trim()),
     );
+    const parsedDates = rawRows.map((row) =>
+      parseDateText(findValueByNormalizedHeader(row, "日期")),
+    );
+    const inferredMonthSummaryRows = new Set<number>();
+    for (let index = 0; index < parsedDates.length; index++) {
+      const date = parsedDates[index];
+      if (!date?.endsWith("-01")) continue;
+      const nextDate = parsedDates.slice(index + 1).find((value) => value !== null);
+      if (nextDate?.slice(0, 7) === date.slice(0, 7) && nextDate > date) {
+        inferredMonthSummaryRows.add(index);
+      }
+    }
     const monthSummaries: Record<string, Record<string, unknown>> = {};
-    for (const row of rawRows) {
+    for (const [index, row] of rawRows.entries()) {
       const summaryDate = String(findValueByNormalizedHeader(row, "日期") ?? "").trim();
       const match = summaryDate.match(/^(\d{4})年(\d{1,2})月$/);
+      const parsedDate = parsedDates[index];
       if (match) {
         monthSummaries[`${match[1]}-${String(Number(match[2])).padStart(2, "0")}`] = row;
+      } else if (inferredMonthSummaryRows.has(index) && parsedDate) {
+        monthSummaries[parsedDate.slice(0, 7)] = row;
       }
     }
     const accountName = sheetName
       .replace(/^(3D|UE4|URP)[-_]/i, "")
       .replace(/[-_]安卓端$/i, "")
       .trim();
-    for (const row of rawRows) {
+    for (const [index, row] of rawRows.entries()) {
       const dateRaw = findValueByNormalizedHeader(row, "日期");
-      const date = parseDateText(String(dateRaw ?? "").trim());
+      const date = parseDateText(dateRaw);
       // 汇总行（2026年总计、2026年9月）不属于日数据，不导入。
-      if (!date) continue;
+      if (!date || inferredMonthSummaryRows.has(index)) continue;
       rows.push({
         account_name: accountName,
         subaccount_name: accountName,

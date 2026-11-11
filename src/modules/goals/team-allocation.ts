@@ -13,6 +13,30 @@ export function sameTeamMetric(a: GoalDefinition, b: GoalDefinition) {
   );
 }
 
+/**
+ * A team account range may be expanded after personal goals exist. Existing
+ * personal goals keep their own account snapshots, so adding accounts does not
+ * invalidate their allocations. Removing an existing account still requires
+ * handling the related personal goals first.
+ */
+export function isAccountScopeExpansion(
+  before: GoalBinding | null | undefined,
+  next: GoalBinding | null | undefined,
+) {
+  if (
+    !before ||
+    !next ||
+    before.source !== next.source ||
+    before.product !== next.product ||
+    before.selection !== "accounts" ||
+    next.selection !== "accounts"
+  )
+    return false;
+  const previous = new Set(before.account_ids);
+  const current = new Set(next.account_ids);
+  return current.size >= previous.size && [...previous].every((id) => current.has(id));
+}
+
 export function supportsTeamSplit(goal: GoalDefinition) {
   // Monthly qualified accounts can be divided across disjoint operator account sets.
   // They are not additive across months: the same account may qualify more than once.

@@ -20,7 +20,7 @@ export interface ImportedProfile {
   name: string;
   hireDate?: string;
   employmentStatus: "probation" | "regular";
-  probationMonths: 2 | 6;
+  probationMonths: 2 | 3 | 6;
   managerName: string;
   skipManagerName: string | null;
   probationGoals: ImportedGoal[];
@@ -104,8 +104,12 @@ export function parsePeoplePerformanceWorkbook(buffer: Buffer): ImportedProfile[
     }
     const employmentStatus = status(row["人员状态"], rowNumber);
     const monthsValue = Number(row["试用期时长"] || 2);
-    if (monthsValue !== 2 && monthsValue !== 6) {
-      throw new AppError("PERFORMANCE_IMPORT_INVALID", `第${rowNumber}行试用期时长只能为2或6`, 400);
+    if (monthsValue !== 2 && monthsValue !== 3 && monthsValue !== 6) {
+      throw new AppError(
+        "PERFORMANCE_IMPORT_INVALID",
+        `第${rowNumber}行试用期时长只能为2、3或6`,
+        400,
+      );
     }
     const hireDate = excelDate(row["入职日期"]);
     if (row["入职日期"] && !hireDate) {
@@ -300,6 +304,9 @@ export function createPeoplePerformanceTemplate(): Buffer {
     ["填写说明"],
     ["一行代表一个考核目标；同一员工有多个目标时重复填写档案字段。"],
     ["人员状态填写“试用期”或“正式”；目标类型填写“试用期”或“绩效”。"],
+    [
+      "试用期时长填写2、3或6（单位：月）；2个月和3个月为单个完整考核周期，6个月按第1、3、5月节点考核。",
+    ],
     ["同一员工、同一目标类型的权重合计必须为100。隔级上级可以留空。"],
     ["入职日期建议填写；留空时系统会先读取已有档案，再实时补抓钉钉花名册。"],
   ]);

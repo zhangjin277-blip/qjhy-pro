@@ -6,7 +6,7 @@
 
 - 当前唯一生效的考勤数据源是 qjhy-pro PostgreSQL 中的 PRO3 兼容表：`attendance_records`、`approval_instances`、`dingtalk_users`、`dingtalk_departments` 及相关主播/排班表。页面不再读取独立 SQLite 文件。
 - 原 NAS SQLite 数据已归档备份；本次按用户要求不迁移旧考勤记录，兼容表为空，之后从钉钉重新同步。组织人员从 qjhy-pro 的 `dingtalk_user` 和 `dingtalk_dept` 初始化。
-- 使用新后台当前登录身份和 attendance 权限点，不运行 PRO3 登录服务、不接受旧 token。全员默认可看本人考勤及审批；部门负责人以本后台权限管理中的“管理部门”（`dept_leader`）为准，读取本人及所管理部门/子部门成员，不采用钉钉默认主管标记。考勤数据范围固定为本人/负责部门，旧岗位全员范围与委托视图不生效；自定义操作权限点仍保留。汇总、明细、审批、排休在数据库分页/聚合前按钉钉人员ID过滤，旧版姓名入口遇到范围外同名人员时拒绝访问。超级管理员沿用应急管理员身份，具备全部考勤范围和操作权限。`0079_attendance_default_permissions.sql` 重置默认阅读配置并保存权限审计快照。
+- 使用新后台当前登录身份和 attendance 权限点，不运行 PRO3 登录服务、不接受旧 token。全员默认可看本人考勤及审批；部门负责人以本后台权限管理中的“管理部门”（`dept_leader`）为准，读取本人及所管理部门/子部门成员，不采用钉钉默认主管标记。考勤默认范围为本人/负责部门；管理员在用户权限中明确设置的数据范围优先（含所有人、仅自己、仅团队和无数据），使用默认时恢复本人/负责部门；岗位全员范围与委托视图不生效；自定义操作权限点仍保留。汇总、明细、审批、排休在数据库分页/聚合前按钉钉人员ID过滤，旧版姓名入口遇到范围外同名人员时拒绝访问。超级管理员沿用应急管理员身份，具备全部考勤范围和操作权限。`0079_attendance_default_permissions.sql` 重置默认阅读配置并保存权限审计快照。
 - `/api/attendance/pro3/[...path]` 是原版接口的适配器；旧 `/api/attendance` 及 `/api/attendance/[id]` 同样转入该库。原 PostgreSQL 考勤表保留但已停止作为此模块的读写源。
 - 钉钉同步使用新后台的 `DINGTALK_APP_KEY` 和 `DINGTALK_APP_SECRET`，写入 qjhy-pro PostgreSQL。Worker 的 `sync-attendance` 任务每天北京时间 09:00 同步前一天考勤与审批，并分别写入 `attendance_sync_log`；审批仍可通过页面手动补充同步。
 

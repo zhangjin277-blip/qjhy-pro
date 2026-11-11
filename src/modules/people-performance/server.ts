@@ -351,46 +351,47 @@ export async function getPeoplePerformanceDetail(userId: string): Promise<People
   const cycles: PerformanceCycleView[] = cycleRows.map((cycle) => {
     // 试用期评级必须经 HR 校准后才能向员工本人展示。
     const canSeeCalibratedResult =
-      cycle.kind !== "probation" || !isEmployeeViewer ||
+      cycle.kind !== "probation" ||
+      !isEmployeeViewer ||
       (cycle.hr_user_id !== null && ["employee_confirm", "completed"].includes(cycle.stage));
     return {
-    id: cycle.id,
-    parentCycleId: cycle.parent_cycle_id,
-    kind: cycle.kind,
-    label: cycle.label,
-    periodStart: cycle.period_start,
-    periodEnd: cycle.period_end,
-    stage: cycle.stage,
-    managerUserId: cycle.manager_user_id,
-    skipManagerUserId: cycle.skip_manager_user_id,
-    requiresFinalReview: cycle.requires_final_review,
-    selfSummary: cycle.self_summary,
-    managerSummary: cycle.manager_summary,
-    skipManagerSummary: cycle.skip_manager_summary,
-    hrComment: cycle.hr_comment,
-    finalScore: numberOrNull(cycle.final_score),
-    finalGrade: visiblePerformanceRating(cycle, isEmployeeViewer),
-    probationResult: canSeeCalibratedResult ? cycle.probation_result : null,
-    confirmationDeadline:
-      cycle.stage === "employee_confirm"
-        ? new Date(cycle.updated_at.getTime() + 72 * 60 * 60 * 1000).toISOString()
-        : null,
-    goals: goalRows
-      .filter((goal) => goal.cycle_id === cycle.id)
-      .map((goal) => ({
-        id: goal.id,
-        title: goal.title,
-        description: goal.description,
-        metric: goal.metric,
-        targetValue: goal.target_value,
-        weight: Number(goal.weight),
-        completion: goal.completion,
-        selfScore: numberOrNull(goal.self_score),
-        managerScore: numberOrNull(goal.manager_score),
-        managerComment: goal.manager_comment,
-        skipManagerScore: numberOrNull(goal.skip_manager_score),
-        skipManagerComment: goal.skip_manager_comment,
-      })),
+      id: cycle.id,
+      parentCycleId: cycle.parent_cycle_id,
+      kind: cycle.kind,
+      label: cycle.label,
+      periodStart: cycle.period_start,
+      periodEnd: cycle.period_end,
+      stage: cycle.stage,
+      managerUserId: cycle.manager_user_id,
+      skipManagerUserId: cycle.skip_manager_user_id,
+      requiresFinalReview: cycle.requires_final_review,
+      selfSummary: cycle.self_summary,
+      managerSummary: cycle.manager_summary,
+      skipManagerSummary: cycle.skip_manager_summary,
+      hrComment: cycle.hr_comment,
+      finalScore: numberOrNull(cycle.final_score),
+      finalGrade: visiblePerformanceRating(cycle, isEmployeeViewer),
+      probationResult: canSeeCalibratedResult ? cycle.probation_result : null,
+      confirmationDeadline:
+        cycle.stage === "employee_confirm"
+          ? new Date(cycle.updated_at.getTime() + 72 * 60 * 60 * 1000).toISOString()
+          : null,
+      goals: goalRows
+        .filter((goal) => goal.cycle_id === cycle.id)
+        .map((goal) => ({
+          id: goal.id,
+          title: goal.title,
+          description: goal.description,
+          metric: goal.metric,
+          targetValue: goal.target_value,
+          weight: Number(goal.weight),
+          completion: goal.completion,
+          selfScore: numberOrNull(goal.self_score),
+          managerScore: numberOrNull(goal.manager_score),
+          managerComment: goal.manager_comment,
+          skipManagerScore: numberOrNull(goal.skip_manager_score),
+          skipManagerComment: goal.skip_manager_comment,
+        })),
     };
   });
 
@@ -442,7 +443,7 @@ export async function ensureProbationCycles(args: {
   managerUserId: string;
   skipManagerUserId: string | null;
   hireDate: string;
-  probationMonths: 2 | 6;
+  probationMonths: 2 | 3 | 6;
 }): Promise<void> {
   const today = todayInShanghai();
   const [profile] = await db

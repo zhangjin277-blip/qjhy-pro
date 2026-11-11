@@ -100,17 +100,34 @@ export function GoalSplitDialog({
   const accountTargetMetric = (goal: Goal) => supportsAccountTargetSplit(goal);
   const accountTargetKey = (ownerId: string, goalId: string, accountId: string) =>
     ownerId + ":" + goalId + ":" + accountId;
+  const existingForPerson = (ownerId: string, goal: Goal) =>
+    existing.find((item) => item.owner_ids.includes(ownerId) && sameTeamMetric(item, goal));
+  const existingTarget = (ownerId: string, goal: Goal) =>
+    existingForPerson(ownerId, goal)?.target ?? null;
+  const existingAccountTarget = (ownerId: string, goal: Goal, accountId: string) =>
+    existingForPerson(ownerId, goal)?.binding?.account_targets?.[accountId] ?? null;
+  const targetValue = (ownerId: string, goal: Goal) => {
+    const key = ownerId + ":" + goal.id;
+    const value = targets[key];
+    return value !== undefined ? Number(value) : (existingTarget(ownerId, goal) ?? 0);
+  };
+  const accountTargetValue = (ownerId: string, goal: Goal, accountId: string) => {
+    const key = accountTargetKey(ownerId, goal.id, accountId);
+    const value = accountTargets[key];
+    return value !== undefined
+      ? Number(value)
+      : (existingAccountTarget(ownerId, goal, accountId) ?? 0);
+  };
   const accountTargetSum = (ownerId: string, goal: Goal) =>
     accountsFor(ownerId).reduce(
-      (sum, account) =>
-        sum + (Number(accountTargets[accountTargetKey(ownerId, goal.id, account.id)]) || 0),
+      (sum, account) => sum + accountTargetValue(ownerId, goal, account.id),
       0,
     );
   const accountTargetMap = (ownerId: string, goal: Goal) =>
     Object.fromEntries(
       accountsFor(ownerId).map((account) => [
         account.id,
-        Number(accountTargets[accountTargetKey(ownerId, goal.id, account.id)]),
+        accountTargetValue(ownerId, goal, account.id),
       ]),
     );
   const existingFor = (goal: Goal) =>
@@ -118,13 +135,12 @@ export function GoalSplitDialog({
   const pendingFor = (goal: Goal) =>
     selected.reduce(
       (sum, id) =>
-        sum +
-        (accountTargetMetric(goal)
-          ? accountTargetSum(id, goal)
-          : Number(targets[id + ":" + goal.id]) || 0),
+        sum + (accountTargetMetric(goal) ? accountTargetSum(id, goal) : targetValue(id, goal)),
       0,
     );
-  const totalFor = (goal: Goal) => existingFor(goal) + pendingFor(goal);
+  const editedExistingFor = (goal: Goal) =>
+    selected.reduce((sum, id) => sum + (existingTarget(id, goal) ?? 0), 0);
+  const totalFor = (goal: Goal) => existingFor(goal) - editedExistingFor(goal) + pendingFor(goal);
   const overAllocated = goals.some((g) => g.target !== null && totalFor(g) > g.target + 1e-8);
   const availableUsers = options.data?.users.filter((u) => !assigned.has(u.id)) ?? [];
   const allSelected =
@@ -141,25 +157,35 @@ export function GoalSplitDialog({
     if (!selected.length) return setError("请至少选择一位运营");
     if (!reason.trim()) return setError("请填写拆分原因");
     for (const id of selected) {
+      const isAssigned = assigned.has(id);
       for (const goal of goals) {
         if (accountTargetMetric(goal)) {
           const accounts = accountsFor(id);
           if (!accounts.length) return setError(`${id}：该运营暂无可匹配账号`);
           if (
-            accounts.some(
-              (account) =>
-                accountTargets[accountTargetKey(id, goal.id, account.id)] === undefined ||
-                accountTargets[accountTargetKey(id, goal.id, account.id)] === "",
-            )
+            accounts.some((account) => {
+              const key = accountTargetKey(id, goal.id, account.id);
+              const value =
+                accountTargets[key] ??
+                (isAssigned && existingAccountTarget(id, goal, account.id) !== null
+                  ? String(existingAccountTarget(id, goal, account.id))
+                  : undefined);
+              return value === undefined || value === "";
+            })
           )
             return setError(`请为${id}的每个账号填写${goal.metric}目标值，暂不承担的账号可填0`);
           if (!Number.isFinite(accountTargetSum(id, goal)) || accountTargetSum(id, goal) > 1e12)
             return setError(`${id}：账号目标合计须为有效的非负数`);
         } else {
-          const value = Number(targets[`${id}:${goal.id}`]);
+          const raw =
+            targets[`${id}:${goal.id}`] ??
+            (isAssigned && existingTarget(id, goal) !== null
+              ? String(existingTarget(id, goal))
+              : undefined);
+          const value = Number(raw);
           if (
-            targets[`${id}:${goal.id}`] === undefined ||
-            targets[`${id}:${goal.id}`] === "" ||
+            raw === undefined ||
+            raw === "" ||
             !Number.isFinite(value) ||
             value < 0 ||
             value > 1e12 ||
@@ -183,9 +209,15 @@ export function GoalSplitDialog({
             owner_id: id,
             targets: goals.map((g) => ({
               goal_id: g.id,
-              target: accountTargetMetric(g)
-                ? accountTargetSum(id, g)
-                : Number(targets[`${id}:${g.id}`]),
+              ...(existingForPerson(id, g)
+                ? {
+                    edit: {
+                      id: existingForPerson(id, g)?.id ?? "",
+                      version: existingForPerson(id, g)?.version ?? 0,
+                    },
+                  }
+                : { edit: null }),
+              target: accountTargetMetric(g) ? accountTargetSum(id, g) : targetValue(id, g),
               ...(accountTargetMetric(g) ? { account_targets: accountTargetMap(id, g) } : {}),
             })),
           })),
@@ -288,7 +320,13 @@ export function GoalSplitDialog({
                   type="button"
                   className={styles.link}
                   disabled={busy || !availableUsers.length}
-                  onClick={() => setSelected(allSelected ? [] : availableUsers.map((u) => u.id))}
+                  onClick={() =>
+                    setSelected((items) => {
+                      return allSelected
+                        ? items.filter((id) => !availableUsers.some((u) => u.id === id))
+                        : [...new Set([...items, ...availableUsers.map((u) => u.id)])];
+                    })
+                  }
                 >
                   {allSelected ? "取消全选" : "选择全部待分配"}
                 </button>
@@ -323,7 +361,7 @@ export function GoalSplitDialog({
                               <input
                                 type="checkbox"
                                 aria-label={`选择${user.name}`}
-                                disabled={isAssigned || busy}
+                                disabled={busy}
                                 checked={isSelected}
                                 onChange={() => togglePerson(user.id)}
                               />
@@ -333,10 +371,12 @@ export function GoalSplitDialog({
                               <span>
                                 <strong>{user.name}</strong>
                                 <small>
-                                  {isAssigned ? (
+                                  {isAssigned && !isSelected ? (
                                     <>
                                       <Check size={11} /> 已分配
                                     </>
+                                  ) : isAssigned ? (
+                                    "调整中"
                                   ) : isSelected ? (
                                     "本次分配"
                                   ) : (
@@ -367,18 +407,29 @@ export function GoalSplitDialog({
                           {goals.map((g) => (
                             <td key={g.id}>
                               <div className={styles.splitTargetCell}>
-                                {isAssigned ? (
+                                {isSelected ? (
+                                  <input
+                                    className={styles.splitTargetInput}
+                                    type="number"
+                                    min="0"
+                                    max={1e12}
+                                    step={g.kind === "count" ? "1" : "any"}
+                                    aria-label={`${user.name}·${g.metric}目标值`}
+                                    disabled={busy}
+                                    value={
+                                      targets[`${user.id}:${g.id}`] ??
+                                      (isAssigned ? String(existingTarget(user.id, g) ?? "") : "")
+                                    }
+                                    onChange={(e) =>
+                                      setTargets((current) => ({
+                                        ...current,
+                                        [`${user.id}:${g.id}`]: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                ) : isAssigned ? (
                                   <span className={styles.splitExistingValue}>
-                                    {fmt(
-                                      existing
-                                        .filter(
-                                          (item) =>
-                                            item.owner_ids.includes(user.id) &&
-                                            sameTeamMetric(item, g),
-                                        )
-                                        .reduce((sum, item) => sum + (item.target ?? 0), 0),
-                                      g.unit,
-                                    )}
+                                    {fmt(existingTarget(user.id, g), g.unit)}
                                   </span>
                                 ) : accountTargetMetric(g) ? (
                                   <span className={styles.splitAccountTargetSummary}>
@@ -419,14 +470,20 @@ export function GoalSplitDialog({
                           <tr className={styles.splitAccountRow}>
                             <td colSpan={goals.length + 2}>
                               <div className={styles.splitAccountList}>
-                                <span>{goals.some(accountTargetMetric) ? "按账号分别填写消耗目标" : "自动匹配账号"}</span>
+                                <span>
+                                  {goals.some(accountTargetMetric)
+                                    ? "按账号分别填写消耗目标"
+                                    : "自动匹配账号"}
+                                </span>
                                 {accountsFor(user.id).map((a) => (
                                   <span key={a.id}>{a.name}</span>
                                 ))}
                               </div>
                               {goals.filter(accountTargetMetric).map((g) => (
                                 <div className={styles.splitAccountTargets} key={g.id}>
-                                  <strong>{g.metric}（{g.unit}）</strong>
+                                  <strong>
+                                    {g.metric}（{g.unit}）
+                                  </strong>
                                   {accountsFor(user.id).map((a) => {
                                     const key = accountTargetKey(user.id, g.id, a.id);
                                     return (
@@ -441,7 +498,14 @@ export function GoalSplitDialog({
                                           aria-label={`${user.name}·${a.name}·${g.metric}目标值`}
                                           placeholder={isSelected ? "填写目标值" : "选中后填写"}
                                           disabled={!isSelected || busy}
-                                          value={accountTargets[key] ?? ""}
+                                          value={
+                                            accountTargets[key] ??
+                                            (isAssigned
+                                              ? String(
+                                                  existingAccountTarget(user.id, g, a.id) ?? "",
+                                                )
+                                              : "")
+                                          }
                                           onChange={(e) =>
                                             setAccountTargets((current) => ({
                                               ...current,

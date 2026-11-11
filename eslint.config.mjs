@@ -16,6 +16,11 @@ export default tseslint.config(
       "**/dist/**",
       "src/db/migrations",
       ".claude/worktrees/**",
+      ".local-backups/**",
+      ".tmp*/**",
+      "_temp/**",
+      "tmp/**",
+      "downloads/**",
     ],
   },
   {
@@ -52,6 +57,9 @@ export default tseslint.config(
   ...tseslint.configs.strict,
   ...tseslint.configs.stylistic,
   {
+    languageOptions: {
+      parserOptions: { tsconfigRootDir: import.meta.dirname },
+    },
     plugins: {
       import: importPlugin,
       "react-hooks": reactHooks,

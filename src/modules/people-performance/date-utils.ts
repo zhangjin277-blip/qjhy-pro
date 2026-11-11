@@ -45,15 +45,15 @@ export function addDays(value: string, days: number): string {
   return formatDate(result);
 }
 
-export function buildProbationPeriods(hireDate: string, months: 2 | 6): CyclePeriod[] {
-  const offsets = months === 2 ? [0] : [0, 1, 3];
+export function buildProbationPeriods(hireDate: string, months: 2 | 3 | 6): CyclePeriod[] {
+  const offsets = months === 6 ? [0, 1, 3] : [0];
   return offsets.map((offset, index) => {
     const start = addMonths(hireDate, offset);
-    const windowMonths = months === 2 ? 2 : index === 0 ? 1 : 2;
+    const windowMonths = months === 6 ? (index === 0 ? 1 : 2) : months;
     const end = addDays(addMonths(start, windowMonths), -1);
-    const nodeMonth = months === 2 ? 1 : [1, 3, 5][index];
+    const nodeMonth = [1, 3, 5][index];
     return {
-      label: months === 2 ? "2个月试用期考核" : `6个月试用期·第${nodeMonth}月节点`,
+      label: months === 6 ? `6个月试用期·第${nodeMonth}月节点` : `${months}个月试用期考核`,
       start,
       end,
       sequence: index + 1,

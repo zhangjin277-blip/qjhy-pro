@@ -1,140 +1,137 @@
 # QJHY-Pro
 
-> 新中台 · 替代 miracle-pro3 作为数据底座
+> 面向直播 MCN 团队的业务中台与数据底座，逐步替代 miracle-pro3。
 
-## 项目目标
+QJHY-Pro 统一承载账号、主播、直播、爬虫、招聘、考勤、绩效、目标、投放、采购和内容生产等业务数据，并通过权限、审计和后台 Worker 支持日常运营。
 
-替代老中台（miracle-pro3）做"数据底座"，解决以下问题：
+## 功能概览
 
-- 数据接口规范乱、加新功能要重新引导
-- 爬虫数据被"翻译"后丢失原始字段含义
-- SQLite 性能瓶颈（pro3 数据库已 600+MB）
-
-详见 [设计文档](./docs/superpowers/specs/2026-04-30-qjhy-pro-design.md)。
+- **运营工作台**：经营总览、趋势指标、项目工作台和可下钻明细。
+- **直播业务**：直播账号、主播、排班、直播记录、开播/下播打卡和直播间配置。
+- **平台数据**：抖音、快手等平台的直播、作品、趋势和官方视频数据采集与回填。
+- **招聘与人员**：主播招聘流程、招聘统计、人员档案、批量导入、试用期评价和绩效评估。
+- **目标与绩效**：目标拆分、团队分配、参与团队、历史周期查询和绩效看板。
+- **考勤与行政**：考勤日历、审批范围、采购流程及钉钉通知。
+- **投放与内容**：投放数据导入、日报/小时数据解析、剪辑任务、素材、课程和发布记录。
+- **权限与审计**：角色默认权限、部门负责人权限、个人覆盖权限和审计日志。
+- **后台任务**：Worker 负责定时同步、数据回填、通知和异步导入。
 
 ## 技术栈
 
-- Next.js 16 (App Router + RSC + Server Actions)
-- TypeScript strict + Zod
-- PostgreSQL 16 + Drizzle ORM
-- Tailwind v4 + shadcn/ui（[design tokens](./docs/design/tokens.md)：字节蓝 + Semi Design 风格）
-- better-auth（钉钉 OAuth + 应急后门）
-- Docker Compose（web + worker + postgres）
-- ESLint + Prettier + Husky + commitlint
+- Next.js 16（App Router、RSC、Server Actions）
+- TypeScript strict、Zod、ESLint、Prettier、Vitest
+- PostgreSQL 16、Drizzle ORM、SQL migrations
+- React 19、Tailwind CSS 4、shadcn/ui、Recharts
+- better-auth（钉钉 OAuth 与应急登录）
+- Docker Compose（Web、Worker、PostgreSQL）
+- Puppeteer、ExcelJS、PapaParse、node-cron、pg-boss
 
 ## 快速开始
 
-### 前置
+### 前置条件
 
-- Node.js 20+（参考 `.nvmrc`）
-- pnpm 9+（`corepack enable`）
-- Docker Desktop / OrbStack
+- Node.js 20+
+- pnpm 9+（推荐先执行 `corepack enable`）
+- Docker Desktop 或 OrbStack
 
-### 安装
+### 安装配置
 
 ```bash
-git clone <repo>
+git clone https://github.com/zhangjin277-blip/qjhy-pro.git
 cd qjhy-pro
 pnpm install
 cp .env.example .env.local
-# 编辑 .env.local 填入实际值（见下）
 ```
 
-### `.env.local` 必填项
+编辑 `.env.local`。本地开发至少需要：
 
-- `AUTH_SECRET`：≥16 字符随机字符串（`openssl rand -base64 32`）
-- `EMERGENCY_LOGIN_PASSWORD`：≥16 字符随机字符串（应急登录用）
-- `DATABASE_URL`：默认本地 docker 即可
-- `DINGTALK_BOT_WEBHOOK`：报错通知（可选，留空则不通知）
+- `AUTH_SECRET`：不少于 16 个字符的随机字符串
+- `EMERGENCY_LOGIN_PASSWORD`：不少于 16 个字符的应急登录密码
+- `DATABASE_URL`：默认使用本地 Docker PostgreSQL
+- 钉钉、爬虫和通知功能按需配置对应的 App、Cookie、Webhook 和 CLI profile
 
-### 启动开发环境（本机）
+不要把 `.env.local`、Cookie、Token、Webhook 或生产数据库凭据提交到 Git。
+
+### 启动开发环境
 
 ```bash
-docker-compose up -d postgres   # 起 Postgres
-pnpm db:migrate                 # 跑 migration
-pnpm db:seed:emergency          # 创建应急用户（首次）
-pnpm dev                        # 起 Next.js（3000）
-
-# 另一个 terminal：
-pnpm worker                     # 起 Worker
+docker compose up -d postgres
+pnpm db:migrate
+pnpm db:seed:emergency
+pnpm dev
 ```
 
-访问 http://localhost:3000，应跳到 `/login`。用 `EMERGENCY_LOGIN_PASSWORD` 登录。
-
-### 全栈 Docker 启动
+另开终端启动后台任务：
 
 ```bash
-docker-compose --env-file=.env.local up -d
+pnpm worker
 ```
 
-## 开发规范
+浏览器访问 <http://localhost:3000>，使用 `.env.local` 中的应急登录密码登录。
 
-⚠ **必读：[`CONTRIBUTING.md`](./CONTRIBUTING.md)**
+### 使用 Docker 启动完整服务
 
-简言之：
+```bash
+docker compose --env-file .env.local up -d
+```
 
-- 加新功能 = 加 `src/modules/[feature]/` 文件夹
-- 模块之间只能 import `index.ts`（ESLint 强制）
-- 所有 Server Action 入参 `Schema.parse()`
-- 错误用 `AppError`，不用 `new Error`
-- 落库不翻译字段，存原始 JSON
+当前 Compose 文件中的剪辑和课程存储使用 NAS NFS 挂载。部署到其他环境前，请调整 `editing_nas`、`course_nas` 的地址和目录，或改成本地卷。钉钉 DWS 功能还需要独立的 CLI 登录与授权。
 
-## Phase 0 验收清单
+历史 migration 涉及从旧系统迁移的表结构；已有数据库升级前应核对实际迁移记录并备份。`drizzle.config.ts` 通过进程环境读取 `DATABASE_URL`，使用自定义数据库时需要显式导出该变量。
 
-- [x] 项目骨架就绪（Next.js 16 + TS strict + Tailwind + shadcn/ui）
-- [x] Design tokens 应用（字节蓝 + 涨红跌绿 + KPI typography）
-- [x] ESLint 跨模块限制工作
-- [x] Pre-commit hook（typecheck + lint + format）+ commitlint
-- [x] Docker Compose 三容器（postgres + web + worker）启动成功
-- [x] Drizzle 迁移工作（`pnpm db:migrate`）
-- [x] env 通过 Zod 校验加载
-- [x] AppError 统一错误类型可用
-- [x] 钉钉机器人通知封装可用
-- [x] better-auth 集成 + 应急后门登录工作
-- [x] 钉钉 OAuth provider 占位（Phase 1 完整接入）
-- [x] 登录/Dashboard 闭环可走通
-- [x] Worker 进程 + cron 调度器可启动
-- [x] CONTRIBUTING.md 写完
-- [x] 平台数据样本（抖音/快手）已收集
+## 常用命令
 
-## Phase 1 验收清单
-
-- [x] 钉钉 API client（token 缓存 + 并发锁 + 递归保护 + 分页 cursor 检查）
-- [x] 钉钉统一授权 OAuth 集成（桌面钉钉一键确认 + 浏览器登录闭环）
-- [x] 钉钉每日同步 job（28 部门 + 146 用户，全量 upsert）
-- [x] 权限三层叠加（role default + dept_leader + override）
-- [x] applyScopeFilter helper（防止裸查询）
-- [x] 权限单元测试（vitest，18/18 通过）
-- [x] /admin/permissions 单页三 Tab UX
-- [x] /profile 用户权限来源说明
-- [x] audit_log 全链路记录
-- [x] 架构经验：模块 index.ts 拆分 client-safe/server-only 入口
-
-## 下一步
-
-进入 Phase 2（业务模块开发）。
+```bash
+pnpm dev                 # Web 开发服务器
+pnpm worker              # 后台 Worker
+pnpm typecheck           # TypeScript 检查
+pnpm lint                # ESLint 检查
+pnpm test                # Vitest 测试
+pnpm format              # Prettier 检查
+pnpm build               # 生产构建
+pnpm db:generate         # 生成 Drizzle migration
+pnpm db:migrate          # 执行数据库 migration
+pnpm db:studio           # 打开 Drizzle Studio
+```
 
 ## 项目结构
 
-```
+```text
 qjhy-pro/
-├── src/
-│   ├── app/          # Next.js 路由（页面/api）
-│   ├── modules/      # 业务模块（feature-first，目前空）
-│   ├── components/   # UI 组件（shadcn）
-│   ├── db/           # Drizzle schema + migration
-│   ├── lib/          # 共享工具（auth/env/errors/notify）
-│   └── worker/       # Worker 进程
-├── docs/
-│   ├── superpowers/  # spec / plan
-│   ├── design/       # design tokens
-│   └── raw-samples/  # 平台原始数据样本
-└── docker-compose.yml
+├── src/app/             # 页面与 API 路由
+├── src/modules/         # 按业务域组织的服务、查询、Schema 和权限逻辑
+├── src/components/      # 通用 UI 组件
+├── src/db/              # PostgreSQL schema、migration 和 seed
+├── src/lib/             # auth、env、错误、通知和共享基础设施
+├── src/worker/          # 定时任务、同步和异步处理
+├── tests/               # 单元测试和模块测试
+├── docs/                # 设计、实施计划和原始资料说明
+└── docker-compose.yml   # Web、Worker、PostgreSQL 编排
 ```
 
-## 相关文档
+## 开发约定
+
+详细规范见 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。核心约定包括：
+
+- 新业务功能放在 `src/modules/[feature]/`，模块间通过 `index.ts` 暴露公共接口。
+- Server Action 和 API 入参先用 Schema 校验。
+- 业务错误使用 `AppError`，避免直接抛出未分类的 `Error`。
+- 数据库存储保留平台原始字段含义，展示层再做格式化。
+- 查询必须经过权限范围过滤；涉及人员、业务数据和通知的操作需要保留审计线索。
+
+## 文档
 
 - [设计文档](./docs/superpowers/specs/2026-04-30-qjhy-pro-design.md)
 - [Phase 0 实施计划](./docs/superpowers/plans/2026-04-30-phase-0-foundation.md)
 - [Design Tokens](./docs/design/tokens.md)
 - [开发规范](./CONTRIBUTING.md)
+- [业务模块说明](./src/modules/)
+- [更新记录](./CHANGELOG.md)
+
+## 项目状态
+
+项目正在持续迭代中。生产部署请先在本地完成类型检查、Lint、测试和构建，再按当前环境的 migration 与 Docker 发布流程更新 Web 或 Worker 服务。
+
+## License
+
+当前仓库尚未声明开源许可证。使用与授权事宜请联系仓库所有者。

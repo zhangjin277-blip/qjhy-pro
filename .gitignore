@@ -77,3 +77,7 @@ tmp/
 
 # Local uploaded and migrated business attachments
 .data/
+
+# Local temporary downloads and release workspaces
+.tmp-*
+downloads/

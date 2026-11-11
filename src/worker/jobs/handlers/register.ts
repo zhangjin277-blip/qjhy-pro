@@ -19,6 +19,7 @@ import { syncWechatAiComicHandler } from "./sync-wechat-ai-comic";
 import { syncKuaishouAiComicHandler } from "./sync-kuaishou-ai-comic";
 import { syncBilibiliAiComicHandler } from "./sync-bilibili-ai-comic";
 import { syncXiaohongshuAiComicHandler } from "./sync-xiaohongshu-ai-comic";
+import { runDingtalkPlacementImport } from "../dingtalk-placement-import";
 import type PgBoss from "pg-boss";
 
 // batchSize=1: one job at a time, avoids rate-limit / Cookie contention.
@@ -148,6 +149,10 @@ export async function registerCrawlerHandlers(): Promise<void> {
   await boss.work(JOB_NAMES.SYNC_XIAOHONGSHU_AI_COMIC, { batchSize: 1 }, async (jobs) => {
     if (jobs.at(0) === undefined) return undefined;
     return await wrap(() => syncXiaohongshuAiComicHandler());
+  });
+  await boss.work(JOB_NAMES.SYNC_DINGTALK_PLACEMENT_DAILY, { batchSize: 1 }, async (jobs) => {
+    if (jobs.at(0) === undefined) return undefined;
+    return await wrap(() => runDingtalkPlacementImport({ includeLateMessages: true }));
   });
   console.log("[crawler] all handlers registered");
 }

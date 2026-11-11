@@ -112,15 +112,19 @@ async function accountsForScope(
       WHERE (ag.project=${product} OR ${includeUnassigned ? sql`ag.project IS NULL` : sql`false`}) AND ${departmentId ? sql`${department}=${departmentId}` : sql`true`}
       GROUP BY ap.anchor_id,ap.nick_name,ag.project ORDER BY ap.nick_name,ap.anchor_id`)) as unknown as GoalAccountOption[];
   }
-  return (await db.execute(sql`SELECT a.id,a.account_name AS name,
-    jsonb_agg(DISTINCT c.dataset_id) AS products,
+  // Collapse historical log rows before joining people/accounts. This avoids
+  // multiplying those joins by every log row when JSONB selectivity is misestimated.
+  return (await db.execute(sql`WITH source_accounts AS MATERIALIZED (
+    SELECT live_account_id,jsonb_agg(DISTINCT dataset_id) AS products
+    FROM placement_cumulative_raw
+    WHERE ${oneOf(sql`dataset_id`, buyuProductIds(product))} AND raw ? '_source_sheet'
+    GROUP BY live_account_id
+  ) SELECT a.id,a.account_name AS name,c.products,
     CASE WHEN du.user_id IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(du.user_id) END AS operator_ids
-    FROM live_account a JOIN placement_cumulative_raw c ON c.live_account_id=a.id
+    FROM live_account a JOIN source_accounts c ON c.live_account_id=a.id
     LEFT JOIN dingtalk_user du ON du.user_id=a.agent_dingtalk_user_id
-    WHERE ${oneOf(sql`c.dataset_id`, buyuProductIds(product))} AND c.raw ? '_source_sheet'
-      AND ${scope.full ? sql`true` : oneOf(sql`a.agent_dingtalk_user_id`, scope.userIds)}
+    WHERE ${scope.full ? sql`true` : oneOf(sql`a.agent_dingtalk_user_id`, scope.userIds)}
       AND ${departmentId ? sql`du.dept_ids->>0=${departmentId}` : sql`true`}
-    GROUP BY a.id,a.account_name,du.user_id
     ORDER BY a.account_name,a.id`)) as unknown as GoalAccountOption[];
 }
 function goalOwnerScope(actor: GoalAccess): SQL {

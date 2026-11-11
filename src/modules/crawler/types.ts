@@ -20,6 +20,7 @@ export const JOB_NAMES = {
   SYNC_KUAISHOU_AI_COMIC: "crawler:sync_kuaishou_ai_comic", // 快手 AI 漫剧作品快照
   SYNC_BILIBILI_AI_COMIC: "crawler:sync_bilibili_ai_comic", // B站 AI 漫剧作品快照
   SYNC_XIAOHONGSHU_AI_COMIC: "crawler:sync_xiaohongshu_ai_comic", // 小红书 AI 漫剧作品快照
+  SYNC_DINGTALK_PLACEMENT_DAILY: "crawler:sync_dingtalk_placement_daily", // 手动补拉捕鱼日报
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];

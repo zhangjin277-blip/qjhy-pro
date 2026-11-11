@@ -620,15 +620,15 @@ function OpenDashboardDrawer({ payload, onClose }: DashboardDrawerProps): React.
   const router = useRouter();
   const [data, setData] = useState<DrawerDetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [topLoading, setTopLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<DrawerMetric | null>(payload?.metric ?? null);
 
   const open = payload !== null;
   const breadcrumb = useMemo(() => (payload ? buildBreadcrumb(payload) : ""), [payload]);
 
-  // 拉数据：依赖 selectedKey 以便切换 KPI 时重新拉「达成主播列表」
-  // 注意：保留之前已加载的 data 不立即清空，避免 KPI/曲线/日明细表闪白屏；
-  // 仅 top_anchors 和 total_anchors 会随 metric 变化（其他字段重 fetch 后是同样的值）。
+  // 首次打开只加载一次完整抽屉数据。指标切换由下面的轻量请求单独更新排行，
+  // 避免重复查询当前/前周期的全部 10 项日明细。
   useEffect(() => {
     if (!payload) {
       setData(null);
@@ -646,8 +646,7 @@ function OpenDashboardDrawer({ payload, onClose }: DashboardDrawerProps): React.
     });
     if (payload.project) params.set("project", payload.project);
     if (payload.group && payload.group !== "all") params.set("group", payload.group);
-    const metric = selectedKey ?? payload.metric;
-    if (metric) params.set("metric", metric);
+    params.set("metric", payload.metric);
 
     fetch(`/api/dashboard/detail?${params.toString()}`, { signal: ctl.signal })
       .then(async (res) => {
@@ -674,14 +673,48 @@ function OpenDashboardDrawer({ payload, onClose }: DashboardDrawerProps): React.
       cancelled = true;
       ctl.abort();
     };
-  }, [
-    payload?.project,
-    payload?.group,
-    payload?.date_from,
-    payload?.date_to,
-    payload,
-    selectedKey,
-  ]);
+  }, [payload?.project, payload?.group, payload?.date_from, payload?.date_to, payload]);
+
+  useEffect(() => {
+    if (!payload || !data || !selectedKey || selectedKey === payload.metric) return;
+    let cancelled = false;
+    const ctl = new AbortController();
+    setTopLoading(true);
+    const params = new URLSearchParams({
+      date_from: payload.date_from,
+      date_to: payload.date_to,
+      metric: selectedKey,
+      only: "top",
+    });
+    if (payload.project) params.set("project", payload.project);
+    if (payload.group && payload.group !== "all") params.set("group", payload.group);
+    fetch(`/api/dashboard/detail?${params.toString()}`, { signal: ctl.signal })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(body.error ?? `HTTP ${res.status}`);
+        }
+        return res.json() as Promise<Pick<DrawerDetailResponse, "top_anchors" | "total_anchors">>;
+      })
+      .then((json) => {
+        if (cancelled) return;
+        setData((current) => (current ? { ...current, ...json } : current));
+      })
+      .catch((e: unknown) => {
+        if (cancelled || (e instanceof DOMException && e.name === "AbortError")) return;
+        setError(e instanceof Error ? e.message : "加载失败");
+      })
+      .finally(() => {
+        if (!cancelled) setTopLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      ctl.abort();
+    };
+    // data is intentionally omitted: adding it would repeat the same top-only request
+    // after the response updates the shared drawer state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payload, selectedKey]);
 
   // 选中的 KPI（用于驱动主曲线）
   const selectedKpi: DrawerKpiBlock | null = useMemo(() => {
@@ -824,7 +857,7 @@ function OpenDashboardDrawer({ payload, onClose }: DashboardDrawerProps): React.
                     selectedKpi={selectedKpi}
                     rows={data?.top_anchors ?? []}
                     total={data?.total_anchors ?? 0}
-                    loading={loading}
+                    loading={loading || topLoading}
                     onClickRow={(anchor) => {
                       // 关闭抽屉后跳转，带上当前抽屉的日期范围 + 项目
                       onClose();

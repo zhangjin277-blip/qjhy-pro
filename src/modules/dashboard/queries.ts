@@ -1076,270 +1076,133 @@ async function fetchDailyMatrix(
 ): Promise<Map<DrawerMetric, Map<string, number>>> {
   const fromUnix = Math.floor(new Date(dateFrom + "T00:00:00").getTime() / 1000);
   const toUnix = Math.floor(new Date(dateTo + "T23:59:59").getTime() / 1000);
+  const shouldGame = !filters.project || filters.project === "ddz";
+  const shouldMini =
+    !filters.project || filters.project === "three" || filters.project === "zhaohua";
 
-  // ─── Section 1：4 个 metric ────────────────────────────
-  // total_fan_ticket、active_anchor_count（基于 anchor_daily）
   const adailyP = db.execute(sql`
     WITH ${groups}
     SELECT ad.date AS d,
       COALESCE(SUM(ad.total_fan_ticket), 0)::numeric AS total_fan_ticket,
-      COUNT(DISTINCT ad.anchor_id) FILTER (WHERE ad.live_duration_1d > 0)::int AS active_anchor_count,
-      COALESCE(SUM(ad.live_duration_1d), 0)::numeric AS live_duration
-    FROM anchor_daily ad
-    JOIN anchor_group ag ON ag.anchor_id = ad.anchor_id
-    WHERE ${groupFilter(filters)}
-      AND ad.date >= ${dateFrom} AND ad.date <= ${dateTo}
+      COUNT(DISTINCT ad.anchor_id) FILTER (WHERE ad.live_duration_1d > 0)::int AS active_anchor_count
+    FROM anchor_daily ad JOIN anchor_group ag ON ag.anchor_id = ad.anchor_id
+    WHERE ${groupFilter(filters)} AND ad.date >= ${dateFrom} AND ad.date <= ${dateTo}
     GROUP BY ad.date ORDER BY ad.date
   `);
 
-  // flow（Section 1）：斗地主/造化仙府 cps_all 全 scene + 三国 minigame
-  const gamePromoFlowP = db.execute(sql`
-    WITH ${groups}
-    SELECT agp.date AS d,
-      COALESCE(SUM(
-        (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
-        + COALESCE(agp.promote_download_pay_amount_1d, 0)
-      ), 0)::numeric AS v
-    FROM anchor_game_promo_daily agp
-    JOIN anchor_group ag ON ag.anchor_id = agp.anchor_id
-    WHERE ag.project = 'ddz'
-      AND ${groupFilter(filters)}
-      AND agp.biz_mode = 'cps_all'
-      AND agp.date >= ${dateFrom} AND agp.date <= ${dateTo}
-    GROUP BY agp.date ORDER BY agp.date
+  const gamePromoP = shouldGame
+    ? db.execute(sql`
+        WITH ${groups}
+        SELECT agp.date AS d,
+          COALESCE(SUM(CASE WHEN agp.biz_mode = 'cps_all' THEN
+            (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
+            + COALESCE(agp.promote_download_pay_amount_1d, 0) ELSE 0 END), 0)::numeric AS flow,
+          COALESCE(SUM(CASE WHEN agp.biz_mode = 'cps_all' AND agp.promote_scene = 'live' THEN
+            (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
+            + COALESCE(agp.promote_download_pay_amount_1d, 0) ELSE 0 END), 0)::numeric AS live_flow,
+          COALESCE(SUM(CASE WHEN agp.biz_mode = 'cps_all' AND agp.promote_scene = 'video' THEN
+            (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
+            + COALESCE(agp.promote_download_pay_amount_1d, 0) ELSE 0 END), 0)::numeric AS video_flow,
+          COALESCE(SUM(CASE WHEN agp.biz_mode = 'cps' THEN agp.promote_install_finish_ucnt_1d ELSE 0 END), 0)::numeric AS install_or_activate
+        FROM anchor_game_promo_daily agp JOIN anchor_group ag ON ag.anchor_id = agp.anchor_id
+        WHERE ag.project = 'ddz' AND ${groupFilter(filters)}
+          AND agp.date >= ${dateFrom} AND agp.date <= ${dateTo}
+        GROUP BY agp.date ORDER BY agp.date
+      `)
+    : Promise.resolve([]);
+
+  const miniP = shouldMini
+    ? db.execute(sql`
+        WITH ${groups}
+        SELECT mg.date AS d,
+          COALESCE(SUM(mg.before_divided_income), 0)::numeric AS flow,
+          COALESCE(SUM(mg.gm_active_ucnt), 0)::numeric AS install_or_activate
+        FROM anchor_minigame_daily mg JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
+        WHERE ag.project IN ('three', 'zhaohua') AND ${groupFilter(filters)}
+          AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
+        GROUP BY mg.date ORDER BY mg.date
+      `)
+    : Promise.resolve([]);
+
+  const profileP = db.execute(sql`
+    WITH ${groups}, profile_days AS (
+      SELECT TO_CHAR(TO_TIMESTAMP(ap.join_time), 'YYYY-MM-DD') AS d, 1 AS new_count, 0 AS first_live_count
+      FROM anchor_profile ap JOIN anchor_group ag ON ag.anchor_id = ap.anchor_id
+      WHERE ${groupFilter(filters)} AND ap.join_time IS NOT NULL
+        AND ap.join_time >= ${fromUnix} AND ap.join_time <= ${toUnix}
+      UNION ALL
+      SELECT TO_CHAR(TO_TIMESTAMP(ap.first_live_time_in_faction), 'YYYY-MM-DD') AS d, 0 AS new_count, 1 AS first_live_count
+      FROM anchor_profile ap JOIN anchor_group ag ON ag.anchor_id = ap.anchor_id
+      WHERE ${groupFilter(filters)} AND ap.first_live_time_in_faction IS NOT NULL
+        AND ap.first_live_time_in_faction > 0
+        AND ap.first_live_time_in_faction >= ${fromUnix} AND ap.first_live_time_in_faction <= ${toUnix}
+    )
+    SELECT d, SUM(new_count)::int AS new_anchor_count, SUM(first_live_count)::int AS first_live_anchor_count
+    FROM profile_days GROUP BY d ORDER BY d
   `);
 
-  const threeFlowP = db.execute(sql`
+  const portraitP = db.execute(sql`
     WITH ${groups}
-    SELECT mg.date AS d,
-      COALESCE(SUM(mg.before_divided_income), 0)::numeric AS v
-    FROM anchor_minigame_daily mg
-    JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-    WHERE ag.project IN ('three', 'zhaohua')
-      AND ${groupFilter(filters)}
-      AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
-    GROUP BY mg.date ORDER BY mg.date
-  `);
-
-  // new_anchor_count：按 join_time 入驻日聚合
-  const newP = db.execute(sql`
-    WITH ${groups}
-    SELECT TO_CHAR(TO_TIMESTAMP(ap.join_time), 'YYYY-MM-DD') AS d,
-      COUNT(*)::int AS v
-    FROM anchor_profile ap
-    JOIN anchor_group ag ON ag.anchor_id = ap.anchor_id
-    WHERE ${groupFilter(filters)}
-      AND ap.join_time IS NOT NULL
-      AND ap.join_time >= ${fromUnix} AND ap.join_time <= ${toUnix}
-    GROUP BY 1 ORDER BY 1
-  `);
-
-  // first_live_anchor_count：按 first_live_time_in_faction 首播日聚合
-  const firstLiveP = db.execute(sql`
-    WITH ${groups}
-    SELECT TO_CHAR(TO_TIMESTAMP(ap.first_live_time_in_faction), 'YYYY-MM-DD') AS d,
-      COUNT(*)::int AS v
-    FROM anchor_profile ap
-    JOIN anchor_group ag ON ag.anchor_id = ap.anchor_id
-    WHERE ${groupFilter(filters)}
-      AND ap.first_live_time_in_faction IS NOT NULL
-      AND ap.first_live_time_in_faction > 0
-      AND ap.first_live_time_in_faction >= ${fromUnix}
-      AND ap.first_live_time_in_faction <= ${toUnix}
-    GROUP BY 1 ORDER BY 1
-  `);
-
-  // ─── Section 2：5 个 metric ────────────────────────────
-  // live/video/install：斗地主与造化仙府走 CPS，三国走 minigame
-  const gamePromoLiveFlowP = db.execute(sql`
-    WITH ${groups}
-    SELECT agp.date AS d,
-      COALESCE(SUM(
-        (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
-        + COALESCE(agp.promote_download_pay_amount_1d, 0)
-      ), 0)::numeric AS v
-    FROM anchor_game_promo_daily agp
-    JOIN anchor_group ag ON ag.anchor_id = agp.anchor_id
-    WHERE ag.project = 'ddz'
-      AND ${groupFilter(filters)}
-      AND agp.biz_mode = 'cps_all' AND agp.promote_scene = 'live'
-      AND agp.date >= ${dateFrom} AND agp.date <= ${dateTo}
-    GROUP BY agp.date ORDER BY agp.date
-  `);
-
-  const threeLiveFlowP = db.execute(sql`
-    WITH ${groups}
-    SELECT mg.date AS d,
-      COALESCE(SUM(mg.before_divided_income), 0)::numeric AS v
-    FROM anchor_minigame_daily mg
-    JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-    WHERE ag.project IN ('three', 'zhaohua')
-      AND ${groupFilter(filters)}
-      AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
-    GROUP BY mg.date ORDER BY mg.date
-  `);
-
-  const gamePromoVideoFlowP = db.execute(sql`
-    WITH ${groups}
-    SELECT agp.date AS d,
-      COALESCE(SUM(
-        (COALESCE(agp.promote_anchor_active_pay_amount_1d, 0) + COALESCE(agp.promote_faction_active_pay_amount_1d, 0)) / 0.4
-        + COALESCE(agp.promote_download_pay_amount_1d, 0)
-      ), 0)::numeric AS v
-    FROM anchor_game_promo_daily agp
-    JOIN anchor_group ag ON ag.anchor_id = agp.anchor_id
-    WHERE ag.project = 'ddz'
-      AND ${groupFilter(filters)}
-      AND agp.biz_mode = 'cps_all' AND agp.promote_scene = 'video'
-      AND agp.date >= ${dateFrom} AND agp.date <= ${dateTo}
-    GROUP BY agp.date ORDER BY agp.date
-  `);
-
-  const gamePromoInstallP = db.execute(sql`
-    WITH ${groups}
-    SELECT agp.date AS d,
-      COALESCE(SUM(agp.promote_install_finish_ucnt_1d), 0)::numeric AS v
-    FROM anchor_game_promo_daily agp
-    JOIN anchor_group ag ON ag.anchor_id = agp.anchor_id
-    WHERE ag.project = 'ddz'
-      AND ${groupFilter(filters)}
-      AND agp.biz_mode = 'cps'
-      AND agp.date >= ${dateFrom} AND agp.date <= ${dateTo}
-    GROUP BY agp.date ORDER BY agp.date
-  `);
-
-  const threeActiveP = db.execute(sql`
-    WITH ${groups}
-    SELECT mg.date AS d,
-      COALESCE(SUM(mg.gm_active_ucnt), 0)::numeric AS v
-    FROM anchor_minigame_daily mg
-    JOIN anchor_group ag ON ag.anchor_id = mg.anchor_id
-    WHERE ag.project IN ('three', 'zhaohua')
-      AND ${groupFilter(filters)}
-      AND mg.date >= ${dateFrom} AND mg.date <= ${dateTo}
-    GROUP BY mg.date ORDER BY mg.date
-  `);
-
-  const showUvP = db.execute(sql`
-    WITH ${groups}
-    SELECT pd.date AS d,
-      COALESCE(SUM(pd.show_uv), 0)::numeric AS v
-    FROM anchor_portrait_daily pd
-    JOIN anchor_group ag ON ag.anchor_id = pd.anchor_id
-    WHERE ${groupFilter(filters)}
-      AND pd.date >= ${dateFrom} AND pd.date <= ${dateTo}
+    SELECT pd.date AS d, COALESCE(SUM(pd.show_uv), 0)::numeric AS show_uv,
+      COALESCE(SUM(pd.watch_uv), 0)::numeric AS watch_uv
+    FROM anchor_portrait_daily pd JOIN anchor_group ag ON ag.anchor_id = pd.anchor_id
+    WHERE ${groupFilter(filters)} AND pd.date >= ${dateFrom} AND pd.date <= ${dateTo}
     GROUP BY pd.date ORDER BY pd.date
   `);
 
-  const watchUvP = db.execute(sql`
-    WITH ${groups}
-    SELECT pd.date AS d,
-      COALESCE(SUM(pd.watch_uv), 0)::numeric AS v
-    FROM anchor_portrait_daily pd
-    JOIN anchor_group ag ON ag.anchor_id = pd.anchor_id
-    WHERE ${groupFilter(filters)}
-      AND pd.date >= ${dateFrom} AND pd.date <= ${dateTo}
-    GROUP BY pd.date ORDER BY pd.date
-  `);
-
-  const [
-    adailyR,
-    gamePromoFlowR,
-    threeFlowR,
-    newR,
-    firstLiveR,
-    gamePromoLiveR,
-    threeLiveR,
-    gamePromoVideoR,
-    gamePromoInstallR,
-    threeActiveR,
-    showUvR,
-    watchUvR,
-  ] = await Promise.all([
+  const [adailyR, gameR, miniR, profileR, portraitR] = await Promise.all([
     adailyP,
-    gamePromoFlowP,
-    threeFlowP,
-    newP,
-    firstLiveP,
-    gamePromoLiveFlowP,
-    threeLiveFlowP,
-    gamePromoVideoFlowP,
-    gamePromoInstallP,
-    threeActiveP,
-    showUvP,
-    watchUvP,
+    gamePromoP,
+    miniP,
+    profileP,
+    portraitP,
   ]);
-
-  function toMap(rows: unknown, key = "v"): Map<string, number> {
-    const m = new Map<string, number>();
-    (rows as Record<string, unknown>[]).forEach((r) => {
-      m.set(String(r.d), Number(r[key] ?? 0));
-    });
-    return m;
-  }
-
-  // 合并跨项目的 flow（Section 1）
-  function unionFlow(a: Map<string, number>, b: Map<string, number>): Map<string, number> {
+  type Row = Record<string, unknown>;
+  const map = (rows: unknown, key: string): Map<string, number> => {
     const out = new Map<string, number>();
-    for (const [k, v] of a) out.set(k, (out.get(k) ?? 0) + v);
-    for (const [k, v] of b) out.set(k, (out.get(k) ?? 0) + v);
+    (rows as Row[]).forEach((r) => out.set(String(r.d), Number(r[key] ?? r.v ?? 0)));
     return out;
-  }
-
-  const adailyRows = adailyR as unknown as Record<string, unknown>[];
-  const totalFanTicketMap = new Map<string, number>();
-  const activeMap = new Map<string, number>();
-  adailyRows.forEach((r) => {
-    totalFanTicketMap.set(String(r.d), Number(r.total_fan_ticket ?? 0));
-    activeMap.set(String(r.d), Number(r.active_anchor_count ?? 0));
-  });
-
-  const gamePromoFlowMap = toMap(gamePromoFlowR);
-  const threeFlowMap = toMap(threeFlowR);
-
-  // Section 1 flow：合并 CPS 项目 + 三国 minigame（按 filters.project 限制）
-  let flowMap: Map<string, number>;
-  if (filters.project === "ddz") flowMap = gamePromoFlowMap;
-  else if (filters.project === "three" || filters.project === "zhaohua") flowMap = threeFlowMap;
-  else flowMap = unionFlow(gamePromoFlowMap, threeFlowMap);
-
-  // live_flow：CPS scene=live + 三国 minigame（按 filters.project 限制）
-  const gamePromoLiveMap = toMap(gamePromoLiveR);
-  const threeLiveMap = toMap(threeLiveR);
-  let liveFlowMap: Map<string, number>;
-  if (filters.project === "ddz") liveFlowMap = gamePromoLiveMap;
-  else if (filters.project === "three" || filters.project === "zhaohua") liveFlowMap = threeLiveMap;
-  else liveFlowMap = unionFlow(gamePromoLiveMap, threeLiveMap);
-
-  // video_flow：CPS 项目有数据；三国 → 0（filters.project='three' 时返回空）
-  const gamePromoVideoMap = toMap(gamePromoVideoR);
-  let videoFlowMap: Map<string, number>;
-  if (filters.project === "three" || filters.project === "zhaohua") videoFlowMap = new Map();
-  else videoFlowMap = gamePromoVideoMap;
-
-  // install_or_activate：CPS install_finish + 三国 gm_active（按 filters.project 限制）
-  const gamePromoInstallMap = toMap(gamePromoInstallR);
-  const threeActiveMap = toMap(threeActiveR);
-  let installOrActivateMap: Map<string, number>;
-  if (filters.project && filters.project !== "three" && filters.project !== "zhaohua") {
-    installOrActivateMap = gamePromoInstallMap;
-  } else if (filters.project === "three" || filters.project === "zhaohua")
-    installOrActivateMap = threeActiveMap;
-  else installOrActivateMap = unionFlow(gamePromoInstallMap, threeActiveMap);
-
-  // 用 metric 名作 key
-  const result = new Map<DrawerMetric, Map<string, number>>();
-  result.set("total_fan_ticket", totalFanTicketMap);
-  result.set("flow", flowMap);
-  result.set("active_anchor_count", activeMap);
-  result.set("new_anchor_count", toMap(newR));
-  result.set("first_live_anchor_count", toMap(firstLiveR));
-  result.set("live_flow", liveFlowMap);
-  result.set("video_flow", videoFlowMap);
-  result.set("install_or_activate", installOrActivateMap);
-  result.set("show_uv", toMap(showUvR));
-  result.set("watch_uv", toMap(watchUvR));
-  return result;
+  };
+  const union = (a: Map<string, number>, b: Map<string, number>): Map<string, number> => {
+    const out = new Map(a);
+    for (const [d, value] of b) out.set(d, (out.get(d) ?? 0) + value);
+    return out;
+  };
+  const adailyRows = adailyR as Row[];
+  const totalFanTicketMap = map(adailyRows, "total_fan_ticket");
+  const activeMap = map(adailyRows, "active_anchor_count");
+  const gameFlow = map(gameR, "flow");
+  const miniFlow = map(miniR, "flow");
+  const gameLive = map(gameR, "live_flow");
+  const gameVideo = map(gameR, "video_flow");
+  const miniActive = map(miniR, "install_or_activate");
+  const flowMap =
+    filters.project === "ddz" ? gameFlow : filters.project ? miniFlow : union(gameFlow, miniFlow);
+  const liveFlowMap =
+    filters.project === "ddz" ? gameLive : filters.project ? miniFlow : union(gameLive, miniFlow);
+  const videoFlowMap = filters.project
+    ? filters.project === "ddz"
+      ? gameVideo
+      : new Map()
+    : gameVideo;
+  const installMap =
+    filters.project === "ddz"
+      ? map(gameR, "install_or_activate")
+      : filters.project
+        ? miniActive
+        : union(map(gameR, "install_or_activate"), miniActive);
+  return new Map<DrawerMetric, Map<string, number>>([
+    ["total_fan_ticket", totalFanTicketMap],
+    ["flow", flowMap],
+    ["active_anchor_count", activeMap],
+    ["new_anchor_count", map(profileR, "new_anchor_count")],
+    ["first_live_anchor_count", map(profileR, "first_live_anchor_count")],
+    ["live_flow", liveFlowMap],
+    ["video_flow", videoFlowMap],
+    ["install_or_activate", installMap],
+    ["show_uv", map(portraitR, "show_uv")],
+    ["watch_uv", map(portraitR, "watch_uv")],
+  ]);
 }
 
 /** 把 daily map 拉成连续日期的 DrawerDailyRow[] */
@@ -1856,4 +1719,15 @@ export async function getDrawerDetail(
     top_anchors: topAnchorsResult.rows,
     total_anchors: topAnchorsResult.total,
   };
+}
+
+/** 指标切换只需要重新计算主播排行，避免重复加载全部日明细和前周期数据。 */
+export async function getDrawerTopAnchors(
+  filters: DrawerDetailFilters,
+  scope: DashboardScope,
+): Promise<Pick<DrawerDetailResponse, "top_anchors" | "total_anchors">> {
+  if (scope.kind === "reject") return { top_anchors: [], total_anchors: 0 };
+  const groups = await resolveAnchorGroup(scope);
+  const result = await fetchTopAnchors(filters, filters.metric ?? "total_fan_ticket", groups);
+  return { top_anchors: result.rows, total_anchors: result.total };
 }

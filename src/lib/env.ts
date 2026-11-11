@@ -8,6 +8,7 @@ const envSchema = z.object({
   DINGTALK_AGENT_ID: z.string().default(""),
   DINGTALK_CLI_PATH: z.string().default("dws"),
   DINGTALK_CLI_PROFILE: z.string().default(""),
+  DINGTALK_PLACEMENT_DAILY_PROFILE: z.string().default(""),
   DINGTALK_RECRUITMENT_SHEET_URL: z
     .string()
     .url()

@@ -12,6 +12,13 @@ export function parseUnitNumber(input: unknown): number {
 
 /** "2026年05月06日" → "2026-05-06"；"2026-05-06" → "2026-05-06" */
 export function parseDateText(input: unknown): string | null {
+  if (typeof input === "number" && Number.isFinite(input) && input > 0) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(input) * 86_400_000);
+    return date.toISOString().slice(0, 10);
+  }
+  if (input instanceof Date && Number.isFinite(input.getTime())) {
+    return input.toISOString().slice(0, 10);
+  }
   if (typeof input !== "string") return null;
   const trimmed = input.trim();
   if (!trimmed) return null;
@@ -24,6 +31,21 @@ export function parseDateText(input: unknown): string | null {
   }
   const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (iso) return trimmed;
+  const short = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  if (short) {
+    const month = Number(short[1]);
+    const day = Number(short[2]);
+    const rawYear = Number(short[3]);
+    const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    ) {
+      return date.toISOString().slice(0, 10);
+    }
+  }
   return null;
 }
 

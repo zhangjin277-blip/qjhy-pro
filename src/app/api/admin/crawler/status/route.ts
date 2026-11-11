@@ -47,7 +47,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       started_on::text AS started_on,
       completed_on::text AS completed_on,
       EXTRACT(EPOCH FROM (completed_on - started_on))::int AS dur_s,
-      output->>'error' AS err,
+      COALESCE(output->>'error', output#>>'{value,message}', output->>'message') AS err,
       CASE WHEN state = 'completed' THEN output ELSE NULL END AS output
     FROM pgboss.job
     WHERE name LIKE 'crawler:%'

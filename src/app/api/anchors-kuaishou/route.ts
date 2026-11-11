@@ -30,10 +30,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     dataSource: dsParam === "today" || dsParam === "history" || dsParam === "all" ? dsParam : "all",
   };
 
-  const [rows, previousRows, kpi] = await Promise.all([
-    listKuaishouAnchors(currentUser.dingtalkUserId, filters, currentUser.isEmergency),
+  // KPI can be derived from the current list result. This avoids scanning the
+  // same live-session and placement aggregates a second time per request.
+  const rows = await listKuaishouAnchors(
+    currentUser.dingtalkUserId,
+    filters,
+    currentUser.isEmergency,
+  );
+  const [previousRows, kpi] = await Promise.all([
     listKuaishouAnchorsPrev(currentUser.dingtalkUserId, filters, currentUser.isEmergency),
-    queryKuaishouAnchorKpi(currentUser.dingtalkUserId, filters, currentUser.isEmergency),
+    queryKuaishouAnchorKpi(currentUser.dingtalkUserId, filters, currentUser.isEmergency, rows),
   ]);
   return NextResponse.json({ rows, previousRows, kpi });
 }

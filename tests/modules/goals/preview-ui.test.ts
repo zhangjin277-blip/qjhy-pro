@@ -85,6 +85,37 @@ function picker(value: GoalDefinition) {
   });
 }
 describe("actual previews while setting targets", () => {
+  it("lets an already assigned operator be selected for a target adjustment", async () => {
+    const assigned: Goal = {
+      ...goal,
+      id: "00000000-0000-4000-8000-000000000003",
+      owner_ids: ["u1"],
+      target: 50000,
+      team_parent_id: goal.id,
+      binding: goal.binding
+        ? { ...goal.binding, selection: "operators", account_ids: ["a1"] }
+        : null,
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => options }));
+    await mount(
+      createElement(GoalSplitDialog, {
+        goals: [goal],
+        allItems: [goal, assigned],
+        departments: [{ id: "offline", name: "线下运营" }],
+        onClose: vi.fn(),
+        onSaved: vi.fn(),
+      }),
+    );
+    const checkbox = document.querySelector<HTMLInputElement>('input[aria-label="选择苏梓豪"]');
+    expect(checkbox?.disabled).toBe(false);
+    expect(document.querySelector('input[aria-label="苏梓豪·小手柄流水目标值"]')).toBeNull();
+    await act(async () => checkbox?.click());
+    expect(
+      document.querySelector<HTMLInputElement>('input[aria-label="苏梓豪·小手柄流水目标值"]')
+        ?.value,
+    ).toBe("50000");
+  });
+
   it("shows both periods and retains comparison when only the target amount changes", async () => {
     const fetch = vi.fn().mockResolvedValue({
       ok: true,

@@ -40,6 +40,7 @@ export {
   savePeopleProfile,
   bulkConfigurePeopleProfiles,
   submitPerformanceGoals,
+  openProbationGoalSetting,
   reviewPerformanceGoals,
   openPerformanceSelfReview,
   bulkOpenPerformanceSelfReview,

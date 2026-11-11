@@ -4,6 +4,7 @@ import {
   supportsTeamSplit,
   personalDefinition,
   validateTeamAllocation,
+  isAccountScopeExpansion,
 } from "@/modules/goals/team-allocation";
 import { definitionSchema, validateAllocation } from "@/modules/goals/rules";
 import { isAdditiveMetric } from "@/modules/goals/catalog";
@@ -48,6 +49,36 @@ const personal = (ownerId: string, target: number) =>
   personalDefinition(parent, ownerId, target, parent.id);
 
 describe("monthly qualified-account team allocation", () => {
+  it("allows adding team accounts while preserving every existing account", () => {
+    const previous = { ...binding, selection: "accounts" as const, account_ids: ["a", "b"] };
+    expect(
+      isAccountScopeExpansion(previous, {
+        ...previous,
+        account_ids: ["c", "b", "a"],
+      }),
+    ).toBe(true);
+    expect(isAccountScopeExpansion(previous, { ...previous, account_ids: ["b", "a"] })).toBe(true);
+    expect(
+      isAccountScopeExpansion(previous, {
+        ...previous,
+        product: "product_ue4",
+        account_ids: ["a", "b", "c"],
+      }),
+    ).toBe(false);
+    expect(
+      isAccountScopeExpansion(previous, {
+        ...previous,
+        account_ids: ["a"],
+      }),
+    ).toBe(false);
+    expect(
+      isAccountScopeExpansion(previous, {
+        ...previous,
+        selection: "all",
+        account_ids: [],
+      }),
+    ).toBe(false);
+  });
   it("allows both metrics in the fishing qualified-account and spend group", () => {
     const spend: Goal = {
       ...parent,

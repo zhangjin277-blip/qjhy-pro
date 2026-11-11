@@ -46,15 +46,24 @@ export function formatOutputSummary(output: Record<string, unknown> | null): str
   const inserted = num("inserted");
   const updated = num("updated");
   const total = num("total");
+  const sessions = num("sessions");
   const rows = num("rows");
   const fail = num("fail");
+  const failed = num("failed");
   const unmatched = num("unmatched");
   const skippedHistory = num("skippedHistory");
   const upserted = num("upserted");
+  const trendPointsUpserted = num("trendPointsUpserted");
   const skipped = num("skipped");
   const works = num("works");
   const daily = num("daily");
   if (works !== null && daily !== null) return `${works} 个作品 · ${daily} 天汇总`;
+  if (trendPointsUpserted !== null) {
+    const parts = [`${trendPointsUpserted} 个趋势点`];
+    if (failed !== null && failed > 0) parts.push(`失败 ${failed}`);
+    if (sessions !== null && sessions > 0) parts.push(`${sessions} 场`);
+    return parts.join(" · ");
+  }
   if (upserted !== null) {
     return skipped && skipped > 0 ? `${upserted} 场 · 跳过 ${skipped}` : `${upserted} 场`;
   }
@@ -66,6 +75,7 @@ export function formatOutputSummary(output: Record<string, unknown> | null): str
   if (rows !== null) {
     const parts = [`${rows} 行`];
     if (fail !== null && fail > 0) parts.push(`失败 ${fail}`);
+    if (failed !== null && failed > 0) parts.push(`失败 ${failed}`);
     if (unmatched !== null && unmatched > 0) parts.push(`未匹配 ${unmatched}`);
     return parts.join(" · ");
   }

@@ -475,8 +475,9 @@ export async function queryKuaishouAnchorKpi(
   userId: string,
   filters: KuaishouAnchorListFilters = {},
   emergencyMode = false,
+  preloadedRows?: KuaishouAnchorRow[],
 ): Promise<KuaishouAnchorKpi> {
-  const rows = await listKuaishouAnchors(userId, filters, emergencyMode);
+  const rows = preloadedRows ?? (await listKuaishouAnchors(userId, filters, emergencyMode));
   const today = new Date();
   const ninetyDaysLater = new Date(today.getTime() + 90 * 86400_000);
 

@@ -59,6 +59,7 @@ import {
   supportsAccountTargetSplit,
   validateTeamAllocation,
   personalDefinition,
+  isAccountScopeExpansion,
 } from "./team-allocation";
 import { z } from "zod";
 import { groupGoals } from "./presentation";
@@ -143,10 +144,15 @@ function dto(row: Row): Goal {
     updated_at: row.updated_at.toISOString(),
   };
 }
-export async function listGoals(period?: string, home = false): Promise<GoalList> {
+export async function listGoals(
+  period?: string,
+  home = false,
+  options: { resolvePeriod?: string; resolveSources?: boolean } = {},
+): Promise<GoalList> {
   const actor = await goalActor();
   requireGoalPoint(actor);
   if (period) periodSchema.parse(period);
+  if (options.resolvePeriod) periodSchema.parse(options.resolvePeriod);
   const items = await db
     .select()
     .from(goals)
@@ -173,13 +179,31 @@ export async function listGoals(period?: string, home = false): Promise<GoalList
   for (let i = 0; i < items.length; i += 4)
     resolved.push(
       ...(await Promise.all(
-        items
-          .slice(i, i + 4)
-          .map((row) =>
-            inGoalScope(actor, row)
-              ? resolveGoalSource(actor, dto(row), cache, accountCache)
-              : resolveParticipatingTeamSummary(dto(row), summaryAccountCache),
-          ),
+        items.slice(i, i + 4).map((row) => {
+          const own = inGoalScope(actor, row);
+          // Keep cross-period definitions for linking, copying and allocation, but
+          // calculate live values only for the period currently being viewed.
+          if (
+            options.resolveSources === false ||
+            (options.resolvePeriod && row.period !== options.resolvePeriod)
+          ) {
+            const goal = dto(row);
+            if (goal.binding) {
+              goal.actual = null;
+              goal.as_of = null;
+              goal.evidence = "";
+              goal.source_result = { status: "pending", note: "切换到该周期后加载进度" };
+            }
+            if (!own) {
+              goal.read_only = true;
+              if (goal.binding) goal.binding = { ...goal.binding, account_ids: [] };
+            }
+            return goal;
+          }
+          return own
+            ? resolveGoalSource(actor, dto(row), cache, accountCache)
+            : resolveParticipatingTeamSummary(dto(row), summaryAccountCache);
+        }),
       )),
     );
   const sharedTeamOwners = [
@@ -674,7 +698,8 @@ async function applyCommand(
     linked.length &&
     command.action === "edit" &&
     (before.binding?.selection !== next.binding?.selection ||
-      !isDeepStrictEqual(before.binding?.account_ids, next.binding?.account_ids))
+      (!isDeepStrictEqual(before.binding?.account_ids, next.binding?.account_ids) &&
+        !isAccountScopeExpansion(before.binding, next.binding)))
   )
     fail("团队已有个人拆分目标，请先处理关联个人目标，再更改团队统计账号范围");
   if (command.action === "edit")
@@ -1171,6 +1196,7 @@ export async function splitTeamGoals(input: unknown): Promise<Goal[]> {
       );
     const representative = existing[0]?.team_parent_id ?? rows.map((g) => g.id).sort()[0];
     if (!representative) fail("团队目标不存在", 404);
+    const activeExisting = existing.filter((g) => g.status !== "closed");
     const result: Goal[] = [];
     for (const allocation of batch.allocations) {
       if (
@@ -1182,6 +1208,22 @@ export async function splitTeamGoals(input: unknown): Promise<Goal[]> {
         const targetEntry = allocation.targets.find((t) => t.goal_id === parent.id);
         const target = targetEntry?.target;
         if (target === undefined || !parent.binding) fail("请填写每项指标的个人目标值");
+        const existingChild = activeExisting.find(
+          (g) =>
+            g.owner_ids.length === 1 &&
+            g.owner_ids[0] === allocation.owner_id &&
+            sameTeamMetric(g, parent),
+        );
+        if (targetEntry?.edit) {
+          if (
+            !existingChild ||
+            existingChild.id !== targetEntry.edit.id ||
+            existingChild.version !== targetEntry.edit.version
+          )
+            fail("个人拆分目标已变化，请刷新后重新调整", 409);
+        } else if (existingChild) {
+          fail("该运营已有个人拆分目标，请使用调整入口", 409);
+        }
         await validateAccountTargetSplit(
           actor,
           dto(parent),
@@ -1189,7 +1231,12 @@ export async function splitTeamGoals(input: unknown): Promise<Goal[]> {
           target,
           targetEntry?.account_targets,
         );
-        const definition = personalDefinition(dto(parent), allocation.owner_id, target, representative);
+        const definition = personalDefinition(
+          dto(parent),
+          allocation.owner_id,
+          target,
+          representative,
+        );
         if (targetEntry?.account_targets) {
           if (!definition.binding) fail("团队目标缺少数据绑定");
           definition.binding = {
@@ -1198,7 +1245,15 @@ export async function splitTeamGoals(input: unknown): Promise<Goal[]> {
           };
         }
         const parsedDefinition = definitionSchema.parse(definition);
-        const command: GoalCommand = { action: "create", definition: parsedDefinition, reason: batch.reason };
+        const command: GoalCommand = existingChild
+          ? {
+              action: "edit",
+              id: existingChild.id,
+              version: existingChild.version,
+              definition: parsedDefinition,
+              reason: batch.reason,
+            }
+          : { action: "create", definition: parsedDefinition, reason: batch.reason };
         await validateCommand(actor, command);
         result.push(await applyCommand(tx, actor, command));
       }

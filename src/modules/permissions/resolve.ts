@@ -62,9 +62,17 @@ export function mergePermissions(
 }
 
 export async function isSuperAdmin(userId: string): Promise<boolean> {
-  const [grant] = await db.select({ userId: auth_super_admin.user_id })
-    .from(auth_super_admin).innerJoin(dingtalk_user, eq(dingtalk_user.user_id, auth_super_admin.user_id))
-    .where(and(eq(auth_super_admin.user_id, userId), eq(dingtalk_user.active, true), eq(dingtalk_user.is_external, false)));
+  const [grant] = await db
+    .select({ userId: auth_super_admin.user_id })
+    .from(auth_super_admin)
+    .innerJoin(dingtalk_user, eq(dingtalk_user.user_id, auth_super_admin.user_id))
+    .where(
+      and(
+        eq(auth_super_admin.user_id, userId),
+        eq(dingtalk_user.active, true),
+        eq(dingtalk_user.is_external, false),
+      ),
+    );
   return !!grant;
 }
 
@@ -89,7 +97,12 @@ export async function resolvePermission(
   }
 
   if (await isSuperAdmin(userId)) {
-    return { scope: "all", points: new Set(MODULE_POINTS[module].map((p) => p.key)), delegatedUserIds: null, sources: [{ kind: "super_admin" }] };
+    return {
+      scope: "all",
+      points: new Set(MODULE_POINTS[module].map((p) => p.key)),
+      delegatedUserIds: null,
+      sources: [{ kind: "super_admin" }],
+    };
   }
 
   // 1. 解析项目岗位：override > 钉钉 title > "其他"
@@ -157,15 +170,16 @@ export async function resolvePermission(
 
   const merged = mergePermissions(role, isDeptLeader, override);
   if (module === "attendance") {
-    // 考勤固定遵循本人 / 负责部门；超级管理员在身份层直接绕过。
-    merged.scope = isDeptLeader ? "team" : "self";
+    // 范围沿用合并结果：默认本人 / 负责部门，管理员明确设置的个人范围优先。
     merged.points = new Set([...merged.points, "approval"]);
   }
 
   // 委托视图：override.delegated_user_ids 非空数组才生效；保留独立的委托范围规则
   const delegatedRaw = overrideRow?.delegated_user_ids as string[] | null | undefined;
   const delegatedUserIds =
-    module !== "attendance" && Array.isArray(delegatedRaw) && delegatedRaw.length > 0 ? delegatedRaw : null;
+    module !== "attendance" && Array.isArray(delegatedRaw) && delegatedRaw.length > 0
+      ? delegatedRaw
+      : null;
 
   // 4. 构造来源说明
   const sources: PermissionSource[] = [{ kind: "default", position }];

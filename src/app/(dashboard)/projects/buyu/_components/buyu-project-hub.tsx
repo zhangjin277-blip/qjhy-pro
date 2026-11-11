@@ -21,6 +21,7 @@ import {
   Save,
   Trash2,
   UsersRound,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils/cn";
+import { triggerBuyuDailyPlacementImport } from "../actions";
 import { useProjectSharedState } from "@/hooks/use-project-shared-state";
 import { AnchorMiniList } from "../../../live-accounts/_components/anchor-mini-list";
 import { PlatformBadge } from "../../../live-accounts/_components/platform-badge";
@@ -177,7 +179,11 @@ function percent(value: number | null): string {
   return value == null || !Number.isFinite(value) ? "—" : `${(value * 100).toFixed(2)}%`;
 }
 
-export function BuyuProjectHub(): React.JSX.Element {
+export function BuyuProjectHub({
+  canManualPlacementPull = false,
+}: {
+  canManualPlacementPull?: boolean;
+}): React.JSX.Element {
   const [view, setView] = useState<ViewKey>("overview");
   const [range, setRange] = useState(initialRange);
   const [daily, setDaily] = useState<DailyRow[]>([]);
@@ -376,6 +382,7 @@ export function BuyuProjectHub(): React.JSX.Element {
           loading={loading}
           dateFrom={range.from}
           dateTo={range.to}
+          canManualPlacementPull={canManualPlacementPull}
         />
       )}
     </div>
@@ -1925,12 +1932,14 @@ function DailyView({
   loading,
   dateFrom,
   dateTo,
+  canManualPlacementPull,
 }: {
   rows: DailyRow[];
   accountOptions: PlacementAccountOption[];
   loading: boolean;
   dateFrom: string;
   dateTo: string;
+  canManualPlacementPull: boolean;
 }): React.JSX.Element {
   const PAGE_SIZE = 31;
   const [productFilter, setProductFilter] = useState("3D");
@@ -1939,6 +1948,8 @@ function DailyView({
   const [monthExpansionOverrides, setMonthExpansionOverrides] = useState<Record<string, boolean>>(
     {},
   );
+  const [manualPulling, setManualPulling] = useState(false);
+  const [manualPullMessage, setManualPullMessage] = useState<string | null>(null);
   const defaultAccountInitialized = useRef(false);
   const productOptions = useMemo(
     () =>
@@ -2169,6 +2180,29 @@ function DailyView({
         <div className="mt-0.5 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-slate-500">按产品、直播账号、日期展示；只保留 A 至 T 列</p>
           <div className="flex flex-wrap items-center gap-2">
+            {canManualPlacementPull && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={manualPulling}
+                title="手动读取捕鱼直播间日报推送群中最新的日报附件"
+                onClick={async () => {
+                  setManualPulling(true);
+                  setManualPullMessage(null);
+                  const result = await triggerBuyuDailyPlacementImport();
+                  if (result.ok) {
+                    setManualPullMessage("已提交拉取，稍后刷新页面查看结果");
+                  } else {
+                    setManualPullMessage(result.error ?? "提交拉取失败");
+                  }
+                  setManualPulling(false);
+                }}
+              >
+                <RefreshCw className={cn("size-3.5", manualPulling && "animate-spin")} />
+                {manualPulling ? "拉取中..." : "手动拉取日报"}
+              </Button>
+            )}
             <select
               value={productFilter}
               onChange={(event) => setProductFilter(event.target.value)}
@@ -2197,6 +2231,9 @@ function DailyView({
             </select>
           </div>
         </div>
+        {manualPullMessage && (
+          <div className="mt-1 text-xs text-slate-500">{manualPullMessage}</div>
+        )}
       </div>
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-[2360px] table-fixed border-collapse text-xs">

@@ -36,6 +36,12 @@ describe("parseDateText", () => {
   it("ISO 格式 2026-05-06", () => {
     expect(parseDateText("2026-05-06")).toBe("2026-05-06");
   });
+  it("Excel 数值日期", () => {
+    expect(parseDateText(46296)).toBe("2026-10-01");
+  });
+  it("短年份斜杠日期", () => {
+    expect(parseDateText("10/29/26")).toBe("2026-10-29");
+  });
   it("不可识别格式 → null", () => {
     expect(parseDateText("foo")).toBe(null);
     expect(parseDateText("")).toBe(null);

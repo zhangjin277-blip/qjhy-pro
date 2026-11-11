@@ -9,7 +9,7 @@ import {
   broker_user_mapping,
   dingtalk_user,
 } from "@/db/schema";
-import { and, eq, sql, inArray, gte, like, or } from "drizzle-orm";
+import { and, eq, sql, inArray, gte, ilike, or } from "drizzle-orm";
 import { resolvePermission } from "@/modules/permissions/server";
 import { getManagedDeptIds } from "@/modules/permissions/server";
 import type { AnchorListFilters, AnchorListRow } from "./types";
@@ -105,8 +105,8 @@ export async function listAnchors(
   }
   if (filters.search) {
     const condition = or(
-      like(anchor_profile.nick_name, `%${filters.search}%`),
-      like(anchor_profile.aweme_display_id, `%${filters.search}%`),
+      ilike(anchor_profile.nick_name, `%${filters.search}%`),
+      ilike(anchor_profile.aweme_display_id, `%${filters.search}%`),
     );
     if (condition) where.push(condition);
   }

@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { RecruitmentStatistics } from "./recruitment-statistics";
+
 import { DataToolbar } from "@/components/patterns/data-toolbar";
 import { KpiGrid } from "@/components/patterns/kpi-grid";
 import { Button } from "@/components/ui/button";
@@ -118,6 +120,41 @@ function formatUpdatedAt(value: string): string {
 }
 
 export function RecruitmentClient({
+  initialBoard,
+  products,
+}: {
+  initialBoard: RecruitmentBoardData;
+  products: string[];
+}) {
+  const [statistics, setStatistics] = useState(false);
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <Button
+          variant={statistics ? "outline" : "default"}
+          size="sm"
+          onClick={() => setStatistics(false)}
+        >
+          登记与评审
+        </Button>
+        <Button
+          variant={statistics ? "default" : "outline"}
+          size="sm"
+          onClick={() => setStatistics(true)}
+        >
+          <BarChart3 className="size-4" />
+          月度统计
+        </Button>
+      </div>
+      <div hidden={statistics}>
+        <RecruitmentRegistrationClient initialBoard={initialBoard} products={products} />
+      </div>
+      {statistics && <RecruitmentStatistics />}
+    </div>
+  );
+}
+
+function RecruitmentRegistrationClient({
   initialBoard,
   products,
 }: {

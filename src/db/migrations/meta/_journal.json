@@ -253,6 +253,27 @@
       "when": 1792207200000,
       "tag": "0086_goal_team_allocation",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793008800000,
+      "tag": "0088_people_probation_three_months",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793625600000,
+      "tag": "0089_crawler_notification_setting",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793750400000,
+      "tag": "0090_performance_indexes",
+      "breakpoints": true
     }
   ]
 }

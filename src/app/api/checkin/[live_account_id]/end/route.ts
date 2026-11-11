@@ -1,3 +1,4 @@
+import { isNotificationEnabled } from "@/lib/notify/settings";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentDingtalkUser } from "@/lib/auth/page-auth";
 import { endSession } from "@/modules/checkin/server";
@@ -44,6 +45,7 @@ async function notifyEnd(
   anchorDingtalkUserId: string,
   durationSeconds: number,
 ): Promise<void> {
+  if (!(await isNotificationEnabled("live_checkin"))) return;
   try {
     const [acc] = await db
       .select({

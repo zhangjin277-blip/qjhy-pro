@@ -75,7 +75,7 @@ function button(text: string, within: ParentNode = document) {
 }
 it("shows the team's full progress with only detail actions and keeps the own personal draft editable below it", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.stubGlobal("fetch", vi.fn());
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => data }));
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);

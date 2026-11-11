@@ -58,7 +58,7 @@ export function BulkProfileDialog({
   const [managerUserId, setManagerUserId] = useState<string | null>(null);
   const [skipManagerUserId, setSkipManagerUserId] = useState<string | null>(null);
   const [employmentStatus, setEmploymentStatus] = useState<"probation" | "regular">("probation");
-  const [probationMonths, setProbationMonths] = useState<2 | 6>(2);
+  const [probationMonths, setProbationMonths] = useState<2 | 3 | 6>(2);
   const [applyProbationGoals, setApplyProbationGoals] = useState(false);
   const [applyPerformanceGoals, setApplyPerformanceGoals] = useState(false);
   const [probationGoals, setProbationGoals] = useState<GoalDraft[]>([{ ...EMPTY_GOAL }]);
@@ -155,7 +155,9 @@ export function BulkProfileDialog({
           <Field label="试用期时长">
             <Select
               value={String(probationMonths)}
-              onValueChange={(value) => setProbationMonths(value === "6" ? 6 : 2)}
+              onValueChange={(value) =>
+                setProbationMonths(value === "6" ? 6 : value === "3" ? 3 : 2)
+              }
               disabled={employmentStatus !== "probation"}
             >
               <SelectTrigger className="w-full">
@@ -163,6 +165,7 @@ export function BulkProfileDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="2">2个月</SelectItem>
+                <SelectItem value="3">3个月</SelectItem>
                 <SelectItem value="6">6个月</SelectItem>
               </SelectContent>
             </Select>

@@ -7,7 +7,7 @@ export const SaveProfileInput = z
     skipManagerUserId: z.string().min(1).nullable(),
     hireDate: z.iso.date(),
     employmentStatus: z.enum(["probation", "regular", "inactive"]),
-    probationMonths: z.union([z.literal(2), z.literal(6)]),
+    probationMonths: z.union([z.literal(2), z.literal(3), z.literal(6)]),
     regularizedAt: z.iso.date().nullable().optional(),
   })
   .refine((data) => data.userId !== data.managerUserId, {
@@ -51,7 +51,7 @@ export const BulkConfigureProfilesInput = z
     managerUserId: z.string().min(1),
     skipManagerUserId: z.string().min(1).nullable(),
     employmentStatus: z.enum(["probation", "regular"]),
-    probationMonths: z.union([z.literal(2), z.literal(6)]),
+    probationMonths: z.union([z.literal(2), z.literal(3), z.literal(6)]),
     hireDateOverride: z.iso.date().optional(),
     applyProbationGoals: z.boolean(),
     probationGoals: GoalTemplateListInput,
@@ -83,12 +83,23 @@ export const ReviewGoalsInput = z.object({
 
 export const SelfReviewInput = z.object({
   cycleId: z.string().min(1),
-  summary: z.string().trim().min(1).max(3000),
+  summary: z
+    .string({ error: "请填写自评总结" })
+    .trim()
+    .min(1, "请填写自评总结")
+    .max(3000, "自评总结不能超过3000字"),
   goals: z.array(
     z.object({
       id: z.string().min(1),
-      completion: z.string().trim().min(1).max(2000),
-      score: z.number().min(0).max(100),
+      completion: z
+        .string({ error: "请填写目标完成情况" })
+        .trim()
+        .min(1, "请填写目标完成情况")
+        .max(2000, "目标完成情况不能超过2000字"),
+      score: z
+        .number({ error: "请填写有效的自评分" })
+        .min(0, "自评分不能小于0")
+        .max(100, "自评分不能超过100"),
     }),
   ),
 });

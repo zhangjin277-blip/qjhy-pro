@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { z } from "zod";
 import {
   AlertTriangle,
   Check,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -29,7 +31,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  calibratePerformance,
+  SelfReviewInput,
   calculateReviewScore,
   calculateWeightedScore,
   gradeForScore,
@@ -38,13 +40,9 @@ import {
   getPeoplePerformanceDetailAction,
   openPerformanceSelfReview,
   returnPerformanceForReview,
-  savePeopleProfile,
   syncPersonFromDingtalkRoster,
   STAGE_LABEL,
   submitPerformanceGoals,
-  submitPerformanceManagerReview,
-  submitPerformanceSkipManagerReview,
-  submitPerformanceSelfReview,
   withdrawPerformanceSelfReview,
   PERFORMANCE_RATINGS,
   type PeoplePerformanceDetail,
@@ -52,6 +50,11 @@ import {
 } from "@/modules/people-performance";
 
 import { ManagerCombobox } from "./manager-combobox";
+
+const PersonAttendanceCalendar = dynamic(
+  () => import("@/modules/attendance/client").then((module) => module.PersonAttendanceCalendar),
+  { ssr: false },
+);
 
 const FLOW = [
   "goal_setting",
@@ -339,6 +342,7 @@ function ProfileEditor({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="2">2个月</SelectItem>
+            <SelectItem value="3">3个月</SelectItem>
             <SelectItem value="6">6个月</SelectItem>
           </SelectContent>
         </Select>
@@ -350,7 +354,7 @@ function ProfileEditor({
           onClick={() =>
             startTransition(async () => {
               try {
-                await savePeopleProfile({
+                await submitAssessment("save_profile", {
                   userId: detail.person.userId,
                   managerUserId,
                   skipManagerUserId: skipManagerUserId || null,
@@ -363,7 +367,7 @@ function ProfileEditor({
                 toast.success("人员考核档案已保存");
                 onSaved();
               } catch (error) {
-                toast.error(error instanceof Error ? error.message : "保存失败");
+                toast.error(performanceErrorMessage(error));
               }
             })
           }
@@ -389,6 +393,8 @@ function CyclePanel({
   loading: boolean;
 }) {
   const [confirmSelfReview, setConfirmSelfReview] = useState(false);
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
+  const closeAttendance = useCallback(() => setAttendanceOpen(false), []);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReturnToHr, setConfirmReturnToHr] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -410,16 +416,52 @@ function CyclePanel({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {cycle.kind === "probation" &&
+            cycle.stage === "scheduled" &&
+            (detail.capabilities.actorUserId === detail.person.userId ||
+              detail.capabilities.actorUserId === cycle.managerUserId ||
+              detail.capabilities.manageProfiles ||
+              detail.capabilities.manageAll) && (
+              <Button
+                size="sm"
+                disabled={loading || advancing}
+                onClick={() =>
+                  startAdvancing(async () => {
+                    try {
+                      await submitAssessment("open_goals", { cycleId: cycle.id });
+                      toast.success("目标填写已提前开启，考核起止日期不变");
+                      onChanged();
+                    } catch (error) {
+                      toast.error(performanceErrorMessage(error));
+                    }
+                  })
+                }
+              >
+                提前开启目标填写
+              </Button>
+            )}
           {detail.capabilities.manageProfiles && (
-            <Button type="button" size="sm" variant="outline" onClick={() => setManualOpen((value) => !value)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setManualOpen((value) => !value)}
+            >
               新增考核周期
             </Button>
           )}
-          {(detail.capabilities.manageProfiles || detail.capabilities.manageAll) && <Button type="button" size="sm" variant="outline" onClick={() => {
-            window.location.href = `/api/people-performance/export?cycleId=${encodeURIComponent(cycle.id)}`;
-          }}>
-            导出考核表
-          </Button>}
+          {(detail.capabilities.manageProfiles || detail.capabilities.manageAll) && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                window.location.href = `/api/people-performance/export?cycleId=${encodeURIComponent(cycle.id)}`;
+              }}
+            >
+              导出考核表
+            </Button>
+          )}
           {detail.capabilities.manageProfiles && (
             <Button
               type="button"
@@ -489,29 +531,70 @@ function CyclePanel({
       {manualOpen && detail.capabilities.manageProfiles && (
         <div className="mb-4 flex flex-wrap items-end gap-2 rounded-md border bg-slate-50 p-3">
           <Field label="周期类型">
-            <Select value={manualKind} onValueChange={(value) => value && setManualKind(value as typeof manualKind)}>
-              <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="monthly">月度</SelectItem><SelectItem value="quarterly">季度</SelectItem></SelectContent>
+            <Select
+              value={manualKind}
+              onValueChange={(value) => value && setManualKind(value as typeof manualKind)}
+            >
+              <SelectTrigger className="w-[130px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="monthly">月度</SelectItem>
+                <SelectItem value="quarterly">季度</SelectItem>
+              </SelectContent>
             </Select>
           </Field>
           <Field label="开始日期">
-            <Input type="date" value={manualStart} onChange={(event) => setManualStart(event.target.value)} />
+            <Input
+              type="date"
+              value={manualStart}
+              onChange={(event) => setManualStart(event.target.value)}
+            />
           </Field>
-          <Button type="button" onClick={() => startAdvancing(async () => {
-            try {
-              await createManualPerformanceCycle({ userId: detail.person.userId, kind: manualKind, periodStart: manualStart });
-              toast.success("考核周期已创建"); setManualOpen(false); onChanged(); onListChanged();
-            } catch (error) { toast.error(error instanceof Error ? error.message : "创建失败"); }
-          })} disabled={advancing || !manualStart}>创建</Button>
+          <Button
+            type="button"
+            onClick={() =>
+              startAdvancing(async () => {
+                try {
+                  await createManualPerformanceCycle({
+                    userId: detail.person.userId,
+                    kind: manualKind,
+                    periodStart: manualStart,
+                  });
+                  toast.success("考核周期已创建");
+                  setManualOpen(false);
+                  onChanged();
+                  onListChanged();
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "创建失败");
+                }
+              })
+            }
+            disabled={advancing || !manualStart}
+          >
+            创建
+          </Button>
         </div>
       )}
       <Tabs defaultValue={defaultTab}>
-        <TabsList variant="line" className="border-b">
-          <TabsTrigger value="flow">考核流程</TabsTrigger>
-          <TabsTrigger value="form">考核表</TabsTrigger>
-          <TabsTrigger value="result">考核结果</TabsTrigger>
-          {detail.capabilities.manageAll && <TabsTrigger value="events">变更记录</TabsTrigger>}
-        </TabsList>
+        <div className="flex flex-wrap items-center gap-3">
+          <TabsList variant="line" className="border-b">
+            <TabsTrigger value="flow">考核流程</TabsTrigger>
+            <TabsTrigger value="form">考核表</TabsTrigger>
+            <TabsTrigger value="result">考核结果</TabsTrigger>
+            {detail.capabilities.manageAll && <TabsTrigger value="events">变更记录</TabsTrigger>}
+          </TabsList>
+          <Button type="button" size="sm" variant="outline" onClick={() => setAttendanceOpen(true)}>
+            本月考勤
+          </Button>
+        </div>
+        {attendanceOpen && (
+          <PersonAttendanceCalendar
+            userId={detail.person.userId}
+            name={detail.person.name}
+            onClose={closeAttendance}
+          />
+        )}
         <TabsContent value="flow" className="pt-4">
           <FlowView cycle={cycle} />
         </TabsContent>
@@ -527,7 +610,11 @@ function CyclePanel({
         <TabsContent value="result" className="pt-4">
           <ResultView cycle={cycle} />
         </TabsContent>
-        {detail.capabilities.manageAll && <TabsContent value="events" className="pt-4"><EventsView detail={detail} cycle={cycle} /></TabsContent>}
+        {detail.capabilities.manageAll && (
+          <TabsContent value="events" className="pt-4">
+            <EventsView detail={detail} cycle={cycle} />
+          </TabsContent>
+        )}
       </Tabs>
       <ConfirmDialog
         open={confirmDelete}
@@ -677,6 +764,22 @@ interface EditableGoal {
   skipManagerComment?: string;
 }
 
+function performanceErrorMessage(error: unknown): string {
+  if (error instanceof z.ZodError) return error.issues[0]?.message ?? "请检查填写内容";
+  if (error instanceof Error && /[\u4e00-\u9fff]/u.test(error.message)) return error.message;
+  return "操作失败，请稍后重试；若页面已长时间未刷新，请先保存填写内容再刷新页面";
+}
+
+async function submitAssessment(operation: string, input: unknown): Promise<void> {
+  const response = await fetch("/api/people-performance/assessment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ operation, input }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message ?? "提交失败，请稍后重试");
+}
+
 async function reviewGoals(input: {
   cycleId: string;
   approved: boolean;
@@ -774,6 +877,11 @@ function AssessmentForm({
   const skipManagerTotal = calculateWeightedScore(
     goals.map((goal) => ({ weight: goal.weight, managerScore: goal.skipManagerScore ?? null })),
   );
+  const previewFinalScore = calculateReviewScore(
+    cycle.kind,
+    directManagerTotal,
+    cycle.skipManagerUserId ? skipManagerTotal : null,
+  );
   const [probationResult, setProbationResult] = useState(cycle.probationResult ?? "passed");
   const [pending, startTransition] = useTransition();
   const [confirmGoalReturn, setConfirmGoalReturn] = useState(false);
@@ -794,7 +902,7 @@ function AssessmentForm({
         toast.success(message);
         onChanged();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "操作失败");
+        toast.error(performanceErrorMessage(error));
       }
     });
   const performReturn = () =>
@@ -1037,21 +1145,24 @@ function AssessmentForm({
         </ActionBar>
       )}
       {cycle.stage === "self_review" && isEmployee && (
-        <ReviewFooter label="自评总结" value={summary} onChange={setSummary}>
+        <ReviewFooter label="自评总结（必填）" value={summary} onChange={setSummary}>
           <Button
             disabled={pending}
             onClick={() =>
               run(
                 () =>
-                  submitPerformanceSelfReview({
-                    cycleId: cycle.id,
-                    summary,
-                    goals: goals.map((goal) => ({
-                      id: goal.id,
-                      completion: goal.completion,
-                      score: goal.selfScore,
-                    })),
-                  }),
+                  submitAssessment(
+                    "self_review",
+                    SelfReviewInput.parse({
+                      cycleId: cycle.id,
+                      summary,
+                      goals: goals.map((goal) => ({
+                        id: goal.id,
+                        completion: goal.completion,
+                        score: goal.selfScore,
+                      })),
+                    }),
+                  ),
                 "自评已提交",
               )
             }
@@ -1084,7 +1195,7 @@ function AssessmentForm({
             onClick={() =>
               run(
                 () =>
-                  submitPerformanceManagerReview({
+                  submitAssessment("manager_review", {
                     cycleId: cycle.id,
                     summary,
                     goals: goals.map((goal) => ({
@@ -1107,6 +1218,12 @@ function AssessmentForm({
             隔级上级评分合计：
             <strong className="ml-1">
               {skipManagerTotal === null ? "待完成全部评分" : skipManagerTotal}
+            </strong>
+          </div>
+          <div className="mt-2 text-base font-medium text-blue-900">
+            预览综合得分：
+            <strong className="ml-1">
+              {previewFinalScore === null ? "待完成全部评分" : previewFinalScore}
             </strong>
           </div>
           <div className="mt-1 text-xs text-blue-700">
@@ -1150,7 +1267,7 @@ function AssessmentForm({
                   if (goals.some((goal) => goal.skipManagerScore === undefined)) {
                     throw new Error("请完成所有目标的隔级上级评分后再提交");
                   }
-                  return submitPerformanceSkipManagerReview({
+                  return submitAssessment("skip_manager_review", {
                     cycleId: cycle.id,
                     summary,
                     goals: goals.map((goal) => ({
@@ -1175,23 +1292,26 @@ function AssessmentForm({
             <Field label="自动总分">
               <Input value={score === null ? "待完成上级评分" : score} readOnly />
             </Field>
-            {cycle.kind === "probation" && <Field label="最终评级">
-              <Select value={rating} onValueChange={(value) => value && setRating(value)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="请选择评级" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PERFORMANCE_RATINGS.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.value}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {PERFORMANCE_RATINGS.find((item) => item.value === rating)?.description ?? "评级独立选择，不按分数自动换算。"}
-              </p>
-            </Field>}
+            {cycle.kind === "probation" && (
+              <Field label="最终评级">
+                <Select value={rating} onValueChange={(value) => value && setRating(value)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="请选择评级" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PERFORMANCE_RATINGS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.value}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {PERFORMANCE_RATINGS.find((item) => item.value === rating)?.description ??
+                    "评级独立选择，不按分数自动换算。"}
+                </p>
+              </Field>
+            )}
             {cycle.kind !== "probation" && (
               <Field label="最终等级">
                 <Input value={score === null ? "待完成上级评分" : gradeForScore(score)} readOnly />
@@ -1249,11 +1369,17 @@ function AssessmentForm({
               onClick={() =>
                 run(
                   () =>
-                    calibratePerformance({
+                    submitAssessment("calibrate", {
                       cycleId: cycle.id,
                       comment,
-                      rating: cycle.kind === "probation" ? rating as (typeof PERFORMANCE_RATINGS)[number]["value"] : undefined,
-                      probationResult: cycle.kind === "probation" && cycle.requiresFinalReview ? probationResult : null,
+                      rating:
+                        cycle.kind === "probation"
+                          ? (rating as (typeof PERFORMANCE_RATINGS)[number]["value"])
+                          : undefined,
+                      probationResult:
+                        cycle.kind === "probation" && cycle.requiresFinalReview
+                          ? probationResult
+                          : null,
                     }),
                   "校准结果已提交",
                 )
@@ -1286,7 +1412,9 @@ function AssessmentForm({
             结果确认截止时间：{formatConfirmationDeadline(cycle.confirmationDeadline)}
           </div>
           <ActionBar>
-            <span>请在截止时间前确认最终得分与评级；评级由 HR 校准后显示，逾期系统将自动确认。</span>
+            <span>
+              请在截止时间前确认最终得分与评级；评级由 HR 校准后显示，逾期系统将自动确认。
+            </span>
             <div>
               <Button
                 disabled={pending}
